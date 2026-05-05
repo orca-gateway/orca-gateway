@@ -1,7 +1,6 @@
 import 'dart:convert' show jsonEncode;
 import 'dart:developer' as developer;
 
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart' show
     MaterialPageRoute,
     Navigator,
@@ -425,8 +424,8 @@ class ActionExecutor {
           'level': level,
           'tag': tag,
           'timestamp': DateTime.now().toIso8601String(),
-          if (message != null) 'message': message,
-          if (data != null) 'data': data,
+          'message': ?message,
+          'data': ?data,
         };
 
         if (action['includeState'] == true) {

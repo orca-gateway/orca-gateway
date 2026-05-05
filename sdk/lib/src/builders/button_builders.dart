@@ -233,10 +233,12 @@ ButtonStyle? _applyOverlay(
 ) {
   if (splashColor == null && highlightColor == null) return base;
   final overlay = WidgetStateProperty.resolveWith<Color?>((states) {
-    if (states.contains(WidgetState.pressed))
+    if (states.contains(WidgetState.pressed)) {
       return splashColor ?? highlightColor;
-    if (states.contains(WidgetState.hovered))
+    }
+    if (states.contains(WidgetState.hovered)) {
       return highlightColor ?? splashColor;
+    }
     return null;
   });
   return (base ?? const ButtonStyle()).copyWith(overlayColor: overlay);
