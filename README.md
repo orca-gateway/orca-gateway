@@ -1,3 +1,7 @@
+<div align="center">
+
+<img src="./docs/logo.svg" alt="Atlas" width="100" />
+
 # Orca Gateway
 
 [![Engine CI](https://github.com/orca-gateway/orca-gateway/actions/workflows/engine.yml/badge.svg)](https://github.com/orca-gateway/orca-gateway/actions/workflows/engine.yml)
@@ -5,6 +9,7 @@
 [![License](https://img.shields.io/badge/license-BSL--1.1-blue.svg)](LICENSE)
 
 **Orca Gateway** is the open-source server-driven UI engine behind [Orca Gateway Premium](https://orcagateway.com) - control your entire Flutter app from the server: navigation, screens, state, actions, and offline behavior. No app store releases required.
+</div>
 
 ## Features
 
