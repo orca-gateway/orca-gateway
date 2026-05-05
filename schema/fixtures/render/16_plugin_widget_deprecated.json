@@ -1,0 +1,38 @@
+{
+  "name": "plugin-widget-deprecated",
+  "description": "A plugin declares two widgets: MiniMap (active) and OldWidget (removedIn set). Only MiniMap should be usable. Using OldWidget should fail encoding. This fixture verifies that a page built with only the active plugin widget encodes correctly while deprecated widgets are excluded from the registry.",
+  "pluginWidgets": [
+    {
+      "type": "MiniMap",
+      "kind": "primitive",
+      "childMode": "none",
+      "slots": [],
+      "introducedIn": "1.0.0"
+    },
+    {
+      "type": "OldWidget",
+      "kind": "primitive",
+      "childMode": "none",
+      "slots": [],
+      "introducedIn": "1.0.0",
+      "removedIn": "2.0.0"
+    }
+  ],
+  "input": {
+    "type": "MiniMap",
+    "key": "map1",
+    "props": { "latitude": 40.7128, "longitude": -74.006 }
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "map1",
+      "type": "MiniMap",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "latitude": 40.7128, "longitude": -74.006 },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

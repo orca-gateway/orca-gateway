@@ -1,0 +1,6 @@
+{
+  "$schema": "https://orcagateway.com/schemas/protocol.json",
+  "protocolVersion": "2.0.0",
+  "minSdkVersion": "0.1.0",
+  "_comment": "Canonical protocol version for the Orca Gateway wire format. Read by every codegen script that needs to know which protocol level the current engine + SDK target. Bump protocolVersion when a feature is added (new widget, Value kind, Action, Transform, BoolExpr op) — the new feature's `introducedIn` should match whatever this value becomes. Bump minSdkVersion only when the server drops support for older SDKs, which is a cloud-level policy decision. See Epic 25b for rationale."
+}

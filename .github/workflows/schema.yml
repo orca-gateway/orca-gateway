@@ -1,0 +1,34 @@
+name: Schema CI
+
+on:
+  push:
+    paths:
+      - "schema/**"
+      - "engine/src/components/**"
+      - "engine/src/types/**"
+  pull_request:
+    paths:
+      - "schema/**"
+      - "engine/src/components/**"
+      - "engine/src/types/**"
+
+jobs:
+  drift-check:
+    name: Codegen drift detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install
+        working-directory: engine
+
+      - name: Regenerate widget registry
+        run: bun run schema/gen-widget-registry.ts
+
+      - name: Check for drift
+        run: |
+          if ! git diff --exit-code -- engine/src/core/widget-registry-gen.ts schema/widget-registry.json; then
+            echo "::error::Widget registry is out of date. Run 'bun run schema/gen-widget-registry.ts' and commit the result."
+            exit 1
+          fi

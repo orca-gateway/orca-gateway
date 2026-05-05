@@ -1,0 +1,21 @@
+{
+  "name": "icon-network-src",
+  "description": "Icon with network src prop. Proves the new src prop flows through the encoder for raster network icons.",
+  "input": {
+    "type": "Icon",
+    "key": "neticon1",
+    "props": { "src": "https://example.com/icon.png", "size": 24, "color": "#FF0000" }
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "neticon1",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "src": "https://example.com/icon.png", "size": 24, "color": "#FF0000" },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

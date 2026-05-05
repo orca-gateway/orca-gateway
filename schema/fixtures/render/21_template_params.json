@@ -1,0 +1,42 @@
+{
+  "name": "template-params",
+  "description": "TemplateTransform with a named-params bag. `{{value}}` is the previous pipeline output; `{{greeting}}` resolves from params. All params are info/static here → entire expression collapses to a plain string. Covers the new multi-placeholder feature without any state reactivity.",
+  "input": {
+    "type": "Text",
+    "key": "t",
+    "props": {
+      "data": {
+        "type": "transform",
+        "input": { "type": "info", "key": "name" },
+        "by": [
+          {
+            "type": "template",
+            "template": "{{greeting}}, {{value}}! You have {{count}} message(s).",
+            "params": {
+              "greeting": { "type": "static", "value": "Hello" },
+              "count": { "type": "info", "key": "count" }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "context": {
+    "pageState": {},
+    "appState": {},
+    "infoData": { "name": "Amr", "count": 3 },
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "t",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": "Hello, Amr! You have 3 message(s)." },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

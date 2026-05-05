@@ -1,0 +1,20 @@
+name: orca_video_player
+description: "Orca Gateway plugin for video playback — server-driven video player with play/pause/seek controls and progress events."
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.3
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  orca_gateway:
+    path: ../../sdk
+  video_player: ^2.9.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

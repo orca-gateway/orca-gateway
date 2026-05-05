@@ -1,0 +1,51 @@
+{
+  "name": "conditional",
+  "description": "Conditional Value with a state-referencing predicate. Because the predicate touches state, the whole Value survives partial resolution; server-only leaves (info here) collapse to static; state refs stay; watches contain only `n`.",
+  "input": {
+    "type": "Text",
+    "key": "t",
+    "props": {
+      "data": {
+        "type": "conditional",
+        "branches": [
+          {
+            "when": {
+              "op": "gt",
+              "left": { "type": "state", "scope": "page", "key": "n" },
+              "right": { "type": "static", "value": 0 }
+            },
+            "then": { "type": "info", "key": "label" }
+          }
+        ],
+        "else": { "type": "static", "value": "zero" }
+      }
+    }
+  },
+  "context": { "pageState": { "n": 3 }, "appState": {}, "infoData": { "label": "positive" }, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "t",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "gt",
+                "left": { "type": "state", "scope": "page", "key": "n" },
+                "right": { "type": "static", "value": 0 }
+              },
+              "then": { "type": "static", "value": "positive" }
+            }
+          ],
+          "else": { "type": "static", "value": "zero" }
+        }
+      },
+      "children": [],
+      "watches": ["n"]
+    }
+  ]
+}

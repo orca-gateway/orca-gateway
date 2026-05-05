@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/component-node.json",
+  "title": "ComponentNode",
+  "description": "A single component in the flat node array produced by the encoder. The root node is first; children reference other nodes by id. `watches` is the deduplicated, insertion-ordered union of every StateValue.key reachable from `props`, used by the Flutter SDK to know which state keys trigger a re-render of this node.",
+  "type": "object",
+  "required": ["id", "type", "kind", "childMode", "props", "children", "watches"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable component id. Equals `widget.key` if set, otherwise a monotonically assigned encoder counter (as a decimal string)."
+    },
+    "type": {
+      "type": "string",
+      "description": "Widget type name, e.g. `Column`, `Text`, `Scaffold`."
+    },
+    "kind": {
+      "enum": ["layout", "primitive", "input", "button", "structure"]
+    },
+    "childMode": {
+      "enum": ["single", "multi", "none"]
+    },
+    "props": {
+      "type": "object",
+      "description": "Resolved props. Leaves are either plain JSON values (fully resolved) or Value objects (partially resolved — state/event refs preserved for the SDK).",
+      "additionalProperties": true
+    },
+    "children": {
+      "type": "array",
+      "description": "Ordered child ids. For StructureWidget slots, slot ids also appear here (and are additionally referenced by name inside `props`).",
+      "items": { "type": "string" }
+    },
+    "watches": {
+      "type": "array",
+      "description": "Insertion-ordered unique list of StateValue keys reachable from `props`. Clients subscribe to these keys.",
+      "items": { "type": "string" }
+    },
+    "actions": {
+      "type": "object",
+      "description": "Map of trigger name (`onTap`, `onChange`, ...) to Action. Action triggers are defined by the widget kind.",
+      "additionalProperties": { "$ref": "action.json#" }
+    }
+  }
+}

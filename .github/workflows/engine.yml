@@ -1,0 +1,24 @@
+name: Engine CI
+
+on:
+  push:
+    paths:
+      - "engine/**"
+      - "schema/**"
+  pull_request:
+    paths:
+      - "engine/**"
+      - "schema/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+        working-directory: engine
+      - run: bun test
+        working-directory: engine
+      - run: bun build src/server.ts --outdir dist --target bun
+        working-directory: engine

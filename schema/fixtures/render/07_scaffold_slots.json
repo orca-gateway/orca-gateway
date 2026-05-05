@@ -1,0 +1,27 @@
+{
+  "name": "scaffold-slots",
+  "description": "Scaffold with appBar + body slots. Verifies the structure-widget contract: each slot widget is encoded as its own node, its id appears in the parent's children[] array in slot order, AND the parent's props[slotName] is set to the slot id.",
+  "input": {
+    "type": "Scaffold",
+    "key": "s",
+    "props": { "backgroundColor": "#fff" },
+    "slots": [
+      { "name": "appBar",  "widget": { "type": "Text", "key": "ab", "props": { "data": "Title" } } },
+      { "name": "body",    "widget": { "type": "Text", "key": "bd", "props": { "data": "Body"  } } }
+    ]
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "s",
+      "type": "Scaffold",
+      "kind": "structure",
+      "childMode": "none",
+      "props": { "backgroundColor": "#fff", "appBar": "ab", "body": "bd" },
+      "children": ["ab", "bd"],
+      "watches": []
+    },
+    { "id": "bd", "type": "Text", "kind": "primitive", "childMode": "none", "props": { "data": "Body" },  "children": [], "watches": [] },
+    { "id": "ab", "type": "Text", "kind": "primitive", "childMode": "none", "props": { "data": "Title" }, "children": [], "watches": [] }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/navigation-config.json",
+  "title": "NavigationConfig",
+  "description": "App-level navigation configuration. Mirrors the engine NavigationConfig (core/app.ts). Stored as JSONB in apps.navigation_config. Controls how flows are presented to the user: tab bar, drawer, initial route, and global app state.",
+  "type": "object",
+  "properties": {
+    "initialRoute": {
+      "type": "string",
+      "description": "The route the app navigates to on launch (e.g. '/home')."
+    },
+    "tabs": {
+      "type": "array",
+      "description": "Tab definitions for bottom tab navigation. If non-empty, the SDK builds a StatefulShellRoute with persistent tab state.",
+      "items": { "$ref": "#/definitions/TabDefinition" }
+    },
+    "drawerItems": {
+      "type": "array",
+      "description": "Drawer menu items. Routes listed here are accessible via the side drawer.",
+      "items": { "$ref": "#/definitions/DrawerItemDefinition" }
+    },
+    "initialAppState": {
+      "type": "object",
+      "description": "Initial app-level state seeded into the SDK's ElmStore on launch. Keys become available to all pages via V.appState().",
+      "additionalProperties": true
+    },
+    "forceUpdate": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the SDK forces all clients to re-fetch config on next launch."
+    },
+    "tabBar": {
+      "description": "Custom server-driven tab bar widget tree. If omitted, the SDK renders a default BottomNavigationBar from the tabs array.",
+      "$ref": "page-definition.json#/definitions/WidgetNode"
+    },
+    "drawer": {
+      "description": "Custom server-driven drawer widget tree. If omitted, the SDK renders a default Drawer from drawerItems.",
+      "$ref": "page-definition.json#/definitions/WidgetNode"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "TabDefinition": {
+      "type": "object",
+      "required": ["id", "label", "icon", "initialRoute"],
+      "properties": {
+        "id": { "type": "string", "description": "Unique tab identifier." },
+        "label": { "type": "string", "description": "Tab label displayed in the tab bar." },
+        "icon": { "type": "string", "description": "Material icon name for the tab." },
+        "initialRoute": { "type": "string", "description": "Route to navigate to when this tab is selected (e.g. '/home')." }
+      }
+    },
+    "DrawerItemDefinition": {
+      "type": "object",
+      "required": ["id", "label", "route"],
+      "properties": {
+        "id": { "type": "string", "description": "Unique drawer item identifier." },
+        "label": { "type": "string", "description": "Display label in the drawer." },
+        "icon": { "type": "string", "description": "Material icon name." },
+        "route": { "type": "string", "description": "Route to navigate to when tapped." }
+      }
+    }
+  }
+}

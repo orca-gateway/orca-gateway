@@ -1,0 +1,39 @@
+{
+  "name": "fallback-prompt",
+  "description": "FallbackPrompt with all five frozen props populated. Pins the wire-format shape of the frozen v1 emergency-channel widget — the invariant every SDK version ever shipped must honor. See Epic 25b, task 25b.5.",
+  "input": {
+    "type": "FallbackPrompt",
+    "key": "root",
+    "props": {
+      "title": "Update available",
+      "body": "A newer version of the app is available with additional features.",
+      "ctaLabel": "Open App Store",
+      "ctaUrl": "https://apps.apple.com/app/id000000000",
+      "severity": "warn"
+    }
+  },
+  "context": {
+    "pageState": {},
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "root",
+      "type": "FallbackPrompt",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "title": "Update available",
+        "body": "A newer version of the app is available with additional features.",
+        "ctaLabel": "Open App Store",
+        "ctaUrl": "https://apps.apple.com/app/id000000000",
+        "severity": "warn"
+      },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

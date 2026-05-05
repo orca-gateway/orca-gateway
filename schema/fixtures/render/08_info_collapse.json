@@ -1,0 +1,21 @@
+{
+  "name": "info-collapse",
+  "description": "Plain info Value with no state refs collapses fully to its resolved scalar. `watches` is empty because info is authoritative on the server.",
+  "input": {
+    "type": "Text",
+    "key": "t",
+    "props": { "data": { "type": "info", "key": "greeting" } }
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": { "greeting": "hello" }, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "t",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": "hello" },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

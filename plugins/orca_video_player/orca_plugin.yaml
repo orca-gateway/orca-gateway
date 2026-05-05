@@ -1,0 +1,17 @@
+name: orca_video_player
+display_name: Video Player
+description: Server-driven video playback with play/pause/seek controls and progress events.
+
+platform:
+  android:
+    min_sdk: 21
+    permissions:
+      - android.permission.INTERNET
+
+  ios:
+    min_version: "14.0"
+    plist:
+      - key: NSAppTransportSecurity
+        value:
+          NSAllowsArbitraryLoads: true
+        type: dict

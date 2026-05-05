@@ -1,0 +1,26 @@
+name: SDK CI
+
+on:
+  push:
+    paths:
+      - "sdk/**"
+      - "schema/**"
+  pull_request:
+    paths:
+      - "sdk/**"
+      - "schema/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+        working-directory: sdk
+      - run: flutter analyze
+        working-directory: sdk
+      - run: flutter test
+        working-directory: sdk

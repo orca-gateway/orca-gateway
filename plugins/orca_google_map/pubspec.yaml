@@ -1,0 +1,20 @@
+name: orca_google_map
+description: "Orca Gateway plugin for Google Maps — server-driven map rendering with markers, camera control, and gesture events."
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.3
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  orca_gateway:
+    path: ../../sdk
+  google_maps_flutter: ^2.10.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

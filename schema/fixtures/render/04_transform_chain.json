@@ -1,0 +1,31 @@
+{
+  "name": "transform-chain",
+  "description": "Value with info-rooted transform chain: base (from info) * 2 + 1, toFixed(2). No state refs → entire expression collapses to the plain string \"11.00\".",
+  "input": {
+    "type": "Text",
+    "key": "t",
+    "props": {
+      "data": {
+        "type": "transform",
+        "input": { "type": "info", "key": "base" },
+        "by": [
+          { "type": "multiply", "by": { "type": "static", "value": 2 } },
+          { "type": "add", "by": { "type": "static", "value": 1 } },
+          { "type": "toFixed", "decimals": 2 }
+        ]
+      }
+    }
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": { "base": 5 }, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "t",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": "11.00" },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

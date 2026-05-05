@@ -1,0 +1,11 @@
+sdk/
+plugins/
+examples/
+docs-site/
+devtools/
+cli/
+.github/
+.git/
+node_modules/
+*.md
+LICENSE

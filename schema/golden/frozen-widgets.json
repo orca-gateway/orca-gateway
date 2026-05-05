@@ -1,0 +1,19 @@
+{
+  "$schema": "https://orcagateway.com/schemas/frozen-widgets.json",
+  "_comment": "Golden snapshot of every widget whose prop shape is frozen by contract (Epic 25b, task 25b.5). Each entry pins the exact set of prop keys the widget's getProps() returns plus the logical type of each prop. The frozen-contract test at engine/test/frozen-contract.test.ts diffs this file against the current widget implementation — any drift (added key, removed key, renamed key) fails CI. Updating this file requires visible reviewer acknowledgment because it means a frozen contract is changing, which breaks every older SDK version that ever shipped. Do not do that lightly.",
+  "widgets": {
+    "FallbackPrompt": {
+      "introducedIn": "1.0.0",
+      "props": {
+        "title": { "required": true, "type": "Valueable<string>" },
+        "body": { "required": true, "type": "Valueable<string>" },
+        "ctaLabel": { "required": false, "type": "Valueable<string>" },
+        "ctaUrl": { "required": false, "type": "Valueable<string>" },
+        "severity": {
+          "required": true,
+          "type": "Valueable<'info' | 'warn' | 'blocking'>"
+        }
+      }
+    }
+  }
+}

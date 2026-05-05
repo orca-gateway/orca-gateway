@@ -1,0 +1,98 @@
+{
+  "GoogleMap": [
+    {
+      "id": "0",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 240,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "decoration": {
+          "color": "0xFFE5E7EB",
+          "borderRadius": 12
+        }
+      },
+      "children": [
+        "1"
+      ],
+      "watches": []
+    },
+    {
+      "id": "1",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "watches": []
+    },
+    {
+      "id": "6",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Runs in the compiled mobile app"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "5",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 4
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "4",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Google Maps preview"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "3",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 8
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "2",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "map",
+        "size": 32
+      },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

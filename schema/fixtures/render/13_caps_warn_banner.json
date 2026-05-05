@@ -1,0 +1,90 @@
+{
+  "name": "caps-warn-banner",
+  "description": "Capability filter in warn mode wraps the original tree in a Column with a FallbackPrompt banner as the first child. The original root remains intact as the second child — warn mode never mutates the authored tree, only prepends a notification. Runs on both Bun and Go engines after slice 3 ported the filter to Go. See Epic 25b slice 2, task 25b.3.",
+  "input": {
+    "type": "Column",
+    "key": "root",
+    "props": { "mainAxisAlignment": "start" },
+    "children": [
+      { "type": "Text", "key": "t1", "props": { "data": "above" } },
+      { "type": "Divider", "key": "d1", "props": { "thickness": 1 } },
+      { "type": "Text", "key": "t2", "props": { "data": "below" } }
+    ]
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "clientCapabilities": {
+    "protocolVersion": "1.0.0",
+    "sdkSemver": "0.1.0",
+    "widgets": ["Column", "Text", "FallbackPrompt"],
+    "valueKinds": ["static", "state", "info", "request", "event", "transform", "conditional", "tween", "tweenSequence"],
+    "actionKinds": [],
+    "transformKinds": [],
+    "boolExprOps": []
+  },
+  "fallbackPolicy": {
+    "default": "warn"
+  },
+  "expected": [
+    {
+      "id": "__caps_warn_root__",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "mainAxisAlignment": "start",
+        "crossAxisAlignment": "stretch"
+      },
+      "children": ["__caps_warn_banner__", "root"],
+      "watches": []
+    },
+    {
+      "id": "__caps_warn_banner__",
+      "type": "FallbackPrompt",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "title": "Some content needs an update",
+        "body": "Parts of this screen use features that your current app version can't fully render (widget.Divider). Please update when convenient for the full experience.",
+        "severity": "warn"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "root",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": { "mainAxisAlignment": "start" },
+      "children": ["t1", "d1", "t2"],
+      "watches": []
+    },
+    {
+      "id": "t2",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": "below" },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "d1",
+      "type": "Divider",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "thickness": 1 },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "t1",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": "above" },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

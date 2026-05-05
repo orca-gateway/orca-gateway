@@ -1,0 +1,307 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/plugin-manifest.json",
+  "title": "PluginManifest",
+  "description": "Declares a plugin's rendering-layer metadata: widgets, actions, value kinds, and transform kinds. The encoder consumes the widget entries (type, kind, childMode, slots, introducedIn) identically to core widgets. Additional fields (props, triggers, params) are informational — used by devtools, validation, and SDK capability negotiation but never by the encoding hot path.",
+  "type": "object",
+  "required": ["pluginId", "version", "author", "widgets"],
+  "additionalProperties": false,
+  "properties": {
+    "pluginId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$",
+      "description": "Globally unique plugin identifier. Lowercase, underscores allowed, 3-64 chars."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-(0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(\\.(0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?$",
+      "description": "Semver version of this manifest."
+    },
+    "author": {
+      "$ref": "#/definitions/Author"
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to the plugin's homepage or documentation."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Short description shown in the plugin catalog."
+    },
+    "minSdkVersion": {
+      "type": "string",
+      "description": "Minimum Flutter SDK protocol version required (semver). If the app's SDK is older, enable shows a warning."
+    },
+    "minEngineVersion": {
+      "type": "string",
+      "description": "Minimum engine protocol version required (semver)."
+    },
+    "widgets": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/PluginWidgetEntry" },
+      "description": "Widget types this plugin provides. Each entry matches the shape consumed by both the TS and Go encoders."
+    },
+    "valueKinds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Custom Value kind identifiers this plugin introduces (e.g. 'geoLocation'). Reserved for future use."
+    },
+    "actionKinds": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/PluginActionEntry" },
+      "description": "Custom action types this plugin provides, optionally with goja server-side handlers."
+    },
+    "transformKinds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Custom Transform kind identifiers this plugin introduces. Reserved for future use."
+    },
+    "preview": {
+      "$ref": "#/definitions/PreviewConfig",
+      "description": "How plugin widgets should render in the Flutter Web preview editor (Epic 38 Slice B). Two modes: 'declarative' — the plugin ships a TypeScript stub that composes only core Orca Gateway widgets, compiled at build time into a static ComponentNode[] artifact the stock preview editor already knows how to render (no rebuild of the preview editor needed); 'web_native' — the plugin ships real Dart code that runs in the preview, which requires a per-tenant preview editor build (Epic 38 Slice D); 'none' — no preview, every plugin widget falls through to the UnsupportedWidgetPlaceholder card."
+    },
+    "marketplace": {
+      "$ref": "#/definitions/MarketplaceConfig",
+      "description": "Marketplace listing metadata (Epic 38 task 38.8 / 38.9). Required icons at three sizes plus at least one screenshot surface in the plugin catalog browse UI and on the per-plugin install page."
+    }
+  },
+  "definitions": {
+    "Author": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" }
+      }
+    },
+    "PluginWidgetEntry": {
+      "type": "object",
+      "required": ["type", "kind", "childMode", "introducedIn"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]+$",
+          "description": "Wire type name. Must start with uppercase. Must not collide with core widget types (enforced at runtime, not schema level)."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["layout", "primitive", "input", "button", "structure"],
+          "description": "Widget category — same enum as core widgets."
+        },
+        "childMode": {
+          "type": "string",
+          "enum": ["single", "multi", "none"],
+          "description": "How the encoder handles children for this widget type."
+        },
+        "slots": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Named slot list for structure widgets. Must be non-empty when kind=structure, empty otherwise."
+        },
+        "introducedIn": {
+          "type": "string",
+          "description": "Plugin version (semver) that first shipped this widget."
+        },
+        "removedIn": {
+          "type": "string",
+          "description": "Plugin version (semver) that removed this widget. Encoder skips it when present."
+        },
+        "frozen": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, the prop shape is immutable across plugin versions."
+        },
+        "isSupportedOnWeb": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this widget can render inside the Flutter Web preview editor (Epic 38 task 38.1). Defaults to true. Set to false for widgets that rely on platform views, native-only APIs, or other capabilities absent on web. When false, the SDK substitutes the widget with either a registered web stub (Epic 38 task 38.3) or the UnsupportedWidgetPlaceholder primitive (Epic 38 task 38.2)."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable widget name shown in the UnsupportedWidgetPlaceholder card and in the dashboard missing-widgets screen. Defaults to the widget type string when absent."
+        },
+        "iconName": {
+          "type": "string",
+          "description": "Optional Material icon identifier shown inside the UnsupportedWidgetPlaceholder card."
+        },
+        "docsUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional documentation link surfaced from the UnsupportedWidgetPlaceholder card and the marketplace listing."
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/PropSchema" },
+          "description": "Informational prop schema for devtools and validation. NOT consumed by the encoder."
+        },
+        "triggers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Event trigger names this widget can fire (e.g. 'onTap', 'onCameraMove')."
+        }
+      },
+      "if": { "properties": { "kind": { "const": "structure" } } },
+      "then": {
+        "properties": { "slots": { "minItems": 1 } },
+        "required": ["slots"]
+      },
+      "else": {
+        "properties": { "slots": { "maxItems": 0 } }
+      }
+    },
+    "PluginActionEntry": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9]+$",
+          "description": "Action type name (camelCase)."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/PropSchema" },
+          "description": "Parameter schema for this action."
+        },
+        "handler": {
+          "type": "string",
+          "description": "JavaScript source for server-side execution in the goja sandbox. Optional — actions without a handler are client-only."
+        }
+      }
+    },
+    "PreviewConfig": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["declarative", "web_native", "none"],
+          "description": "Preview strategy. 'declarative' means the plugin ships a TypeScript file composed of core Orca Gateway widgets that `orca plugin build` compiles into a static JSON artifact; 'web_native' means the plugin ships real Dart that runs inside the preview editor and requires a per-composition preview build; 'none' explicitly opts out of preview rendering, leaving every plugin widget as an UnsupportedWidgetPlaceholder card."
+        },
+        "stub": {
+          "type": "string",
+          "description": "Path (relative to the plugin root) of the TypeScript file declaring the declarative stub tree. Only consulted when kind='declarative'. Defaults to 'preview/stub.ts' when absent. The file must export a default map whose keys are widget type strings and whose values are Orca Gateway engine Widget instances."
+        },
+        "compiledStub": {
+          "type": "string",
+          "description": "Path (relative to the plugin root) where `orca plugin build` writes the compiled ComponentNode[] JSON. Only consulted when kind='declarative'. Defaults to 'preview/stub.compiled.json'. This file is committed into the plugin repo so installs don't require a build step."
+        },
+        "entry": {
+          "type": "string",
+          "description": "Path (relative to the plugin root) of the Dart file that registers web-native component builders. Only consulted when kind='web_native'. The entry must export a registration function compatible with the preview build pipeline added in Epic 38 Slice D."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "declarative" } } },
+          "then": { "not": { "required": ["entry"] } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "web_native" } } },
+          "then": {
+            "required": ["entry"],
+            "not": { "anyOf": [{ "required": ["stub"] }, { "required": ["compiledStub"] }] }
+          }
+        }
+      ]
+    },
+    "MarketplaceConfig": {
+      "type": "object",
+      "required": ["icons", "screenshots"],
+      "additionalProperties": false,
+      "properties": {
+        "icons": {
+          "$ref": "#/definitions/MarketplaceIcons",
+          "description": "All three icon sizes are required for a marketplace-eligible plugin. Every size is validated as a PNG with exact pixel dimensions by `orca plugin doctor`. SVGs and other formats are rejected — PNG only keeps validation dependency-free and predictable across renderers."
+        },
+        "screenshots": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/MarketplaceScreenshot" },
+          "description": "At least one static PNG screenshot is required so the marketplace listing has something visual to show. Optional YouTube video links may be added per screenshot for richer demos."
+        },
+        "tagline": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Optional short tagline shown under the plugin name in the marketplace listing."
+        }
+      }
+    },
+    "MarketplaceIcons": {
+      "type": "object",
+      "required": ["small", "medium", "large"],
+      "additionalProperties": false,
+      "properties": {
+        "small": {
+          "type": "string",
+          "description": "Path (relative to the plugin root) of the 32x32 PNG icon."
+        },
+        "medium": {
+          "type": "string",
+          "description": "Path (relative to the plugin root) of the 64x64 PNG icon."
+        },
+        "large": {
+          "type": "string",
+          "description": "Path (relative to the plugin root) of the 128x128 PNG icon."
+        }
+      }
+    },
+    "MarketplaceScreenshot": {
+      "type": "object",
+      "required": ["path"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path (relative to the plugin root) of a PNG screenshot. No dimension constraints — we let authors use whatever aspect ratio matches the widget being demoed."
+        },
+        "caption": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Optional caption shown below the screenshot in the marketplace listing."
+        },
+        "youtubeUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional YouTube video link demonstrating the widget in action. The marketplace listing embeds this as a play button overlay on the screenshot."
+        }
+      }
+    },
+    "PropSchema": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "boolean", "object", "array"],
+          "description": "JSON type of the prop value."
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "enum": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Allowed string values (only meaningful when type=string)."
+        },
+        "items": {
+          "$ref": "#/definitions/PropSchema",
+          "description": "Schema for array items (only meaningful when type=array)."
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/PropSchema" },
+          "description": "Nested prop schemas (only meaningful when type=object)."
+        }
+      }
+    }
+  }
+}

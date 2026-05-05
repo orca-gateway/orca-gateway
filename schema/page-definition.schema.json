@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/page-definition.json",
+  "title": "PageDefinition (stored input)",
+  "description": "Stored definition of a page. This is the INPUT to the engine's 4-stage pipeline — not the rendered output (see page-response.schema.json for that). Stored as JSONB in page_versions.definition. The cloud dashboard writes this; the app-server reads it to run the pipeline.",
+  "type": "object",
+  "required": ["id", "title", "state", "widgets"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Page identifier. Matches page_definitions.slug."
+    },
+    "title": {
+      "type": "string",
+      "description": "Page title used by the SDK for route/app-bar titles."
+    },
+    "appState": {
+      "type": "array",
+      "description": "App-level state keys this page needs access to. The SDK subscribes to these keys.",
+      "items": { "type": "string" }
+    },
+    "cachePolicy": {
+      "enum": ["none", "ttl", "stale-while-revalidate"],
+      "description": "Page-level cache policy. Overrides the flow-level policy if set."
+    },
+    "cacheTtl": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Page cache TTL in seconds."
+    },
+    "state": {
+      "type": "array",
+      "description": "Initial state declarations. The SDK seeds its ElmStore with these before rendering.",
+      "items": { "$ref": "page-response.json#/definitions/StateDefinition" }
+    },
+    "infoData": {
+      "type": "object",
+      "description": "Data fetching configuration for Stage 1 of the pipeline. In the cloud, this replaces the engine's getInfoData() function with a declarative config.",
+      "properties": {
+        "url": { "type": "string", "description": "API endpoint URL to fetch data from." },
+        "method": { "enum": ["GET", "POST"], "description": "HTTP method." },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "body": { "description": "Request body (for POST)." },
+        "transform": { "type": "string", "description": "JSONPath expression to extract data from the response." }
+      }
+    },
+    "forceUpdate": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the page always re-fetches data on revisit."
+    },
+    "widgets": {
+      "type": "array",
+      "description": "Widget tree definition. Each entry is a widget node (pre-flatten). The engine's render stage produces this; in the cloud's visual editor, it's built by drag-and-drop.",
+      "items": { "$ref": "#/definitions/WidgetNode" }
+    },
+    "_dashboard": {
+      "type": "object",
+      "description": "Dashboard-only metadata. NOT consumed by the engine or sent to the app. Used by the cloud dashboard UI to display route context for this page.",
+      "properties": {
+        "route": {
+          "type": "string",
+          "description": "The full route path this page is served at (e.g. '/home', '/product/:id'). Derived from the flow's route tree."
+        },
+        "children": {
+          "type": "array",
+          "description": "Child routes nested under this page's route. Each item shows the child path and which page it maps to.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": { "type": "string" },
+              "page": { "type": "string" }
+            }
+          }
+        },
+        "flowSlug": {
+          "type": "string",
+          "description": "Slug of the flow that contains this page's route."
+        }
+      }
+    }
+  },
+  "definitions": {
+    "WidgetNode": {
+      "type": "object",
+      "description": "Pre-flatten widget tree node. Mirrors the engine's Widget.new() output structure. The encoder flattens this into ComponentNode[] at render time.",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "description": "Widget type name (e.g. 'Column', 'Text', 'Scaffold')." },
+        "key": { "type": "string", "description": "Optional stable key for the widget." },
+        "props": { "type": "object", "description": "Widget props. Values can be plain JSON or Value objects.", "additionalProperties": true },
+        "child": { "$ref": "#/definitions/WidgetNode" },
+        "children": { "type": "array", "items": { "$ref": "#/definitions/WidgetNode" } },
+        "actions": { "type": "object", "description": "Event handlers.", "additionalProperties": { "$ref": "action.json#" } }
+      }
+    }
+  }
+}

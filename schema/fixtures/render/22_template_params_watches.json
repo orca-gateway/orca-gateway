@@ -1,0 +1,55 @@
+{
+  "name": "template-params-watches",
+  "description": "TemplateTransform whose `params` bag references page state. The param's `V.pageState(...)` MUST survive partial-resolve (so the SDK re-resolves on state change) AND the watched key MUST surface in the node's `watches: []` array. Proves the watch-collection branch for template/regex params. Regression test for the Settings-page bug where a state-ref buried in a param silently stopped rebuilds.",
+  "input": {
+    "type": "Text",
+    "key": "t",
+    "props": {
+      "data": {
+        "type": "transform",
+        "input": { "type": "info", "key": "greeting" },
+        "by": [
+          {
+            "type": "template",
+            "template": "{{value}}, {{userName}}!",
+            "params": {
+              "userName": { "type": "state", "scope": "page", "key": "userName" }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "context": {
+    "pageState": { "userName": "Amr" },
+    "appState": {},
+    "infoData": { "greeting": "Hi" },
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "t",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": { "type": "static", "value": "Hi" },
+          "by": [
+            {
+              "type": "template",
+              "template": "{{value}}, {{userName}}!",
+              "params": {
+                "userName": { "type": "state", "scope": "page", "key": "userName" }
+              }
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": ["userName"]
+    }
+  ]
+}

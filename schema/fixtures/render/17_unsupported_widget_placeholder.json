@@ -1,0 +1,39 @@
+{
+  "name": "unsupported-widget-placeholder",
+  "description": "UnsupportedWidgetPlaceholder with every optional prop populated. Pins the wire-format shape of the Epic 38 placeholder primitive used by the Flutter Web preview editor and the dashboard missing-widgets screen. The preview renderer substitutes this node in place of plugin widgets whose manifest declares isSupportedOnWeb: false and that did not register a web stub. Semantically distinct from FallbackPrompt — this case is 'known widget, unsupported platform', not 'unknown widget, forward-compat miss'.",
+  "input": {
+    "type": "UnsupportedWidgetPlaceholder",
+    "key": "root",
+    "props": {
+      "widgetType": "OrcaGoogleMap",
+      "displayName": "Google Maps",
+      "iconName": "map",
+      "docsUrl": "https://docs.orcagateway.com/plugins/orca_google_map",
+      "reason": "Maps render in the compiled mobile app. Open on device to preview."
+    }
+  },
+  "context": {
+    "pageState": {},
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "root",
+      "type": "UnsupportedWidgetPlaceholder",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "widgetType": "OrcaGoogleMap",
+        "displayName": "Google Maps",
+        "iconName": "map",
+        "docsUrl": "https://docs.orcagateway.com/plugins/orca_google_map",
+        "reason": "Maps render in the compiled mobile app. Open on device to preview."
+      },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

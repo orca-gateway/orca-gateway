@@ -1,0 +1,63 @@
+{
+  "name": "plugin-widget",
+  "description": "Plugin-provided primitive widget encodes identically in TS and Go when extra widget metadata is supplied at runtime via pluginWidgets. The encoder treats plugin widgets exactly like core widgets — same kind/childMode/slots semantics, same output shape.",
+  "pluginWidgets": [
+    {
+      "type": "MiniMap",
+      "kind": "primitive",
+      "childMode": "none",
+      "slots": [],
+      "introducedIn": "1.0.0"
+    }
+  ],
+  "input": {
+    "type": "Column",
+    "key": "root",
+    "children": [
+      {
+        "type": "MiniMap",
+        "key": "map1",
+        "props": {
+          "latitude": 37.7749,
+          "longitude": -122.4194,
+          "zoom": 12
+        }
+      },
+      {
+        "type": "Text",
+        "key": "label",
+        "props": { "data": "San Francisco" }
+      }
+    ]
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "root",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": ["map1", "label"],
+      "watches": []
+    },
+    {
+      "id": "label",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": "San Francisco" },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "map1",
+      "type": "MiniMap",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "latitude": 37.7749, "longitude": -122.4194, "zoom": 12 },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

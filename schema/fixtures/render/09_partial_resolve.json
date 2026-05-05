@@ -1,0 +1,37 @@
+{
+  "name": "partial-resolve",
+  "description": "Transform Value that adds a state key to an info scalar. Because state is present, the tree survives — but the info leaf MUST be replaced with a static wrapper carrying the resolved scalar. This is the load-bearing partial-resolve behavior in value-resolver.ts.",
+  "input": {
+    "type": "Text",
+    "key": "t",
+    "props": {
+      "data": {
+        "type": "transform",
+        "input": { "type": "info", "key": "base" },
+        "by": [
+          { "type": "add", "by": { "type": "state", "scope": "page", "key": "delta" } }
+        ]
+      }
+    }
+  },
+  "context": { "pageState": { "delta": 7 }, "appState": {}, "infoData": { "base": 100 }, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "t",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": { "type": "static", "value": 100 },
+          "by": [
+            { "type": "add", "by": { "type": "state", "scope": "page", "key": "delta" } }
+          ]
+        }
+      },
+      "children": [],
+      "watches": ["delta"]
+    }
+  ]
+}

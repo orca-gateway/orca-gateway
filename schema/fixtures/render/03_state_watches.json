@@ -1,0 +1,23 @@
+{
+  "name": "state-watches",
+  "description": "Text prop bound to a pageState value. The value is preserved (not resolved) because it has state refs, and `watches` must contain the key.",
+  "input": {
+    "type": "Text",
+    "key": "t",
+    "props": {
+      "data": { "type": "state", "scope": "page", "key": "counter" }
+    }
+  },
+  "context": { "pageState": { "counter": 0 }, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "t",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": { "type": "state", "scope": "page", "key": "counter" } },
+      "children": [],
+      "watches": ["counter"]
+    }
+  ]
+}

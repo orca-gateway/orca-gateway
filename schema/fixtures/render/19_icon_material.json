@@ -1,0 +1,21 @@
+{
+  "name": "icon-material",
+  "description": "Icon with Material name prop. Baseline — font icon by name, no watches.",
+  "input": {
+    "type": "Icon",
+    "key": "icon1",
+    "props": { "name": "home", "size": 32, "color": "#FF5722" }
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "icon1",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "name": "home", "size": 32, "color": "#FF5722" },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

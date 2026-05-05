@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/page-response.json",
+  "title": "PageResponse",
+  "description": "Response body returned by the page render endpoint. Produced by the 4-stage pipeline (getInfoData → getState → render → flatten) and consumed by the Flutter SDK.",
+  "type": "object",
+  "required": ["pageId", "title", "state", "components"],
+  "properties": {
+    "pageId": {
+      "type": "string",
+      "description": "Stable page identifier. Matches Page.id in the engine."
+    },
+    "title": {
+      "type": "string",
+      "description": "Page title (used by the SDK for route/app-bar titles)."
+    },
+    "state": {
+      "type": "array",
+      "description": "Initial state declarations from Page.getState(). The SDK seeds its ElmStore with these before rendering.",
+      "items": { "$ref": "#/definitions/StateDefinition" }
+    },
+    "components": {
+      "type": "array",
+      "description": "Flat node array produced by the encoder. Root is first; children reference other nodes by id.",
+      "items": { "$ref": "component-node.json#" }
+    }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "StateDefinition": {
+      "type": "object",
+      "required": ["key", "scope", "initial"],
+      "properties": {
+        "key": { "type": "string" },
+        "scope": { "enum": ["page", "app"] },
+        "initial": { "description": "Initial value — any JSON type." }
+      }
+    }
+  }
+}

@@ -1,0 +1,64 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Build artifacts
+dist/
+build/
+*.js.map
+
+# Flutter
+sdk/.dart_tool/
+sdk/.packages
+sdk/.flutter-plugins
+sdk/.flutter-plugins-dependencies
+sdk/build/
+sdk/.metadata
+sdk/pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Docker
+docker-data/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+
+# Dashboard
+dashboard/.next/
+dashboard/node_modules/
+dashboard/out/
+
+# Docs site
+docs-site/node_modules/
+docs-site/dist/
+docs-site/.astro/
+docs-site
+
+.atlas
+
+# Dart/Flutter generated
+.dart_tool/
+**/.dart_tool/
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/ephemeral/
+**/ios/.symlinks/

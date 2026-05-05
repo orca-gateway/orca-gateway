@@ -1,0 +1,27 @@
+name: orca_push_notification
+display_name: Push Notification
+description: FCM push notifications with token management, topic subscriptions, and local notification display.
+
+platform:
+  android:
+    min_sdk: 21
+    permissions:
+      - android.permission.POST_NOTIFICATIONS
+
+  ios:
+    min_version: "14.0"
+    plist:
+      - key: FirebaseAppDelegateProxyEnabled
+        value: "false"
+        type: boolean
+    entitlements:
+      - aps-environment
+
+setup_steps:
+  - "Create a Firebase project at https://console.firebase.google.com"
+  - "Register your iOS and Android apps in the Firebase console"
+  - "Download google-services.json and place it in android/app/"
+  - "Download GoogleService-Info.plist and place it in ios/Runner/"
+  - "For Android: Add the Google Services Gradle plugin — see https://firebase.google.com/docs/android/setup"
+  - "For iOS: Enable Push Notifications capability in Xcode"
+  - "Call PushNotificationPlugin.initialize() in your main() before runApp()"

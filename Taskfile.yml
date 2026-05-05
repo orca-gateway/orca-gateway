@@ -1,0 +1,148 @@
+version: "3"
+
+vars:
+  ENGINE_DIR: engine
+  SDK_DIR: sdk
+  DASH_DIR: dashboard
+
+tasks:
+  # === Top-level ===
+  dev:
+    desc: Start engine dev server
+    cmds:
+      - task: engine:dev
+
+  test:all:
+    desc: Run all tests (engine + engine-dart + SDK)
+    cmds:
+      - task: engine:test
+      - task: engine-dart:test
+      - task: sdk:test
+
+  # === Engine ===
+  engine:dev:
+    desc: Start engine in dev mode with hot reload
+    dir: "{{.ENGINE_DIR}}"
+    cmds:
+      - bun run --watch src/server.ts
+
+  engine:test:
+    desc: Run engine tests
+    dir: "{{.ENGINE_DIR}}"
+    cmds:
+      - bun test
+
+  engine:lint:
+    desc: Lint and format-check engine code
+    dir: "{{.ENGINE_DIR}}"
+    cmds:
+      - bun run lint
+
+  engine:build:
+    desc: Build engine for production
+    dir: "{{.ENGINE_DIR}}"
+    cmds:
+      - bun build src/server.ts --outdir dist --target bun
+
+  # === Engine (Dart) ===
+  engine-dart:dev:
+    desc: Start Dart engine example server
+    dir: examples/server-dart
+    cmds:
+      - dart run main.dart
+
+  engine-dart:test:
+    desc: Run Dart engine tests (conformance suite)
+    dir: engine-dart
+    cmds:
+      - dart test
+
+  engine-dart:analyze:
+    desc: Run Dart static analysis on engine-dart
+    dir: engine-dart
+    cmds:
+      - dart analyze
+
+  engine-dart:gen:
+    desc: Regenerate widget registry + builder shells
+    dir: engine-dart
+    cmds:
+      - dart run tool/gen_widget_registry.dart
+      - dart run tool/gen_widget_builders.dart
+
+  # === SDK ===
+  sdk:test:
+    desc: Run SDK tests
+    dir: "{{.SDK_DIR}}"
+    cmds:
+      - flutter test
+
+  sdk:analyze:
+    desc: Run Flutter static analysis
+    dir: "{{.SDK_DIR}}"
+    cmds:
+      - flutter analyze
+
+  # === Example app ===
+  example:dev:
+    desc: Start example app and server in parallel
+    deps: 
+      - example:dev:app
+      - example:dev:server
+      - devtools:dev
+    
+  
+  example:dev:app:
+    desc: Start example app in dev mode (Android)
+    dir: examples/app
+    cmds:
+      - flutter run 
+  example:dev:server:
+    desc: Start example server in dev mode
+    dir: examples/server
+    cmds:
+      - bun run --watch index.ts
+
+  # === Docs ===
+  docs:dev:
+    desc: Start docs site dev server (Docusaurus v3)
+    dir: docs-site
+    cmds:
+      - bun run start
+
+  docs:build:
+    desc: Build docs site for production
+    dir: docs-site
+    cmds:
+      - bun run build
+
+  docs:clear:
+    desc: Clear Docusaurus build cache
+    dir: docs-site
+    cmds:
+      - bun run clear
+
+  # === Dashboard ===
+  dash:dev:
+    desc: Start dashboard dev server
+    dir: "{{.DASH_DIR}}"
+    cmds:
+      - bun run dev
+
+  # === Devtools ===
+  devtools:dev:
+    desc: Start Devtools dev server
+    dir: devtools
+    cmds:
+      - flutter run -d macos
+
+  # === Docker ===
+  docker:up:
+    desc: Start Docker services (PostgreSQL)
+    cmds:
+      - docker compose up -d
+
+  docker:down:
+    desc: Stop Docker services
+    cmds:
+      - docker compose down

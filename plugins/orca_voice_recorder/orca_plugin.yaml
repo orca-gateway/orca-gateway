@@ -1,0 +1,15 @@
+name: orca_voice_recorder
+display_name: Voice Recorder
+description: Audio recording with amplitude monitoring, pause/resume, and playback.
+
+platform:
+  android:
+    min_sdk: 21
+    permissions:
+      - android.permission.RECORD_AUDIO
+
+  ios:
+    min_version: "14.0"
+    plist:
+      - key: NSMicrophoneUsageDescription
+        value: "This app needs microphone access to record audio"

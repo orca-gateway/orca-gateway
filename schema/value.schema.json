@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/value.json",
+  "title": "Value",
+  "description": "Union of all Value kinds. A Value is a server-authored expression that is either fully resolved on the server (static, info, request) or partially resolved and re-evaluated on the client as state changes (state, event, transform, conditional, tween, tweenSequence).",
+  "oneOf": [
+    { "$ref": "#/definitions/StaticValue" },
+    { "$ref": "#/definitions/StateValue" },
+    { "$ref": "#/definitions/InfoValue" },
+    { "$ref": "#/definitions/RequestValue" },
+    { "$ref": "#/definitions/EventValue" },
+    { "$ref": "#/definitions/TransformValue" },
+    { "$ref": "#/definitions/ConditionalValue" },
+    { "$ref": "#/definitions/TweenValue" },
+    { "$ref": "#/definitions/TweenSequenceValue" }
+  ],
+  "definitions": {
+    "StaticValue": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": { "const": "static" },
+        "value": {}
+      }
+    },
+    "StateValue": {
+      "type": "object",
+      "required": ["type", "key", "scope"],
+      "properties": {
+        "type": { "const": "state" },
+        "key": { "type": "string", "description": "Dot-delimited path into the state object. Numeric segments index arrays." },
+        "scope": { "enum": ["page", "app"] }
+      }
+    },
+    "InfoValue": {
+      "type": "object",
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "const": "info" },
+        "key": { "type": "string", "description": "Dot-delimited path into Page.getInfoData() result." }
+      }
+    },
+    "RequestValue": {
+      "type": "object",
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "const": "request" },
+        "key": { "type": "string", "description": "Dot-delimited path into RequestInfo (headers, query, params, auth)." }
+      }
+    },
+    "EventValue": {
+      "type": "object",
+      "description": "Resolved client-side at event-trigger time from the event payload.",
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "const": "event" },
+        "key": { "type": "string" }
+      }
+    },
+    "TransformValue": {
+      "type": "object",
+      "required": ["type", "input", "by"],
+      "properties": {
+        "type": { "const": "transform" },
+        "input": { "$ref": "#/definitions/Value" },
+        "by": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Transform" }
+        }
+      }
+    },
+    "ConditionalValue": {
+      "type": "object",
+      "required": ["type", "branches"],
+      "properties": {
+        "type": { "const": "conditional" },
+        "branches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["when", "then"],
+            "properties": {
+              "when": { "$ref": "#/definitions/BoolExpr" },
+              "then": { "$ref": "#/definitions/Value" }
+            }
+          }
+        },
+        "else": { "$ref": "#/definitions/Value" }
+      }
+    },
+    "TweenValue": {
+      "type": "object",
+      "required": ["type", "begin", "end"],
+      "properties": {
+        "type": { "const": "tween" },
+        "begin": {},
+        "end": {},
+        "animationId": { "type": "string" }
+      }
+    },
+    "TweenSequenceValue": {
+      "type": "object",
+      "required": ["type", "items"],
+      "properties": {
+        "type": { "const": "tweenSequence" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["value", "duration"],
+            "properties": {
+              "value": {},
+              "duration": { "type": "number" }
+            }
+          }
+        },
+        "animationId": { "type": "string" }
+      }
+    },
+
+    "Value": { "$ref": "#" },
+
+    "Transform": {
+      "oneOf": [
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "toString" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "toUpperCase" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "toLowerCase" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "trim" } } },
+        { "type": "object", "required": ["type", "template"], "properties": { "type": { "const": "template" }, "template": { "type": "string" }, "params": { "type": "object", "additionalProperties": { "$ref": "#/definitions/Value" } } } },
+        { "type": "object", "required": ["type", "pattern"], "properties": { "type": { "const": "regex" }, "pattern": { "type": "string" }, "flags": { "type": "string" }, "replacement": { "type": "string" }, "params": { "type": "object", "additionalProperties": { "$ref": "#/definitions/Value" } } } },
+        { "type": "object", "required": ["type", "start"], "properties": { "type": { "const": "substring" }, "start": { "type": "number" }, "length": { "type": "number" } } },
+        { "type": "object", "required": ["type", "separator"], "properties": { "type": { "const": "split" }, "separator": { "type": "string" } } },
+        { "type": "object", "required": ["type", "separator"], "properties": { "type": { "const": "join" }, "separator": { "type": "string" } } },
+        { "type": "object", "required": ["type", "by"], "properties": { "type": { "const": "multiply" }, "by": { "$ref": "#/definitions/Value" } } },
+        { "type": "object", "required": ["type", "by"], "properties": { "type": { "const": "divide" }, "by": { "$ref": "#/definitions/Value" } } },
+        { "type": "object", "required": ["type", "by"], "properties": { "type": { "const": "add" }, "by": { "$ref": "#/definitions/Value" } } },
+        { "type": "object", "required": ["type", "by"], "properties": { "type": { "const": "subtract" }, "by": { "$ref": "#/definitions/Value" } } },
+        { "type": "object", "required": ["type", "by"], "properties": { "type": { "const": "modulo" }, "by": { "$ref": "#/definitions/Value" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "round" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "floor" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "ceil" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "abs" } } },
+        { "type": "object", "required": ["type", "decimals"], "properties": { "type": { "const": "toFixed" }, "decimals": { "type": "number" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "not" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "toBool" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "length" } } },
+        { "type": "object", "required": ["type", "index"], "properties": { "type": { "const": "at" }, "index": { "type": "number" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "first" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "last" } } },
+        { "type": "object", "required": ["type", "transform"], "properties": { "type": { "const": "map" }, "transform": { "$ref": "#/definitions/Transform" } } },
+        { "type": "object", "required": ["type", "expr"], "properties": { "type": { "const": "filter" }, "expr": { "$ref": "#/definitions/BoolExpr" } } },
+        { "type": "object", "required": ["type", "value"], "properties": { "type": { "const": "contains" }, "value": { "$ref": "#/definitions/Value" } } },
+        { "type": "object", "required": ["type", "currency"], "properties": { "type": { "const": "formatCurrency" }, "currency": { "type": "string" }, "decimals": { "type": "number" } } },
+        { "type": "object", "required": ["type", "format"], "properties": { "type": { "const": "formatDate" }, "format": { "type": "string" } } },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "formatNumber" }, "decimals": { "type": "number" }, "useGrouping": { "type": "boolean" } } }
+      ]
+    },
+
+    "BoolExpr": {
+      "oneOf": [
+        { "type": "object", "required": ["op", "left", "right"], "properties": { "op": { "enum": ["eq", "neq", "gt", "gte", "lt", "lte"] }, "left": { "$ref": "#/definitions/Value" }, "right": { "$ref": "#/definitions/Value" } } },
+        { "type": "object", "required": ["op", "exprs"], "properties": { "op": { "enum": ["and", "or"] }, "exprs": { "type": "array", "items": { "$ref": "#/definitions/BoolExpr" } } } },
+        { "type": "object", "required": ["op", "expr"], "properties": { "op": { "const": "not" }, "expr": { "$ref": "#/definitions/BoolExpr" } } },
+        { "type": "object", "required": ["op", "value"], "properties": { "op": { "const": "isNull" }, "value": { "$ref": "#/definitions/Value" } } },
+        { "type": "object", "required": ["op", "haystack", "needle"], "properties": { "op": { "const": "contains" }, "haystack": { "$ref": "#/definitions/Value" }, "needle": { "$ref": "#/definitions/Value" } } },
+        { "type": "object", "required": ["op", "str", "prefix"], "properties": { "op": { "const": "startsWith" }, "str": { "$ref": "#/definitions/Value" }, "prefix": { "$ref": "#/definitions/Value" } } },
+        { "type": "object", "required": ["op", "str", "regex"], "properties": { "op": { "const": "matches" }, "str": { "$ref": "#/definitions/Value" }, "regex": { "type": "string" } } }
+      ]
+    }
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/flow-definition.json",
+  "title": "FlowDefinition",
+  "description": "Stored definition of a flow. Mirrors the engine FlowConfig (core/flow.ts). Stored as JSONB in flow_versions.definition. The cloud control-plane writes this; the app-server reads it to build the runtime route tree.",
+  "type": "object",
+  "required": ["name", "routes"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Flow identifier. Matches the flow_definitions.slug."
+    },
+    "routes": {
+      "type": "array",
+      "description": "Nested route tree. Each route maps a path segment to a page slug.",
+      "items": { "$ref": "#/definitions/RouteDefinition" }
+    },
+    "cachePolicy": {
+      "enum": ["none", "ttl", "stale-while-revalidate"],
+      "description": "Flow-level cache policy applied to all pages in this flow unless overridden."
+    },
+    "cacheTtl": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Cache TTL in seconds. Only meaningful when cachePolicy is 'ttl' or 'stale-while-revalidate'."
+    },
+    "isStatic": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, all non-dynamic pages are pre-rendered at startup and cached on the client."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Client-facing version number for cache invalidation. Bump to force clients to re-fetch."
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "RouteDefinition": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path segment(s). Supports dynamic params with ':' prefix (e.g. 'product/:id')."
+        },
+        "page": {
+          "type": "string",
+          "description": "Slug of the page_definition to render at this route. Null for grouping-only routes."
+        },
+        "children": {
+          "type": "array",
+          "description": "Nested child routes. Matched after the parent path segments.",
+          "items": { "$ref": "#/definitions/RouteDefinition" }
+        },
+        "transition": { "$ref": "#/definitions/RouteTransition" },
+        "redirect": { "$ref": "#/definitions/RedirectRule" },
+        "isDynamic": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, this route always fetches fresh even in a static flow."
+        },
+        "hooks": {
+          "type": "object",
+          "description": "Route lifecycle hooks. In the cloud these are stored as action references, not raw JS.",
+          "properties": {
+            "onEnter": { "type": "string", "description": "Action definition slug to execute on route enter." },
+            "onExit": { "type": "string", "description": "Action definition slug to execute on route exit." }
+          }
+        }
+      }
+    },
+    "RouteTransition": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["slide", "fade", "scale", "slideUp", "slideRight", "none"]
+        },
+        "duration": {
+          "type": "integer",
+          "description": "Transition duration in milliseconds."
+        },
+        "curve": {
+          "type": "string",
+          "description": "Animation curve name (e.g. 'easeInOut', 'bounceIn')."
+        }
+      }
+    },
+    "RedirectRule": {
+      "type": "object",
+      "required": ["when", "equals", "to"],
+      "properties": {
+        "when": {
+          "type": "string",
+          "description": "App state key to evaluate."
+        },
+        "equals": {
+          "description": "Value to compare against."
+        },
+        "to": {
+          "type": "string",
+          "description": "Route path to redirect to when condition matches."
+        }
+      }
+    }
+  }
+}

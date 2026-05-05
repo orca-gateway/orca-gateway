@@ -1,0 +1,43 @@
+{
+  "name": "sub-page",
+  "description": "SubPage widget with pageId, params (including a state-backed Value), and an onLoading child. Verifies the SubPage encodes as a layout/single node whose props carry pageId and params, the child appears in children[], and the state-backed param produces a watch.",
+  "input": {
+    "type": "SubPage",
+    "key": "detail",
+    "props": {
+      "pageId": "profile",
+      "params": {
+        "userId": { "type": "state", "key": "selectedUser", "scope": "page" }
+      }
+    },
+    "children": [
+      { "type": "CircularProgressIndicator", "key": "loader" }
+    ]
+  },
+  "context": { "pageState": { "selectedUser": "u-42" }, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "detail",
+      "type": "SubPage",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "pageId": "profile",
+        "params": {
+          "userId": { "type": "state", "key": "selectedUser", "scope": "page" }
+        }
+      },
+      "children": ["loader"],
+      "watches": ["selectedUser"]
+    },
+    {
+      "id": "loader",
+      "type": "CircularProgressIndicator",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {},
+      "children": [],
+      "watches": []
+    }
+  ]
+}

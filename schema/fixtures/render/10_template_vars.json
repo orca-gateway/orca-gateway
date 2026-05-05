@@ -1,0 +1,29 @@
+{
+  "name": "template-vars",
+  "description": "String props with {{requestInfo.X}} and {{config.X}} tokens. Both are resolved on the server; unknown roots pass through unchanged.",
+  "input": {
+    "type": "Text",
+    "key": "t",
+    "props": {
+      "data": "Bearer {{requestInfo.authToken}} @ {{config.apiBaseUrl}} — unknown: {{state.foo}}"
+    }
+  },
+  "context": {
+    "pageState": {},
+    "appState": {},
+    "infoData": null,
+    "requestInfo": { "authToken": "tok-abc" },
+    "config": { "apiBaseUrl": "https://api.example.com" }
+  },
+  "expected": [
+    {
+      "id": "t",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": "Bearer tok-abc @ https://api.example.com — unknown: {{state.foo}}" },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

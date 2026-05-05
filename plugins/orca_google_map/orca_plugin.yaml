@@ -1,0 +1,91 @@
+name: orca_google_map
+display_name: Google Map
+description: Server-driven Google Maps with markers, camera control, and gesture events.
+
+# Epic 38 Slice B — declarative preview. The stub composes only core Orca Gateway
+# widgets, so the compiled JSON renders inside the stock Flutter Web preview
+# editor with no rebuild. Run `orca plugin build` after editing stub.ts to
+# regenerate stub.compiled.json.
+preview:
+  kind: declarative
+  stub: preview/stub.ts
+  compiledStub: preview/stub.compiled.json
+
+marketplace:
+  icons:
+    small: assets/icon-32.png
+    medium: assets/icon-64.png
+    large: assets/icon-128.png
+  screenshots:
+    - path: assets/screenshot-1.png
+      caption: "Google Map with markers and camera control"
+  tagline: "Server-driven Google Maps with markers, camera control, and gesture events."
+
+platform:
+  android:
+    min_sdk: 21
+    permissions:
+      - android.permission.ACCESS_FINE_LOCATION
+      - android.permission.ACCESS_COARSE_LOCATION
+    manifest_meta:
+      - name: com.google.android.geo.API_KEY
+        value: "${GOOGLE_MAPS_ANDROID_API_KEY}"
+
+  ios:
+    min_version: "15.0"
+    plist:
+      - key: NSLocationWhenInUseUsageDescription
+        value: "This app needs location access to show your position on the map"
+      - key: GOOGLE_MAPS_IOS_API_KEY
+        value: "${GOOGLE_MAPS_IOS_API_KEY}"
+    appdelegate:
+      imports:
+        - GoogleMaps
+      did_finish_launching:
+        - 'GMSServices.provideAPIKey(Bundle.main.object(forInfoDictionaryKey: "GOOGLE_MAPS_IOS_API_KEY") as? String ?? "")'
+
+env:
+  - key: GOOGLE_MAPS_ANDROID_API_KEY
+    description: "Google Maps API key for Android (from Google Cloud Console)"
+    required: true
+    platforms: [android]
+  - key: GOOGLE_MAPS_IOS_API_KEY
+    description: "Google Maps API key for iOS (from Google Cloud Console)"
+    required: true
+    platforms: [ios]
+
+setup_steps:
+  - "Create a Google Cloud project and enable the Maps SDK for iOS and Android"
+  - "Generate an API key at https://console.cloud.google.com/apis/credentials"
+
+schema:
+  widgets:
+    GoogleMap:
+      kind: primitive
+      props:
+        latitude: { type: number, required: true }
+        longitude: { type: number, required: true }
+        zoom: { type: number }
+        mapType: { type: string, enum: [normal, satellite, terrain, hybrid] }
+        myLocationEnabled: { type: boolean }
+        zoomControlsEnabled: { type: boolean }
+        markers:
+          type: array
+          items:
+            type: object
+            name: MapMarker
+            props:
+              id: { type: string, required: true }
+              latitude: { type: number, required: true }
+              longitude: { type: number, required: true }
+              title: { type: string }
+              snippet: { type: string }
+      triggers: [onTap, onLongPress, onCameraMove, onMarkerTap]
+
+  actions:
+    moveCamera:
+      params:
+        targetId: { type: string, required: true }
+        latitude: { type: number, required: true }
+        longitude: { type: number, required: true }
+        zoom: { type: number }

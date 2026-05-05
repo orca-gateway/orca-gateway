@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/orca-gateway/orca-gateway/discussions
+    about: Ask questions and start discussions here
+  - name: Security Vulnerabilities
+    url: https://github.com/orca-gateway/orca-gateway/blob/main/SECURITY.md
+    about: Report security issues privately (do NOT open a public issue)

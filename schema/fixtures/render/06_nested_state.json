@@ -1,0 +1,49 @@
+{
+  "name": "nested-state-watch-ordering",
+  "description": "Column > Text showing multiple state keys in a single node's props. Insertion-ordered watch dedup: `theme.color` appears before `count` and is NOT reordered alphabetically. The second reference to `theme.color` must NOT appear twice.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "props": {},
+    "children": [
+      {
+        "type": "Text",
+        "key": "lbl",
+        "props": {
+          "data": { "type": "state", "scope": "page", "key": "theme.color" },
+          "style": {
+            "background": { "type": "state", "scope": "page", "key": "count" },
+            "shadow": { "type": "state", "scope": "page", "key": "theme.color" }
+          }
+        }
+      }
+    ]
+  },
+  "context": { "pageState": { "theme": { "color": "red" }, "count": 2 }, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": ["lbl"],
+      "watches": []
+    },
+    {
+      "id": "lbl",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": { "type": "state", "scope": "page", "key": "theme.color" },
+        "style": {
+          "background": { "type": "state", "scope": "page", "key": "count" },
+          "shadow": { "type": "state", "scope": "page", "key": "theme.color" }
+        }
+      },
+      "children": [],
+      "watches": ["count", "theme.color"]
+    }
+  ]
+}

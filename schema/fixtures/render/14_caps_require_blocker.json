@@ -1,0 +1,42 @@
+{
+  "name": "caps-require-blocker",
+  "description": "Capability filter in require mode replaces the entire tree with a single blocking FallbackPrompt. Any unsupported feature at any node triggers a hard block — the authored content is discarded and the client sees only the upgrade prompt. This fixture asserts cross-engine byte-equality (Bun + Go) for the require path, completing the graceful/warn/require triple that Epic 25b slice 3 established for fixtures 12 and 13. See Epic 25b slice 3, task 25b.11.",
+  "input": {
+    "type": "Column",
+    "key": "root",
+    "props": { "mainAxisAlignment": "start" },
+    "children": [
+      { "type": "Text", "key": "t1", "props": { "data": "above" } },
+      { "type": "Divider", "key": "d1", "props": { "thickness": 1 } },
+      { "type": "Text", "key": "t2", "props": { "data": "below" } }
+    ]
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "clientCapabilities": {
+    "protocolVersion": "1.0.0",
+    "sdkSemver": "0.1.0",
+    "widgets": ["Column", "Text", "FallbackPrompt"],
+    "valueKinds": ["static", "state", "info", "request", "event", "transform", "conditional", "tween", "tweenSequence"],
+    "actionKinds": [],
+    "transformKinds": [],
+    "boolExprOps": []
+  },
+  "fallbackPolicy": {
+    "default": "require"
+  },
+  "expected": [
+    {
+      "id": "__caps_block_root__",
+      "type": "FallbackPrompt",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "title": "Update required",
+        "body": "This screen needs features that this app version can't render (widget.Divider). Please update from your app store to continue.",
+        "severity": "blocking"
+      },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

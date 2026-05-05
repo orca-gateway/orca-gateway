@@ -1,0 +1,11 @@
+include: package:lints/recommended.yaml
+
+linter:
+  rules:
+    prefer_single_quotes: true
+    sort_constructors_first: false
+    unnecessary_lambdas: true
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    avoid_print: false
+    dangling_library_doc_comments: false

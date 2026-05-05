@@ -1,0 +1,56 @@
+{
+  "name": "caps-graceful-strip",
+  "description": "Capability filter in graceful mode strips an unsupported widget (Divider) from the tree, pulling its (empty) children up to the parent. The surviving Column has one fewer child than the input. Runs on both Bun and Go engines after slice 3 ported the filter to Go. See Epic 25b slice 2, task 25b.3.",
+  "input": {
+    "type": "Column",
+    "key": "root",
+    "props": { "mainAxisAlignment": "start" },
+    "children": [
+      { "type": "Text", "key": "t1", "props": { "data": "above" } },
+      { "type": "Divider", "key": "d1", "props": { "thickness": 1 } },
+      { "type": "Text", "key": "t2", "props": { "data": "below" } }
+    ]
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "clientCapabilities": {
+    "protocolVersion": "1.0.0",
+    "sdkSemver": "0.1.0",
+    "widgets": ["Column", "Text", "FallbackPrompt"],
+    "valueKinds": ["static", "state", "info", "request", "event", "transform", "conditional", "tween", "tweenSequence"],
+    "actionKinds": [],
+    "transformKinds": [],
+    "boolExprOps": []
+  },
+  "fallbackPolicy": {
+    "default": "graceful"
+  },
+  "expected": [
+    {
+      "id": "root",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": { "mainAxisAlignment": "start" },
+      "children": ["t1", "t2"],
+      "watches": []
+    },
+    {
+      "id": "t2",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": "below" },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "t1",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": "above" },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

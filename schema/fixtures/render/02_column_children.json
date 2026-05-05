@@ -1,0 +1,30 @@
+{
+  "name": "column-children",
+  "description": "Column with three static Text children. Checks child ordering (children[] must be in author order) and monotonic id assignment for the un-keyed inner nodes. Root has a stable key; children rely on encoder-assigned ids.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "props": { "gap": 8 },
+    "children": [
+      { "type": "Text", "props": { "data": "a" } },
+      { "type": "Text", "props": { "data": "b" } },
+      { "type": "Text", "props": { "data": "c" } }
+    ]
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": { "gap": 8 },
+      "children": ["0", "1", "2"],
+      "watches": []
+    },
+    { "id": "2", "type": "Text", "kind": "primitive", "childMode": "none", "props": { "data": "c" }, "children": [], "watches": [] },
+    { "id": "1", "type": "Text", "kind": "primitive", "childMode": "none", "props": { "data": "b" }, "children": [], "watches": [] },
+    { "id": "0", "type": "Text", "kind": "primitive", "childMode": "none", "props": { "data": "a" }, "children": [], "watches": [] }
+  ],
+  "note": "Encoder output is [root, lastChild, ..., firstChild] because children[] is appended to nodes[] before the parent and the whole array is then reversed so root is first. The `children` field INSIDE each node preserves author order — only the flat array is reverse-traversal order. This mirrors the TS Encoder + flatten() in engine/src/types/widget.ts."
+}

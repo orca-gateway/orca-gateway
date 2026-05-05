@@ -1,0 +1,21 @@
+{
+  "name": "text-static",
+  "description": "Single Text widget with a fully static prop. Baseline sanity — one node, no watches, no children.",
+  "input": {
+    "type": "Text",
+    "key": "root",
+    "props": { "data": "hello world" }
+  },
+  "context": { "pageState": {}, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "expected": [
+    {
+      "id": "root",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": { "data": "hello world" },
+      "children": [],
+      "watches": []
+    }
+  ]
+}
