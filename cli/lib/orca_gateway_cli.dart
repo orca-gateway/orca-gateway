@@ -1,4 +1,4 @@
-library orca_cli;
+library;
 
 export 'src/manifest/plugin_manifest.dart';
 export 'src/manifest/plugin_schema.dart';

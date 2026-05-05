@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = orca_devtools
+PRODUCT_NAME = orca_gateway_devtools
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.orcaDevtools
+PRODUCT_BUNDLE_IDENTIFIER = com.orcagateway.devtools
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 Orca Gateway. All rights reserved.

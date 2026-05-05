@@ -23,9 +23,9 @@
 
 import 'dart:io';
 
-import 'package:orca_cli/src/manifest/plugin_manifest.dart';
-import 'package:orca_cli/src/utils/core_widget_types.dart';
-import 'package:orca_cli/src/utils/png_reader.dart';
+import 'package:orca_gateway_cli/src/manifest/plugin_manifest.dart';
+import 'package:orca_gateway_cli/src/utils/core_widget_types.dart';
+import 'package:orca_gateway_cli/src/utils/png_reader.dart';
 import 'package:test/test.dart';
 
 void main() {

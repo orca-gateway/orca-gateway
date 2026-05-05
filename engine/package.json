@@ -1,5 +1,5 @@
 {
-  "name": "@orcagateway/engine",
+  "name": "@orca-gateway/engine",
   "version": "0.1.0",
   "description": "Orca Gateway SDUI Engine — server-driven UI for Flutter",
   "type": "module",
@@ -8,8 +8,11 @@
   "homepage": "https://orcagateway.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/orca-gateway/orca-gateway.git",
-    "directory": "engine"
+    "url": "git+https://github.com/orca-gateway/orca-gateway.git",
+    "directory": "open-source/engine"
+  },
+  "bugs": {
+    "url": "https://github.com/orca-gateway/orca-gateway/issues"
   },
   "keywords": [
     "sdui",
@@ -17,6 +20,7 @@
     "flutter",
     "bun",
     "typescript",
+    "orca-gateway",
     "orcagateway"
   ],
   "exports": {
@@ -24,8 +28,17 @@
     "./types": "./src/types/index.ts",
     "./components": "./src/components/index.ts"
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "bun": ">=1.0"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "scripts": {
     "dev": "bun run --watch src/server.ts",

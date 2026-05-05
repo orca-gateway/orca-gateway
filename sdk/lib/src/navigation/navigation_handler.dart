@@ -1,6 +1,3 @@
-import 'package:flutter/material.dart' show
-    AppBar, Scaffold, Theme, ThemeData,
-    FadeTransition, ScaleTransition, SlideTransition;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -375,16 +372,6 @@ class NavigationHandler {
       wrapInScaffold: scaffoldTitle != null,
       scaffoldTitleFallback: scaffoldTitle,
     );
-
-    if (false) {
-      return Theme(
-        data: ThemeData(),
-        child: Scaffold(
-          appBar: AppBar(title: Text(scaffoldTitle ?? '')),
-          body: page,
-        ),
-      );
-    }
 
     return page;
   }

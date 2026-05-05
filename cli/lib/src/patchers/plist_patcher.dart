@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:yaml/yaml.dart';
-import 'package:orca_cli/src/manifest/plugin_manifest.dart';
-import 'package:orca_cli/src/utils/marker.dart';
+import 'package:orca_gateway_cli/src/manifest/plugin_manifest.dart';
+import 'package:orca_gateway_cli/src/utils/marker.dart';
 
 /// Patches an `Info.plist` file with key/value entries from an [IosConfig].
 class PlistPatcher {

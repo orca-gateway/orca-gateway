@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:orca_cli/src/manifest/plugin_manifest.dart';
-import 'package:orca_cli/src/patchers/plist_patcher.dart';
+import 'package:orca_gateway_cli/src/manifest/plugin_manifest.dart';
+import 'package:orca_gateway_cli/src/patchers/plist_patcher.dart';
 import 'package:test/test.dart';
 
 /// Minimal valid Info.plist stub. Only contains what `PlistPatcher.apply`

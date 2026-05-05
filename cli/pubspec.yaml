@@ -1,6 +1,15 @@
 name: orca_gateway_cli
-description: "CLI tool for Orca Gateway — manage plugins, native config, and scaffolding."
+description: "Command-line tool for Orca Gateway projects — manages plugins, patches native config, and scaffolds new servers."
 version: 0.1.0
+homepage: https://orcagateway.com
+repository: https://github.com/orca-gateway/orca-gateway
+issue_tracker: https://github.com/orca-gateway/orca-gateway/issues
+topics:
+  - cli
+  - sdui
+  - server-driven-ui
+  - flutter
+  - tooling
 
 environment:
   sdk: ^3.11.3

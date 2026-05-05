@@ -1,12 +1,12 @@
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
-import 'package:orca_cli/src/commands/plugin_add.dart';
-import 'package:orca_cli/src/commands/plugin_remove.dart';
-import 'package:orca_cli/src/commands/plugin_doctor.dart';
-import 'package:orca_cli/src/commands/plugin_create.dart';
-import 'package:orca_cli/src/commands/plugin_generate.dart';
-import 'package:orca_cli/src/commands/plugin_build.dart';
+import 'package:orca_gateway_cli/src/commands/plugin_add.dart';
+import 'package:orca_gateway_cli/src/commands/plugin_remove.dart';
+import 'package:orca_gateway_cli/src/commands/plugin_doctor.dart';
+import 'package:orca_gateway_cli/src/commands/plugin_create.dart';
+import 'package:orca_gateway_cli/src/commands/plugin_generate.dart';
+import 'package:orca_gateway_cli/src/commands/plugin_build.dart';
 
 void main(List<String> args) async {
   final runner = CommandRunner<void>(

@@ -1,5 +1,5 @@
-name: orca_gateway_sdk
-description: "Flutter SDK for Orca Gateway — server-driven UI rendering."
+name: orca_gateway
+description: "Flutter SDK for Orca Gateway — renders server-driven UI from the Orca engine into native Flutter widgets."
 version: 0.1.0
 homepage: https://orcagateway.com
 repository: https://github.com/orca-gateway/orca-gateway
@@ -7,7 +7,9 @@ issue_tracker: https://github.com/orca-gateway/orca-gateway/issues
 topics:
   - sdui
   - server-driven-ui
-  - orcagateway
+  - ui
+  - flutter
+  - rendering
 
 environment:
   sdk: ^3.11.3
@@ -18,10 +20,10 @@ dependencies:
     sdk: flutter
   http: ^1.4.0
   url_launcher: ^6.2.0
-  share_plus: ^12.0.2
-  go_router: ^15.0.0
+  share_plus: ^13.0.0
+  go_router: ^16.0.0
   shared_preferences: ^2.5.0
-  device_info_plus: ^12.4.0
+  device_info_plus: ^13.0.0
   web_socket_channel: ^3.0.0
   # Epic 25b slice 2: sha256 for capability vector hashing
   crypto: ^3.0.0

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:orca_cli/src/manifest/plugin_manifest.dart';
+import 'package:orca_gateway_cli/src/manifest/plugin_manifest.dart';
 
 /// Reads an existing `.env` file at [path] and returns a map of KEY=VALUE
 /// pairs. Blank lines and lines starting with `#` are ignored.

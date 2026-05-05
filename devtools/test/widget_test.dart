@@ -1,9 +1,9 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:orca_devtools/app.dart';
-import 'package:orca_devtools/models/app_settings.dart';
-import 'package:orca_devtools/server/connection_manager.dart';
-import 'package:orca_devtools/server/ws_server.dart';
+import 'package:orca_gateway_devtools/app.dart';
+import 'package:orca_gateway_devtools/models/app_settings.dart';
+import 'package:orca_gateway_devtools/server/connection_manager.dart';
+import 'package:orca_gateway_devtools/server/ws_server.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
   // The macOS shell targets 1440×900; set the test surface to match so the
@@ -17,11 +17,13 @@ Future<void> _pumpApp(WidgetTester tester) async {
     connectionManager: connectionManager,
     port: 0,
   );
-  await tester.pumpWidget(OrcaDevToolsApp(
-    connectionManager: connectionManager,
-    settings: settings,
-    server: server,
-  ));
+  await tester.pumpWidget(
+    OrcaDevToolsApp(
+      connectionManager: connectionManager,
+      settings: settings,
+      server: server,
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -40,14 +42,16 @@ Future<void> _chord(
 void main() {
   const paletteHint = 'Search actions, network paths, state keys…';
 
-  testWidgets('App renders waiting message when no device connected',
-      (tester) async {
+  testWidgets('App renders waiting message when no device connected', (
+    tester,
+  ) async {
     await _pumpApp(tester);
     expect(find.text('Waiting for device connection...'), findsOneWidget);
   });
 
-  testWidgets('Tapping the search pill opens the command palette',
-      (tester) async {
+  testWidgets('Tapping the search pill opens the command palette', (
+    tester,
+  ) async {
     await _pumpApp(tester);
     expect(find.text(paletteHint), findsNothing);
 
@@ -59,8 +63,9 @@ void main() {
     expect(find.text('toggle'), findsOneWidget);
   });
 
-  testWidgets('Palette shows Jump-to group with inspector shortcuts',
-      (tester) async {
+  testWidgets('Palette shows Jump-to group with inspector shortcuts', (
+    tester,
+  ) async {
     await _pumpApp(tester);
     await tester.tap(find.text('Search or jump to…'));
     await tester.pumpAndSettle();
@@ -85,25 +90,27 @@ void main() {
     // Settings screen has the unique "WebSocket Server Port" label.
     expect(find.text('Appearance'), findsNothing);
 
-    await _chord(
-        tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.comma);
+    await _chord(tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.comma);
     expect(find.text('Appearance'), findsOneWidget);
   });
 
-  testWidgets('Cmd-2 jumps to State inspector, Cmd-1 returns to Timeline',
-      (tester) async {
+  testWidgets('Cmd-2 jumps to State inspector, Cmd-1 returns to Timeline', (
+    tester,
+  ) async {
     await _pumpApp(tester);
     // Default is Timeline — no Settings content visible.
     expect(find.text('Appearance'), findsNothing);
 
     // Cmd-, → Settings renders.
-    await _chord(
-        tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.comma);
+    await _chord(tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.comma);
     expect(find.text('Appearance'), findsOneWidget);
 
     // Cmd-1 → Timeline; Settings content gone.
     await _chord(
-        tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.digit1);
+      tester,
+      LogicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.digit1,
+    );
     expect(find.text('Appearance'), findsNothing);
     expect(find.text('Waiting for device connection...'), findsOneWidget);
   });

@@ -6,10 +6,13 @@ Flutter SDK for [Orca Gateway](https://github.com/orca-gateway/orca-gateway) —
 
 ```yaml
 dependencies:
-  orca_gateway:
-    git:
-      url: https://github.com/orca-gateway/orca-gateway.git
-      path: sdk
+  orca_gateway: ^0.1.0
+```
+
+Or via the Flutter CLI:
+
+```sh
+flutter pub add orca_gateway
 ```
 
 ## Quick Start

@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:orca_cli/src/manifest/plugin_manifest.dart';
-import 'package:orca_cli/src/utils/marker.dart';
+import 'package:orca_gateway_cli/src/manifest/plugin_manifest.dart';
+import 'package:orca_gateway_cli/src/utils/marker.dart';
 
 /// Patches a `Podfile` for a plugin.
 ///
