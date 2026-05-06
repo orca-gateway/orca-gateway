@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 env:
-  FLUTTER_VERSION: "3.24.0"
+  FLUTTER_VERSION: "3.41.5"
 
 jobs:
   build-macos:
@@ -35,12 +35,19 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Import signing certificate
+        id: cert
         env:
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ github.run_id }}
         run: |
           set -e
+          if [ -z "$MACOS_CERTIFICATE_P12" ]; then
+            echo "::warning::MACOS_CERTIFICATE_P12 secret not set — building unsigned macOS .dmg (skipping codesign and notarization)."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
           CERT_PATH="$RUNNER_TEMP/devid.p12"
 
@@ -64,6 +71,7 @@ jobs:
             exit 1
           fi
           echo "SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - name: Flutter build
         working-directory: devtools
@@ -72,6 +80,7 @@ jobs:
           flutter build macos --release
 
       - name: Code-sign the .app
+        if: steps.cert.outputs.signed == 'true'
         working-directory: devtools
         run: |
           set -e
@@ -92,10 +101,13 @@ jobs:
           ln -s /Applications "$STAGING/Applications"
           hdiutil create -volname "Orca Gateway DevTools" \
             -srcfolder "$STAGING" -ov -format UDZO "$DMG"
-          codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$DMG"
+          if [ -n "$SIGNING_IDENTITY" ]; then
+            codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$DMG"
+          fi
           echo "DMG_PATH=$PWD/$DMG" >> "$GITHUB_ENV"
 
       - name: Notarize and staple
+        if: steps.cert.outputs.signed == 'true'
         env:
           APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.MACOS_NOTARIZATION_PWD }}
