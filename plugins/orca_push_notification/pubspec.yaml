@@ -1,6 +1,6 @@
 name: orca_push_notification
 description: "Orca Gateway plugin for push notifications — FCM token management, permission handling, and notification display."
-version: 0.1.1
+version: 0.2.0
 homepage: https://github.com/amrebada/orca-gateway
 repository: https://github.com/amrebada/orca-gateway
 
