@@ -1,6 +1,6 @@
 name: orca_voice_recorder
 description: "Orca Gateway plugin for voice recording — start/stop/pause recording with amplitude monitoring and playback."
-version: 0.1.0
+version: 0.1.1
 homepage: https://github.com/amrebada/orca-gateway
 repository: https://github.com/amrebada/orca-gateway
 

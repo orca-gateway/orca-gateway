@@ -1,6 +1,6 @@
 name: orca_video_player
 description: "Orca Gateway plugin for video playback — server-driven video player with play/pause/seek controls and progress events."
-version: 0.1.0
+version: 0.1.1
 homepage: https://github.com/amrebada/orca-gateway
 repository: https://github.com/amrebada/orca-gateway
 
