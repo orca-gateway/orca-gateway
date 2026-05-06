@@ -1,7 +1,8 @@
 name: orca_push_notification
 description: "Orca Gateway plugin for push notifications — FCM token management, permission handling, and notification display."
 version: 0.1.0
-publish_to: none
+homepage: https://github.com/amrebada/orca-gateway
+repository: https://github.com/amrebada/orca-gateway
 
 environment:
   sdk: ^3.11.3
@@ -10,8 +11,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  orca_gateway:
-    path: ../../sdk
+  orca_gateway: ^0.2.0
   firebase_messaging: ^15.2.4
   flutter_local_notifications: ^18.0.1
 

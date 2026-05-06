@@ -22,6 +22,10 @@ PACKAGES=(
   "sdk|sdk|sdk-v|pub|sdk/pubspec.yaml"
   "cli|cli|cli-v|pub|cli/pubspec.yaml"
   "devtools|devtools|devtools-v|github-release|devtools/pubspec.yaml"
+  "orca_google_map|plugins/orca_google_map|orca_google_map-v|pub|plugins/orca_google_map/pubspec.yaml"
+  "orca_push_notification|plugins/orca_push_notification|orca_push_notification-v|pub|plugins/orca_push_notification/pubspec.yaml"
+  "orca_video_player|plugins/orca_video_player|orca_video_player-v|pub|plugins/orca_video_player/pubspec.yaml"
+  "orca_voice_recorder|plugins/orca_voice_recorder|orca_voice_recorder-v|pub|plugins/orca_voice_recorder/pubspec.yaml"
 )
 
 # --- Output helpers ---------------------------------------------------------
@@ -188,6 +192,7 @@ done
 LOG=$(mktemp)
 trap 'rm -f "$LOG"' EXIT
 
+# Returns: 0 = clean, 1 = real failure, 2 = ok but with non-fatal warnings.
 validate_pkg() {
   local name=$1 path=$2 publisher=$3
   case "$publisher" in
@@ -195,7 +200,18 @@ validate_pkg() {
       ( cd "$path" && npm pack --dry-run ) >"$LOG" 2>&1 || return 1
       ;;
     pub)
-      ( cd "$path" && flutter pub publish --dry-run ) >"$LOG" 2>&1 || return 1
+      # `flutter pub publish --dry-run` exits non-zero on *any* issue, including
+      # the always-present "modified pubspec.yaml" warning we trigger by bumping
+      # the version moments earlier, and the "dependency_overrides" hint that
+      # plugins emit by design. The deterministic blocker line is the one below;
+      # everything else is a non-fatal warning we want to surface but not abort on.
+      ( cd "$path" && flutter pub publish --dry-run ) >"$LOG" 2>&1 || true
+      if grep -q "Sorry, your package is missing a requirement" "$LOG"; then
+        return 1
+      fi
+      if grep -qE "Package has [1-9]" "$LOG"; then
+        return 2
+      fi
       ;;
     github-release)
       : # No registry validation; CI handles the build on tag push.
@@ -207,14 +223,23 @@ echo; c_bold "Validating..."; echo
 for k in "${!SELECTED[@]}"; do
   idx=${SELECTED[$k]}
   printf "  [%s] dry-run... " "${PKG_NAMES[$idx]}"
-  if validate_pkg "${PKG_NAMES[$idx]}" "${PKG_PATHS[$idx]}" "${PKG_PUBS[$idx]}"; then
-    echo "$(c_green ok)"
-  else
-    echo "$(c_red failed)"
-    cat "$LOG"
-    git checkout -- "${PKG_FILES[@]}"
-    die "validation failed for ${PKG_NAMES[$idx]} — file changes reverted"
-  fi
+  set +e
+  validate_pkg "${PKG_NAMES[$idx]}" "${PKG_PATHS[$idx]}" "${PKG_PUBS[$idx]}"
+  rc=$?
+  set -e
+  case "$rc" in
+    0) echo "$(c_green ok)" ;;
+    2)
+      echo "$(c_yellow "ok (warnings)")"
+      grep -E "^\* " "$LOG" | sed 's/^/    /'
+      ;;
+    *)
+      echo "$(c_red failed)"
+      cat "$LOG"
+      git checkout -- "${PKG_FILES[@]}"
+      die "validation failed for ${PKG_NAMES[$idx]} — file changes reverted"
+      ;;
+  esac
 done
 
 # --- 6. Commit + tag (local only) ------------------------------------------

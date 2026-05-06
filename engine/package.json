@@ -24,12 +24,21 @@
     "orcagateway"
   ],
   "exports": {
-    "./core": "./src/core/index.ts",
-    "./types": "./src/types/index.ts",
-    "./components": "./src/components/index.ts"
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js"
+    }
   },
   "files": [
-    "src",
+    "dist",
     "README.md",
     "LICENSE"
   ],
@@ -43,10 +52,15 @@
   "scripts": {
     "dev": "bun run --watch src/server.ts",
     "dev:examples": "bun run --watch ../examples/server/index.ts",
-    "build": "bun build src/server.ts --outdir dist --target bun",
+    "clean": "rm -rf dist",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build:js": "bun build src/core/index.ts --outdir dist/core --minify --target bun --format esm && bun build src/types/index.ts --outdir dist/types --minify --target bun --format esm && bun build src/components/index.ts --outdir dist/components --minify --target bun --format esm",
+    "build": "bun run clean && bun run build:types && bun run build:js",
+    "prepublishOnly": "bun run build",
     "test": "bun test"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
   }
 }

@@ -25,14 +25,14 @@ export class SliverAppBar extends StructureWidget {
   private _leading?: Widget;
   private _actions: Widget[];
   private _flexibleSpace?: Widget;
-  private _backgroundColor?: string;
-  private _elevation?: number;
-  private _centerTitle?: boolean;
-  private _floating?: boolean;
-  private _pinned?: boolean;
-  private _snap?: boolean;
-  private _expandedHeight?: number;
-  private _collapsedHeight?: number;
+  private _backgroundColor?: Valueable<string>;
+  private _elevation?: Valueable<number>;
+  private _centerTitle?: Valueable<boolean>;
+  private _floating?: Valueable<boolean>;
+  private _pinned?: Valueable<boolean>;
+  private _snap?: Valueable<boolean>;
+  private _expandedHeight?: Valueable<number>;
+  private _collapsedHeight?: Valueable<number>;
 
   private constructor(opts: SliverAppBarProps) {
     super();

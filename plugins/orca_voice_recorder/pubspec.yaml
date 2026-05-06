@@ -1,7 +1,8 @@
 name: orca_voice_recorder
 description: "Orca Gateway plugin for voice recording — start/stop/pause recording with amplitude monitoring and playback."
 version: 0.1.0
-publish_to: none
+homepage: https://github.com/amrebada/orca-gateway
+repository: https://github.com/amrebada/orca-gateway
 
 environment:
   sdk: ^3.11.3
@@ -10,8 +11,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  orca_gateway:
-    path: ../../sdk
+  orca_gateway: ^0.2.0
   record: ^6.2.0
   audioplayers: ^6.1.0
   path_provider: ^2.1.0

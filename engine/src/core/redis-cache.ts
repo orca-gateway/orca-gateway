@@ -5,7 +5,7 @@ import type { CacheProvider } from "./cache";
 // No external dependencies — uses Bun's built-in TCP socket.
 
 export class RedisCache implements CacheProvider {
-  private socket: ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never;
+  private socket!: ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never;
   private ready: Promise<void>;
   private responseQueue: Array<{
     resolve: (value: string | null) => void;

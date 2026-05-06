@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0 - 2026-05-06
+
+Version-aligned release with engine 0.2.0 and sdk 0.2.0. No CLI source changes.
+
 ## 0.1.0 - 2026-05-05
 
 Initial release.
