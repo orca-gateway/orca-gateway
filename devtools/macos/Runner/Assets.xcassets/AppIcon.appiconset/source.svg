@@ -1,0 +1,46 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" rx="232" ry="232" fill="url(#bg_grad)"/>
+  <g transform="translate(107 243) scale(1.15)">
+    <path d="M189.113 432.637L385.178 432.645C421.272 432.646 470.025 409.984 494.071 382.027L624.687 230.166C648.733 202.209 638.965 179.544 602.871 179.543L406.807 179.535C370.712 179.534 321.959 202.196 297.913 230.153L167.297 382.014C143.251 409.971 153.019 432.636 189.113 432.637Z" fill="url(#paint0_orca)"/>
+    <path d="M144.437 359.529L340.501 359.536C376.596 359.538 425.349 336.876 449.395 308.919L580.011 157.057C604.056 129.101 594.289 106.436 558.195 106.434L362.13 106.427C326.036 106.425 277.282 129.088 253.237 157.044L122.621 308.906C98.575 336.863 108.342 359.527 144.437 359.529Z" fill="url(#paint1_orca)"/>
+    <path d="M100.31 288.017L296.375 288.025C332.469 288.027 381.222 265.364 405.268 237.407L535.884 85.5462C559.93 57.5894 550.162 34.9247 514.068 34.9232L318.004 34.9154C281.909 34.914 233.156 57.5764 209.11 85.5333L78.4942 237.394C54.4485 265.351 64.2159 288.016 100.31 288.017Z" fill="url(#paint2_orca)"/>
+    <path d="M585.982 119.094L633.942 119.096C642.771 119.096 654.697 113.552 660.579 106.714L692.53 69.5659C698.412 62.7272 696.023 57.1831 687.193 57.1827L639.233 57.1808C630.404 57.1805 618.478 62.724 612.596 69.5627L580.645 106.71C574.763 113.549 577.152 119.093 585.982 119.094Z" fill="url(#paint3_orca)"/>
+    <path d="M556.615 61.9145L604.576 61.9164C613.405 61.9167 625.331 56.3731 631.213 49.5344L663.163 12.3867C669.045 5.54801 666.656 0.00386175 657.827 0.00351091L609.866 0.00160513C601.037 0.00125428 589.111 5.54483 583.229 12.3835L551.278 49.5312C545.396 56.37 547.786 61.9141 556.615 61.9145Z" fill="url(#paint4_orca)"/>
+    <path d="M45.353 467.557L93.3135 467.558C102.143 467.559 114.069 462.015 119.951 455.177L151.901 418.029C157.783 411.19 155.394 405.646 146.565 405.646L98.6043 405.644C89.775 405.643 77.8491 411.187 71.9672 418.026L40.0164 455.173C34.1344 462.012 36.5237 467.556 45.353 467.557Z" fill="url(#paint5_orca)"/>
+    <path d="M15.9864 410.377L63.9469 410.379C72.7762 410.38 84.702 404.836 90.584 397.997L122.535 360.85C128.417 354.011 126.027 348.467 117.198 348.466L69.2377 348.464C60.4084 348.464 48.4825 354.008 42.6006 360.846L10.6498 397.994C4.7678 404.833 7.15707 410.377 15.9864 410.377Z" fill="url(#paint6_orca)"/>
+  </g>
+  <defs>
+    <linearGradient id="bg_grad" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#001543"/>
+      <stop offset="1" stop-color="#000000"/>
+    </linearGradient>
+    <linearGradient id="paint0_orca" x1="450.532" y1="432.647" x2="334.399" y2="182.811" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#178FEA"/>
+      <stop offset="1" stop-color="#1834AE"/>
+    </linearGradient>
+    <linearGradient id="paint1_orca" x1="405.856" y1="359.539" x2="289.723" y2="109.703" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25E7FF"/>
+      <stop offset="1" stop-color="#1053E1"/>
+    </linearGradient>
+    <linearGradient id="paint2_orca" x1="361.729" y1="288.028" x2="245.596" y2="38.1913" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C5F8FE"/>
+      <stop offset="1" stop-color="#25E7FF"/>
+    </linearGradient>
+    <linearGradient id="paint3_orca" x1="649.929" y1="119.096" x2="621.521" y2="57.9821" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25E7FF"/>
+      <stop offset="1" stop-color="#1053E1"/>
+    </linearGradient>
+    <linearGradient id="paint4_orca" x1="620.562" y1="61.917" x2="592.154" y2="0.802929" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C5F8FE"/>
+      <stop offset="1" stop-color="#25E7FF"/>
+    </linearGradient>
+    <linearGradient id="paint5_orca" x1="109.3" y1="467.559" x2="80.8922" y2="406.445" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#178FEA"/>
+      <stop offset="1" stop-color="#1834AE"/>
+    </linearGradient>
+    <linearGradient id="paint6_orca" x1="79.9337" y1="410.38" x2="51.5256" y2="349.266" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25E7FF"/>
+      <stop offset="1" stop-color="#1053E1"/>
+    </linearGradient>
+  </defs>
+</svg>

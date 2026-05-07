@@ -84,7 +84,7 @@ jobs:
         working-directory: devtools
         run: |
           set -e
-          APP="build/macos/Build/Products/Release/orca_gateway_devtools.app"
+          APP="build/macos/Build/Products/Release/Orca Gateway DevTools.app"
           codesign --force --deep --options runtime --timestamp \
             --sign "$SIGNING_IDENTITY" "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
@@ -93,7 +93,7 @@ jobs:
         working-directory: devtools
         run: |
           set -e
-          APP="build/macos/Build/Products/Release/orca_gateway_devtools.app"
+          APP="build/macos/Build/Products/Release/Orca Gateway DevTools.app"
           DMG="orca_gateway_devtools-${{ steps.version.outputs.version }}-macos.dmg"
           STAGING="$RUNNER_TEMP/dmg-staging"
           mkdir -p "$STAGING"

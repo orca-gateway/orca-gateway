@@ -5,7 +5,8 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = orca_gateway_devtools
+// Spaces are intentional — this becomes the .app bundle filename and the Finder display name.
+PRODUCT_NAME = Orca Gateway DevTools
 
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = com.orcagateway.devtools
