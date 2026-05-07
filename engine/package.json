@@ -62,7 +62,7 @@
     "dev:examples": "bun run --watch ../examples/server/index.ts",
     "clean": "rm -rf dist",
     "build:types": "tsc -p tsconfig.build.json",
-    "build:js": "bun build src/index.ts --outdir dist --minify --target bun --format esm && bun build src/core/index.ts --outdir dist/core --minify --target bun --format esm && bun build src/types/index.ts --outdir dist/types --minify --target bun --format esm && bun build src/components/index.ts --outdir dist/components --minify --target bun --format esm && bun build src/middlewares/index.ts --outdir dist/middlewares --minify --target bun --format esm",
+    "build:js": "bun build src/index.ts src/core/index.ts src/types/index.ts src/components/index.ts src/middlewares/index.ts --outdir dist --root src --minify --target bun --format esm --splitting",
     "build": "bun run clean && bun run build:types && bun run build:js",
     "prepublishOnly": "bun run build",
     "test": "bun test"

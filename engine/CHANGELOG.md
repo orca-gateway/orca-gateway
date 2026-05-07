@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4 - 2026-05-07
+
+### Fixed
+
+- **Critical**: every page rendered as an empty container (`Scaffold` with no slots, `Column` with no children, etc.). Root cause was a bundler-level dual-package hazard: each entry point (`./core`, `./components`, `./types`, `./middlewares`) was built as a standalone bundle that inlined its own copy of `MultiChildLayout`, `StructureWidget`, and other base classes from `widget.ts`. Same source file → distinct class identities at runtime → the encoder's `widget instanceof MultiChildLayout` checks failed across entry-point boundaries, so children and slots were silently dropped from every encoded tree. Fixed by switching to a single `bun build` invocation with `--splitting`, which extracts shared internals into a chunk that every entry point references — restoring single-identity for `widget.ts` classes across the package.
+
 ## 0.2.3 - 2026-05-07
 
 ### Added
