@@ -24,6 +24,10 @@
     "orcagateway"
   ],
   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./core": {
       "types": "./dist/core/index.d.ts",
       "import": "./dist/core/index.js"
@@ -54,7 +58,7 @@
     "dev:examples": "bun run --watch ../examples/server/index.ts",
     "clean": "rm -rf dist",
     "build:types": "tsc -p tsconfig.build.json",
-    "build:js": "bun build src/core/index.ts --outdir dist/core --minify --target bun --format esm && bun build src/types/index.ts --outdir dist/types --minify --target bun --format esm && bun build src/components/index.ts --outdir dist/components --minify --target bun --format esm",
+    "build:js": "bun build src/index.ts --outdir dist --minify --target bun --format esm && bun build src/core/index.ts --outdir dist/core --minify --target bun --format esm && bun build src/types/index.ts --outdir dist/types --minify --target bun --format esm && bun build src/components/index.ts --outdir dist/components --minify --target bun --format esm",
     "build": "bun run clean && bun run build:types && bun run build:js",
     "prepublishOnly": "bun run build",
     "test": "bun test"

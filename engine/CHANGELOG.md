@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 - 2026-05-07
+
+### Fixed
+
+- Add a root `"."` export so `import { ... } from "@orca-gateway/engine"` resolves correctly. The 0.2.0 publish only exposed `./core`, `./types`, and `./components` subpaths, leaving bare imports unresolvable. The root barrel re-exports `core` + `components`; `types` remains under its subpath because `Transform` collides between `types` (wire-format) and `components` (widget class).
+
 ## 0.2.0 - 2026-05-06
 
 ### Changed
