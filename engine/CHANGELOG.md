@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.3 - 2026-05-07
+
+### Added
+
+- New `@orca-gateway/engine/middlewares` public export. Re-exports `corsMiddleware`, `loggingMiddleware`, `recoveryMiddleware`, `authMiddleware`, and `rateLimitMiddleware`. Previously these lived only in `src/middlewares/` and consumers had to reach into source.
+
+### Fixed
+
+- **Critical**: closing the dual-package hazard. Showcase and other consumers that mixed source-path imports (`../../open-source/engine/src/...`) with published-package imports (`@orca-gateway/engine/...`) hit silent `instanceof` mismatches in the encoder — widget classes from the published package failed `instanceof MultiChildLayout` against the engine's local-source class identity, so children were dropped from every rendered page. The middleware export removes the last reason a server consumer would need to import from source.
+
 ## 0.2.2 - 2026-05-07
 
 ### Fixed
