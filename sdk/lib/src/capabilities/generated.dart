@@ -16,7 +16,7 @@
 //                                    kSupportedBoolExprOps
 
 const String kProtocolVersion = '2.0.0';
-const String kSdkSemver = '0.1.0';
+const String kSdkSemver = '0.2.0';
 
 const Set<String> kSupportedWidgets = {
   'AbsorbPointer',
