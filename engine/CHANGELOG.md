@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 - 2026-05-07
+
+### Fixed
+
+- Re-export `MaterialIcons` (icon-name string union) from `@orca-gateway/engine/types`. The type lived in `src/types/icons.ts` but was never re-exported through the public barrel, so consumers couldn't reach it via the published package. The icons module itself is unchanged — only the public surface widens.
+
 ## 0.2.1 - 2026-05-07
 
 ### Fixed

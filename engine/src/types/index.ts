@@ -135,3 +135,6 @@ export {
   type AppState,
   type State,
 } from "./state";
+
+// Icons
+export { type MaterialIcons } from "./icons";
