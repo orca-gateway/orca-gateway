@@ -1,6 +1,6 @@
 name: orca_gateway
 description: "Flutter SDK for Orca Gateway — renders server-driven UI from the Orca engine into native Flutter widgets."
-version: 0.2.0
+version: 0.2.1
 homepage: https://orcagateway.com
 repository: https://github.com/orca-gateway/orca-gateway
 issue_tracker: https://github.com/orca-gateway/orca-gateway/issues
