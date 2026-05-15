@@ -2151,7 +2151,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: WatchBuilder(
-            store: store,
+            pageStore: store,
             watches: {'count'},
             builder: (ctx, state) {
               buildCount++;
@@ -2183,7 +2183,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: WatchBuilder(
-            store: store,
+            pageStore: store,
             watches: {'a', 'b'},
             builder: (ctx, state) {
               buildCount++;
@@ -2249,7 +2249,7 @@ void main() {
           home: ComponentRenderer(
             registry: registry,
             state: store.state,
-            store: store,
+            pageStore: store,
           ).render(nodes),
         ),
       );
@@ -2298,7 +2298,7 @@ void main() {
           home: ComponentRenderer(
             registry: registry,
             state: store.state,
-            store: store,
+            pageStore: store,
           ).render(nodes),
         ),
       );
@@ -2332,7 +2332,7 @@ void main() {
         }));
       }
       children.add(WatchBuilder(
-        store: store,
+        pageStore: store,
         watches: {'target'},
         builder: (ctx, state) {
           watchedBuilds++;
@@ -2363,6 +2363,108 @@ void main() {
 
       expect(watchedBuilds, initialWatched + 2);
       expect(unwatchedBuilds, initialUnwatched); // still unchanged
+    });
+  });
+
+  group('11.12b: app-scope selective rebuild', () {
+    testWidgets('WatchBuilder rebuilds on appStore change, not just pageStore',
+        (tester) async {
+      final appStore = ElmStore(pageId: 'app', scope: 'app')
+        ..dispatch({'activeValue': 0});
+      final pageStore = ElmStore(initial: {'pageOnly': 'x'});
+      int buildCount = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WatchBuilder(
+            pageStore: pageStore,
+            appStore: appStore,
+            watches: {'activeValue'},
+            builder: (ctx, state) {
+              buildCount++;
+              return Text('Value: ${state['activeValue']}');
+            },
+          ),
+        ),
+      );
+
+      expect(buildCount, 1);
+      expect(find.text('Value: 0'), findsOneWidget);
+
+      // App-scoped watched key changes → watcher rebuilds.
+      appStore.dispatch({'activeValue': 7});
+      await tester.pump();
+      expect(buildCount, 2);
+      expect(find.text('Value: 7'), findsOneWidget);
+
+      // Unwatched page-scoped key changes → no rebuild.
+      pageStore.dispatch({'pageOnly': 'y'});
+      await tester.pump();
+      expect(buildCount, 2);
+    });
+
+    testWidgets('app-scope SetState rebuilds only watching nodes', (tester) async {
+      final registry = ComponentRegistry()..registerDefaults();
+      final appStore = ElmStore(pageId: 'app', scope: 'app')
+        ..dispatch({'activeValue': 1});
+      final pageStore = ElmStore(initial: {});
+
+      // Root + two Text leaves: one watches the app key, one is static.
+      final nodes = [
+        ComponentNode(
+          id: 'root',
+          type: 'Column',
+          kind: 'layout',
+          childMode: 'multi',
+          props: {},
+          children: ['watched', 'static'],
+          watches: [],
+        ),
+        ComponentNode(
+          id: 'watched',
+          type: 'Text',
+          kind: 'primitive',
+          childMode: 'none',
+          props: {
+            'data': {
+              'type': 'transform',
+              'input': {'type': 'state', 'key': 'activeValue', 'scope': 'app'},
+              'by': [{'type': 'toString'}],
+            },
+          },
+          children: [],
+          watches: ['activeValue'],
+        ),
+        ComponentNode(
+          id: 'static',
+          type: 'Text',
+          kind: 'primitive',
+          childMode: 'none',
+          props: {'data': 'Untouched'},
+          children: [],
+          watches: [],
+        ),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ComponentRenderer(
+            registry: registry,
+            state: {...appStore.state, ...pageStore.state},
+            pageStore: pageStore,
+            appStore: appStore,
+          ).render(nodes),
+        ),
+      );
+
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('Untouched'), findsOneWidget);
+
+      // App-scoped SetState — the watched Text re-resolves, the rest stays.
+      appStore.dispatch({'activeValue': 99});
+      await tester.pump();
+      expect(find.text('99'), findsOneWidget);
+      expect(find.text('Untouched'), findsOneWidget);
     });
   });
 
@@ -2451,7 +2553,7 @@ void main() {
           home: ComponentRenderer(
             registry: registry,
             state: store.state,
-            store: store,
+            pageStore: store,
           ).render(nodes),
         ),
       );

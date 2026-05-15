@@ -111,6 +111,11 @@ class _OrcaPageState extends State<OrcaPage> {
   final ComponentStore _componentStore = ComponentStore();
   final AnimationRegistry _animationRegistry = AnimationRegistry();
 
+  /// Whether the timing event has been reported for the current response.
+  /// build() can re-run without a network fetch, so timing is reported at
+  /// most once per page fetch (reset in [_initState]).
+  bool _timingReported = false;
+
   @override
   void initState() {
     super.initState();
@@ -137,7 +142,6 @@ class _OrcaPageState extends State<OrcaPage> {
 
   void _disposeCurrentPage() {
     if (_response != null) {
-      _stateManager.appStore.removeListener(_onAppStateChanged);
       _componentStore.removeListener(_onComponentsChanged);
       _stateManager.disposePage(_response!.pageId);
       _pageStore = null;
@@ -172,14 +176,16 @@ class _OrcaPageState extends State<OrcaPage> {
 
   void _initState(PageResponse response) {
     _response = response;
+    _timingReported = false;
     _stateManager.initPage(response.pageId, response.state);
     _pageStore = _stateManager.getPageStore(response.pageId);
     _componentStore.init(response.components);
-    // Only app store changes trigger a full page rebuild.
-    // Page state changes are handled by individual WatchBuilders
-    // in the component tree for efficient re-rendering.
-    _stateManager.appStore.addListener(_onAppStateChanged);
-    // Component mutations (add/delete/update/replace) trigger full rebuild.
+    // State changes — in EITHER scope — are handled by the per-node
+    // WatchBuilders in the component tree, so the page root deliberately
+    // does NOT subscribe to either store: a SetState rebuilds only the
+    // widgets that watch the changed key, never the whole page.
+    // Component mutations (add/delete/update/replace) restructure the tree
+    // itself, so those still trigger a full rebuild.
     _componentStore.addListener(_onComponentsChanged);
   }
 
@@ -200,7 +206,6 @@ class _OrcaPageState extends State<OrcaPage> {
     }
   }
 
-  void _onAppStateChanged() => _scheduleRebuild();
   void _onComponentsChanged() => _scheduleRebuild();
 
   /// Build a merged state map (app state + page state, page wins on conflict).
@@ -333,7 +338,8 @@ class _OrcaPageState extends State<OrcaPage> {
                 registry: merged.registry,
                 state: _mergedState(),
                 actionExecutor: exec,
-                store: _pageStore,
+                pageStore: _pageStore,
+                appStore: _stateManager.appStore,
               );
               return FractionallySizedBox(
                 heightFactor: heightFactor,
@@ -357,15 +363,20 @@ class _OrcaPageState extends State<OrcaPage> {
           registry: merged.registry,
           state: _mergedState(),
           actionExecutor: actionExecutor,
-          store: _pageStore,
+          pageStore: _pageStore,
+          appStore: _stateManager.appStore,
         );
         final nodes = _componentStore.toList();
         final rendered = renderer.render(nodes);
 
         timingCollector?.mark('renderComplete');
 
-        // Report combined timing data to OrcaDebug
-        if (OrcaDebug.isEnabled && timingCollector != null) {
+        // Report combined timing data to OrcaDebug — once per page fetch.
+        // build() can re-run for reasons unrelated to a network fetch (e.g.
+        // a component-tree mutation); re-emitting the timing event with the
+        // stale collector would draw a phantom request on every rebuild.
+        if (OrcaDebug.isEnabled && timingCollector != null && !_timingReported) {
+          _timingReported = true;
           final combined = CombinedTimingData.merge(
             result.timingHeader,
             timingCollector,

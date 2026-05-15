@@ -915,7 +915,8 @@ Widget _buildAnimatedBuilder(OrcaComponentContext ctx) {
     autoStart: autoStart,
     animationId: animationId,
     parentContext: ctx,
-    store: ctx.store,
+    pageStore: ctx.pageStore,
+    appStore: ctx.appStore,
   );
 }
 

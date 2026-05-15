@@ -28,8 +28,10 @@ class OrcaComponentContext {
   /// Reference to the component registry for nested rendering (e.g. AnimatedBuilder).
   final ComponentRegistry? registry;
 
-  /// Page store for reactive WatchBuilder wrapping inside AnimatedBuilder.
-  final ElmStore? store;
+  /// Page- and app-scoped stores for reactive WatchBuilder wrapping inside
+  /// AnimatedBuilder / SubPage subtrees.
+  final ElmStore? pageStore;
+  final ElmStore? appStore;
 
   /// When true, prop resolutions are traced for debugging.
   final bool captureTraces;
@@ -51,7 +53,8 @@ class OrcaComponentContext {
     this.actionExecutor,
     this.animationProgress,
     this.registry,
-    this.store,
+    this.pageStore,
+    this.appStore,
     this.captureTraces = false,
   });
 

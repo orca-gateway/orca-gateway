@@ -17,17 +17,19 @@ class ComponentRenderer {
   final Map<String, dynamic> state;
   final ActionExecutor? actionExecutor;
 
-  /// Optional store for watch-based selective rebuilding.
-  /// When provided, nodes with non-empty [ComponentNode.watches]
-  /// are wrapped in a [WatchBuilder] that only rebuilds when
-  /// watched keys change.
-  final ElmStore? store;
+  /// Optional page- and app-scoped stores for watch-based selective
+  /// rebuilding. When either is provided, nodes with non-empty
+  /// [ComponentNode.watches] are wrapped in a [WatchBuilder] that rebuilds
+  /// only when one of its watched keys changes — in either scope.
+  final ElmStore? pageStore;
+  final ElmStore? appStore;
 
   const ComponentRenderer({
     required this.registry,
     this.state = const {},
     this.actionExecutor,
-    this.store,
+    this.pageStore,
+    this.appStore,
   });
 
   /// Render the component tree from a flat node list.
@@ -53,10 +55,11 @@ class ComponentRenderer {
 
     // If this node has watches and we have a store, wrap in WatchBuilder
     // so it only rebuilds when watched keys change.
-    if (store != null && node.watches.isNotEmpty) {
+    if ((pageStore != null || appStore != null) && node.watches.isNotEmpty) {
       return WatchBuilder(
         key: ValueKey('watch_$nodeId'),
-        store: store!,
+        pageStore: pageStore,
+        appStore: appStore,
         watches: node.watches.toSet(),
         builder: (_, watchedState) {
           // Merge the full base state (which includes app state) with
@@ -105,7 +108,8 @@ class ComponentRenderer {
           state: currentState,
           actionExecutor: actionExecutor,
           registry: registry,
-          store: store,
+          pageStore: pageStore,
+          appStore: appStore,
         );
         return stub(stubContext);
       }
@@ -194,7 +198,8 @@ class ComponentRenderer {
       state: currentState,
       actionExecutor: actionExecutor,
       registry: registry,
-      store: store,
+      pageStore: pageStore,
+      appStore: appStore,
       captureTraces: shouldTrace,
     );
 

@@ -168,16 +168,19 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
         if (allComponents.isEmpty) return const SizedBox.shrink();
 
         final exec = widget.parentContext.actionExecutor;
-        final parentStore = widget.parentContext.store;
+        final parentPageStore = widget.parentContext.pageStore;
+        final parentAppStore = widget.parentContext.appStore;
 
         final renderer = ComponentRenderer(
           registry: widget.parentContext.registry!,
           state: {
             ...widget.parentContext.state,
-            if (parentStore != null) ...parentStore.state,
+            if (parentAppStore != null) ...parentAppStore.state,
+            if (parentPageStore != null) ...parentPageStore.state,
           },
           actionExecutor: exec,
-          store: parentStore,
+          pageStore: parentPageStore,
+          appStore: parentAppStore,
         );
 
         return renderer.render(allComponents);

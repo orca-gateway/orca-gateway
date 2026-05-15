@@ -1,26 +1,38 @@
 import 'package:flutter/widgets.dart';
 import 'elm_store.dart';
 
-/// A widget that subscribes to specific state keys in an [ElmStore]
-/// and only rebuilds when those watched keys change.
+/// A widget that subscribes to specific state keys across the app- and
+/// page-scoped [ElmStore]s and only rebuilds when one of those watched
+/// keys changes.
 ///
 /// This enables efficient re-rendering: a page may have 100 widgets
 /// but if only one watches "count", only that widget rebuilds when
 /// "count" changes.
+///
+/// The wire-format `watches` array is a flat list of key names and carries
+/// no scope tag, so a watched key may live in either store. WatchBuilder
+/// subscribes to both and resolves each key against whichever store holds
+/// it — this is what makes an `app`-scoped `SetState` rebuild only its
+/// watchers instead of the whole page.
 class WatchBuilder extends StatefulWidget {
-  /// The store to watch.
-  final ElmStore store;
+  /// The page-scoped store. Null when the page has no page store.
+  final ElmStore? pageStore;
+
+  /// The app-scoped store, shared across pages. Null in scopes that have
+  /// no app store (e.g. unit tests exercising page state only).
+  final ElmStore? appStore;
 
   /// The set of state keys this widget depends on.
   final Set<String> watches;
 
-  /// Builder that receives the current state snapshot.
+  /// Builder that receives the current merged (app + page) state snapshot.
   final Widget Function(BuildContext context, Map<String, dynamic> state)
       builder;
 
   const WatchBuilder({
     super.key,
-    required this.store,
+    this.pageStore,
+    this.appStore,
     required this.watches,
     required this.builder,
   });
@@ -36,28 +48,42 @@ class _WatchBuilderState extends State<WatchBuilder> {
   void initState() {
     super.initState();
     _lastWatchedValues = _snapshotWatched();
-    widget.store.addListener(_onStoreChanged);
+    widget.pageStore?.addListener(_onStoreChanged);
+    widget.appStore?.addListener(_onStoreChanged);
   }
 
   @override
   void didUpdateWidget(WatchBuilder oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.store != widget.store) {
-      oldWidget.store.removeListener(_onStoreChanged);
-      widget.store.addListener(_onStoreChanged);
+    if (oldWidget.pageStore != widget.pageStore ||
+        oldWidget.appStore != widget.appStore) {
+      oldWidget.pageStore?.removeListener(_onStoreChanged);
+      oldWidget.appStore?.removeListener(_onStoreChanged);
+      widget.pageStore?.addListener(_onStoreChanged);
+      widget.appStore?.addListener(_onStoreChanged);
       _lastWatchedValues = _snapshotWatched();
     }
   }
 
   @override
   void dispose() {
-    widget.store.removeListener(_onStoreChanged);
+    widget.pageStore?.removeListener(_onStoreChanged);
+    widget.appStore?.removeListener(_onStoreChanged);
     super.dispose();
+  }
+
+  /// Merge app + page state. Page state wins on a key conflict, matching
+  /// the resolution order used everywhere else in the SDK.
+  Map<String, dynamic> _mergedState() {
+    return <String, dynamic>{
+      ...?widget.appStore?.state,
+      ...?widget.pageStore?.state,
+    };
   }
 
   /// Take a snapshot of only the watched keys.
   Map<String, dynamic> _snapshotWatched() {
-    final state = widget.store.state;
+    final state = _mergedState();
     return {
       for (final key in widget.watches)
         if (state.containsKey(key)) key: state[key],
@@ -82,6 +108,6 @@ class _WatchBuilderState extends State<WatchBuilder> {
 
   @override
   Widget build(BuildContext context) {
-    return widget.builder(context, widget.store.state);
+    return widget.builder(context, _mergedState());
   }
 }

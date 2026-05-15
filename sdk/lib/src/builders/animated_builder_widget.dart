@@ -18,7 +18,8 @@ class OrcaAnimatedBuilder extends StatefulWidget {
   final bool autoStart;
   final String? animationId;
   final OrcaComponentContext parentContext;
-  final ElmStore? store;
+  final ElmStore? pageStore;
+  final ElmStore? appStore;
 
   const OrcaAnimatedBuilder({
     super.key,
@@ -29,7 +30,8 @@ class OrcaAnimatedBuilder extends StatefulWidget {
     this.autoStart = true,
     this.animationId,
     required this.parentContext,
-    this.store,
+    this.pageStore,
+    this.appStore,
   });
 
   @override
@@ -137,11 +139,12 @@ class _OrcaAnimatedBuilderState extends State<OrcaAnimatedBuilder>
 
     // Wrap nodes with watches in WatchBuilder so reactive state (e.g.
     // V.pageState("balanceVisible")) updates even inside AnimatedBuilder.
-    final store = widget.store;
-    if (store != null && node.watches.isNotEmpty) {
+    if ((widget.pageStore != null || widget.appStore != null) &&
+        node.watches.isNotEmpty) {
       return WatchBuilder(
         key: ValueKey('anim_watch_$nodeId'),
-        store: store,
+        pageStore: widget.pageStore,
+        appStore: widget.appStore,
         watches: node.watches.toSet(),
         builder: (_, watchedState) {
           final merged = {...ancestorCtx.state, ...watchedState};
