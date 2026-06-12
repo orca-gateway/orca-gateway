@@ -1,6 +1,6 @@
 {
   "name": "@orca-gateway/engine",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Orca Gateway SDUI Engine — server-driven UI for Flutter",
   "type": "module",
   "author": "Amr Ebada <hello@orcagateway.com>",

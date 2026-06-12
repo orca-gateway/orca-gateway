@@ -1,6 +1,6 @@
 name: orca_google_map
 description: "Orca Gateway plugin for Google Maps — server-driven map rendering with markers, camera control, and gesture events."
-version: 0.2.0
+version: 0.2.1
 homepage: https://github.com/amrebada/orca-gateway
 repository: https://github.com/amrebada/orca-gateway
 
