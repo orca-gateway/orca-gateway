@@ -32,6 +32,15 @@ export interface FlattenOptions {
 /** Maximum CompositeWidget nesting depth — guards accidental infinite recursion. */
 export const MAX_COMPOSITE_DEPTH = 32;
 
+/**
+ * Absolute ceilings on any encoded widget tree (class-based and JSON-tree
+ * encoders alike). Real pages stay far below both; the caps exist so a
+ * pathological or maliciously authored tree fails with a clear error
+ * instead of blowing the stack / exhausting memory.
+ */
+export const MAX_TREE_DEPTH = 1024;
+export const MAX_TREE_NODES = 50_000;
+
 /** Flatten a widget tree into a `ComponentNode[]` array with root first. */
 export function flatten(widget: Widget, opts?: FlattenOptions): ComponentNode[] {
   const encoder = new Encoder(opts);
@@ -47,6 +56,7 @@ export class Encoder {
   private nodes: ComponentNode[] = [];
   private nextId = 0;
   private depth = 0;
+  private treeDepth = 0;
   private readonly renderOpts?: FlattenOptions;
 
   constructor(renderOpts?: FlattenOptions) {
@@ -54,6 +64,23 @@ export class Encoder {
   }
 
   addNode(widget: Widget): string {
+    if (this.treeDepth >= MAX_TREE_DEPTH) {
+      throw new Error(
+        `Widget tree exceeded ${MAX_TREE_DEPTH} nesting levels at ${widget.constructor.name}.`,
+      );
+    }
+    if (this.nodes.length >= MAX_TREE_NODES) {
+      throw new Error(`Widget tree exceeded ${MAX_TREE_NODES} nodes.`);
+    }
+    this.treeDepth++;
+    try {
+      return this.addNodeInner(widget);
+    } finally {
+      this.treeDepth--;
+    }
+  }
+
+  private addNodeInner(widget: Widget): string {
     // CompositeWidget expansion must run BEFORE the instanceof chain below —
     // composites have no wire representation and must be replaced by their
     // built subtree in-place. Their own `type`/`kind`/`getProps()` never

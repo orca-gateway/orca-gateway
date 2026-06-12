@@ -209,7 +209,9 @@ describe("19.3: HTTP integration - X-Orca-Timing header", () => {
   let server: Awaited<ReturnType<Engine["start"]>>;
 
   beforeAll(async () => {
-    server = await engine.start({ port: 0, cache: false });
+    // The timing header requires the operator opt-in (enableDebugEndpoint)
+    // in addition to the per-request x-orca-debug header.
+    server = await engine.start({ port: 0, cache: false, enableDebugEndpoint: true });
   });
   afterAll(() => engine.stop());
 
@@ -219,6 +221,22 @@ describe("19.3: HTTP integration - X-Orca-Timing header", () => {
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Orca-Timing")).toBeNull();
+  });
+
+  test("X-Orca-Timing header is absent when enableDebugEndpoint is off, even with x-orca-debug", async () => {
+    const lockedEngine = new Engine();
+    lockedEngine.registerApp(app);
+    const lockedServer = await lockedEngine.start({ port: 0, cache: false });
+    try {
+      const res = await fetch(
+        `http://localhost:${lockedServer.port}/api/v1/app/timing-app/page/home`,
+        { headers: { "x-orca-debug": "true" } },
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get("X-Orca-Timing")).toBeNull();
+    } finally {
+      lockedEngine.stop();
+    }
   });
 
   test("X-Orca-Timing header is present with x-orca-debug=true", async () => {

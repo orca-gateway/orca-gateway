@@ -248,20 +248,42 @@ export type ExecuteFn = (
   context: ActionContext,
 ) => ResponseAction[] | Promise<ResponseAction[]>;
 
+export type AuthorizeFn = (
+  context: ActionContext,
+) => boolean | Promise<boolean>;
+
+/**
+ * SECURITY: every field of the ActionContext that reaches `authorize` and
+ * `execute` — `pageState`, `appState`, `actionParams` — is echoed verbatim
+ * from the client's request body. Any client that knows an action id can
+ * call it with arbitrary values; actions are NOT bound to the page that
+ * rendered them. Never trust these fields for authorization or pricing
+ * decisions — re-derive anything sensitive server-side (e.g. from
+ * `requestInfo.authToken`).
+ */
 export interface ServerActionConfig {
   id: string;
   schema?: RequestSchema;
+  /**
+   * Optional authorization gate, run after schema validation and before
+   * `execute`. Return false to reject the call with HTTP 403. Base the
+   * decision on `context.requestInfo` (auth token, user id) — not on
+   * client-supplied state/params.
+   */
+  authorize?: AuthorizeFn;
   execute: ExecuteFn;
 }
 
 export class ServerActionDefinition {
   readonly id: string;
   readonly schema?: RequestSchema;
+  readonly authorize?: AuthorizeFn;
   readonly execute: ExecuteFn;
 
   private constructor(config: ServerActionConfig) {
     this.id = config.id;
     this.schema = config.schema;
+    this.authorize = config.authorize;
     this.execute = config.execute;
   }
 

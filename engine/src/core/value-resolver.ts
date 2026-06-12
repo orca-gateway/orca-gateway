@@ -493,6 +493,13 @@ export function getByDotPath(obj: unknown, path: string): unknown {
   for (const seg of segments) {
     if (current === null || current === undefined) return undefined;
 
+    // Refuse to walk into the prototype chain. Paths are server-authored in
+    // OSS, but the cloud JSON-tree path can carry dashboard-authored keys —
+    // "__proto__.x" / "constructor.prototype" must resolve to nothing.
+    if (seg === "__proto__" || seg === "prototype" || seg === "constructor") {
+      return undefined;
+    }
+
     if (Array.isArray(current)) {
       const idx = Number(seg);
       if (Number.isNaN(idx)) return undefined;

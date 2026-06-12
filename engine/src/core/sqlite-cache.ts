@@ -10,6 +10,7 @@ export class SQLiteCache implements CacheProvider {
   private stmtDel: ReturnType<Database["prepare"]>;
   private stmtFlush: ReturnType<Database["prepare"]>;
   private stmtCleanup: ReturnType<Database["prepare"]>;
+  private cleanupTimer: ReturnType<typeof setInterval>;
 
   constructor(path = ":memory:") {
     this.db = new Database(path);
@@ -47,6 +48,11 @@ export class SQLiteCache implements CacheProvider {
     this.stmtCleanup = this.db.prepare(
       "DELETE FROM cache WHERE expires_at IS NOT NULL AND expires_at <= ?",
     );
+
+    // Sweep expired rows periodically so the cache file doesn't grow
+    // unbounded. unref'd so the timer never keeps the process alive.
+    this.cleanupTimer = setInterval(() => this.cleanup(), 60_000);
+    this.cleanupTimer.unref?.();
   }
 
   async get(key: string): Promise<string | null> {
@@ -74,6 +80,7 @@ export class SQLiteCache implements CacheProvider {
   }
 
   close(): void {
+    clearInterval(this.cleanupTimer);
     this.db.close();
   }
 }

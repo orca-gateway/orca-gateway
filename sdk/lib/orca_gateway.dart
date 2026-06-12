@@ -13,6 +13,7 @@ export 'src/state/elm_store.dart';
 export 'src/state/state_manager.dart';
 export 'src/state/action_executor.dart';
 export 'src/state/component_store.dart';
+export 'src/state/url_scheme_policy.dart';
 export 'src/state/value_resolver.dart';
 export 'src/state/watch_builder.dart';
 

@@ -22,11 +22,8 @@ import '../widgets/orca_nav_config.dart';
 import 'animation_registry.dart';
 import 'component_store.dart';
 import 'state_manager.dart';
+import 'url_scheme_policy.dart';
 import 'value_resolver.dart';
-
-const _safeUrlSchemes = {'http', 'https', 'tel', 'mailto', 'sms'};
-
-bool _isSafeUrlScheme(Uri uri) => _safeUrlSchemes.contains(uri.scheme.toLowerCase());
 
 /// Identifies where an action chain originated so dedupe wrappers like
 /// `Once(...)` can key by (widgetId, trigger). Passed by `fireAction(...)`
@@ -488,7 +485,7 @@ class ActionExecutor {
     _handlers['openUrl'] = (action, exec) async {
       final urlString = exec.resolveString(action['url']);
       final uri = Uri.tryParse(urlString);
-      if (uri != null && _isSafeUrlScheme(uri)) {
+      if (uri != null && OrcaUrlPolicy.isAllowed(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       }
     };

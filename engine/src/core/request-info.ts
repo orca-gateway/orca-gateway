@@ -2,9 +2,22 @@ import type { ClientCapabilitiesRef, RequestInfo } from "../types/context";
 
 // ── Extract RequestInfo from HTTP Request ──────────────────
 
+export interface RequestInfoOptions {
+  /** Peer address of the connecting socket (e.g. from Bun's `server.requestIP`). */
+  socketAddress?: string;
+  /**
+   * Honor `X-Forwarded-For` when resolving `ipAddress`. Only enable when the
+   * engine sits behind a reverse proxy you control — the header is
+   * client-forgeable, and `ipAddress` keys the rate limiter's buckets.
+   * Default: false (use the socket peer address).
+   */
+  trustProxy?: boolean;
+}
+
 export function extractRequestInfo(
   req: Request,
   routeParams: Record<string, string>,
+  opts?: RequestInfoOptions,
 ): RequestInfo {
   const url = new URL(req.url);
   const headers = req.headers;
@@ -68,7 +81,7 @@ export function extractRequestInfo(
     timezone,
     language,
     networkType,
-    ipAddress: parseHeader(headers, "x-forwarded-for", "127.0.0.1"),
+    ipAddress: resolveClientIp(headers, opts),
     routePath: url.pathname,
     routeParams,
     queryParams,
@@ -76,6 +89,30 @@ export function extractRequestInfo(
     userId,
     clientCapabilities,
   };
+}
+
+/**
+ * Resolve the client IP. With `trustProxy`, take the RIGHTMOST entry of
+ * `X-Forwarded-For` — that's the hop appended by the trusted proxy itself,
+ * the only entry a client can't forge. Anything a client sends in its own
+ * XFF header sits further left and is ignored. Without `trustProxy` (or
+ * when the entry isn't a plausible IP), fall back to the socket address.
+ */
+function resolveClientIp(headers: Headers, opts?: RequestInfoOptions): string {
+  if (opts?.trustProxy) {
+    const xff = headers.get("x-forwarded-for");
+    if (xff) {
+      const hops = xff.split(",");
+      const candidate = hops[hops.length - 1]!.trim();
+      if (isIpAddress(candidate)) return candidate;
+    }
+  }
+  return opts?.socketAddress ?? "127.0.0.1";
+}
+
+function isIpAddress(s: string): boolean {
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(s)) return true; // IPv4
+  return s.includes(":") && /^[0-9a-fA-F:]+(%[0-9a-zA-Z]+)?$/.test(s); // IPv6
 }
 
 function parseHeader(headers: Headers, name: string, fallback: string): string;

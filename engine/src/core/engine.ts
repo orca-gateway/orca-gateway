@@ -31,6 +31,13 @@ export interface EngineConfig {
   enableDebugEndpoint?: boolean;
   /** Maximum request body size in bytes. Default: 1 MB (1048576). */
   maxRequestBodySize?: number;
+  /**
+   * Honor `X-Forwarded-For` when resolving the client IP. Only enable when
+   * the engine runs behind a reverse proxy you control — the header is
+   * client-forgeable, and the resolved IP keys rate-limit buckets.
+   * Default: false (use the socket peer address).
+   */
+  trustProxy?: boolean;
 }
 
 export class Engine {
@@ -40,6 +47,7 @@ export class Engine {
   private readonly monitorEmitter = new MonitorEmitter();
   private debugStore?: DebugStore;
   private enableDebugEndpoint = false;
+  private trustProxy = false;
 
   // Epic 25b slice 2: capability negotiation state.
   private fallbackResolver: FallbackPolicyResolver = createStaticPolicyResolver({});
@@ -116,6 +124,7 @@ export class Engine {
 
     // Debug endpoint
     this.enableDebugEndpoint = config.enableDebugEndpoint ?? false;
+    this.trustProxy = config.trustProxy ?? false;
 
     // Dev monitor
     if (config.devMonitor) {
@@ -153,6 +162,17 @@ export class Engine {
 
   getCache(): CacheProvider | undefined {
     return this.cache;
+  }
+
+  /**
+   * Build RequestInfo with the engine's IP-resolution settings: the socket
+   * peer address from Bun, and X-Forwarded-For only when `trustProxy` is on.
+   */
+  private requestInfo(req: Request, routeParams: Record<string, string>) {
+    return extractRequestInfo(req, routeParams, {
+      socketAddress: this.server?.requestIP(req)?.address,
+      trustProxy: this.trustProxy,
+    });
   }
 
   /**
@@ -222,7 +242,7 @@ export class Engine {
       }
     }
 
-    const requestInfo = extractRequestInfo(req, {});
+    const requestInfo = this.requestInfo(req, {});
     const pageState = (body.pageState ?? {}) as Record<string, unknown>;
     const appState = (body.appState ?? {}) as Record<string, unknown>;
 
@@ -232,6 +252,21 @@ export class Engine {
       appState,
       actionParams: params,
     };
+
+    // Per-action authorization gate. Note: pageState/appState/params above
+    // are echoed verbatim from the client body — only requestInfo carries
+    // anything the client can't freely fabricate (and authToken still needs
+    // server-side verification by the action author).
+    if (actionDef.authorize) {
+      try {
+        if (!(await actionDef.authorize(context))) {
+          return Response.json({ error: "Forbidden" }, { status: 403 });
+        }
+      } catch (err) {
+        console.error(`Error in authorize() for server action "${actionId}":`, err);
+        return Response.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
 
     const actionStart = performance.now();
     try {
@@ -314,7 +349,7 @@ export class Engine {
     }
 
     try {
-      const requestInfo = extractRequestInfo(req, routeMatch.params);
+      const requestInfo = this.requestInfo(req, routeMatch.params);
       const appState = (body.appState ?? {}) as Record<string, unknown>;
       const context: PageContext = {
         requestInfo,
@@ -355,7 +390,7 @@ export class Engine {
     }
 
     const deviceId = (body.deviceId as string) ?? undefined;
-    const reqInfo = extractRequestInfo(req, {});
+    const reqInfo = this.requestInfo(req, {});
 
     if (type === "start") {
       this.monitorEmitter.emit("onSessionStart", { timestamp: Date.now(), deviceId, requestInfo: reqInfo });
@@ -389,7 +424,7 @@ export class Engine {
     ) as { type: "start" | "end"; timestamp: number }[];
 
     if (validSessions.length > 0) {
-      const reqInfo = extractRequestInfo(req, {});
+      const reqInfo = this.requestInfo(req, {});
       this.monitorEmitter.emit("onRegisterOfflineSessions", {
         timestamp: Date.now(),
         deviceId,
@@ -464,7 +499,7 @@ export class Engine {
     }
 
     // Build middleware context
-    const requestInfo = extractRequestInfo(req, {});
+    const requestInfo = this.requestInfo(req, {});
     const middlewareCtx: MiddlewareContext = {
       request: req,
       requestInfo,
@@ -473,8 +508,10 @@ export class Engine {
       configuration: app.configuration,
     };
 
-    // Check if debug timing is requested
-    const isDebug = req.headers.get("x-orca-debug") === "true";
+    // Check if debug timing is requested. The `x-orca-debug` header alone is
+    // not enough — internal stage timings only leave the server when the
+    // operator opted in via `enableDebugEndpoint`.
+    const isDebug = this.enableDebugEndpoint && req.headers.get("x-orca-debug") === "true";
 
     // Run onRequest middleware chain
     const middlewares = app.getMiddlewares();
@@ -558,7 +595,7 @@ export class Engine {
           });
 
           pageBlock: try {
-            const pageRequestInfo = extractRequestInfo(req, routeMatch.params);
+            const pageRequestInfo = this.requestInfo(req, routeMatch.params);
 
             // Parse the request body ONCE — Bun Request bodies can only be
             // consumed once. Downstream extractors read fields off the
@@ -682,13 +719,12 @@ export class Engine {
 
             const headers: Record<string, string> = {};
 
-            // Add timing header if debug is enabled
+            // Add timing header if debug is enabled (`timing` only exists
+            // when enableDebugEndpoint is on — see `isDebug` above).
             if (timing) {
               const timingData = timing.toTimingData(`/${pagePath}`, req.method);
-              if (this.enableDebugEndpoint) {
-                if (!this.debugStore) this.debugStore = new DebugStore();
-                this.debugStore.push(timingData);
-              }
+              if (!this.debugStore) this.debugStore = new DebugStore();
+              this.debugStore.push(timingData);
               headers["X-Orca-Timing"] = JSON.stringify(timingData);
             }
 

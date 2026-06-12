@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { Middleware } from "../core/middleware";
 
 export interface AuthMiddlewareConfig {
@@ -11,7 +12,21 @@ export interface AuthMiddlewareConfig {
 
 export function authMiddleware(config: AuthMiddlewareConfig): Middleware {
   const header = config.header ?? "authorization";
-  const keySet = new Set(config.apiKeys);
+  // Compare SHA-256 digests with timingSafeEqual instead of raw string
+  // equality — string/Set comparison short-circuits on the first differing
+  // byte, leaking key prefixes through response timing.
+  const sha256 = (s: string) => createHash("sha256").update(s).digest();
+  const keyDigests = config.apiKeys.map(sha256);
+  const isValidKey = (candidate: string): boolean => {
+    const digest = sha256(candidate);
+    // Check every key (no early exit) so timing doesn't depend on which
+    // key matched.
+    let valid = false;
+    for (const kd of keyDigests) {
+      if (timingSafeEqual(digest, kd)) valid = true;
+    }
+    return valid;
+  };
   const exclude = new Set(config.exclude ?? []);
 
   return {
@@ -26,7 +41,7 @@ export function authMiddleware(config: AuthMiddlewareConfig): Middleware {
       if (!key) {
         return { status: 401, body: { error: "Missing API key" } };
       }
-      if (!keySet.has(key)) {
+      if (!isValidKey(key)) {
         return { status: 401, body: { error: "Invalid API key" } };
       }
     },

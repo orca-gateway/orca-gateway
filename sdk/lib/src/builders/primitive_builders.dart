@@ -3,9 +3,8 @@ import 'package:flutter/widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../rendering/component_context.dart';
 import '../rendering/component_registry.dart';
+import '../state/url_scheme_policy.dart';
 import 'builder_helpers.dart';
-
-const _safeUrlSchemes = {'http', 'https', 'tel', 'mailto', 'sms'};
 
 /// Register all primitive component builders.
 void registerPrimitiveBuilders(ComponentRegistry registry) {
@@ -180,7 +179,7 @@ Widget _buildFallbackPrompt(OrcaComponentContext ctx) {
           GestureDetector(
             onTap: () {
               final uri = Uri.tryParse(ctaUrl);
-              if (uri != null && _safeUrlSchemes.contains(uri.scheme.toLowerCase())) {
+              if (uri != null && OrcaUrlPolicy.isAllowed(uri)) {
                 launchUrl(uri);
               }
             },
@@ -270,8 +269,7 @@ Widget _buildUnsupportedWidgetPlaceholder(OrcaComponentContext ctx) {
           GestureDetector(
             onTap: () {
               final uri = Uri.tryParse(docsUrl);
-              if (uri != null &&
-                  _safeUrlSchemes.contains(uri.scheme.toLowerCase())) {
+              if (uri != null && OrcaUrlPolicy.isAllowed(uri)) {
                 launchUrl(uri);
               }
             },

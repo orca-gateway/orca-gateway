@@ -32,6 +32,7 @@
 
 import type { ActionMap } from "../types/action";
 import type { ComponentNode } from "../types/node";
+import { MAX_TREE_DEPTH, MAX_TREE_NODES } from "../types/widget";
 import { WIDGET_REGISTRY, type WidgetRegistryEntry } from "./widget-registry-gen";
 import { ValueResolver, type ValueResolverContext } from "./value-resolver";
 import { V, isValue, type Value } from "../types/value";
@@ -57,6 +58,7 @@ export interface JsonTreeEncoderOptions {
 export class JsonTreeEncoder {
   private nodes: ComponentNode[] = [];
   private nextId = 0;
+  private treeDepth = 0;
   private extraWidgets: Readonly<Record<string, WidgetRegistryEntry>>;
 
   constructor(
@@ -79,6 +81,24 @@ export class JsonTreeEncoder {
   }
 
   private addNode(tree: JsonTreeNode): string {
+    // JSON trees can come from untrusted authoring surfaces (dashboards,
+    // stored definitions) — enforce the same absolute ceilings as the
+    // class-based encoder so a hostile tree can't blow the stack.
+    if (this.treeDepth >= MAX_TREE_DEPTH) {
+      throw new Error(`json-tree-encoder: tree exceeded ${MAX_TREE_DEPTH} nesting levels`);
+    }
+    if (this.nodes.length >= MAX_TREE_NODES) {
+      throw new Error(`json-tree-encoder: tree exceeded ${MAX_TREE_NODES} nodes`);
+    }
+    this.treeDepth++;
+    try {
+      return this.addNodeInner(tree);
+    } finally {
+      this.treeDepth--;
+    }
+  }
+
+  private addNodeInner(tree: JsonTreeNode): string {
     if (!tree || typeof tree !== "object") {
       throw new Error("json-tree-encoder: tree node is not an object");
     }
