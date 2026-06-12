@@ -11,7 +11,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  orca_gateway: ^0.2.0
+  orca_gateway: ^0.3.0
   video_player: ^2.9.3
 
 dev_dependencies:

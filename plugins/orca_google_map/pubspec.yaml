@@ -11,7 +11,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  orca_gateway: ^0.2.0
+  orca_gateway: ^0.3.0
   google_maps_flutter: ^2.10.0
 
 dev_dependencies:
