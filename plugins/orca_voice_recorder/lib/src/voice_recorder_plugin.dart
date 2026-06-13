@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:orca_gateway/orca_gateway.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -67,6 +68,18 @@ class VoiceRecorderPlugin extends OrcaPlugin {
               ),
             ],
           },
+          // Epic 38.1/38.2: microphone capture has no faithful web preview.
+          widgetMetadata: {
+            'VoiceRecorder': WidgetWebMetadata(
+              isSupportedOnWeb: false,
+              displayName: 'Voice Recorder',
+              iconName: 'mic',
+            ),
+          },
+          // Epic 38.5: branded web stub in place of the recorder UI.
+          webStubs: {
+            'VoiceRecorder': _buildVoiceRecorderWebStub,
+          },
         );
 
   static final Map<String, _RecorderInstance> _recorders = {};
@@ -90,6 +103,11 @@ class _RecorderInstance {
     state.dispose();
     amplitude.dispose();
   }
+}
+
+/// Web stub for `VoiceRecorder` (Epic 38.5).
+Widget _buildVoiceRecorderWebStub(OrcaComponentContext ctx) {
+  return const OrcaWebStub(label: 'Voice Recorder', icon: Icons.mic_none_outlined);
 }
 
 Widget _buildVoiceRecorder(OrcaComponentContext ctx) {

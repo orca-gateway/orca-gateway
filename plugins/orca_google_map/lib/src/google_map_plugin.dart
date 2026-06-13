@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:orca_gateway/orca_gateway.dart';
 
@@ -59,10 +60,30 @@ class GoogleMapPlugin extends OrcaPlugin {
               ),
             ],
           },
+          // Epic 38.1/38.2: the native map view has no faithful web preview.
+          widgetMetadata: {
+            'GoogleMap': WidgetWebMetadata(
+              isSupportedOnWeb: false,
+              displayName: 'Google Maps',
+              iconName: 'map',
+            ),
+          },
+          // Epic 38.5: branded web stub shown in the preview in place of the
+          // real platform view.
+          webStubs: {
+            'GoogleMap': _buildGoogleMapWebStub,
+          },
         );
 
   /// Stores controllers by widget key for camera control actions.
   static final Map<String, GoogleMapController> _controllers = {};
+}
+
+/// Web stub for `GoogleMap` (Epic 38.5). google_maps_flutter has no usable web
+/// platform view in the preview host, so substitute a branded placeholder that
+/// occupies the map's slot.
+Widget _buildGoogleMapWebStub(OrcaComponentContext ctx) {
+  return const OrcaWebStub(label: 'Google Maps', icon: Icons.map_outlined);
 }
 
 Widget _buildGoogleMap(OrcaComponentContext ctx) {

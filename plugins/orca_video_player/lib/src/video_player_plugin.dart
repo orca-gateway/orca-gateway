@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:orca_gateway/orca_gateway.dart';
 import 'package:video_player/video_player.dart';
 
@@ -67,10 +68,27 @@ class VideoPlayerPlugin extends OrcaPlugin {
               ),
             ],
           },
+          // Epic 38.1/38.2: the native video surface doesn't preview on web.
+          widgetMetadata: {
+            'VideoPlayer': WidgetWebMetadata(
+              isSupportedOnWeb: false,
+              displayName: 'Video Player',
+              iconName: 'video',
+            ),
+          },
+          // Epic 38.5: branded web stub in place of the platform view.
+          webStubs: {
+            'VideoPlayer': _buildVideoPlayerWebStub,
+          },
         );
 
   /// Active controllers keyed by playerId for action targeting.
   static final Map<String, VideoPlayerController> _controllers = {};
+}
+
+/// Web stub for `VideoPlayer` (Epic 38.5).
+Widget _buildVideoPlayerWebStub(OrcaComponentContext ctx) {
+  return const OrcaWebStub(label: 'Video Player', icon: Icons.play_circle_outline);
 }
 
 Widget _buildVideoPlayer(OrcaComponentContext ctx) {

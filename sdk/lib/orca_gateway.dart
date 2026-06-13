@@ -46,6 +46,7 @@ export 'src/widgets/orca_nav_config.dart';
 export 'src/widgets/orca_page.dart';
 export 'src/widgets/orca_shell.dart';
 export 'src/widgets/lifecycle_wrapper.dart';
+export 'src/widgets/orca_web_stub.dart';
 
 // Capabilities + telemetry (Epic 25b)
 export 'src/capabilities/generated.dart';
