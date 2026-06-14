@@ -277,6 +277,10 @@ class _OrcaAppState extends State<OrcaApp> with WidgetsBindingObserver {
     }
     if (widget.enableSessionTracking) {
       _initSession();
+    } else {
+      // Even without session tracking, resolve the device id so analytics /
+      // MAU counting works — it rides on every request via the client header.
+      _resolveDeviceId();
     }
 
     // Capture cold-start deeplink — the URI the OS used to launch the app.
@@ -328,22 +332,29 @@ class _OrcaAppState extends State<OrcaApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _initSession() async {
-    final store = OfflineSessionStore();
-    widget.client.setOfflineSessionStore(store);
-
+  /// Resolve the stable anonymous device id once and push it to the client so
+  /// it rides on every request as `x-orca-device-id` (analytics / MAU). Falls
+  /// back to a null id if the platform lookup fails — analytics degrades to
+  /// "no device id" rather than erroring. Idempotent.
+  Future<void> _resolveDeviceId() async {
+    if (_deviceId != null) return;
     try {
       final deviceInfo = DeviceInfoPlugin();
       if (Platform.isIOS) {
-        final ios = await deviceInfo.iosInfo;
-        _deviceId = ios.identifierForVendor;
+        _deviceId = (await deviceInfo.iosInfo).identifierForVendor;
       } else if (Platform.isAndroid) {
-        final android = await deviceInfo.androidInfo;
-        _deviceId = android.id;
+        _deviceId = (await deviceInfo.androidInfo).id;
       }
     } catch (_) {
-      // Fall back to null deviceId if platform call fails
+      // Fall back to null deviceId if platform call fails.
     }
+    widget.client.setDeviceId(_deviceId);
+  }
+
+  Future<void> _initSession() async {
+    final store = OfflineSessionStore();
+    widget.client.setOfflineSessionStore(store);
+    await _resolveDeviceId();
     widget.client.sendSessionStart(widget.appId, deviceId: _deviceId);
     _flushOfflineSessions();
   }

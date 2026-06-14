@@ -51,6 +51,7 @@ export 'src/widgets/orca_web_stub.dart';
 // Capabilities + telemetry (Epic 25b)
 export 'src/capabilities/generated.dart';
 export 'src/telemetry/orca_telemetry.dart';
+export 'src/telemetry/orca_analytics.dart'; // batched event emitter (Epic 47.4)
 
 // Debug
 export 'src/debug/orca_debug.dart';

@@ -36,6 +36,13 @@ class OrcaClient {
   Map<String, String>? _cachedDeviceHeaders;
   String? _cachedCapsHash;
 
+  /// Stable anonymous per-install device id (identifierForVendor on iOS,
+  /// ANDROID_ID on Android), resolved by OrcaApp during boot and pushed here
+  /// via [setDeviceId]. Sent as `x-orca-device-id` on every request so the
+  /// cloud can count distinct active devices (MAU). Null until resolved — the
+  /// header is simply omitted, and the request still succeeds.
+  String? _deviceId;
+
   /// Additional widget types contributed by registered plugins. Folded into
   /// the capability vector so the server's fallback policy doesn't strip
   /// plugin widgets from the rendered tree. Populated by OrcaApp during
@@ -243,6 +250,10 @@ class OrcaClient {
 
   Map<String, String> _computeDeviceHeaders() {
     final headers = <String, String>{};
+    final deviceId = _deviceId;
+    if (deviceId != null && deviceId.isNotEmpty) {
+      headers['x-orca-device-id'] = deviceId;
+    }
     try {
       headers['x-orca-platform'] = Platform.isIOS ? 'iOS' : 'Android';
       headers['x-orca-os-version'] = Platform.operatingSystemVersion;
@@ -525,6 +536,35 @@ class OrcaClient {
   /// Set the offline session store for persisting sessions when offline.
   void setOfflineSessionStore(OfflineSessionStore store) {
     _offlineSessionStore = store;
+  }
+
+  /// Register the stable anonymous device id so it rides on every subsequent
+  /// request as `x-orca-device-id` (Epic 48 — active-device / MAU counting).
+  /// Invalidates the cached header map so the next request picks it up, mirroring
+  /// how capability-extension registration invalidates the cache. Idempotent.
+  void setDeviceId(String? deviceId) {
+    if (_deviceId == deviceId) return;
+    _deviceId = deviceId;
+    _cachedDeviceHeaders = null;
+  }
+
+  /// Send a batch of analytics events (Epic 47.4). Best-effort: returns false
+  /// on a network error or non-2xx instead of throwing, so the caller's flush
+  /// loop can decide whether to re-queue. Auth, env, and x-orca-sdk-version
+  /// ride along via [_deviceHeaders].
+  Future<bool> sendEvents(String appId, List<Map<String, dynamic>> events) async {
+    if (events.isEmpty) return true;
+    final uri = Uri.parse('$baseUrl/api/v1/app/$appId/events');
+    try {
+      final response = await _client.post(
+        uri,
+        headers: {'Content-Type': 'application/json', ..._deviceHeaders()},
+        body: jsonEncode({'events': events}),
+      );
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Notify the engine that a session has started (app opened).
