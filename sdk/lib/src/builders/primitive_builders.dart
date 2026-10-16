@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart' show SelectableText, ImageIcon;
 import 'package:flutter/widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -292,6 +294,12 @@ Widget _buildUnsupportedWidgetPlaceholder(OrcaComponentContext ctx) {
 Widget _buildCircularProgress(OrcaComponentContext ctx) {
   final size = (ctx.prop<num>('size'))?.toDouble() ?? 36;
   final color = parseColor(ctx.prop('color'));
+  final strokeWidth = (ctx.prop<num>('strokeWidth'))?.toDouble() ?? 3;
+  // `value` makes the indicator determinate (0.0–1.0). Without it the builder
+  // keeps drawing the static "spinner" arc it always drew, so existing pages
+  // look the same and widget tests still settle (no endless animation).
+  final raw = (ctx.prop<num>('value'))?.toDouble();
+  final value = raw == null || raw.isNaN ? null : raw.clamp(0.0, 1.0).toDouble();
 
   return SizedBox(
     width: size,
@@ -299,6 +307,8 @@ Widget _buildCircularProgress(OrcaComponentContext ctx) {
     child: CustomPaint(
       painter: _CircularProgressPainter(
         color: color ?? const Color(0xFF2196F3),
+        strokeWidth: strokeWidth > 0 ? strokeWidth : 3.0,
+        value: value,
       ),
     ),
   );
@@ -446,24 +456,50 @@ class _LinearProgressPainter extends CustomPainter {
 
 class _CircularProgressPainter extends CustomPainter {
   final Color color;
-  _CircularProgressPainter({required this.color});
+  final double strokeWidth;
+
+  /// Fraction filled (0.0–1.0), or null for the indeterminate spinner arc.
+  final double? value;
+
+  _CircularProgressPainter({
+    required this.color,
+    this.strokeWidth = 3.0,
+    this.value,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
+    final inset = strokeWidth / 2;
+    final rect = Rect.fromLTWH(
+      inset,
+      inset,
+      math.max(0.0, size.width - strokeWidth),
+      math.max(0.0, size.height - strokeWidth),
+    );
     final paint = Paint()
       ..color = color
-      ..strokeWidth = 3
+      ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      Rect.fromLTWH(2, 2, size.width - 4, size.height - 4),
-      -0.5,
-      4.5,
-      false,
-      paint,
-    );
+
+    final v = value;
+    if (v == null) {
+      canvas.drawArc(rect, -0.5, 4.5, false, paint);
+      return;
+    }
+
+    // Determinate: faint full-circle track, then the filled arc from 12 o'clock.
+    final track = Paint()
+      ..color = color.withAlpha(0x33)
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+    canvas.drawArc(rect, 0.0, math.pi * 2, false, track);
+    if (v > 0) {
+      canvas.drawArc(rect, -math.pi / 2, math.pi * 2 * v, false, paint);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _CircularProgressPainter old) =>
+      old.color != color || old.strokeWidth != strokeWidth || old.value != value;
 }

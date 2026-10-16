@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.1 - 2026-10-16
+
+### Fixed
+
+- `CircularProgressIndicator` now honours `value` (0.0–1.0, drawn from 12 o'clock over a faint
+  track) and `strokeWidth`. Previously it always painted the same fixed arc. Without `value` it
+  keeps the indeterminate arc it drew before.
+- `closeDialog` pops exactly one sheet and never the page underneath it. A double tap (two
+  queued `closeDialog`s) or a stray `closeDialog` used to pop the page, and with a single page
+  left GoRouter asserted "popped the last page off of the stack" (black screen).
+- `closeDialog` and `refetchPage` now request the frame they wait for. After a plain
+  `GestureDetector` tap nothing else repaints, so a sheet stayed open and a refetched page did
+  not appear until some unrelated frame (e.g. a scroll).
+
 ## 0.2.0 - 2026-05-06
 
 Version-aligned release with engine 0.2.0. No SDK source changes.

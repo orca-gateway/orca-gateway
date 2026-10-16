@@ -772,8 +772,24 @@ class ActionExecutor {
       if (exec.context != null) {
         final ctx = exec.context!;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (ctx.mounted) Navigator.of(ctx).pop();
+          if (!ctx.mounted) return;
+          // Pop exactly one popup route (the sheet), never a page. A
+          // closeDialog with no sheet open — or a second one queued by a
+          // double tap — used to pop the page itself, and with a single page
+          // left GoRouter asserted "popped the last page" (black screen).
+          var popped = false;
+          Navigator.of(ctx).popUntil((route) {
+            if (!popped && route is PopupRoute) {
+              popped = true;
+              return false; // pop this sheet, then stop at the route below
+            }
+            return true;
+          });
         });
+        // The pop runs after the next frame, so make sure one is coming: after
+        // a plain GestureDetector tap nothing else repaints, and the sheet
+        // stayed open until some unrelated frame.
+        WidgetsBinding.instance.ensureVisualUpdate();
       }
     };
   }
