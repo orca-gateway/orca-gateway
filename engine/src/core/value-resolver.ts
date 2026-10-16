@@ -463,24 +463,33 @@ export class ValueResolver {
 
 // ── State reference detection ──────────────────────────────
 
-/** Returns true if the Value tree needs client-side resolution (state or event refs). */
+/**
+ * Returns true if the Value tree needs client-side resolution: it reads state, an action event,
+ * or an animation tween anywhere in the tree (transform inputs and step params, conditional
+ * conditions and branches).
+ */
 function hasStateRefs(value: Value): boolean {
-  return V.extractWatches(value).length > 0 || containsEventRefs(value);
+  return V.extractWatches(value).length > 0 || containsClientOnlyRefs(value);
 }
 
-/** Check if a Value tree contains any event references. */
-function containsEventRefs(value: Value): boolean {
-  switch (value.type) {
-    case "event":
-      return true;
-    case "transform":
-      return containsEventRefs(value.input);
-    case "conditional":
-      return value.branches.some(b => containsEventRefs(b.then)) ||
-        (value.else ? containsEventRefs(value.else) : false);
-    default:
-      return false;
+/**
+ * Values only the SDK can produce: `event` (the triggering action's payload) and `tween` /
+ * `tweenSequence` (the enclosing AnimatedBuilder's progress). A tree containing one must ship
+ * as-is; resolving it on the server would compute with the raw Value object (a count-up such as
+ * `V.transform(V.Tween(0, 9), [TV.round()])` used to arrive as `null`).
+ */
+const CLIENT_ONLY_KINDS = new Set(["event", "tween", "tweenSequence"]);
+
+function containsClientOnlyRefs(node: unknown): boolean {
+  if (node === null || typeof node !== "object") return false;
+  if (Array.isArray(node)) return node.some(containsClientOnlyRefs);
+  if (isValue(node)) {
+    if (CLIENT_ONLY_KINDS.has(node.type)) return true;
+    if (node.type === "static") return false; // literal data, never evaluated
   }
+  // Walk every nested field: transform steps (`by`, `value`, `params`, `expr`, `transform`),
+  // conditional `branches[].when` / `then` / `else`, BoolExpr operands.
+  return Object.values(node as Record<string, unknown>).some(containsClientOnlyRefs);
 }
 
 // ── Dot-path traversal ─────────────────────────────────────

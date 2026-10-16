@@ -287,6 +287,17 @@ describe("9.6: Pipeline resolves Values in render context", () => {
     };
   }
 
+  it("ships a count-up (transform over a tweenSequence) inside an AnimatedBuilder intact", async () => {
+    const { AnimatedBuilder } = require("../src/components");
+    const countUp = VH.transform(VH.TweenSequence([{ value: 0, duration: 0 }, { value: 9, duration: 600 }]), [{ type: "round" }]);
+    const page = PageDefinition.create({
+      id: "t", title: "T",
+      render: () => AnimatedBuilder.new({ duration: 600, children: [new ValueText(countUp)] }),
+    });
+    const res = await runPipeline(page, makePipelineContext());
+    expect(res.components.find((c: any) => c.type === "Text").props.data).toEqual(countUp);
+  });
+
   it("resolves V.static in component props", async () => {
     const page = PageDefinition.create({ id: "t", title: "T", render: () => new ValueText(VH.static("resolved!")) });
     const res = await runPipeline(page, makePipelineContext());
@@ -431,6 +442,75 @@ describe("9.x: resolveProps skips state-dependent Values", () => {
     expect(resolved.title).toBe("Orca");
     expect(resolved.count).toEqual(stateValue);
     expect(resolved.label).toBe("Buy");
+  });
+});
+
+describe("9.x: resolveProps keeps client-only Values (tween, tweenSequence, event)", () => {
+  const countUp = V.transform(V.TweenSequence([{ value: 0, duration: 0 }, { value: 9, duration: 600 }]), [TV.round()]);
+
+  it("bare V.Tween / V.TweenSequence pass through untouched", () => {
+    const tween = V.Tween(0, 1);
+    const seq = V.TweenSequence([{ value: 0, duration: 100 }, { value: 1, duration: 200 }]);
+    const resolved = r().resolveProps({ opacity: tween, height: seq });
+    expect(resolved.opacity).toEqual(tween);
+    expect(resolved.height).toEqual(seq);
+  });
+
+  it("keeps a transform whose input is a tweenSequence (count-up), instead of resolving it to null", () => {
+    const resolved = r().resolveProps({ data: countUp });
+    expect(resolved.data).toEqual(countUp);
+  });
+
+  it("keeps a transform whose input is a V.Tween", () => {
+    const value = V.transform(V.Tween(0, 100), [TV.round(), TV.toString()]);
+    expect(r().resolveProps({ data: value }).data).toEqual(value);
+  });
+
+  it("keeps a transform whose step param is a tween", () => {
+    const value = V.transform(V.static(10), [TV.multiply(V.Tween(0, 1))]);
+    expect(r().resolveProps({ width: value }).width).toEqual(value);
+  });
+
+  it("keeps a transform whose step param is an event (not just its input)", () => {
+    const value = V.transform(V.static(1), [TV.add(V.event("value"))]);
+    expect(r().resolveProps({ data: value }).data).toEqual(value);
+  });
+
+  it("keeps a conditional with a tween transform in a branch", () => {
+    const value = V.when([{ when: Expr.eq(V.static(1), 1), then: countUp }], V.static(0));
+    expect(r().resolveProps({ data: value }).data).toEqual(value);
+  });
+
+  it("keeps a conditional whose condition compares against a tween", () => {
+    const value = V.when([{ when: Expr.gt(V.Tween(0, 1), 0.5), then: V.static("late") }], V.static("early"));
+    expect(r().resolveProps({ data: value }).data).toEqual(value);
+  });
+
+  it("partially resolves server-only leaves next to a tween", () => {
+    const resolved = r({ infoData: { target: 42 } }).resolveProps({
+      data: V.transform(V.Tween(0, 1), [TV.multiply(V.info("target")), TV.round()]),
+    });
+    expect(resolved.data).toEqual(V.transform(V.Tween(0, 1), [TV.multiply(V.static(42)), TV.round()]));
+  });
+
+  it("nested in plain objects (style, transform matrices) still pass through", () => {
+    const resolved = r().resolveProps({
+      style: { fontSize: V.Tween(12, 24) },
+      transform: { type: "scale", scaleX: V.Tween(0.5, 1), scaleY: V.Tween(0.5, 1) },
+    });
+    expect(resolved.style).toEqual({ fontSize: V.Tween(12, 24) });
+    expect(resolved.transform).toEqual({ type: "scale", scaleX: V.Tween(0.5, 1), scaleY: V.Tween(0.5, 1) });
+  });
+
+  it("does not treat tween-shaped data inside V.static as a tween", () => {
+    const literal = { type: "tween", begin: 0, end: 1 };
+    const resolved = r().resolveProps({ data: V.transform(V.static([literal]), [TV.length()]) });
+    expect(resolved.data).toBe(1); // fully resolved on the server, as before
+  });
+
+  it("still resolves purely static transforms on the server", () => {
+    const resolved = r().resolveProps({ data: V.transform(V.static("orca"), [TV.toUpperCase()]) });
+    expect(resolved.data).toBe("ORCA");
   });
 });
 

@@ -515,29 +515,27 @@ class ValueResolver {
 
 // ── State reference detection ──────────────────────────────
 
+/// True if the value tree needs client-side resolution: it reads state, an action event, or an
+/// animation tween anywhere (transform inputs and step params, conditional conditions and branches).
 bool _hasStateRefs(dynamic value) {
-  return V.extractWatches(value).isNotEmpty || _containsEventRefs(value);
+  return V.extractWatches(value).isNotEmpty || _containsClientOnlyRefs(value);
 }
 
-bool _containsEventRefs(dynamic value) {
-  if (value is! Map) return false;
-  switch (value['type']) {
-    case 'event':
-      return true;
-    case 'transform':
-      return _containsEventRefs(value['input']);
-    case 'conditional':
-      final branches = value['branches'];
-      if (branches is List) {
-        for (final b in branches) {
-          if (b is Map && _containsEventRefs(b['then'])) return true;
-        }
-      }
-      final elseValue = value['else'];
-      return elseValue != null && _containsEventRefs(elseValue);
-    default:
-      return false;
+/// Values only the SDK can produce: `event` (the triggering action's payload) and `tween` /
+/// `tweenSequence` (the enclosing AnimatedBuilder's progress). A tree containing one must ship
+/// as-is; resolving it on the server computes with the raw value map (a count-up such as
+/// `V.transform(V.tween(0, 9), [round])` used to arrive as null).
+const _clientOnlyKinds = {'event', 'tween', 'tweenSequence'};
+
+bool _containsClientOnlyRefs(dynamic node) {
+  if (node is List) return node.any(_containsClientOnlyRefs);
+  if (node is! Map) return false;
+  if (isValue(node)) {
+    final type = node['type'];
+    if (_clientOnlyKinds.contains(type)) return true;
+    if (type == 'static') return false; // literal data, never evaluated
   }
+  return node.values.any(_containsClientOnlyRefs);
 }
 
 // ── Dot-path traversal ─────────────────────────────────────

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 - Unreleased
+
+### Fixed
+
+- Tween-driven values arrived as `null`. The page pipeline resolves on the server any Value tree with no state refs, but only `event` counted as client-only, and only in a transform's input or a conditional's branches. A transform over a `V.Tween` / `V.TweenSequence` (a count-up: `V.transform(V.TweenSequence(...), [TV.round()])`) was therefore evaluated on the server with the raw tween object and shipped as `null`. `event`, `tween` and `tweenSequence` are now client-only wherever they appear (transform inputs and step params, conditional conditions, branches and `else`), so those trees ship intact; `info` / `request` leaves beside them still collapse to `V.static`. Same fix in the Dart engine port. New conformance fixture `24_tween_transform`.
+
 ## 0.2.4 - 2026-05-07
 
 ### Fixed
