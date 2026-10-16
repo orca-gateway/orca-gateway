@@ -289,6 +289,10 @@ class _OrcaPageState extends State<OrcaPage> {
                 _pageStore = _stateManager.getPageStore(freshResponse.pageId);
                 _componentStore.init(freshResponse.components);
               });
+              // Request that frame: when the refetch was triggered by a plain
+              // tap nothing else is repainting, and the fresh page would only
+              // appear on the next unrelated frame (e.g. a scroll).
+              WidgetsBinding.instance.ensureVisualUpdate();
             }
           },
           pageBuilder: (path) => OrcaPage(
