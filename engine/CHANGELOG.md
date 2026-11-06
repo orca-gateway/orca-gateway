@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.3.2 - Unreleased
+## 0.3.3 - 2026-11-06
+
+### Added
+
+- Client platforms (Epic 23b). A new `Platform` type covers `"flutter" | "web" | "android" | "ios"`, and `ALL_PLATFORMS` lists all four. Both are exported from `@orca-gateway/engine/types`.
+- Widget classes declare which platforms render them natively with `static readonly targets`. The generated registry carries each widget's `targets`; that registry is `WIDGET_REGISTRY` and `schema/widget-registry.json`. Checkbox, Drawer, FloatingActionButton, InkWell, Radio, SnackBar and Tooltip leave out `ios`.
+- A page definition can declare `targets`, the platforms its author expects to serve. Outside production, the pipeline then warns once per page about widgets that one of those platforms cannot render, naming the widget and the missing platforms. Those clients degrade such widgets through the capability vector. A page without `targets` is not checked.
+
+## 0.3.2 - 2026-10-16
 
 ### Fixed
 
