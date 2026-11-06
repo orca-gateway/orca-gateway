@@ -74,13 +74,15 @@ struct FlexView: View {
         }
     }
 
+    /// Under `stretch` a child spans the cross axis; one that does not fill
+    /// it (a Text) sits at its start, as Flutter paints it in the tight box.
     @ViewBuilder
     private func child(_ id: String) -> some View {
         if Props.crossAxis(node["crossAxisAlignment"]) == .stretch {
             if axis == .vertical {
-                NodeView(id: id, model: model).frame(maxWidth: .infinity)
+                NodeView(id: id, model: model).frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                NodeView(id: id, model: model).frame(maxHeight: .infinity)
+                NodeView(id: id, model: model).frame(maxHeight: .infinity, alignment: .top)
             }
         } else {
             NodeView(id: id, model: model)
