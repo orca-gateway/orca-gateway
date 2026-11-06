@@ -22,17 +22,23 @@ public enum GeneratedCapabilities {
         "Card",
         "Center",
         "Column",
+        "Container",
         "Divider",
         "ElevatedButton",
+        "Expanded",
         "FallbackPrompt",
+        "Icon",
+        "Image",
         "OutlinedButton",
         "Padding",
         "Row",
         "Scaffold",
         "SingleChildScrollView",
         "SizedBox",
+        "Spacer",
         "Text",
         "TextButton",
+        "TextField",
     ]
 
     public static let valueKinds: [String] = [
@@ -116,5 +122,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "6a68c38066b85406753f674bb9b625f791554fec3c5279f33d212ab33b3eca91"
+    public static let capsHash = "e61e73c701a6e597d61c7f51d75dcfb79c0df4463746cf5aa90f0a8a14737604"
 }

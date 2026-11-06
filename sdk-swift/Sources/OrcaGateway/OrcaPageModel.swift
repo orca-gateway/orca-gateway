@@ -89,6 +89,25 @@ public final class OrcaPageModel: ObservableObject {
         first?()
     }
 
+    /// The user edited a TextField (Flutter `_buildTextField`'s onChanged):
+    /// `setState` on the node's `stateKey` when it has one, then its
+    /// `onChange` with `eventData: {value}`. The returned task finishes when
+    /// both have run.
+    @discardableResult
+    func textChanged(_ value: String, on node: ResolvedNode) -> Task<Void, Never>? {
+        let stateKey = node["stateKey"]?.stringValue
+        let onChange = node.actions["onChange"]
+        guard stateKey != nil || onChange != nil else { return nil }
+        return Task {
+            if let stateKey {
+                await run(.setState(Action.SetState(key: stateKey, value: .string(value))))
+            }
+            if let onChange {
+                await run(onChange, eventData: ["value": .string(value)])
+            }
+        }
+    }
+
     /// A link the page itself draws, such as a FallbackPrompt's call to
     /// action (Flutter: `OrcaUrlPolicy.isAllowed`, then `launchUrl`). A URL
     /// the policy refuses does nothing. Under OrcaApp it goes out as an

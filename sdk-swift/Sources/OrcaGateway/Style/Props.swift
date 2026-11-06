@@ -105,6 +105,56 @@ enum Props {
         }
     }
 
+    /// Flutter `parseAlignment`: the nine names; anything else is center.
+    static func alignment(_ value: JSONValue?) -> Alignment {
+        switch value?.stringValue {
+        case "topLeft": return .topLeading
+        case "topCenter": return .top
+        case "topRight": return .topTrailing
+        case "centerLeft": return .leading
+        case "centerRight": return .trailing
+        case "bottomLeft": return .bottomLeading
+        case "bottomCenter": return .bottom
+        case "bottomRight": return .bottomTrailing
+        default: return .center
+        }
+    }
+
+    /// The same nine names as a point in a unit square (gradient ends).
+    static func unitPoint(_ value: JSONValue?) -> UnitPoint {
+        switch value?.stringValue {
+        case "topLeft": return .topLeading
+        case "topCenter": return .top
+        case "topRight": return .topTrailing
+        case "centerLeft": return .leading
+        case "centerRight": return .trailing
+        case "bottomLeft": return .bottomLeading
+        case "bottomCenter": return .bottom
+        case "bottomRight": return .bottomTrailing
+        default: return .center
+        }
+    }
+
+    /// Flutter `_parseBorderRadius`: a number rounds every corner, an object
+    /// `{topLeft, topRight, bottomLeft, bottomRight}` each (missing ones 0);
+    /// anything else is nil.
+    static func radii(_ value: JSONValue?) -> CornerRadii? {
+        switch value {
+        case .int?, .double?:
+            return value?.doubleValue.map { CornerRadii(all: CGFloat($0)) }
+        case .object(let o)?:
+            func corner(_ key: String) -> CGFloat { CGFloat(o[key]?.doubleValue ?? 0) }
+            return CornerRadii(topLeft: corner("topLeft"), topRight: corner("topRight"),
+                               bottomLeft: corner("bottomLeft"), bottomRight: corner("bottomRight"))
+        default:
+            return nil
+        }
+    }
+
+    /// Flutter `parseClip`: only `none` (the default) leaves the box unclipped.
+    static func clips(_ value: JSONValue?) -> Bool {
+        ["hardEdge", "antiAlias", "antiAliasWithSaveLayer"].contains(value?.stringValue ?? "none")
+    }
 }
 
 /// Flutter `TextStyleData` applied to a SwiftUI `Text`.

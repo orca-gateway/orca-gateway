@@ -40,7 +40,7 @@ private struct WatchedNode: View {
     }
 }
 
-/// The registry's builders: wire type to SwiftUI view. The 15 types listed in
+/// The registry's builders: wire type to SwiftUI view. The types listed in
 /// sdk-swift/capabilities.json; anything else has already been degraded by
 /// the renderer.
 @MainActor
@@ -63,6 +63,12 @@ struct WidgetView: View {
         case "Divider": DividerView(node: node)
         case "ElevatedButton", "OutlinedButton", "TextButton": ButtonNodeView(node: node, model: model)
         case "FallbackPrompt": FallbackPromptView(node: node, model: model)
+        case "Icon": IconNodeView(node: node)
+        case "Image": ImageNodeView(node: node)
+        case "Container": ContainerView(node: node, model: model)
+        case "Expanded": ExpandedView(node: node, model: model)
+        case "Spacer": SpacerNodeView()
+        case "TextField": TextFieldNodeView(node: node, model: model)
         default: EmptyView()
         }
     }
