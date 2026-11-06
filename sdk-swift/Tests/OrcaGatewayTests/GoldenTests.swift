@@ -10,18 +10,24 @@ import XCTest
 ///
 /// The page is hosted in a UIKit window and its layer tree is rendered,
 /// because SwiftUI's ImageRenderer cannot draw the navigation bar. Pixels are compared
-/// with a small tolerance. Rendering is done by the simulator runtime, so each
-/// golden records the iOS version it was made on (`<name>.runtime`) and the
-/// test skips on any other runtime instead of failing on font noise. A missing
-/// golden is recorded and the test fails once; set ORCA_RECORD_GOLDENS=1
-/// (TEST_RUNNER_ORCA_RECORD_GOLDENS=1 through xcodebuild) to re-record.
+/// with a small tolerance.
+///
+/// The picture depends on the toolchain as well as on the page: the simulator
+/// runtime draws it, and SwiftUI picks layout metrics (bar height, button
+/// padding) by the SDK the tests were built with. Xcode 16.4 and Xcode 27.2
+/// draw this page 1 to 3 points apart on the same iOS 18.5 runtime. So each
+/// golden is named after its toolchain, `<name>.sdk-<SDK>.ios-<runtime>.png`,
+/// and the test skips on a toolchain that has none. CI pins Xcode 16.4 and
+/// prefers iOS 18.5, so it always compares. Set ORCA_RECORD_GOLDENS=1
+/// (TEST_RUNNER_ORCA_RECORD_GOLDENS=1 through xcodebuild) to record the golden
+/// of the toolchain you run on.
 @MainActor
 final class GoldenTests: XCTestCase {
     static let size = CGSize(width: 393, height: 852)
     /// A pixel differs when a channel moves by more than this (0...255).
     static let channelTolerance = 48
     /// The test fails when more than this share of pixels differs: 0.01%,
-    /// about 130 pixels. The same runtime renders the page pixel-identical
+    /// about 130 pixels. The same toolchain renders the page pixel-identical
     /// (0.0); changing the count from 0 to 5 moves 0.095%.
     static let maxDifferingShare = 0.0001
 
@@ -55,22 +61,28 @@ final class GoldenTests: XCTestCase {
         }
     }
 
+    /// `sdk-<SDK>.ios-<runtime>`: the SDK this test bundle was built with
+    /// (`DTPlatformVersion`, written by Xcode) and the simulator's iOS version.
+    static var toolchain: String {
+        let sdk = Bundle(for: GoldenTests.self).object(forInfoDictionaryKey: "DTPlatformVersion") as? String
+        return "sdk-\(sdk ?? "unknown").ios-\(UIDevice.current.systemVersion)"
+    }
+
     func assertGolden(_ image: UIImage, named name: String, file: StaticString = #filePath, line: UInt = #line) throws {
-        let golden = swiftRoot.appendingPathComponent("Tests/Goldens/\(name).png")
-        let runtimeFile = swiftRoot.appendingPathComponent("Tests/Goldens/\(name).runtime")
-        let runtime = "iOS \(UIDevice.current.systemVersion)"
+        let goldens = swiftRoot.appendingPathComponent("Tests/Goldens")
+        let golden = goldens.appendingPathComponent("\(name).\(Self.toolchain).png")
         let png = try XCTUnwrap(image.pngData())
-        let record = ProcessInfo.processInfo.environment["ORCA_RECORD_GOLDENS"] == "1"
-        guard !record, FileManager.default.fileExists(atPath: golden.path) else {
+        if ProcessInfo.processInfo.environment["ORCA_RECORD_GOLDENS"] == "1" {
             try png.write(to: golden)
-            try Data((runtime + "\n").utf8).write(to: runtimeFile)
-            XCTFail("Recorded \(golden.path) on \(runtime); run the test again.", file: file, line: line)
+            XCTFail("Recorded \(golden.path); run the test again.", file: file, line: line)
             return
         }
-        let recordedOn = (try? String(contentsOf: runtimeFile, encoding: .utf8))?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if recordedOn != runtime {
-            throw XCTSkip("\(name) was recorded on \(recordedOn ?? "an unknown runtime"), this is \(runtime)")
+        guard FileManager.default.fileExists(atPath: golden.path) else {
+            let others = ((try? FileManager.default.contentsOfDirectory(atPath: goldens.path)) ?? [])
+                .filter { $0.hasPrefix("\(name).") && $0.hasSuffix(".png") }.sorted()
+            throw XCTSkip(
+                "\(name) has no golden for \(Self.toolchain) (have: \(others.joined(separator: ", "))); "
+                    + "record one with ORCA_RECORD_GOLDENS=1")
         }
         let expected = try XCTUnwrap(UIImage(contentsOfFile: golden.path))
         let share = try differingShare(image, expected)

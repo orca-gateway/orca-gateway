@@ -25,6 +25,11 @@ jobs:
     name: UI tests and example (iOS simulator)
     runs-on: macos-15
     timeout-minutes: 45
+    # Pinned: SwiftUI's layout metrics follow the SDK the tests are built with,
+    # and the CI golden is counter-home.sdk-18.5.ios-18.5.png (Xcode 16.4's
+    # SDK on the iOS 18.5 runtime). A new Xcode here needs a new golden.
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
 
@@ -33,9 +38,10 @@ jobs:
           xcodebuild -version
           xcrun simctl list runtimes
 
-      # The golden was recorded on iOS 18.5 (sdk-swift/Tests/Goldens/*.runtime);
-      # prefer that runtime so the comparison runs, else the newest iPhone. On
-      # another runtime the golden test skips instead of failing on font noise.
+      # Goldens are named after their toolchain (sdk-swift/Tests/Goldens/
+      # <name>.sdk-<SDK>.ios-<runtime>.png). Prefer iOS 18.5 so the comparison
+      # runs, else the newest iPhone; on a toolchain with no golden the test
+      # skips instead of failing on layout and font noise.
       - name: Pick a simulator
         id: sim
         run: |
