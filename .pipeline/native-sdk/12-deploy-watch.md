@@ -31,3 +31,9 @@ First CI read (one read, no polling): open-source `Codegen drift detection` pass
 What the watch covers: schema drift (manifest + TS registry), engine tests, SDK tests, cloud app-server build. What it cannot: nothing deploys, no user sees S0; the first observable surface is the counter page on iOS in S2.
 Bookkeeping: this artifact and its card are not yet committed; they ride along on the next `.pipeline/` commit on the branch (before merge, so the gate history lands with PR 1).
 Known local-only failure, not in CI: the caps-412 engine test needs port 8080 (Docker holds it here).
+
+### Watch result (after approval)
+Both PRs went red on first CI, for reasons older than S0:
+- open-source SDK CI: `flutter analyze` exits 1 on the `onReorder` deprecation (`layout_builders.dart:667`); red on main since June 2026 (CI runs Flutter stable 3.47, the SDK floor is 3.24, where `onReorderItem` does not exist). Fixed with an `// ignore: deprecated_member_use` at the one call site, commit `8a4a94a`; `flutter analyze` now exits 0.
+- cloud app-server: `golangci-lint-action@v6` refuses golangci-lint v2.1; red on main since June in app-server, control-plane and shared-go. Bumped all three pins to `@v7`, commit `ba54d11`; local `golangci-lint run` (2.12.2) on app-server: 0 issues.
+Auto-fix could not be turned on from this session (the app's permission classifier denied `set_monitor`); turn it on from the PR bar, or say the word and I read CI once more. Stages 13-16 skipped: S0 has nothing to observe at runtime.
