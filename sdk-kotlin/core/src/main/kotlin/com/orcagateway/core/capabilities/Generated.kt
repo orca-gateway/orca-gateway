@@ -19,7 +19,23 @@ public object GeneratedCapabilities {
     public const val protocolVersion: String = "2.0.0"
     public const val sdkSemver: String = "0.1.0-alpha.1"
 
-    public val widgets: List<String> = emptyList()
+    public val widgets: List<String> = listOf(
+        "AppBar",
+        "Card",
+        "Center",
+        "Column",
+        "Divider",
+        "ElevatedButton",
+        "FallbackPrompt",
+        "OutlinedButton",
+        "Padding",
+        "Row",
+        "Scaffold",
+        "SingleChildScrollView",
+        "SizedBox",
+        "Text",
+        "TextButton",
+    )
 
     public val valueKinds: List<String> = listOf(
         "conditional",
@@ -102,5 +118,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "28c599792d941f6b225f96d8fd43b5b3c1ccb7504a49343f25b6adb031841f28"
+    public const val capsHash: String = "6a68c38066b85406753f674bb9b625f791554fec3c5279f33d212ab33b3eca91"
 }
