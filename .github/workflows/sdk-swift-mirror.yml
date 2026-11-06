@@ -1,0 +1,127 @@
+name: SDK Swift Mirror
+
+# Publishes the iOS SDK (Epic 23b, task 23b.25). SwiftPM resolves a package
+# from a repository root with bare X.Y.Z tags, so on each sdk-swift-v<X> tag
+# (pushed by scripts/release.sh) this splits sdk-swift/ out of the monorepo,
+# builds the split tree on its own, pushes it to orca-gateway-swift `main`
+# and tags it <X> there. Then fresh runners resolve the mirror at exactly <X>
+# from a scratch package and build it, as an app would.
+#
+# The work is in scripts/swift-mirror.sh, which also runs against a local
+# bare repository to rehearse a release.
+#
+# Needs the public repository orca-gateway/orca-gateway-swift (created empty)
+# and a deploy key with write access on it, its private half in the Actions
+# secret SWIFT_MIRROR_DEPLOY_KEY. See docs/User_Actions.md, Epic 23b.
+on:
+  push:
+    tags:
+      - "sdk-swift-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish again (e.g. sdk-swift-v0.1.0-alpha.1)"
+        required: true
+
+permissions:
+  contents: read
+
+# One release at a time: the mirror's main only moves forward.
+concurrency:
+  group: sdk-swift-mirror
+  cancel-in-progress: false
+
+env:
+  MIRROR_SSH: git@github.com:orca-gateway/orca-gateway-swift.git
+  MIRROR_HTTPS: https://github.com/orca-gateway/orca-gateway-swift.git
+
+jobs:
+  publish:
+    name: Split and push to the mirror
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - name: Resolve the tag
+        id: tag
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^sdk-swift-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::not an sdk-swift release tag: $TAG"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#sdk-swift-v}" >> "$GITHUB_OUTPUT"
+
+      # The split walks the whole history, so the checkout needs all of it.
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Deploy key
+        env:
+          KEY: ${{ secrets.SWIFT_MIRROR_DEPLOY_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::The secret SWIFT_MIRROR_DEPLOY_KEY is not set (docs/User_Actions.md, Epic 23b)."
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/mirror_key
+          chmod 600 ~/.ssh/mirror_key
+          # GitHub's published ed25519 host key, pinned rather than scanned.
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" \
+            >> ~/.ssh/known_hosts
+
+      - name: Split, build, push and tag
+        env:
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes
+          SWIFT_DOCKER_IMAGE: swift:6.2-noble
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: bash scripts/swift-mirror.sh publish "$TAG" "$MIRROR_SSH"
+
+  verify-linux:
+    name: Resolve the mirror at the tag (linux, the core)
+    needs: publish
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
+    timeout-minutes: 20
+    steps:
+      # Only the script is needed; the package comes from the mirror.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+      - run: swift --version
+      - name: Resolve, build and run
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: bash scripts/swift-mirror.sh verify "$MIRROR_HTTPS" "$VERSION" run
+
+  verify-apple:
+    name: Resolve the mirror at the tag (${{ matrix.name }})
+    needs: publish
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos, SwiftUI
+            mode: run
+          - name: ios simulator
+            mode: ios
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+      - run: swift --version
+      - name: Resolve and build
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
+          MODE: ${{ matrix.mode }}
+        run: bash scripts/swift-mirror.sh verify "$MIRROR_HTTPS" "$VERSION" "$MODE"
