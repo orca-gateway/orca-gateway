@@ -4,6 +4,10 @@ import SwiftUI
 /// Column and Row (Flutter `Flex`): no implicit spacing, `gap` between
 /// children only, main-axis alignment with spacers, `mainAxisSize: max` (the
 /// default) fills the main axis. `spaceAround` is drawn like `spaceEvenly`.
+///
+/// A Row or Column with an Expanded or Spacer child is drawn by FlexLayout,
+/// which shares the space by `flex`; every other one keeps the stack below,
+/// so pages that drew before draw exactly as before.
 @MainActor
 struct FlexView: View {
     let node: ResolvedNode
@@ -11,6 +15,36 @@ struct FlexView: View {
     let axis: Axis
 
     var body: some View {
+        content.environment(\.orcaTight, stretched ? TightAxes(axis == .vertical ? .horizontal : .vertical) : [])
+    }
+
+    private var stretched: Bool { Props.crossAxis(node["crossAxisAlignment"]) == .stretch }
+
+    @ViewBuilder
+    private var content: some View {
+        let flexes = node.childIds.map(flex(of:))
+        if flexes.contains(where: { $0 > 0 }) {
+            FlexLayout(axis: axis, cross: Props.crossAxis(node["crossAxisAlignment"]),
+                       fill: Props.fillsMainAxis(node["mainAxisSize"]),
+                       gap: Props.number(node["gap"]) ?? 0) {
+                ForEach(Array(zip(node.childIds, flexes)), id: \.0) { id, flex in
+                    child(id).layoutValue(key: FlexFactor.self, value: flex)
+                }
+            }
+            .environment(\.orcaFlexAxis, axis)
+        } else {
+            stacked
+        }
+    }
+
+    /// Flutter `propOr<int>('flex', 1)` for Expanded and Spacer; 0 otherwise.
+    private func flex(of id: String) -> Int {
+        guard let type = model.renderer.node(id)?.type, type == "Expanded" || type == "Spacer" else { return 0 }
+        return max(model.resolve(id)?["flex"]?.intValue ?? 1, 0)
+    }
+
+    @ViewBuilder
+    private var stacked: some View {
         let main = Props.mainAxis(node["mainAxisAlignment"])
         let fill = Props.fillsMainAxis(node["mainAxisSize"])
         let ids = node.childIds
@@ -30,6 +64,7 @@ struct FlexView: View {
             }
             if trail { Spacer(minLength: 0) }
         }
+        .environment(\.orcaFlexAxis, axis)
     }
 
     @ViewBuilder
@@ -46,13 +81,15 @@ struct FlexView: View {
         }
     }
 
+    /// Under `stretch` a child spans the cross axis; one that does not fill
+    /// it (a Text) sits at its start, as Flutter paints it in the tight box.
     @ViewBuilder
     private func child(_ id: String) -> some View {
         if Props.crossAxis(node["crossAxisAlignment"]) == .stretch {
             if axis == .vertical {
-                NodeView(id: id, model: model).frame(maxWidth: .infinity)
+                NodeView(id: id, model: model).frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                NodeView(id: id, model: model).frame(maxHeight: .infinity)
+                NodeView(id: id, model: model).frame(maxHeight: .infinity, alignment: .top)
             }
         } else {
             NodeView(id: id, model: model)
@@ -71,6 +108,7 @@ struct CenterView: View {
 
     var body: some View {
         ChildView(node: node, model: model)
+            .environment(\.orcaTight, [])
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }
@@ -99,7 +137,9 @@ struct SizedBoxView: View {
         if node.childIds.isEmpty {
             Color.clear.frame(width: width ?? 0, height: height ?? 0)
         } else {
-            ChildView(node: node, model: model).frame(width: width, height: height)
+            ChildView(node: node, model: model)
+                .modifier(AddTight(axes: [width != nil ? .horizontal : [], height != nil ? .vertical : []]))
+                .frame(width: width, height: height)
         }
     }
 }
@@ -115,6 +155,15 @@ struct ScrollNodeView: View {
             ChildView(node: node, model: model)
                 .padding(Props.insets(node["padding"]) ?? EdgeInsets())
         }
+    }
+}
+/// Adds axes to the tight set the children see.
+struct AddTight: ViewModifier {
+    let axes: TightAxes
+    @Environment(\.orcaTight) private var tight
+
+    func body(content: Content) -> some View {
+        content.environment(\.orcaTight, tight.union(axes))
     }
 }
 #endif

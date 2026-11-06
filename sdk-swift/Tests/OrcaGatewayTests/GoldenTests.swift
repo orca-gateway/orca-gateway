@@ -37,6 +37,34 @@ final class GoldenTests: XCTestCase {
         try assertGolden(image, named: "counter-home")
     }
 
+    /// T4.1 and T4.2: the warn policy's banner over the page (with the
+    /// Checkbox drawn as its own prompt) and the require policy's blocking
+    /// prompt, in Flutter's colours.
+    func testWarnPolicyPage() throws {
+        let model = OrcaPageModel(page: try recordedPage("degrade-warn"), registry: WidgetRegistry())
+        let image = render(NavigationStack { OrcaPageView(model: model) })
+        try assertGolden(image, named: "degrade-warn")
+    }
+
+    func testRequirePolicyPage() throws {
+        let model = OrcaPageModel(page: try recordedPage("degrade-require"))
+        let image = render(NavigationStack { OrcaPageView(model: model) })
+        try assertGolden(image, named: "degrade-require")
+    }
+
+    /// T4.4 and T4.5: the S4 demo page. Network images would make the
+    /// picture depend on the network, so each Image's src is emptied and the
+    /// box draws its "!" placeholder; layout, colours and icons stay.
+    func testNativeWidgetsPage() throws {
+        var page = try recordedPage("native-widgets-home")
+        for index in page.components.indices where page.components[index].type == "Image" {
+            page.components[index].props["src"] = ""
+        }
+        let model = OrcaPageModel(page: page)
+        let image = render(NavigationStack { OrcaPageView(model: model) })
+        try assertGolden(image, named: "native-widgets-home")
+    }
+
     // MARK: rendering and comparison
 
     func render<V: View>(_ view: V) -> UIImage {

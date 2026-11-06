@@ -1,0 +1,1492 @@
+{
+  "pageId": "home",
+  "title": "Native Widgets",
+  "state": [
+    {
+      "key": "query",
+      "scope": "page",
+      "initial": ""
+    },
+    {
+      "key": "fav_pizza",
+      "scope": "page",
+      "initial": false
+    },
+    {
+      "key": "fav_bowl",
+      "scope": "page",
+      "initial": true
+    }
+  ],
+  "components": [
+    {
+      "id": "0",
+      "type": "Scaffold",
+      "kind": "structure",
+      "childMode": "none",
+      "props": {
+        "appBar": "1",
+        "body": "3"
+      },
+      "children": [
+        "1",
+        "3"
+      ],
+      "watches": []
+    },
+    {
+      "id": "3",
+      "type": "SingleChildScrollView",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "4"
+      ],
+      "watches": []
+    },
+    {
+      "id": "4",
+      "type": "Padding",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        }
+      },
+      "children": [
+        "5"
+      ],
+      "watches": []
+    },
+    {
+      "id": "5",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisAlignment": "stretch"
+      },
+      "children": [
+        "6",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "44",
+        "71",
+        "72",
+        "73",
+        "81",
+        "82",
+        "86",
+        "87"
+      ],
+      "watches": []
+    },
+    {
+      "id": "87",
+      "type": "GestureDetector",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "88"
+      ],
+      "watches": [],
+      "actions": {
+        "onTap": {
+          "type": "showToast",
+          "message": "Tapped"
+        },
+        "onDoubleTap": {
+          "type": "showToast",
+          "message": "Double tapped"
+        }
+      }
+    },
+    {
+      "id": "88",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "decoration": {
+          "borderRadius": 12,
+          "border": {
+            "color": "#FF5722",
+            "width": 1
+          }
+        }
+      },
+      "children": [
+        "89"
+      ],
+      "watches": []
+    },
+    {
+      "id": "89",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Tap or double tap this box",
+        "textAlign": "center"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "86",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 16
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "82",
+      "type": "Row",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "83",
+        "84",
+        "85"
+      ],
+      "watches": []
+    },
+    {
+      "id": "85",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Spacer pushes this right"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "84",
+      "type": "Spacer",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {},
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "83",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Left"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "81",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 8
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "73",
+      "type": "Row",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "74",
+        "77",
+        "78"
+      ],
+      "watches": []
+    },
+    {
+      "id": "78",
+      "type": "Expanded",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "flex": 2
+      },
+      "children": [
+        "79"
+      ],
+      "watches": []
+    },
+    {
+      "id": "79",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 40,
+        "alignment": "center",
+        "decoration": {
+          "borderRadius": 8,
+          "gradient": {
+            "colors": [
+              "#FF5722",
+              "#FFC107"
+            ],
+            "begin": "centerLeft",
+            "end": "centerRight"
+          }
+        }
+      },
+      "children": [
+        "80"
+      ],
+      "watches": []
+    },
+    {
+      "id": "80",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "flex 2",
+        "style": {
+          "color": "#FFFFFF"
+        }
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "77",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 8
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "74",
+      "type": "Expanded",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "flex": 1
+      },
+      "children": [
+        "75"
+      ],
+      "watches": []
+    },
+    {
+      "id": "75",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 40,
+        "alignment": "center",
+        "decoration": {
+          "color": "#FFE0B2",
+          "borderRadius": 8
+        }
+      },
+      "children": [
+        "76"
+      ],
+      "watches": []
+    },
+    {
+      "id": "76",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "flex 1"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "72",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 8
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "71",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Flex",
+        "style": {
+          "fontSize": 18,
+          "fontWeight": "bold"
+        }
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "44",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
+        "decoration": {
+          "color": "#FFFFFF",
+          "borderRadius": 16,
+          "boxShadow": [
+            {
+              "color": "#0000001F",
+              "blurRadius": 12,
+              "offset": {
+                "dx": 0,
+                "dy": 4
+              }
+            }
+          ]
+        }
+      },
+      "children": [
+        "45"
+      ],
+      "watches": []
+    },
+    {
+      "id": "45",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisAlignment": "stretch"
+      },
+      "children": [
+        "46",
+        "56"
+      ],
+      "watches": []
+    },
+    {
+      "id": "56",
+      "type": "Padding",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        }
+      },
+      "children": [
+        "57"
+      ],
+      "watches": []
+    },
+    {
+      "id": "57",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisAlignment": "stretch"
+      },
+      "children": [
+        "58",
+        "64",
+        "65"
+      ],
+      "watches": []
+    },
+    {
+      "id": "65",
+      "type": "Row",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "66",
+        "67",
+        "68",
+        "69",
+        "70"
+      ],
+      "watches": []
+    },
+    {
+      "id": "70",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "$14.00",
+        "style": {
+          "fontSize": 16,
+          "fontWeight": "bold",
+          "color": "#FF5722"
+        }
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "69",
+      "type": "Spacer",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {},
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "68",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "15 min",
+        "style": {
+          "color": "#757575"
+        }
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "67",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 4
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "66",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "access_time",
+        "color": "#757575",
+        "size": 16
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "64",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 8
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "58",
+      "type": "Row",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "59",
+        "61",
+        "62",
+        "63"
+      ],
+      "watches": []
+    },
+    {
+      "id": "63",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "4.6"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "62",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 4
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "61",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "star",
+        "color": "#FFC107",
+        "size": 16
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "59",
+      "type": "Expanded",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "60"
+      ],
+      "watches": []
+    },
+    {
+      "id": "60",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Salmon Poke Bowl",
+        "style": {
+          "fontSize": 16,
+          "fontWeight": "bold"
+        },
+        "maxLines": 1
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "46",
+      "type": "Stack",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "47",
+        "49",
+        "52"
+      ],
+      "watches": []
+    },
+    {
+      "id": "52",
+      "type": "Positioned",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "top": 12,
+        "left": 12
+      },
+      "children": [
+        "53"
+      ],
+      "watches": []
+    },
+    {
+      "id": "53",
+      "type": "GestureDetector",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "54"
+      ],
+      "watches": [],
+      "actions": {
+        "onTap": {
+          "type": "setState",
+          "scope": "page",
+          "key": "fav_bowl",
+          "value": {
+            "type": "conditional",
+            "branches": [
+              {
+                "when": {
+                  "op": "eq",
+                  "left": {
+                    "type": "state",
+                    "key": "fav_bowl",
+                    "scope": "page"
+                  },
+                  "right": {
+                    "type": "static",
+                    "value": true
+                  }
+                },
+                "then": {
+                  "type": "static",
+                  "value": false
+                }
+              }
+            ],
+            "else": {
+              "type": "static",
+              "value": true
+            }
+          }
+        },
+        "onLongPress": {
+          "type": "showToast",
+          "message": "Salmon Poke Bowl: long press"
+        }
+      }
+    },
+    {
+      "id": "54",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 36,
+        "height": 36,
+        "alignment": "center",
+        "decoration": {
+          "color": "#FFFFFF",
+          "borderRadius": 18
+        }
+      },
+      "children": [
+        "55"
+      ],
+      "watches": []
+    },
+    {
+      "id": "55",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "eq",
+                "left": {
+                  "type": "state",
+                  "key": "fav_bowl",
+                  "scope": "page"
+                },
+                "right": {
+                  "type": "static",
+                  "value": true
+                }
+              },
+              "then": {
+                "type": "static",
+                "value": "favorite"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "favorite_border"
+          }
+        },
+        "color": "#FF5722",
+        "size": 20
+      },
+      "children": [],
+      "watches": [
+        "fav_bowl"
+      ]
+    },
+    {
+      "id": "49",
+      "type": "Positioned",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "top": 12,
+        "right": 12
+      },
+      "children": [
+        "50"
+      ],
+      "watches": []
+    },
+    {
+      "id": "50",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
+        "decoration": {
+          "color": "#FF5722",
+          "borderRadius": 8
+        }
+      },
+      "children": [
+        "51"
+      ],
+      "watches": []
+    },
+    {
+      "id": "51",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "NEW",
+        "style": {
+          "color": "#FFFFFF",
+          "fontSize": 12,
+          "fontWeight": "bold"
+        }
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "47",
+      "type": "ClipRRect",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "borderRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomLeft": 0,
+          "bottomRight": 0
+        }
+      },
+      "children": [
+        "48"
+      ],
+      "watches": []
+    },
+    {
+      "id": "48",
+      "type": "Image",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "src": "https://picsum.photos/seed/orca-bowl/800/480",
+        "height": 160,
+        "fit": "cover",
+        "alt": "Salmon Poke Bowl"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "17",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
+        "decoration": {
+          "color": "#FFFFFF",
+          "borderRadius": 16,
+          "boxShadow": [
+            {
+              "color": "#0000001F",
+              "blurRadius": 12,
+              "offset": {
+                "dx": 0,
+                "dy": 4
+              }
+            }
+          ]
+        }
+      },
+      "children": [
+        "18"
+      ],
+      "watches": []
+    },
+    {
+      "id": "18",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisAlignment": "stretch"
+      },
+      "children": [
+        "19",
+        "29"
+      ],
+      "watches": []
+    },
+    {
+      "id": "29",
+      "type": "Padding",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        }
+      },
+      "children": [
+        "30"
+      ],
+      "watches": []
+    },
+    {
+      "id": "30",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisAlignment": "stretch"
+      },
+      "children": [
+        "31",
+        "37",
+        "38"
+      ],
+      "watches": []
+    },
+    {
+      "id": "38",
+      "type": "Row",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "39",
+        "40",
+        "41",
+        "42",
+        "43"
+      ],
+      "watches": []
+    },
+    {
+      "id": "43",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "$12.50",
+        "style": {
+          "fontSize": 16,
+          "fontWeight": "bold",
+          "color": "#FF5722"
+        }
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "42",
+      "type": "Spacer",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {},
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "41",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "25 min",
+        "style": {
+          "color": "#757575"
+        }
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "40",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 4
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "39",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "access_time",
+        "color": "#757575",
+        "size": 16
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "37",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 8
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "31",
+      "type": "Row",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "32",
+        "34",
+        "35",
+        "36"
+      ],
+      "watches": []
+    },
+    {
+      "id": "36",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "4.8"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "35",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 4
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "34",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "star",
+        "color": "#FFC107",
+        "size": 16
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "32",
+      "type": "Expanded",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "33"
+      ],
+      "watches": []
+    },
+    {
+      "id": "33",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Margherita Pizza",
+        "style": {
+          "fontSize": 16,
+          "fontWeight": "bold"
+        },
+        "maxLines": 1
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "19",
+      "type": "Stack",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "20",
+        "22",
+        "25"
+      ],
+      "watches": []
+    },
+    {
+      "id": "25",
+      "type": "Positioned",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "top": 12,
+        "left": 12
+      },
+      "children": [
+        "26"
+      ],
+      "watches": []
+    },
+    {
+      "id": "26",
+      "type": "GestureDetector",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "27"
+      ],
+      "watches": [],
+      "actions": {
+        "onTap": {
+          "type": "setState",
+          "scope": "page",
+          "key": "fav_pizza",
+          "value": {
+            "type": "conditional",
+            "branches": [
+              {
+                "when": {
+                  "op": "eq",
+                  "left": {
+                    "type": "state",
+                    "key": "fav_pizza",
+                    "scope": "page"
+                  },
+                  "right": {
+                    "type": "static",
+                    "value": true
+                  }
+                },
+                "then": {
+                  "type": "static",
+                  "value": false
+                }
+              }
+            ],
+            "else": {
+              "type": "static",
+              "value": true
+            }
+          }
+        },
+        "onLongPress": {
+          "type": "showToast",
+          "message": "Margherita Pizza: long press"
+        }
+      }
+    },
+    {
+      "id": "27",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 36,
+        "height": 36,
+        "alignment": "center",
+        "decoration": {
+          "color": "#FFFFFF",
+          "borderRadius": 18
+        }
+      },
+      "children": [
+        "28"
+      ],
+      "watches": []
+    },
+    {
+      "id": "28",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "eq",
+                "left": {
+                  "type": "state",
+                  "key": "fav_pizza",
+                  "scope": "page"
+                },
+                "right": {
+                  "type": "static",
+                  "value": true
+                }
+              },
+              "then": {
+                "type": "static",
+                "value": "favorite"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "favorite_border"
+          }
+        },
+        "color": "#FF5722",
+        "size": 20
+      },
+      "children": [],
+      "watches": [
+        "fav_pizza"
+      ]
+    },
+    {
+      "id": "22",
+      "type": "Positioned",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "top": 12,
+        "right": 12
+      },
+      "children": [
+        "23"
+      ],
+      "watches": []
+    },
+    {
+      "id": "23",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
+        "decoration": {
+          "color": "#FF5722",
+          "borderRadius": 8
+        }
+      },
+      "children": [
+        "24"
+      ],
+      "watches": []
+    },
+    {
+      "id": "24",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "20% OFF",
+        "style": {
+          "color": "#FFFFFF",
+          "fontSize": 12,
+          "fontWeight": "bold"
+        }
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "20",
+      "type": "ClipRRect",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "borderRadius": {
+          "topLeft": 16,
+          "topRight": 16,
+          "bottomLeft": 0,
+          "bottomRight": 0
+        }
+      },
+      "children": [
+        "21"
+      ],
+      "watches": []
+    },
+    {
+      "id": "21",
+      "type": "Image",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "src": "https://picsum.photos/seed/orca-pizza/800/480",
+        "height": 160,
+        "fit": "cover",
+        "alt": "Margherita Pizza"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "16",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 12
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "15",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Popular near you",
+        "style": {
+          "fontSize": 18,
+          "fontWeight": "bold"
+        }
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "14",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 16
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "13",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "key": "query",
+            "scope": "page"
+          },
+          "by": [
+            {
+              "type": "template",
+              "template": "You typed: {{value}}"
+            }
+          ]
+        },
+        "style": {
+          "color": "#757575",
+          "fontSize": 12
+        }
+      },
+      "children": [],
+      "watches": [
+        "query"
+      ]
+    },
+    {
+      "id": "12",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 8
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "6",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "padding": {
+          "top": 10,
+          "right": 12,
+          "bottom": 10,
+          "left": 12
+        },
+        "decoration": {
+          "color": "#F2F2F2",
+          "borderRadius": 12
+        }
+      },
+      "children": [
+        "7"
+      ],
+      "watches": []
+    },
+    {
+      "id": "7",
+      "type": "Row",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "8",
+        "9",
+        "10"
+      ],
+      "watches": []
+    },
+    {
+      "id": "10",
+      "type": "Expanded",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "11"
+      ],
+      "watches": []
+    },
+    {
+      "id": "11",
+      "type": "TextField",
+      "kind": "input",
+      "childMode": "none",
+      "props": {
+        "placeholder": "Search dishes",
+        "value": {
+          "type": "state",
+          "key": "query",
+          "scope": "page"
+        }
+      },
+      "children": [],
+      "watches": [
+        "query"
+      ],
+      "actions": {
+        "onChange": {
+          "type": "setState",
+          "scope": "page",
+          "key": "query",
+          "value": {
+            "type": "event",
+            "key": "value"
+          }
+        }
+      }
+    },
+    {
+      "id": "9",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 8
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "8",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "search",
+        "size": 20,
+        "color": "#757575"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "1",
+      "type": "AppBar",
+      "kind": "structure",
+      "childMode": "none",
+      "props": {
+        "centerTitle": true,
+        "title": "2"
+      },
+      "children": [
+        "2"
+      ],
+      "watches": []
+    },
+    {
+      "id": "2",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Native Widgets"
+      },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

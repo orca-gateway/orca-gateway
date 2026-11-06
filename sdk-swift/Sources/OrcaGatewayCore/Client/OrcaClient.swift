@@ -84,15 +84,32 @@ public struct OrcaClient: @unchecked Sendable {
         let url = try pageURL(path)
         let response = try await sendWithCapsRetry(url: url, appState: appState)
         let received = OrcaDebug.now() - start
-        guard response.status == 200 else {
+        let page: PageResponse
+        if response.status == 200 {
+            page = try JSONDecoder().decode(PageResponse.self, from: response.body)
+        } else if let upgrade = Self.upgradeRequiredPage(response) {
+            page = upgrade
+        } else {
             throw OrcaClientError.http(
                 status: response.status, body: String(decoding: response.body, as: UTF8.self))
         }
-        let page = try JSONDecoder().decode(PageResponse.self, from: response.body)
         let server = response.headers["x-orca-timing"].flatMap { try? JSONValue.decode(Data($0.utf8)) }
         return (page, PageLoadTiming(
             startMs: start, server: server, responseReceivedMs: received,
             parseCompleteMs: OrcaDebug.now() - start))
+    }
+
+    /// The upgrade screen of a 426 (Epic 25b.6): below the app's minimum SDK
+    /// version the engine answers `{error, minSdkVersion, clientSdkVersion,
+    /// page}`, where `page` is one blocking FallbackPrompt. The page is
+    /// rendered like any other, as Flutter does; a 426 without a page, or any
+    /// other status, stays an error.
+    static func upgradeRequiredPage(_ response: HTTPResponse) -> PageResponse? {
+        guard response.status == 426,
+              let body = try? JSONValue.decode(response.body),
+              case .object = body["page"]
+        else { return nil }
+        return try? body["page"].decode(PageResponse.self)
     }
 
     /// `POST /api/v1/app/{appId}/action` with `{action, params?, pageState?,

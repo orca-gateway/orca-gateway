@@ -1,0 +1,142 @@
+{
+  "pageId": "degrade",
+  "title": "Degrade",
+  "state": [],
+  "components": [
+    {
+      "id": "__caps_warn_root__",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "mainAxisAlignment": "start",
+        "crossAxisAlignment": "stretch"
+      },
+      "children": [
+        "__caps_warn_banner__",
+        "0"
+      ],
+      "watches": []
+    },
+    {
+      "id": "__caps_warn_banner__",
+      "type": "FallbackPrompt",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "title": "Some content needs an update",
+        "body": "Parts of this screen use features that your current app version can't fully render (widget.Checkbox). Please update when convenient for the full experience.",
+        "severity": "warn"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "0",
+      "type": "Scaffold",
+      "kind": "structure",
+      "childMode": "none",
+      "props": {
+        "appBar": "1",
+        "body": "3"
+      },
+      "children": [
+        "1",
+        "3"
+      ],
+      "watches": []
+    },
+    {
+      "id": "3",
+      "type": "Padding",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        }
+      },
+      "children": [
+        "4"
+      ],
+      "watches": []
+    },
+    {
+      "id": "4",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisAlignment": "stretch"
+      },
+      "children": [
+        "5",
+        "6",
+        "7"
+      ],
+      "watches": []
+    },
+    {
+      "id": "7",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Below the checkbox."
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "6",
+      "type": "Checkbox",
+      "kind": "input",
+      "childMode": "none",
+      "props": {
+        "value": true,
+        "label": "Only some SDKs draw this"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "5",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Above the checkbox."
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "1",
+      "type": "AppBar",
+      "kind": "structure",
+      "childMode": "none",
+      "props": {
+        "centerTitle": true,
+        "title": "2"
+      },
+      "children": [
+        "2"
+      ],
+      "watches": []
+    },
+    {
+      "id": "2",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Degrade"
+      },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

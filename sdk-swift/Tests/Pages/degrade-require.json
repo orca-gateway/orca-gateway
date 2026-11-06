@@ -1,0 +1,20 @@
+{
+  "pageId": "degrade",
+  "title": "Degrade",
+  "state": [],
+  "components": [
+    {
+      "id": "__caps_block_root__",
+      "type": "FallbackPrompt",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "title": "Update required",
+        "body": "This screen needs features that this app version can't render (widget.Checkbox). Please update from your app store to continue.",
+        "severity": "blocking"
+      },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

@@ -4,11 +4,13 @@ import SwiftUI
 /// ElevatedButton, OutlinedButton and TextButton. A tap fires `onTap` and a
 /// long press `onLongPress`; `enabled: false` disables both, as in Flutter.
 /// The look is native: a prominent bordered button, an outlined one, and a
-/// borderless one.
+/// borderless one, unless the host set a style for the type in `OrcaTheme`
+/// and the server sent no style props for this button.
 @MainActor
 struct ButtonNodeView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
+    @Environment(\.orcaTheme) private var theme
 
     var body: some View {
         let enabled = node["enabled"]?.boolValue ?? true
@@ -38,6 +40,15 @@ struct ButtonNodeView: View {
 
     @ViewBuilder
     private func styled<B: View>(_ button: B) -> some View {
+        if let host = theme.buttonStyle(for: node) {
+            button.buttonStyle(host)
+        } else {
+            native(button)
+        }
+    }
+
+    @ViewBuilder
+    private func native<B: View>(_ button: B) -> some View {
         let radius = Props.number(node["borderRadius"])
         let padding = Props.insets(node["padding"])
         switch node.type {

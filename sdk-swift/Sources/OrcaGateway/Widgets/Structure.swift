@@ -30,6 +30,10 @@ struct ScaffoldView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBars }
         .modifier(AppBarChrome(appBar: appBar, model: model))
+        // Flutter's Scaffold lays out its slots with fresh, loose
+        // constraints, so an axis forced on the Scaffold (the warn banner's
+        // stretched Column) reaches neither the AppBar title nor the body.
+        .environment(\.orcaTight, [])
     }
 
     @ViewBuilder
