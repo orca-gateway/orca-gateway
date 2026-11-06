@@ -41,6 +41,13 @@ scheme, or pass them to `simctl launch`:
 SIMCTL_CHILD_ORCA_APP_ID=server-actions SIMCTL_CHILD_ORCA_PATH=shop xcrun simctl launch booted com.orcagateway.examples.counter
 ```
 
+## DevTools
+
+Debug builds connect to Orca DevTools on `ws://localhost:6363` (start it with `task devtools:dev`)
+and show up as "Orca Counter": network requests, page timing, state changes, actions, rebuilds and
+errors. Set `ORCA_DEVTOOLS=0` to turn it off, or `ORCA_DEVTOOLS_HOST` to the Mac's address when the
+app runs on a device.
+
 ## What it shows
 
 `+` and `-` change the count; `Reset` sets it to 0 and shows a snackbar. The page, the state and the

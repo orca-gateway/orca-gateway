@@ -51,10 +51,12 @@ public final class WidgetRegistry: @unchecked Sendable {
 
     /// What the renderer draws instead of a node of an unknown type.
     func degraded(_ node: ComponentNode) -> ComponentNode {
-        reportUnknown(node.type)
+        let first = reportUnknown(node.type)
         guard supports("FallbackPrompt") else {
             return ComponentNode(id: node.id, type: Self.emptyType, kind: .primitive, childMode: .none)
         }
+        // DevTools hears about each type once per session, like telemetry.
+        if first { OrcaDebug.report(.fallbackPrompt(node.type)) }
         let body = "This screen includes a \"\(node.type)\" component that this app version "
             + "cannot display. Please update to the latest version for the full experience."
         return ComponentNode(

@@ -19,6 +19,7 @@ public struct OrcaPageView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onAppear { model.appeared() }
         .overlay(alignment: .bottom) { ToastView(model: model) }
         .animation(.easeInOut(duration: 0.2), value: model.toast)
     }
@@ -88,9 +89,17 @@ public final class OrcaPageLoader: ObservableObject {
         if client.device == DeviceInfo() { client.device = .current() }
         let app = router?.appState ?? [:]
         do {
-            let page = try await client.fetchPage(path, appState: app)
+            let (page, timing) = try await client.fetchPageTimed(path, appState: app)
+            let renderStart = timing.elapsed()
             let model = OrcaPageModel(page: page, store: ElmStore(app: app), client: client)
             router?.attach(model)
+            let renderComplete = timing.elapsed()
+            let path = self.path
+            model.onFirstAppear = {
+                OrcaDebug.report(timing.event(
+                    pageId: page.pageId, path: path, renderStartMs: renderStart,
+                    renderCompleteMs: renderComplete, firstFrameMs: timing.elapsed()))
+            }
             phase = .loaded(model)
         } catch OrcaClientError.http(let status, let body) {
             phase = .failed("HTTP \(status): \(body.prefix(200))")

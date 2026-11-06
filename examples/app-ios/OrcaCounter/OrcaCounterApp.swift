@@ -10,6 +10,18 @@ import SwiftUI
 /// SIMCTL_CHILD_ORCA_PATH for `simctl launch`.
 @main
 struct OrcaCounterApp: App {
+    init() {
+        #if DEBUG
+        // Debug builds show up in Orca DevTools (`t devtools:dev`, port 6363).
+        // ORCA_DEVTOOLS=0 turns it off; ORCA_DEVTOOLS_HOST points a device at
+        // the Mac running DevTools.
+        OrcaDebug.start(OrcaDebugConfig(
+            enabled: Self.setting("ORCA_DEVTOOLS", "1") != "0",
+            host: Self.setting("ORCA_DEVTOOLS_HOST", "localhost"),
+            appName: "Orca Counter"))
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             OrcaApp(

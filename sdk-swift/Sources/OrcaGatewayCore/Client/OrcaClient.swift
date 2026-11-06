@@ -73,13 +73,26 @@ public struct OrcaClient: @unchecked Sendable {
     public func fetchPage(_ path: String, appState: [String: JSONValue]? = nil) async throws
         -> PageResponse
     {
+        try await fetchPageTimed(path, appState: appState).page
+    }
+
+    /// `fetchPage`, plus what it measured for the DevTools `timing` event.
+    public func fetchPageTimed(_ path: String, appState: [String: JSONValue]? = nil) async throws
+        -> (page: PageResponse, timing: PageLoadTiming)
+    {
+        let start = OrcaDebug.now()
         let url = try pageURL(path)
         let response = try await sendWithCapsRetry(url: url, appState: appState)
+        let received = OrcaDebug.now() - start
         guard response.status == 200 else {
             throw OrcaClientError.http(
                 status: response.status, body: String(decoding: response.body, as: UTF8.self))
         }
-        return try JSONDecoder().decode(PageResponse.self, from: response.body)
+        let page = try JSONDecoder().decode(PageResponse.self, from: response.body)
+        let server = response.headers["x-orca-timing"].flatMap { try? JSONValue.decode(Data($0.utf8)) }
+        return (page, PageLoadTiming(
+            startMs: start, server: server, responseReceivedMs: received,
+            parseCompleteMs: OrcaDebug.now() - start))
     }
 
     /// `POST /api/v1/app/{appId}/action` with `{action, params?, pageState?,
@@ -103,7 +116,7 @@ public struct OrcaClient: @unchecked Sendable {
         if let appState { body["appState"] = .object(appState) }
         var headers = self.headers
         headers["Content-Type"] = "application/json"
-        let response = try await transport.send(HTTPRequest(
+        let response = try await send(HTTPRequest(
             method: "POST", url: url, headers: headers, body: try JSONValue.object(body).encoded()))
         let json = try JSONValue.decode(response.body)
         guard response.status == 200 else {
@@ -111,6 +124,42 @@ public struct OrcaClient: @unchecked Sendable {
                 status: response.status, message: json["error"].stringValue ?? "Server action failed")
         }
         return try (json["actions"].arrayValue ?? []).map { try $0.decode(Action.self) }
+    }
+
+    /// The transport, plus a DevTools `network` event per request and an
+    /// `error` event for one that failed or was refused (Dart
+    /// `_reportFailedRequest` and `_reportHttpErrorResponse`). The 412 of the
+    /// capability handshake is expected, so it is no error.
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        guard OrcaDebug.isEnabled else { return try await transport.send(request) }
+        let start = OrcaDebug.now()
+        let url = request.url.absoluteString
+        let context = "\(request.method) \(url)"
+        let requestHeaders = DevToolsEvent.sanitize(request.headers)
+        do {
+            let response = try await transport.send(request)
+            let ms = OrcaDebug.now() - start
+            OrcaDebug.report(.network(
+                method: request.method, url: url, statusCode: response.status, durationMs: ms,
+                requestSizeBytes: request.body?.count, responseSizeBytes: response.body.count,
+                requestHeaders: requestHeaders, responseHeaders: DevToolsEvent.sanitize(response.headers),
+                phases: [.init("wait", ms)]))
+            let handshake = response.status == 412 && response.errorField == "caps_vector_unknown"
+            if response.status >= 400, !handshake {
+                OrcaDebug.report(.error(
+                    message: "HTTP \(response.status) \(request.url.path)",
+                    stackTrace: String(decoding: response.body, as: UTF8.self), context: context))
+            }
+            return response
+        } catch {
+            let ms = OrcaDebug.now() - start
+            OrcaDebug.report(.network(
+                method: request.method, url: url, statusCode: 0, durationMs: ms,
+                requestSizeBytes: request.body?.count, requestHeaders: requestHeaders,
+                phases: [.init("wait", ms)]))
+            OrcaDebug.report(.error(message: "Network request failed: \(error)", context: context))
+            throw error
+        }
     }
 
     func pageURL(_ path: String) throws -> URL {
@@ -144,7 +193,7 @@ public struct OrcaClient: @unchecked Sendable {
         } else {
             first = HTTPRequest(method: "GET", url: url, headers: base)
         }
-        let response = try await transport.send(first)
+        let response = try await send(first)
         guard response.status == 412, response.errorField == "caps_vector_unknown" else {
             return response
         }
@@ -152,7 +201,28 @@ public struct OrcaClient: @unchecked Sendable {
         // The retry is always a POST: the vector has to travel in the body.
         var body: [String: JSONValue] = ["_orcaCapsVector": try JSONValue(encoding: capabilities)]
         if let state { body["appState"] = .object(state) }
-        return try await transport.send(HTTPRequest(
+        return try await send(HTTPRequest(
             method: "POST", url: url, headers: json, body: try JSONValue.object(body).encoded()))
+    }
+}
+
+/// What a page fetch measured, for the DevTools `timing` event: the engine's
+/// `x-orca-timing` header and the client's marks, in milliseconds from the
+/// request start. The page view adds the render marks.
+public struct PageLoadTiming: Sendable {
+    /// When the request started, on `OrcaDebug.now()`'s clock.
+    public let startMs: Double
+    public var server: JSONValue?
+    public var responseReceivedMs: Double
+    public var parseCompleteMs: Double
+
+    /// Milliseconds since the request started.
+    public func elapsed() -> Double { OrcaDebug.now() - startMs }
+
+    public func event(pageId: String, path: String, renderStartMs: Double, renderCompleteMs: Double,
+                      firstFrameMs: Double) -> DevToolsEvent {
+        .timing(pageId: pageId, path: path, server: server, client: .init(
+            responseReceivedMs: responseReceivedMs, parseCompleteMs: parseCompleteMs,
+            renderStartMs: renderStartMs, renderCompleteMs: renderCompleteMs, firstFrameMs: firstFrameMs))
     }
 }

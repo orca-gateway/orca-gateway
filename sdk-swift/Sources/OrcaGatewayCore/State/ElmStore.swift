@@ -115,6 +115,10 @@ public final class ElmStore {
     /// notified: how a navigator keeps the app scope shared between pages.
     public var onCommit: ((StoreState) -> Void)?
 
+    /// The page this store belongs to. When set and DevTools is on, every
+    /// changed key is reported as a `state_change` (Dart `ElmStore.pageId`).
+    public var pageId: String?
+
     public init(_ state: StoreState = StoreState()) {
         self.state = state
     }
@@ -160,7 +164,13 @@ public final class ElmStore {
     /// Replace the state and notify the subscribers whose watched values
     /// changed. Subscribers are notified in subscription order.
     public func commit(_ next: StoreState) {
+        let previous = state
         state = next
+        if let pageId, OrcaDebug.isEnabled {
+            for event in DevToolsEvent.stateChanges(from: previous, to: next, pageId: pageId) {
+                OrcaDebug.report(event)
+            }
+        }
         onCommit?(next)
         let merged = next.merged
         for id in subscribers.keys.sorted() {

@@ -41,6 +41,7 @@ public final class OrcaPageModel: ObservableObject {
         self.renderer = PageRenderer(page: page, registry: registry)
         self.store = store
         self.executor = ActionExecutor(store: store, client: client)
+        store.pageId = page.pageId
         store.seed(page.state)
         executor.onEffect = { [weak self] effect in self?.onEffect?(effect) }
         executor.perform = { [weak self] effect in self?.perform(effect) }
@@ -73,8 +74,19 @@ public final class OrcaPageModel: ObservableObject {
         do {
             try await executor.execute(action, eventData: eventData)
         } catch {
+            OrcaDebug.report(.error(message: "\(error)", context: "action \(action.kind) on \(page.pageId)"))
             onError?(error)
         }
+    }
+
+    /// Runs once, the first time the page is on screen (the loader's
+    /// DevTools `timing` event, which needs the first frame).
+    var onFirstAppear: (() -> Void)?
+
+    func appeared() {
+        let first = onFirstAppear
+        onFirstAppear = nil
+        first?()
     }
 
     func perform(_ effect: ActionEffect) {
@@ -124,8 +136,15 @@ final class NodeObserver: ObservableObject {
         guard next != watches || subscription == nil else { return }
         watches = next
         subscription = next.isEmpty ? nil : model.store.subscribe(next) { [weak self] _ in
-            self?.revision += 1
+            self?.watchedChanged()
         }
+    }
+
+    /// A watched key changed: redraw, and tell DevTools.
+    private func watchedChanged() {
+        revision += 1
+        guard OrcaDebug.isEnabled, let node = model?.renderer.node(id) else { return }
+        OrcaDebug.report(.widgetRebuild(widgetId: id, widgetType: node.type, watches: watches))
     }
 
     private func structureChanged() {

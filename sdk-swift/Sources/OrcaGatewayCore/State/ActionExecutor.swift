@@ -35,9 +35,6 @@ public final class ActionExecutor {
     public var perform: ((ActionEffect) async -> Void)?
     /// A structural change from a server action, for the page's node tree.
     public var onMutation: ((ComponentMutation) -> Void)?
-    /// Each action run (nested ones too) with its duration in milliseconds,
-    /// for DevTools' `action` events.
-    public var onActionRun: ((Action, Double) -> Void)?
 
     private let reducer = ActionReducer()
     private var eventData: [String: JSONValue]?
@@ -78,8 +75,13 @@ public final class ActionExecutor {
 
     private func run(_ action: Action) async throws {
         guard Self.kinds.contains(action.kind) else { return }
-        let start = Date()
-        defer { onActionRun?(action, Date().timeIntervalSince(start) * 1000) }
+        // Every action run, nested ones too, is a DevTools `action` event.
+        let start = OrcaDebug.isEnabled ? OrcaDebug.now() : nil
+        defer {
+            if let start {
+                OrcaDebug.report(.action(action, pageId: store.pageId ?? "", durationMs: OrcaDebug.now() - start))
+            }
+        }
 
         switch action {
         case .setState, .showSnackbar, .showToast:
