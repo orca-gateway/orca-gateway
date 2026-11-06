@@ -25,44 +25,84 @@ import type { CapabilityVector } from "../types/context";
 import type { PageResponse } from "./page";
 
 /**
- * Parse a semver string into a numeric tuple for comparison.
+ * Parse a semver string into its numeric core, for comparison.
  *
- * Orca Gateway's SDK versions are always major.minor.patch with no pre-release
- * tags, build metadata, or "v" prefix — the SDK's pubspec.yaml has always
- * shipped a clean `version: 0.1.0` style. So we don't need a full semver
- * parser; a three-segment numeric split is enough and keeps the engine
+ * Accepts `major.minor.patch` with an optional pre-release label and build
+ * metadata (semver.org §9-10): `0.1.0`, `0.1.0-alpha.1`, `1.2.3+build.7`.
+ * The Flutter SDK ships plain versions; the Swift SDK ships pre-releases
+ * such as `0.1.0-alpha.1`, which must reach the min-SDK gate too.
+ *
+ * Returns the `[major, minor, patch]` core; `compareSemver` reads the
+ * pre-release label as well. Written by hand to keep the engine
  * dependency-free.
  *
- * Any malformed input (non-numeric, wrong segment count, empty) returns
- * null rather than throwing, so callers can fall back to "allow" when the
- * client's version header is garbage — that's the safer failure mode than
- * 426-ing a legitimate client because it emitted a dev-mode version string.
+ * Any malformed input (non-numeric, wrong segment count, empty, a "v"
+ * prefix, an empty label) returns null rather than throwing, so callers can
+ * fall back to "allow" when the client's version header is garbage — that's
+ * the safer failure mode than 426-ing a legitimate client because it
+ * emitted a dev-mode version string.
  */
 export function parseSemver(version: string): [number, number, number] | null {
+  const parsed = parseSemverParts(version);
+  return parsed ? parsed.core : null;
+}
+
+const SEMVER_RE =
+  /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+interface SemverParts {
+  core: [number, number, number];
+  /** Pre-release identifiers; empty for a release. Build metadata is dropped. */
+  pre: string[];
+}
+
+function parseSemverParts(version: string): SemverParts | null {
   if (!version) return null;
-  const parts = version.split(".");
-  if (parts.length !== 3) return null;
-  const nums: number[] = [];
-  for (const p of parts) {
-    if (!/^\d+$/.test(p)) return null;
-    nums.push(parseInt(p, 10));
-  }
-  return [nums[0], nums[1], nums[2]];
+  const m = SEMVER_RE.exec(version);
+  if (!m) return null;
+  return {
+    core: [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)],
+    pre: m[4] ? m[4].split(".") : [],
+  };
+}
+
+/** Pre-release identifier order (semver.org §11.4): numbers as numbers,
+ *  numbers below words, words in ASCII order. */
+function compareIdentifier(a: string, b: string): number {
+  const an = /^\d+$/.test(a);
+  const bn = /^\d+$/.test(b);
+  if (an && bn) return Math.sign(parseInt(a, 10) - parseInt(b, 10));
+  if (an) return -1;
+  if (bn) return 1;
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /**
  * Compare two semver strings. Returns negative if `a < b`, zero if equal,
- * positive if `a > b`. Malformed inputs sort as zero (not below) so a
+ * positive if `a > b`, by semver precedence: the numeric core first, then a
+ * pre-release sorts below its release (`0.1.0-alpha.1 < 0.1.0`), and two
+ * labels compare identifier by identifier (`alpha.9 < alpha.10 < beta`).
+ * Build metadata is ignored. Malformed inputs sort as zero (not below) so a
  * bad client version doesn't accidentally trip the min-SDK gate.
  */
 export function compareSemver(a: string, b: string): number {
-  const pa = parseSemver(a);
-  const pb = parseSemver(b);
+  const pa = parseSemverParts(a);
+  const pb = parseSemverParts(b);
   if (!pa || !pb) return 0;
   for (let i = 0; i < 3; i++) {
-    if (pa[i] !== pb[i]) return pa[i] - pb[i];
+    if (pa.core[i] !== pb.core[i]) return pa.core[i] - pb.core[i];
   }
-  return 0;
+  // A release outranks any pre-release of the same core.
+  if (pa.pre.length === 0 && pb.pre.length === 0) return 0;
+  if (pa.pre.length === 0) return 1;
+  if (pb.pre.length === 0) return -1;
+  const n = Math.min(pa.pre.length, pb.pre.length);
+  for (let i = 0; i < n; i++) {
+    const c = compareIdentifier(pa.pre[i], pb.pre[i]);
+    if (c !== 0) return c;
+  }
+  // Equal so far: the longer label wins (alpha < alpha.1).
+  return Math.sign(pa.pre.length - pb.pre.length);
 }
 
 /**
@@ -115,7 +155,8 @@ export function createStaticMinSdkResolver(
  *   - Client sent no `X-Orca-Sdk-Version` header → allowed (unversioned
  *     clients bypass the gate; they also bypass the capability filter).
  *   - Client version parse fails → allowed (don't punish garbage headers).
- *   - Client version < min → BLOCK, return the min.
+ *   - Client version < min → BLOCK, return the min. Pre-releases count:
+ *     a min of `0.1.0` blocks `0.1.0-alpha.1`.
  *   - Client version ≥ min → allowed, return null.
  */
 export function checkMinSdkVersion(

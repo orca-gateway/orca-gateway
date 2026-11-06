@@ -304,6 +304,43 @@ describe("25b.6 + 25b.11 minimum SDK version gate", () => {
   });
 });
 
+// ── Scenario 4b: a pre-release client below the min gets the 426 page ─────
+// Epic 23b.32: the Swift SDK sends `0.1.0-alpha.1`; a min of `0.1.0` (its
+// release) must block it, as semver precedence says.
+
+describe("23b.32 the min-SDK gate reads pre-release versions", () => {
+  function fetchAs(version: string): Promise<Response> {
+    return fetch(url(), {
+      headers: { "x-orca-sdk-version": version, "x-orca-caps-hash": SDK_V1_HASH },
+    });
+  }
+
+  test("0.1.0-alpha.1 under a min of 0.1.0 gets 426 with the blocking page", async () => {
+    engine.setFallbackPolicy({ default: "graceful" });
+    engine.setMinSdkVersion({ appDefault: "0.1.0" });
+    const res = await fetchAs("0.1.0-alpha.1");
+    expect(res.status).toBe(426);
+    const body = (await res.json()) as {
+      minSdkVersion: string;
+      clientSdkVersion: string;
+      page: PageResponse;
+    };
+    expect(body.minSdkVersion).toBe("0.1.0");
+    expect(body.clientSdkVersion).toBe("0.1.0-alpha.1");
+    expect(body.page.components[0].type).toBe("FallbackPrompt");
+    expect(body.page.components[0].props.severity).toBe("blocking");
+  });
+
+  test("a pre-release at or above the min, and garbage, still pass", async () => {
+    engine.setMinSdkVersion({ appDefault: "0.1.0-alpha.1" });
+    expect((await fetchAs("0.1.0-alpha.1")).status).not.toBe(426);
+    expect((await fetchAs("0.1.0-alpha.2")).status).not.toBe(426);
+    engine.setMinSdkVersion({ appDefault: "99.0.0" });
+    expect((await fetchAs("dev-build")).status).not.toBe(426);
+    engine.setMinSdkVersion({});
+  });
+});
+
 // ── Scenario 5: 426 gate releases when client is at or above minimum ──────
 
 describe("25b.6 gate release paths", () => {

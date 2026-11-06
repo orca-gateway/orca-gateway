@@ -21,14 +21,24 @@ describe("parseSemver", () => {
     expect(parseSemver("10.20.30")).toEqual([10, 20, 30]);
   });
 
+  test("reads the core of a pre-release or a build (the Swift SDK ships 0.1.0-alpha.1)", () => {
+    expect(parseSemver("0.1.0-alpha.1")).toEqual([0, 1, 0]);
+    expect(parseSemver("1.2.3-beta")).toEqual([1, 2, 3]);
+    expect(parseSemver("1.2.3-rc.1+build.7")).toEqual([1, 2, 3]);
+    expect(parseSemver("1.2.3+20261106")).toEqual([1, 2, 3]);
+  });
+
   test("rejects malformed input as null", () => {
     expect(parseSemver("")).toBeNull();
     expect(parseSemver("1.2")).toBeNull();
     expect(parseSemver("1.2.3.4")).toBeNull();
     expect(parseSemver("1.2.x")).toBeNull();
     expect(parseSemver("v1.2.3")).toBeNull();
-    expect(parseSemver("1.2.3-beta")).toBeNull();
     expect(parseSemver("a.b.c")).toBeNull();
+    expect(parseSemver("1.2.3-")).toBeNull();
+    expect(parseSemver("1.2.3-alpha..1")).toBeNull();
+    expect(parseSemver("1.2.3+")).toBeNull();
+    expect(parseSemver("1.2.3-al pha")).toBeNull();
   });
 });
 
@@ -48,6 +58,28 @@ describe("compareSemver", () => {
     // Lexical sort would put "10" before "2" — the parser must compare as numbers.
     expect(compareSemver("1.10.0", "1.2.0")).toBeGreaterThan(0);
     expect(compareSemver("1.2.10", "1.2.2")).toBeGreaterThan(0);
+  });
+
+  test("pre-releases follow semver precedence (T5.3)", () => {
+    const ordered = ["0.1.0-alpha.1", "0.1.0-alpha.2", "0.1.0-beta", "0.1.0", "0.1.1"];
+    for (let i = 0; i < ordered.length - 1; i++) {
+      expect(compareSemver(ordered[i], ordered[i + 1])).toBeLessThan(0);
+      expect(compareSemver(ordered[i + 1], ordered[i])).toBeGreaterThan(0);
+    }
+    expect(compareSemver("0.1.0-alpha.1", "0.1.0-alpha.1")).toBe(0);
+  });
+
+  test("numeric identifiers compare as numbers, below words; longer label wins a tie", () => {
+    expect(compareSemver("0.1.0-alpha.10", "0.1.0-alpha.9")).toBeGreaterThan(0);
+    expect(compareSemver("1.0.0-1", "1.0.0-alpha")).toBeLessThan(0);
+    expect(compareSemver("1.0.0-alpha", "1.0.0-alpha.1")).toBeLessThan(0);
+    expect(compareSemver("1.0.0-alpha.beta", "1.0.0-beta")).toBeLessThan(0);
+    expect(compareSemver("1.0.0-rc.1", "1.0.0-beta.11")).toBeGreaterThan(0);
+  });
+
+  test("build metadata is ignored", () => {
+    expect(compareSemver("1.0.0+a", "1.0.0+b")).toBe(0);
+    expect(compareSemver("1.0.0-alpha.1+x", "1.0.0-alpha.1")).toBe(0);
   });
 
   test("malformed input compares as zero (safe default)", () => {
@@ -112,6 +144,14 @@ describe("checkMinSdkVersion", () => {
   test("client below min is blocked and returns the enforced min", () => {
     expect(checkMinSdkVersion("1.0.0", "2.0.0")).toBe("2.0.0");
     expect(checkMinSdkVersion("1.9.99", "2.0.0")).toBe("2.0.0");
+  });
+
+  test("a pre-release of the min is blocked; a release of it is not", () => {
+    expect(checkMinSdkVersion("0.1.0-alpha.1", "0.1.0")).toBe("0.1.0");
+    expect(checkMinSdkVersion("0.1.0-alpha.1", "99.0.0")).toBe("99.0.0");
+    expect(checkMinSdkVersion("0.1.0-alpha.2", "0.1.0-alpha.2")).toBeNull();
+    expect(checkMinSdkVersion("0.1.0-beta", "0.1.0-alpha.2")).toBeNull();
+    expect(checkMinSdkVersion("0.1.0+build.3", "0.1.0")).toBeNull();
   });
 
   test("client at exactly min is allowed", () => {
