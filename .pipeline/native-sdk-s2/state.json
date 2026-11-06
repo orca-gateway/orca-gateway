@@ -4,7 +4,7 @@
   "idea": "Epic 23b slice S2: the skeleton UI of the iOS SDK (tasks 23b.15-23b.19) — OrcaClient with caps headers and the 412 handshake, renderer and registry for the 15 core widgets with safe degrade, OrcaApp root view with one NavigationStack and toasts, examples/app-ios running the counter page on a simulator, macOS CI job",
   "kind": "feature",
   "created_at": "2026-11-06T10:47:38Z",
-  "updated_at": "2026-11-06T14:12:39Z",
+  "updated_at": "2026-11-06T14:29:21Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
   "current": "10",
   "stages": {
@@ -52,8 +52,8 @@
     },
     "10": {
       "status": "in_review",
-      "rounds": 2,
-      "card": "cards/10-r2.md"
+      "rounds": 3,
+      "card": "cards/10-r3.md"
     },
     "11": {
       "status": "pending"

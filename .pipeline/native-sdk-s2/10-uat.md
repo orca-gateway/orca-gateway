@@ -3,29 +3,43 @@
 ## Front page
 
 ### In one breath
-The counter runs in the simulator panel against the example server on :8097 (GET 412, POST 200).
-Tap + twice, then Reset: you should see 2, then 0 and the snackbar "Counter reset to 0".
-PR #4: the golden failed on CI (0.34% off; Xcode 16.4 lays out 1-3 pt apart from my Xcode 27.2).
-Fix pushed (521dd56): goldens named by SDK and runtime, CI pins Xcode 16.4. 10 checks green.
+You merged PR #4 (022b45f, 14:22 UTC). Its last commit passed all 8 checks, and the golden
+compared on Xcode 16.4 and iOS 18.5 rather than skipping. Main is green on all 4 workflows.
+The counter still runs in the simulator panel on :8097 if you want to tap it yourself.
 
 ### New for you
 Nothing new.
 
 ### Trade-offs
 1 auto-decided: UAT is your tap in the panel plus the tests (your call, 2026-11-06, S2 gate 09).
-2 needs you: engine and sdk changed since their last tags. Release after PR #4 merges, or at S5?
-  Default: after the merge (native-sdk 10 said "publish after S2"); you run release.sh, not me.
-3 auto-decided: squash-merge, one commit per slice (your call, 2026-11-06, native-sdk 12).
+2 needs you: engine and sdk changed since their last tags. Release now that #4 is in, or at S5?
+  Default: now, at stage 11 (native-sdk 10 said "publish after S2"); you run release.sh, not me.
+3 noted: #4 went in as a merge commit, not the squash native-sdk 12 chose; your call each time.
 4 auto-decided: golden key = build SDK + runtime, Xcode pinned in CI (extends your S2 gate 09 call).
 
 ### Questions for you
-1. Tap + + then Reset in the simulator panel: 2, then 0 and the snackbar? (default: A = it worked)
-2. Turn on Auto-fix for PR #4, as for PR 2? (default: yes, on approve)
+1. + + then Reset in the panel shows 2, then 0 and the snackbar? (default: A = it worked)
+2. After A: 11 Release (trade-off 2), 12 records main green, 13-16 skipped: nothing is deployed.
 3. Stop or go: S3 next (all 12 action kinds, navigation, share, server actions)? (default: go)
 
 ## Appendix
 
 **Placeholder:** this stage is rendered by pipeline-core; the pipeline-ship module replaces it.
+
+### Round 3: you merged PR #4
+PR #4 merged at 2026-11-06T14:22:45Z as 022b45f, a merge commit whose tree equals the PR head
+521dd56. On 521dd56 all 8 checks passed:
+- Codegen drift detection, with the counter page re-recorded and no drift.
+- SDK Swift CI on Linux 5.10 and 6.2.
+- The UI job (run 42231778860), on Xcode 16.4 and iPhone 16 Pro with iOS 18.5. The golden test
+  passed and compared rather than skipped, and examples/app-ios built.
+- The engine and SDK tests.
+
+After the merge, main ran Engine CI, Schema CI, SDK Swift CI and SDK CI, and all four passed. The
+UI workflow does not run on a push to main; it runs nightly at 03:00 UTC.
+
+Local branch: 7a58a48 (gate 10 round 2) and this round are pipeline-only commits that are not on
+main. As after S1, they go onto the next slice's branch, cut from main at 022b45f.
 
 ### Round 2: the golden failed on CI
 You sent the failing job (run 42225697954). The core tests passed, 71 of them; the golden reported
