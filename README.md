@@ -31,9 +31,10 @@ extension.
 ```
 engine/    → Bun (TypeScript) - SDUI engine, HTTP API, 4-stage page pipeline
 sdk/       → Flutter package - renders server-driven UI natively
+sdk-swift/ → Swift package (alpha) - native iOS SDK, mirrored to orca-gateway-swift
 schema/    → JSON Schema definitions, codegen, conformance fixtures
 plugins/   → Out-of-tree Flutter plugins (maps, video, voice, push)
-examples/  → Example server implementations + Flutter app
+examples/  → Example server implementations + Flutter and iOS apps
 cli/       → CLI tooling for plugin management
 devtools/  → Flutter DevTools extension
 docs-site/ → Astro documentation site

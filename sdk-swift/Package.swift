@@ -1,6 +1,6 @@
 // swift-tools-version: 5.9
 //
-// Orca Gateway iOS SDK (experimental). Two targets:
+// Orca Gateway iOS SDK (alpha). Two targets:
 //   OrcaGatewayCore  pure Swift (Foundation only): wire models, ValueResolver,
 //                    ElmStore, effects as data, generated capability vector.
 //                    Builds and tests on Linux.
@@ -9,7 +9,9 @@
 //
 // The tests read the conformance fixtures from ../schema, the recorded pages
 // from Tests/Pages and the goldens from Tests/Goldens at run time, so they
-// only run inside the monorepo; the read-only mirror ships no tests.
+// only run inside the monorepo. The read-only mirror (orca-gateway-swift)
+// carries them as the subtree split leaves them; SwiftPM never builds a
+// dependency's test targets.
 import PackageDescription
 
 let package = Package(
