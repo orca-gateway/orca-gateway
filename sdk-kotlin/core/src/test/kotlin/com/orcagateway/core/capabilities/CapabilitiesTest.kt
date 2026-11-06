@@ -1,5 +1,9 @@
 package com.orcagateway.core.capabilities
 
+import com.orcagateway.core.models.Action
+import com.orcagateway.core.models.BoolExpr
+import com.orcagateway.core.models.Value
+import com.orcagateway.core.state.ActionExecutor
 import com.orcagateway.core.support.Fixtures
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -48,9 +52,13 @@ class CapabilitiesTest {
     fun actionKindsMatchTheImplementedList() {
         val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["actionKinds"])
         assertEquals(listed, GeneratedCapabilities.actionKinds.toSet())
+        assertTrue(Action.kinds.toSet().containsAll(listed), "not wire kinds: ${listed - Action.kinds.toSet()}")
         assertEquals(15, listed.size)
         // Swift's twin: the iOS SDK advertises the same 15 kinds.
         assertEquals(strings(json("sdk-swift/capabilities.json").jsonObject["actionKinds"]), listed)
+        // The executor runs exactly what is advertised, plus the server-only
+        // replaceComponent (not in action.ts, so never advertised).
+        assertEquals(listed + "replaceComponent", ActionExecutor.kinds)
     }
 
     @Test
@@ -58,6 +66,9 @@ class CapabilitiesTest {
         assertEquals(9, GeneratedCapabilities.valueKinds.size)
         assertEquals(31, GeneratedCapabilities.transformKinds.size)
         assertEquals(13, GeneratedCapabilities.boolExprOps.size)
+        // The typed models know every advertised kind and op.
+        assertEquals(Value.kinds.toSet(), GeneratedCapabilities.valueKinds.toSet())
+        assertEquals(BoolExpr.ops.toSet(), GeneratedCapabilities.boolExprOps.toSet())
     }
 
     @Test
