@@ -1,0 +1,82 @@
+name: SDK Swift UI CI
+
+# The SwiftUI layer of the iOS SDK and the iOS example, on an iOS simulator
+# (Epic 23b, task 23b.19): every package test (core, page model, the counter
+# golden) through xcodebuild, then a build of examples/app-ios.
+#
+# Runs nightly, on release tags, by hand, and on PRs that touch the Swift SDK
+# or the iOS example (decided at native-sdk-s2 gate 08: macOS minutes are free
+# on a public repo). The Linux core job in sdk-swift.yml stays the fast gate.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+  push:
+    tags:
+      - "sdk-swift-v*"
+  pull_request:
+    paths:
+      - "sdk-swift/**"
+      - "examples/app-ios/**"
+      - ".github/workflows/sdk-swift-ui.yml"
+
+jobs:
+  ios:
+    name: UI tests and example (iOS simulator)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      # The golden was recorded on iOS 18.5 (sdk-swift/Tests/Goldens/*.runtime);
+      # prefer that runtime so the comparison runs, else the newest iPhone. On
+      # another runtime the golden test skips instead of failing on font noise.
+      - name: Pick a simulator
+        id: sim
+        run: |
+          id=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          phones = []
+          for runtime, items in devices.items():
+              if "iOS" not in runtime:
+                  continue
+              version = tuple(int(p) for p in runtime.split("iOS-")[-1].split("-") if p.isdigit())
+              for d in items:
+                  if d["name"].startswith("iPhone"):
+                      phones.append((version == (18, 5), d["name"] == "iPhone 16 Pro", version, d["udid"], d["name"], runtime))
+          phones.sort(reverse=True)
+          best = phones[0]
+          print(best[3])
+          print(f"picked {best[4]} on {best[5]}", file=sys.stderr)
+          ')
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Package tests on the simulator (T2, the golden included)
+        working-directory: sdk-swift
+        run: |
+          xcodebuild test \
+            -scheme OrcaGateway-Package \
+            -destination "id=${{ steps.sim.outputs.id }}" \
+            -resultBundlePath "$RUNNER_TEMP/sdk-swift-ui.xcresult"
+
+      - name: Build examples/app-ios
+        run: |
+          xcodebuild build \
+            -project examples/app-ios/OrcaCounter.xcodeproj \
+            -scheme OrcaCounter \
+            -destination "id=${{ steps.sim.outputs.id }}" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Keep the test results (attachments hold a failing golden's image)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-swift-ui-xcresult
+          path: ${{ runner.temp }}/sdk-swift-ui.xcresult
+          retention-days: 7
