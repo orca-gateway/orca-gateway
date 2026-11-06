@@ -95,6 +95,11 @@ tasks:
     cmds:
       - bun run schema/gen-native-capabilities.ts
 
+  sdk-swift:record:
+    desc: Re-record the pages the Swift tests load, through the Swift caps handshake
+    cmds:
+      - bun run examples/server/record-page.ts counter home sdk-swift/Tests/Pages/counter-home.json
+
   # === Example app ===
   example:dev:
     desc: Start example app and server in parallel
