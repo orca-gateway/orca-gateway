@@ -95,6 +95,12 @@ tasks:
     cmds:
       - bun run schema/gen-native-capabilities.ts
 
+  sdk-swift:test:ios:
+    desc: Run every iOS SDK test on an iOS simulator, the golden included (macOS with Xcode)
+    dir: sdk-swift
+    cmds:
+      - xcodebuild test -scheme OrcaGateway-Package -destination 'platform=iOS Simulator,name={{.SIM | default "iPhone 16 Pro"}}'
+
   sdk-swift:record:
     desc: Re-record the pages the Swift tests load, through the Swift caps handshake
     cmds:
@@ -119,6 +125,12 @@ tasks:
     dir: examples/server
     cmds:
       - bun run --watch index.ts
+
+  example:ios:build:
+    desc: Build the iOS counter example for the simulator (open examples/app-ios in Xcode to run it)
+    dir: examples/app-ios
+    cmds:
+      - xcodebuild build -project OrcaCounter.xcodeproj -scheme OrcaCounter -destination 'generic/platform=iOS Simulator'
 
   # === Docs ===
   docs:dev:
