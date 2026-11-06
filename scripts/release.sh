@@ -182,11 +182,32 @@ printf "Proceed? [y/N]: "
 read -r CONFIRM
 [[ "$CONFIRM" == "y" || "$CONFIRM" == "Y" ]] || die "aborted"
 
+# The Dart SDK's capability vector embeds the sdk version (kSdkSemver, read
+# from sdk/pubspec.yaml) and ships in the published package, so an sdk bump
+# must regenerate it. Schema CI fails on a stale copy.
+SDK_CAPS_FILE="sdk/lib/src/capabilities/generated.dart"
+GENERATED_FILES=()
+for idx in "${SELECTED[@]}"; do
+  if [[ "${PKG_NAMES[$idx]}" == "sdk" ]]; then
+    command -v bun >/dev/null 2>&1 \
+      || die "bun is required to regenerate $SDK_CAPS_FILE for an sdk release"
+    GENERATED_FILES+=("$SDK_CAPS_FILE")
+  fi
+done
+
 # --- 4. Apply bumps --------------------------------------------------------
 for k in "${!SELECTED[@]}"; do
   idx=${SELECTED[$k]}
   write_version "${PKG_FILES[$idx]}" "${NEW_VERS[$k]}"
 done
+
+if [[ ${#GENERATED_FILES[@]} -gt 0 ]]; then
+  echo; c_bold "Regenerating $SDK_CAPS_FILE..."; echo
+  if ! bun run schema/gen-sdk-capabilities.ts; then
+    git checkout -- "${PKG_FILES[@]}" "${GENERATED_FILES[@]}"
+    die "capability codegen failed — file changes reverted"
+  fi
+fi
 
 # --- 5. Validate -----------------------------------------------------------
 LOG=$(mktemp)
@@ -236,7 +257,8 @@ for k in "${!SELECTED[@]}"; do
     *)
       echo "$(c_red failed)"
       cat "$LOG"
-      git checkout -- "${PKG_FILES[@]}"
+      # ${arr[@]+...} keeps an empty array safe under `set -u` on bash 3.2.
+      git checkout -- "${PKG_FILES[@]}" ${GENERATED_FILES[@]+"${GENERATED_FILES[@]}"}
       die "validation failed for ${PKG_NAMES[$idx]} — file changes reverted"
       ;;
   esac
@@ -253,6 +275,9 @@ for k in "${!SELECTED[@]}"; do
   idx=${SELECTED[$k]}
   git add "${PKG_FILES[$idx]}"
 done
+if [[ ${#GENERATED_FILES[@]} -gt 0 ]]; then
+  git add "${GENERATED_FILES[@]}"
+fi
 
 git commit -m "chore(release): version bump" -m "$COMMIT_BODY"
 
