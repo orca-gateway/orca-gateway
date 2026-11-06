@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "slug": "native-sdk-s1",
+  "idea": "Epic 23b slice S1: the pure-Swift core of the iOS SDK (tasks 23b.9-23b.14) — sdk-swift/ package skeleton, Codable models for ComponentNode/Value/Action/PageResponse, ValueResolver with all transforms and BoolExpr ops, ElmStore with scoped watches, native capabilities generator, Taskfile task and ubuntu Swift CI job",
+  "kind": "feature",
+  "created_at": "2026-11-06T08:50:30Z",
+  "updated_at": "2026-11-06T08:54:12Z",
+  "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
+  "current": "09",
+  "stages": {
+    "01": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10"
+    },
+    "02": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10"
+    },
+    "03": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10"
+    },
+    "04": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10"
+    },
+    "05": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10"
+    },
+    "06": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10"
+    },
+    "07": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10"
+    },
+    "08": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-06T08:54:12Z",
+      "approved_with": "A approve"
+    },
+    "09": {
+      "status": "pending"
+    },
+    "10": {
+      "status": "pending"
+    },
+    "11": {
+      "status": "pending"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": true
+  }
+}
