@@ -83,6 +83,18 @@ tasks:
     cmds:
       - flutter analyze
 
+  # === SDK (Swift, experimental: Epic 23b) ===
+  sdk-swift:test:
+    desc: Run the iOS SDK core tests (pure Swift; macOS or Linux with a Swift toolchain)
+    dir: sdk-swift
+    cmds:
+      - swift test
+
+  sdk-swift:gen:
+    desc: Regenerate the Swift capability vector (run after schema/gen-widget-registry.ts)
+    cmds:
+      - bun run schema/gen-native-capabilities.ts
+
   # === Example app ===
   example:dev:
     desc: Start example app and server in parallel
