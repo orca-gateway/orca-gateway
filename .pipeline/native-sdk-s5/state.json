@@ -4,9 +4,9 @@
   "idea": "Epic 23b slice S5: the release.sh mirror publisher and subtree-split CI job that tags the iOS SDK on a read-only orca-gateway-swift repo (23b.25), docs: an \"iOS SDK (alpha)\" page, README banner, epic row ticked (23b.26), and the engine's min-SDK gate accepting pre-release versions (S4 gate 09)",
   "kind": "feature",
   "created_at": "2026-11-06T19:46:26Z",
-  "updated_at": "2026-11-06T21:42:27Z",
+  "updated_at": "2026-11-06T21:44:34Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "12",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -62,21 +62,27 @@
       "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/12-r1.md"
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-06T21:44:34Z",
+      "approved_with": "A approve"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S5 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S5 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S5 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S5 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     }
   },
   "gates": {
