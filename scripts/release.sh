@@ -16,7 +16,11 @@ cd "$REPO_ROOT"
 
 # --- Package registry --------------------------------------------------------
 # Each line:  name|path|tag-prefix|publisher|version-file
-# publisher ∈ { npm, pub, github-release }
+# publisher ∈ { npm, pub, github-release, mirror }
+#   mirror: the tag push starts .github/workflows/sdk-swift-mirror.yml, which
+#   splits the package into its own repository and tags it there (SwiftPM
+#   needs Package.swift at a repository root and bare X.Y.Z tags).
+# New packages go at the end, so the numbers people type stay the same.
 PACKAGES=(
   "engine|engine|engine-v|npm|engine/package.json"
   "sdk|sdk|sdk-v|pub|sdk/pubspec.yaml"
@@ -26,7 +30,12 @@ PACKAGES=(
   "orca_push_notification|plugins/orca_push_notification|orca_push_notification-v|pub|plugins/orca_push_notification/pubspec.yaml"
   "orca_video_player|plugins/orca_video_player|orca_video_player-v|pub|plugins/orca_video_player/pubspec.yaml"
   "orca_voice_recorder|plugins/orca_voice_recorder|orca_voice_recorder-v|pub|plugins/orca_voice_recorder/pubspec.yaml"
+  "sdk-swift|sdk-swift|sdk-swift-v|mirror|sdk-swift/VERSION"
 )
+
+# The public repository the mirror workflow pushes to. The override exists
+# for rehearsals against a local bare repository.
+SWIFT_MIRROR_URL="${SWIFT_MIRROR_URL:-https://github.com/orca-gateway/orca-gateway-swift.git}"
 
 # --- Output helpers ---------------------------------------------------------
 c_red()    { printf "\033[31m%s\033[0m" "$*"; }
@@ -46,6 +55,9 @@ read_version() {
       ;;
     *.yaml)
       grep -E '^version:[[:space:]]+' "$file" | head -1 | awk '{print $2}'
+      ;;
+    */VERSION)
+      head -1 "$file" | tr -d '[:space:]'
       ;;
     *) die "unsupported manifest: $file" ;;
   esac
@@ -70,12 +82,18 @@ write_version() {
       sed -i.bak -E "s/^version:[[:space:]]+.*/version: $new/" "$file"
       rm -f "${file}.bak"
       ;;
+    */VERSION)
+      printf "%s\n" "$new" > "$file"
+      ;;
   esac
 }
 
+# A pre-release label (`0.1.0-alpha.1`) is dropped before M/m/P: 0.1.0-alpha.1
+# -> patch -> 0.1.1. The pre-release choices are bump_pre's.
 bump_core() {
   local cur=$1 level=$2
   local core="${cur%%+*}"
+  core="${core%%-*}"
   local maj min pat
   IFS='.' read -r maj min pat <<<"$core"
   case "$level" in
@@ -95,6 +113,34 @@ bump_version() {
     printf "%s" "$core"
   fi
 }
+
+# The pre-release choices for a version with a `-label`:
+#   next     0.1.0-alpha.1 -> 0.1.0-alpha.2 (a label with no number gains .1)
+#   release  0.1.0-alpha.1 -> 0.1.0
+has_pre() { local core="${1%%+*}"; [[ "$core" == *-* ]]; }
+
+bump_pre() {
+  local cur=$1 kind=$2
+  local core="${cur%%+*}"
+  local base="${core%%-*}" label="${core#*-}"
+  case "$kind" in
+    release) printf "%s" "$base" ;;
+    next)
+      local last="${label##*.}"
+      if [[ "$last" =~ ^[0-9]+$ ]]; then
+        if [[ "$label" == *.* ]]; then
+          printf "%s-%s.%d" "$base" "${label%.*}" "$((10#$last+1))"
+        else
+          printf "%s-%d" "$base" "$((10#$last+1))"
+        fi
+      else
+        printf "%s-%s.1" "$base" "$label"
+      fi
+      ;;
+  esac
+}
+
+tag_exists() { git rev-parse -q --verify "refs/tags/$1" >/dev/null; }
 
 # --- Pre-flight -------------------------------------------------------------
 ensure_clean_git() {
@@ -126,7 +172,7 @@ done
 echo
 c_bold "Packages in this monorepo:"; echo
 for i in "${!PKG_NAMES[@]}"; do
-  printf "  %d) %-10s %-12s (%s)\n" \
+  printf "  %d) %-10s %-14s (%s)\n" \
     "$((i+1))" "${PKG_NAMES[$i]}" "${PKG_VERS[$i]}" "${PKG_PUBS[$i]}"
 done
 
@@ -215,6 +261,16 @@ check_pub_login() {
   printf "  %s pub.dev, credentials in %s\n" "$(c_green ok)" "$found"
 }
 
+# The mirror workflow pushes to SWIFT_MIRROR_URL with a deploy key; if the
+# repository is missing, the tag would start a job that cannot succeed.
+check_swift_mirror() {
+  command -v swift >/dev/null 2>&1 || die "swift is required to validate sdk-swift"
+  GIT_TERMINAL_PROMPT=0 git ls-remote --quiet "$SWIFT_MIRROR_URL" >/dev/null 2>&1 \
+    || die "the mirror $SWIFT_MIRROR_URL is not reachable. Create it first (docs/User_Actions.md, Epic 23b, the iOS SDK mirror)."
+  printf "  %s mirror %s (the deploy key secret is checked by CI)\n" \
+    "$(c_green ok)" "$SWIFT_MIRROR_URL"
+}
+
 # Step 7 pushes the commit and every tag; a dry run checks the same auth.
 check_git_push() {
   git push --dry-run --quiet origin "$BRANCH" >/dev/null 2>&1 \
@@ -229,6 +285,7 @@ for idx in "${SELECTED[@]}"; do
   case "${PKG_PUBS[$idx]}" in
     npm) check_npm_login "${PKG_NAMES[$idx]}" "${PKG_PATHS[$idx]}" ;;
     pub) NEED_PUB=1 ;;
+    mirror) check_swift_mirror ;;
   esac
 done
 if [[ $NEED_PUB -eq 1 ]]; then check_pub_login; fi
@@ -239,6 +296,34 @@ echo
 NEW_VERS=()
 for idx in "${SELECTED[@]}"; do
   cur="${PKG_VERS[$idx]}"
+  if has_pre "$cur"; then
+    # A pre-release: publish it as it is (only while its tag does not exist),
+    # move to the next pre-release, drop the label, or bump the core.
+    untagged=0; tag_exists "${PKG_TAGS[$idx]}$cur" || untagged=1
+    if [[ $untagged -eq 1 ]]; then def="k"; keep_hint="[k]eep $cur / "
+    else def="n"; keep_hint=""
+    fi
+    while true; do
+      printf "[%s] %s -> %s[n]ext %s / [r]elease %s / [M]ajor / [m]inor / [P]atch (default: %s): " \
+        "$(c_bold "${PKG_NAMES[$idx]}")" "$cur" "$keep_hint" "$(bump_pre "$cur" next)" \
+        "$(bump_pre "$cur" release)" "$def"
+      read -r ans
+      ans="${ans:-$def}"
+      case "$ans" in
+        k|keep)
+          if [[ $untagged -eq 1 ]]; then new="$cur"; break; fi
+          echo "  ${PKG_TAGS[$idx]}$cur is already tagged; pick n, r, M, m or P" ;;
+        n|next)       new=$(bump_pre "$cur" next); break ;;
+        r|release)    new=$(bump_pre "$cur" release); break ;;
+        M|major)      new=$(bump_version "$cur" major); break ;;
+        m|minor)      new=$(bump_version "$cur" minor); break ;;
+        P|p|patch)    new=$(bump_version "$cur" patch); break ;;
+        *) echo "  please answer ${keep_hint:+k, }n, r, M, m, or P (default: $def)" ;;
+      esac
+    done
+    NEW_VERS+=("$new")
+    continue
+  fi
   while true; do
     printf "[%s] %s -> [M]ajor / [m]inor / [P]atch: " \
       "$(c_bold "${PKG_NAMES[$idx]}")" "$cur"
@@ -254,6 +339,14 @@ for idx in "${SELECTED[@]}"; do
   NEW_VERS+=("$new")
 done
 
+# A tag that already exists would make `git tag -a` fail after the commit.
+for k in "${!SELECTED[@]}"; do
+  idx=${SELECTED[$k]}
+  if tag_exists "${PKG_TAGS[$idx]}${NEW_VERS[$k]}"; then
+    die "tag ${PKG_TAGS[$idx]}${NEW_VERS[$k]} already exists"
+  fi
+done
+
 # --- 3. Summary + confirm --------------------------------------------------
 echo
 c_bold "Summary:"; echo
@@ -267,18 +360,26 @@ printf "Proceed? [y/N]: "
 read -r CONFIRM
 [[ "$CONFIRM" == "y" || "$CONFIRM" == "Y" ]] || die "aborted"
 
-# The Dart SDK's capability vector embeds the sdk version (kSdkSemver, read
-# from sdk/pubspec.yaml) and ships in the published package, so an sdk bump
-# must regenerate it. Schema CI fails on a stale copy.
-SDK_CAPS_FILE="sdk/lib/src/capabilities/generated.dart"
+# Each SDK's capability vector embeds its version and ships in the package,
+# so a bump must regenerate it; Schema CI fails on a stale copy.
+#   sdk:       kSdkSemver from sdk/pubspec.yaml
+#   sdk-swift: sdkSemver from sdk-swift/VERSION
 GENERATED_FILES=()
+GENERATORS=()
 for idx in "${SELECTED[@]}"; do
-  if [[ "${PKG_NAMES[$idx]}" == "sdk" ]]; then
-    command -v bun >/dev/null 2>&1 \
-      || die "bun is required to regenerate $SDK_CAPS_FILE for an sdk release"
-    GENERATED_FILES+=("$SDK_CAPS_FILE")
-  fi
+  case "${PKG_NAMES[$idx]}" in
+    sdk)
+      GENERATED_FILES+=("sdk/lib/src/capabilities/generated.dart")
+      GENERATORS+=("schema/gen-sdk-capabilities.ts") ;;
+    sdk-swift)
+      GENERATED_FILES+=("sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift")
+      GENERATORS+=("schema/gen-native-capabilities.ts") ;;
+  esac
 done
+if [[ ${#GENERATORS[@]} -gt 0 ]]; then
+  command -v bun >/dev/null 2>&1 \
+    || die "bun is required to regenerate ${GENERATED_FILES[*]}"
+fi
 
 # --- 4. Apply bumps --------------------------------------------------------
 for k in "${!SELECTED[@]}"; do
@@ -286,13 +387,13 @@ for k in "${!SELECTED[@]}"; do
   write_version "${PKG_FILES[$idx]}" "${NEW_VERS[$k]}"
 done
 
-if [[ ${#GENERATED_FILES[@]} -gt 0 ]]; then
-  echo; c_bold "Regenerating $SDK_CAPS_FILE..."; echo
-  if ! bun run schema/gen-sdk-capabilities.ts; then
+for g in ${GENERATORS[@]+"${GENERATORS[@]}"}; do
+  echo; c_bold "Regenerating with $g..."; echo
+  if ! bun run "$g"; then
     git checkout -- "${PKG_FILES[@]}" "${GENERATED_FILES[@]}"
     die "capability codegen failed — file changes reverted"
   fi
-fi
+done
 
 # --- 5. Validate -----------------------------------------------------------
 LOG=$(mktemp)
@@ -321,6 +422,11 @@ validate_pkg() {
       ;;
     github-release)
       : # No registry validation; CI handles the build on tag push.
+      ;;
+    mirror)
+      # What a consumer resolves: the manifest, then a build of every target.
+      ( swift package --package-path "$path" describe >/dev/null \
+        && swift build --package-path "$path" ) >"$LOG" 2>&1 || return 1
       ;;
   esac
 }
@@ -364,7 +470,13 @@ if [[ ${#GENERATED_FILES[@]} -gt 0 ]]; then
   git add "${GENERATED_FILES[@]}"
 fi
 
-git commit -m "chore(release): version bump" -m "$COMMIT_BODY"
+# A pre-release published as it is changes no file; it is tagged at HEAD.
+if git diff --cached --quiet; then
+  printf "%s nothing to commit (versions kept as they are); tagging HEAD\n" \
+    "$(c_yellow note:)"
+else
+  git commit -m "chore(release): version bump" -m "$COMMIT_BODY"
+fi
 
 for k in "${!SELECTED[@]}"; do
   idx=${SELECTED[$k]}
@@ -389,28 +501,31 @@ publish_pkg() {
       printf "  %s tag push triggers .github/workflows/devtools-release.yml\n" \
         "$(c_yellow "[$name]")"
       ;;
+    mirror)
+      printf "  %s tag push triggers .github/workflows/sdk-swift-mirror.yml (split, push to %s, tag %s there)\n" \
+        "$(c_yellow "[$name]")" "$SWIFT_MIRROR_URL" "$4"
+      ;;
   esac
 }
 
-# Publish non-CI packages first; push their tags last.
-# devtools is left for the end since pushing its tag triggers a long CI build.
+# Publish registry packages first, then push the tags CI picks up: the
+# mirror, and devtools last since its tag starts a long CI build.
 ORDER=()
-for k in "${!SELECTED[@]}"; do
-  if [[ "${PKG_PUBS[${SELECTED[$k]}]}" != "github-release" ]]; then
-    ORDER+=("$k")
-  fi
-done
-for k in "${!SELECTED[@]}"; do
-  if [[ "${PKG_PUBS[${SELECTED[$k]}]}" == "github-release" ]]; then
-    ORDER+=("$k")
-  fi
+for pass in registry mirror github-release; do
+  for k in "${!SELECTED[@]}"; do
+    pub="${PKG_PUBS[${SELECTED[$k]}]}"
+    case "$pass:$pub" in
+      registry:mirror|registry:github-release) ;;
+      registry:*|mirror:mirror|github-release:github-release) ORDER+=("$k") ;;
+    esac
+  done
 done
 
 for k in "${ORDER[@]}"; do
   idx=${SELECTED[$k]}
   echo
   c_bold "Publishing ${PKG_NAMES[$idx]} ${NEW_VERS[$k]}..."; echo
-  publish_pkg "${PKG_NAMES[$idx]}" "${PKG_PATHS[$idx]}" "${PKG_PUBS[$idx]}"
+  publish_pkg "${PKG_NAMES[$idx]}" "${PKG_PATHS[$idx]}" "${PKG_PUBS[$idx]}" "${NEW_VERS[$k]}"
   tag="${PKG_TAGS[$idx]}${NEW_VERS[$k]}"
   git push origin "$tag"
 done

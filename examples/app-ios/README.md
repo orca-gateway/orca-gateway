@@ -1,8 +1,9 @@
 # iOS example: Orca Counter
 
-The counter example drawn by the **experimental** Swift SDK (`sdk-swift/`, Epic 23b) against the
+The counter example drawn by the **alpha** Swift SDK (`sdk-swift/`, Epic 23b) against the
 same Bun server as the Flutter example. The project depends on the SDK through a local path
-(`../../sdk-swift`), so a change to the SDK shows up on the next build.
+(`../../sdk-swift`), so a change to the SDK shows up on the next build. Your own app installs the
+published package instead; see "Install" in [`sdk-swift/README.md`](../../sdk-swift/README.md).
 
 ## Run it
 
