@@ -11,6 +11,9 @@ on:
       - "sdk-swift/VERSION"
       - "sdk-swift/capabilities.json"
       - "sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift"
+      - "sdk-kotlin/VERSION"
+      - "sdk-kotlin/capabilities.json"
+      - "sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/capabilities/Generated.kt"
       - "sdk-swift/Tests/Pages/**"
       - "engine/src/core/**"
       - "examples/server/**"
@@ -25,6 +28,9 @@ on:
       - "sdk-swift/VERSION"
       - "sdk-swift/capabilities.json"
       - "sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift"
+      - "sdk-kotlin/VERSION"
+      - "sdk-kotlin/capabilities.json"
+      - "sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/capabilities/Generated.kt"
       - "sdk-swift/Tests/Pages/**"
       - "engine/src/core/**"
       - "examples/server/**"
@@ -61,13 +67,17 @@ jobs:
             exit 1
           fi
 
-      - name: Regenerate native (Swift) capabilities
+      - name: Regenerate native (Swift and Kotlin) capabilities
         run: bun run schema/gen-native-capabilities.ts
 
       - name: Check native capabilities for drift
         run: |
           if ! git diff --exit-code -- sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift; then
             echo "::error::Swift capability vector is out of date. Run 'bun run schema/gen-native-capabilities.ts' and commit the result."
+            exit 1
+          fi
+          if ! git diff --exit-code -- sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/capabilities/Generated.kt; then
+            echo "::error::Kotlin capability vector is out of date. Run 'bun run schema/gen-native-capabilities.ts' and commit the result."
             exit 1
           fi
 

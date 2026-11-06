@@ -12,10 +12,11 @@
  *                                 plus schema/protocol.json and the action /
  *                                 value type files, and emits
  *                                 sdk/lib/src/capabilities/generated.dart.
- *   3. gen-native-capabilities.ts — reads the same manifest plus
- *                                 sdk-swift/VERSION and capabilities.json,
- *                                 and emits the Swift capability vector
- *                                 (sdk-swift/.../Capabilities/Generated.swift).
+ *   3. gen-native-capabilities.ts — reads the same manifest plus each native
+ *                                 SDK's VERSION and capabilities.json, and
+ *                                 emits the Swift and Kotlin capability vectors
+ *                                 (sdk-swift/.../Capabilities/Generated.swift,
+ *                                 sdk-kotlin/.../capabilities/Generated.kt).
  *
  * Steps 2 and 3 read what step 1 writes, so order is load-bearing — running
  * them out of order leaves the SDK capability vectors stale.
