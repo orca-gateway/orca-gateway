@@ -5,6 +5,10 @@ import Foundation
 public enum OrcaClientError: Error, Equatable, Sendable {
     case http(status: Int, body: String)
     case invalidURL(String)
+    /// A server action answered with a status other than 200. `message` is
+    /// the body's `error`, or "Server action failed" (Dart
+    /// `OrcaClientException` from `executeAction`).
+    case action(status: Int, message: String)
 }
 
 /// Talks to an Orca engine as the iOS SDK: device and capability headers on
@@ -78,11 +82,48 @@ public struct OrcaClient: @unchecked Sendable {
         return try JSONDecoder().decode(PageResponse.self, from: response.body)
     }
 
+    /// `POST /api/v1/app/{appId}/action` with `{action, params?, pageState?,
+    /// appState?}`, returning the actions the server sent back (Dart
+    /// `executeAction`). Server actions skip the capability handshake: the
+    /// engine never checks capabilities on this route and Flutter never
+    /// retries one, so neither does Swift.
+    ///
+    /// Like Dart, the body is read as JSON before the status is checked: a
+    /// body that is not JSON throws a decoding error, which a lifecycle's
+    /// `onError` sees; a JSON error body throws `OrcaClientError.action`,
+    /// which the executor turns into a snackbar.
+    public func executeAction(
+        _ id: String, params: [String: JSONValue]? = nil,
+        pageState: [String: JSONValue]? = nil, appState: [String: JSONValue]? = nil
+    ) async throws -> [Action] {
+        let url = try endpointURL("action")
+        var body: [String: JSONValue] = ["action": .string(id)]
+        if let params { body["params"] = .object(params) }
+        if let pageState { body["pageState"] = .object(pageState) }
+        if let appState { body["appState"] = .object(appState) }
+        var headers = self.headers
+        headers["Content-Type"] = "application/json"
+        let response = try await transport.send(HTTPRequest(
+            method: "POST", url: url, headers: headers, body: try JSONValue.object(body).encoded()))
+        let json = try JSONValue.decode(response.body)
+        guard response.status == 200 else {
+            throw OrcaClientError.action(
+                status: response.status, message: json["error"].stringValue ?? "Server action failed")
+        }
+        return try (json["actions"].arrayValue ?? []).map { try $0.decode(Action.self) }
+    }
+
     func pageURL(_ path: String) throws -> URL {
+        let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        return try endpointURL("page/\(trimmed)")
+    }
+
+    /// `{baseURL}/api/v1/app/{appId}/{rest}`, with any trailing slash of the
+    /// base URL dropped.
+    func endpointURL(_ rest: String) throws -> URL {
         var base = baseURL.absoluteString
         while base.hasSuffix("/") { base.removeLast() }
-        let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
-        let text = "\(base)/api/v1/app/\(appId)/page/\(trimmed)"
+        let text = "\(base)/api/v1/app/\(appId)/\(rest)"
         guard let url = URL(string: text) else { throw OrcaClientError.invalidURL(text) }
         return url
     }

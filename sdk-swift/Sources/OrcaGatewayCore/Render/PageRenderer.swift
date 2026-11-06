@@ -121,17 +121,19 @@ public struct RenderNode: Equatable, Sendable {
 /// a structure node's slots are props holding node ids, and props are
 /// resolved deep against the merged state.
 public struct PageRenderer: Sendable {
+    /// The page as the server sent it; mutations change `nodes`, not this.
     public let page: PageResponse
     public let registry: WidgetRegistry
-    private let nodes: [String: ComponentNode]
+    /// The current node map, as the Flutter `ComponentStore` holds it.
+    public internal(set) var nodes: [String: ComponentNode]
+    public internal(set) var rootId: String?
 
     public init(page: PageResponse, registry: WidgetRegistry = .shared) {
         self.page = page
         self.registry = registry
         self.nodes = page.nodesById
+        self.rootId = page.components.first?.id
     }
-
-    public var rootId: String? { page.components.first?.id }
 
     /// The node to draw for an id: degraded when its type is unknown, nil
     /// when the page has no such node.

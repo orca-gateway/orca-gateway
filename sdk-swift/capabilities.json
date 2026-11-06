@@ -19,8 +19,10 @@
   ],
   "actionKinds": [
     "actionGroup",
+    "addComponent",
     "conditionalAction",
     "copyToClipboard",
+    "deleteComponent",
     "goBack",
     "lifecycle",
     "navigate",
@@ -29,6 +31,7 @@
     "setState",
     "share",
     "showSnackbar",
-    "showToast"
+    "showToast",
+    "updateComponent"
   ]
 }

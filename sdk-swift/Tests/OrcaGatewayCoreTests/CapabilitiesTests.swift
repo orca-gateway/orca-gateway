@@ -38,7 +38,10 @@ final class CapabilitiesTests: XCTestCase {
         let listed = Set((implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue))
         XCTAssertEqual(Set(GeneratedCapabilities.actionKinds), listed)
         XCTAssertTrue(listed.isSubset(of: Set(Action.kinds)))
-        XCTAssertEqual(listed.count, 12)
+        XCTAssertEqual(listed.count, 15)
+        // The executor runs exactly what is advertised, plus the server-only
+        // replaceComponent (not in action.ts, so never advertised).
+        XCTAssertEqual(ActionExecutor.kinds, listed.union(["replaceComponent"]))
     }
 
     func testValueKindsTransformsAndOpsAreComplete() {
