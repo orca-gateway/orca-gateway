@@ -21,21 +21,25 @@ public enum GeneratedCapabilities {
         "AppBar",
         "Card",
         "Center",
+        "ClipRRect",
         "Column",
         "Container",
         "Divider",
         "ElevatedButton",
         "Expanded",
         "FallbackPrompt",
+        "GestureDetector",
         "Icon",
         "Image",
         "OutlinedButton",
         "Padding",
+        "Positioned",
         "Row",
         "Scaffold",
         "SingleChildScrollView",
         "SizedBox",
         "Spacer",
+        "Stack",
         "Text",
         "TextButton",
         "TextField",
@@ -122,5 +126,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "e61e73c701a6e597d61c7f51d75dcfb79c0df4463746cf5aa90f0a8a14737604"
+    public static let capsHash = "277cc2e0ee594953a06718433976b76542859fe36020c197187715b24fa51254"
 }

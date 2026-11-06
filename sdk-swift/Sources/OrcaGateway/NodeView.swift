@@ -69,6 +69,10 @@ struct WidgetView: View {
         case "Expanded": ExpandedView(node: node, model: model)
         case "Spacer": SpacerNodeView()
         case "TextField": TextFieldNodeView(node: node, model: model)
+        case "Stack": StackNodeView(node: node, model: model)
+        case "Positioned": PositionedView(node: node, model: model)
+        case "ClipRRect": ClipRRectView(node: node, model: model)
+        case "GestureDetector": GestureNodeView(node: node, model: model)
         default: EmptyView()
         }
     }
