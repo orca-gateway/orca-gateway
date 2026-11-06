@@ -6,11 +6,17 @@ on:
       - "schema/**"
       - "engine/src/components/**"
       - "engine/src/types/**"
+      - "sdk/pubspec.yaml"
+      - "sdk/lib/src/capabilities/**"
+      - ".github/workflows/schema.yml"
   pull_request:
     paths:
       - "schema/**"
       - "engine/src/components/**"
       - "engine/src/types/**"
+      - "sdk/pubspec.yaml"
+      - "sdk/lib/src/capabilities/**"
+      - ".github/workflows/schema.yml"
 
 jobs:
   drift-check:
@@ -30,5 +36,15 @@ jobs:
         run: |
           if ! git diff --exit-code -- engine/src/core/widget-registry-gen.ts schema/widget-registry.json; then
             echo "::error::Widget registry is out of date. Run 'bun run schema/gen-widget-registry.ts' and commit the result."
+            exit 1
+          fi
+
+      - name: Regenerate Dart SDK capabilities
+        run: bun run schema/gen-sdk-capabilities.ts
+
+      - name: Check Dart SDK capabilities for drift
+        run: |
+          if ! git diff --exit-code -- sdk/lib/src/capabilities/generated.dart; then
+            echo "::error::Dart SDK capability vector is out of date. Run 'bun run schema/gen-sdk-capabilities.ts' and commit the result."
             exit 1
           fi
