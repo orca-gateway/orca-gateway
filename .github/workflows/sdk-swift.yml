@@ -1,0 +1,39 @@
+name: SDK Swift CI
+
+# The pure-Swift core of the iOS SDK (OrcaGatewayCore) on Linux, per PR.
+# The SwiftUI layer needs macOS and runs in a separate nightly job (Epic 23b, S2).
+on:
+  push:
+    paths:
+      - "sdk-swift/**"
+      - "schema/**"
+      - ".github/workflows/sdk-swift.yml"
+  pull_request:
+    paths:
+      - "sdk-swift/**"
+      - "schema/**"
+      - ".github/workflows/sdk-swift.yml"
+
+jobs:
+  core-tests:
+    name: Core tests (swift ${{ matrix.swift }}, linux)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 5.10 keeps the package's swift-tools-version 5.9 floor honest;
+        # 6.2 is the current toolchain.
+        swift: ["5.10-jammy", "6.2-noble"]
+    container: swift:${{ matrix.swift }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: swift --version
+
+      - name: Build
+        run: swift build --build-tests
+        working-directory: sdk-swift
+
+      - name: Test (T1 group; fixtures read from ../schema)
+        run: swift test --skip-build
+        working-directory: sdk-swift
