@@ -1,0 +1,21 @@
+{
+  "$comment": "What this Kotlin build implements. gen-native-capabilities.ts advertises these widgets (each must carry the android target in schema/widget-registry.json) and these action kinds; value kinds, transforms and BoolExpr ops are scraped from the engine like the Dart SDK's. Add a name here only in the PR that lands its implementation. The core slice (S6) draws nothing yet, so it lists no widgets.",
+  "widgets": [],
+  "actionKinds": [
+    "actionGroup",
+    "addComponent",
+    "conditionalAction",
+    "copyToClipboard",
+    "deleteComponent",
+    "goBack",
+    "lifecycle",
+    "navigate",
+    "openUrl",
+    "serverAction",
+    "setState",
+    "share",
+    "showSnackbar",
+    "showToast",
+    "updateComponent"
+  ]
+}
