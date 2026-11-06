@@ -1,0 +1,27 @@
+{
+  "name": "setState-static",
+  "description": "setState with a static value writes the page key; no effects.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 0
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "setState",
+      "key": "count",
+      "value": 5
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 5
+      },
+      "app": {}
+    },
+    "effects": []
+  }
+}

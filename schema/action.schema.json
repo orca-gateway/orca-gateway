@@ -4,245 +4,697 @@
   "title": "Action",
   "description": "Serialized event handler. All Actions execute on the Flutter client except ServerAction, which round-trips to the server.",
   "oneOf": [
-    { "$ref": "#/definitions/NavigateAction" },
-    { "$ref": "#/definitions/GoBackAction" },
-    { "$ref": "#/definitions/SwitchTabAction" },
-    { "$ref": "#/definitions/OpenDrawerAction" },
-    { "$ref": "#/definitions/OpenDialogAction" },
-    { "$ref": "#/definitions/SetStateAction" },
-    { "$ref": "#/definitions/ClearStateAction" },
-    { "$ref": "#/definitions/PersistStateAction" },
-    { "$ref": "#/definitions/ServerActionRef" },
-    { "$ref": "#/definitions/ShowSnackbarAction" },
-    { "$ref": "#/definitions/ShowToastAction" },
-    { "$ref": "#/definitions/UpdateComponentAction" },
-    { "$ref": "#/definitions/DeleteComponentAction" },
-    { "$ref": "#/definitions/AddComponentAction" },
-    { "$ref": "#/definitions/CopyToClipboardAction" },
-    { "$ref": "#/definitions/ShareAction" },
-    { "$ref": "#/definitions/OpenUrlAction" },
-    { "$ref": "#/definitions/ActionGroup" },
-    { "$ref": "#/definitions/ConditionalAction" },
-    { "$ref": "#/definitions/AnimateForwardAction" },
-    { "$ref": "#/definitions/AnimateReverseAction" },
-    { "$ref": "#/definitions/LifecycleAction" },
-    { "$ref": "#/definitions/UpdateSubPageAction" },
-    { "$ref": "#/definitions/CustomAction" }
+    {
+      "$ref": "#/definitions/NavigateAction"
+    },
+    {
+      "$ref": "#/definitions/GoBackAction"
+    },
+    {
+      "$ref": "#/definitions/SwitchTabAction"
+    },
+    {
+      "$ref": "#/definitions/OpenDrawerAction"
+    },
+    {
+      "$ref": "#/definitions/OpenDialogAction"
+    },
+    {
+      "$ref": "#/definitions/SetStateAction"
+    },
+    {
+      "$ref": "#/definitions/ClearStateAction"
+    },
+    {
+      "$ref": "#/definitions/PersistStateAction"
+    },
+    {
+      "$ref": "#/definitions/ServerActionRef"
+    },
+    {
+      "$ref": "#/definitions/ShowSnackbarAction"
+    },
+    {
+      "$ref": "#/definitions/ShowToastAction"
+    },
+    {
+      "$ref": "#/definitions/UpdateComponentAction"
+    },
+    {
+      "$ref": "#/definitions/DeleteComponentAction"
+    },
+    {
+      "$ref": "#/definitions/AddComponentAction"
+    },
+    {
+      "$ref": "#/definitions/CopyToClipboardAction"
+    },
+    {
+      "$ref": "#/definitions/ShareAction"
+    },
+    {
+      "$ref": "#/definitions/OpenUrlAction"
+    },
+    {
+      "$ref": "#/definitions/ActionGroup"
+    },
+    {
+      "$ref": "#/definitions/ConditionalAction"
+    },
+    {
+      "$ref": "#/definitions/AnimateForwardAction"
+    },
+    {
+      "$ref": "#/definitions/AnimateReverseAction"
+    },
+    {
+      "$ref": "#/definitions/LifecycleAction"
+    },
+    {
+      "$ref": "#/definitions/UpdateSubPageAction"
+    },
+    {
+      "$ref": "#/definitions/CloseDialogAction"
+    },
+    {
+      "$ref": "#/definitions/RefetchPageAction"
+    },
+    {
+      "$ref": "#/definitions/DebugLogAction"
+    },
+    {
+      "$ref": "#/definitions/OnceAction"
+    },
+    {
+      "$ref": "#/definitions/AlwaysAction"
+    },
+    {
+      "$ref": "#/definitions/CustomAction"
+    }
   ],
   "definitions": {
-    "Action": { "$ref": "#" },
+    "Action": {
+      "$ref": "#"
+    },
     "ValueOrString": {
       "oneOf": [
-        { "type": "string" },
-        { "$ref": "value.json#" }
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "value.json#"
+        }
       ]
     },
     "NavigateAction": {
       "type": "object",
-      "required": ["type", "route"],
+      "required": [
+        "type",
+        "route"
+      ],
       "properties": {
-        "type": { "const": "navigate" },
-        "route": { "$ref": "#/definitions/ValueOrString" },
-        "params": { "type": "object", "additionalProperties": { "$ref": "value.json#" } },
-        "replace": { "type": "boolean" }
+        "type": {
+          "const": "navigate"
+        },
+        "route": {
+          "$ref": "#/definitions/ValueOrString"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "value.json#"
+          }
+        },
+        "replace": {
+          "type": "boolean"
+        }
       }
     },
-    "GoBackAction": { "type": "object", "required": ["type"], "properties": { "type": { "const": "goBack" } } },
-    "SwitchTabAction": { "type": "object", "required": ["type", "tabId"], "properties": { "type": { "const": "switchTab" }, "tabId": { "type": "string" } } },
-    "OpenDrawerAction": { "type": "object", "required": ["type"], "properties": { "type": { "const": "openDrawer" } } },
-    "OpenDialogAction": { "type": "object", "required": ["type", "dialogId"], "properties": { "type": { "const": "openDialog" }, "dialogId": { "type": "string" } } },
+    "GoBackAction": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "goBack"
+        }
+      }
+    },
+    "SwitchTabAction": {
+      "type": "object",
+      "required": [
+        "type",
+        "tabId"
+      ],
+      "properties": {
+        "type": {
+          "const": "switchTab"
+        },
+        "tabId": {
+          "type": "string"
+        }
+      }
+    },
+    "OpenDrawerAction": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "openDrawer"
+        }
+      }
+    },
+    "OpenDialogAction": {
+      "type": "object",
+      "required": [
+        "type",
+        "dialogId"
+      ],
+      "properties": {
+        "type": {
+          "const": "openDialog"
+        },
+        "dialogId": {
+          "type": "string"
+        }
+      }
+    },
     "SetStateAction": {
       "type": "object",
-      "required": ["type", "scope", "key", "value"],
+      "required": [
+        "type",
+        "scope",
+        "key",
+        "value"
+      ],
       "properties": {
-        "type": { "const": "setState" },
-        "scope": { "enum": ["page", "app"] },
-        "key": { "type": "string" },
-        "value": { "$ref": "value.json#" }
+        "type": {
+          "const": "setState"
+        },
+        "scope": {
+          "enum": [
+            "page",
+            "app"
+          ]
+        },
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "value.json#"
+        }
       }
     },
     "ClearStateAction": {
       "type": "object",
-      "required": ["type", "scope", "key"],
+      "required": [
+        "type",
+        "scope",
+        "key"
+      ],
       "properties": {
-        "type": { "const": "clearState" },
-        "scope": { "enum": ["page", "app"] },
-        "key": { "type": "string" }
+        "type": {
+          "const": "clearState"
+        },
+        "scope": {
+          "enum": [
+            "page",
+            "app"
+          ]
+        },
+        "key": {
+          "type": "string"
+        }
       }
     },
     "PersistStateAction": {
       "type": "object",
-      "required": ["type", "scope", "key", "storage"],
+      "required": [
+        "type",
+        "scope",
+        "key",
+        "storage"
+      ],
       "properties": {
-        "type": { "const": "persistState" },
-        "scope": { "enum": ["page", "app"] },
-        "key": { "type": "string" },
-        "storage": { "enum": ["local", "session"] }
+        "type": {
+          "const": "persistState"
+        },
+        "scope": {
+          "enum": [
+            "page",
+            "app"
+          ]
+        },
+        "key": {
+          "type": "string"
+        },
+        "storage": {
+          "enum": [
+            "local",
+            "session"
+          ]
+        }
       }
     },
     "ServerActionRef": {
       "type": "object",
-      "required": ["type", "id"],
+      "required": [
+        "type",
+        "id"
+      ],
       "properties": {
-        "type": { "const": "serverAction" },
-        "id": { "type": "string" },
-        "params": { "type": "object", "additionalProperties": { "$ref": "value.json#" } }
+        "type": {
+          "const": "serverAction"
+        },
+        "id": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "value.json#"
+          }
+        }
       }
     },
     "ShowSnackbarAction": {
       "type": "object",
-      "required": ["type", "message"],
+      "required": [
+        "type",
+        "message"
+      ],
       "properties": {
-        "type": { "const": "showSnackbar" },
-        "message": { "$ref": "#/definitions/ValueOrString" },
-        "duration": { "type": "number" },
-        "action": { "type": "string" }
+        "type": {
+          "const": "showSnackbar"
+        },
+        "message": {
+          "$ref": "#/definitions/ValueOrString"
+        },
+        "duration": {
+          "type": "number"
+        },
+        "action": {
+          "type": "string"
+        }
       }
     },
     "ShowToastAction": {
       "type": "object",
-      "required": ["type", "message"],
+      "required": [
+        "type",
+        "message"
+      ],
       "properties": {
-        "type": { "const": "showToast" },
-        "message": { "$ref": "#/definitions/ValueOrString" }
+        "type": {
+          "const": "showToast"
+        },
+        "message": {
+          "$ref": "#/definitions/ValueOrString"
+        }
       }
     },
     "UpdateComponentAction": {
       "type": "object",
-      "required": ["type", "id", "props"],
+      "required": [
+        "type",
+        "id",
+        "props"
+      ],
       "properties": {
-        "type": { "const": "updateComponent" },
-        "id": { "type": "string" },
-        "props": { "type": "object" }
+        "type": {
+          "const": "updateComponent"
+        },
+        "id": {
+          "type": "string"
+        },
+        "props": {
+          "type": "object"
+        }
       }
     },
     "DeleteComponentAction": {
       "type": "object",
-      "required": ["type", "id"],
+      "required": [
+        "type",
+        "id"
+      ],
       "properties": {
-        "type": { "const": "deleteComponent" },
-        "id": { "type": "string" }
+        "type": {
+          "const": "deleteComponent"
+        },
+        "id": {
+          "type": "string"
+        }
       }
     },
     "AddComponentAction": {
       "type": "object",
-      "required": ["type", "parentId", "node"],
+      "required": [
+        "type",
+        "parentId",
+        "node"
+      ],
       "properties": {
-        "type": { "const": "addComponent" },
-        "parentId": { "type": "string" },
+        "type": {
+          "const": "addComponent"
+        },
+        "parentId": {
+          "type": "string"
+        },
         "node": {},
-        "position": { "type": "number" }
+        "position": {
+          "type": "number"
+        }
       }
     },
     "CopyToClipboardAction": {
       "type": "object",
-      "required": ["type", "text"],
+      "required": [
+        "type",
+        "text"
+      ],
       "properties": {
-        "type": { "const": "copyToClipboard" },
-        "text": { "$ref": "#/definitions/ValueOrString" }
+        "type": {
+          "const": "copyToClipboard"
+        },
+        "text": {
+          "$ref": "#/definitions/ValueOrString"
+        }
       }
     },
     "ShareAction": {
       "type": "object",
-      "required": ["type", "title", "message"],
+      "required": [
+        "type",
+        "title",
+        "message"
+      ],
       "properties": {
-        "type": { "const": "share" },
-        "title": { "type": "string" },
-        "message": { "$ref": "#/definitions/ValueOrString" },
-        "url": { "type": "string" }
+        "type": {
+          "const": "share"
+        },
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "$ref": "#/definitions/ValueOrString"
+        },
+        "url": {
+          "type": "string"
+        }
       }
     },
     "OpenUrlAction": {
       "type": "object",
-      "required": ["type", "url"],
+      "required": [
+        "type",
+        "url"
+      ],
       "properties": {
-        "type": { "const": "openUrl" },
-        "url": { "$ref": "#/definitions/ValueOrString" }
+        "type": {
+          "const": "openUrl"
+        },
+        "url": {
+          "$ref": "#/definitions/ValueOrString"
+        }
       }
     },
     "ActionGroup": {
       "type": "object",
-      "required": ["type", "mode", "actions"],
+      "required": [
+        "type",
+        "mode",
+        "actions"
+      ],
       "properties": {
-        "type": { "const": "actionGroup" },
-        "mode": { "enum": ["sequential", "parallel"] },
-        "actions": { "type": "array", "items": { "$ref": "#/definitions/Action" } }
+        "type": {
+          "const": "actionGroup"
+        },
+        "mode": {
+          "enum": [
+            "sequential",
+            "parallel"
+          ]
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Action"
+          }
+        }
       }
     },
     "ConditionalAction": {
       "type": "object",
-      "required": ["type", "branches"],
+      "required": [
+        "type",
+        "branches"
+      ],
       "properties": {
-        "type": { "const": "conditionalAction" },
+        "type": {
+          "const": "conditionalAction"
+        },
         "branches": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["when", "then"],
+            "required": [
+              "when",
+              "then"
+            ],
             "properties": {
-              "when": { "$ref": "value.json#/definitions/BoolExpr" },
-              "then": { "$ref": "#/definitions/Action" }
+              "when": {
+                "$ref": "value.json#/definitions/BoolExpr"
+              },
+              "then": {
+                "$ref": "#/definitions/Action"
+              }
             }
           }
         },
-        "else": { "$ref": "#/definitions/Action" }
+        "else": {
+          "$ref": "#/definitions/Action"
+        }
       }
     },
     "AnimateForwardAction": {
       "type": "object",
-      "required": ["type", "animationId"],
+      "required": [
+        "type",
+        "animationId"
+      ],
       "properties": {
-        "type": { "const": "animateForward" },
-        "animationId": { "type": "string" }
+        "type": {
+          "const": "animateForward"
+        },
+        "animationId": {
+          "type": "string"
+        }
       }
     },
     "AnimateReverseAction": {
       "type": "object",
-      "required": ["type", "animationId"],
+      "required": [
+        "type",
+        "animationId"
+      ],
       "properties": {
-        "type": { "const": "animateReverse" },
-        "animationId": { "type": "string" }
+        "type": {
+          "const": "animateReverse"
+        },
+        "animationId": {
+          "type": "string"
+        }
       }
     },
     "LifecycleAction": {
       "type": "object",
-      "required": ["type", "action"],
+      "required": [
+        "type",
+        "action"
+      ],
       "properties": {
-        "type": { "const": "lifecycle" },
-        "action": { "$ref": "#/definitions/Action" },
-        "onLoading": { "$ref": "#/definitions/ActionOrList" },
-        "onSuccess": { "$ref": "#/definitions/ActionOrList" },
-        "onError": { "$ref": "#/definitions/ActionOrList" },
-        "onComplete": { "$ref": "#/definitions/ActionOrList" }
+        "type": {
+          "const": "lifecycle"
+        },
+        "action": {
+          "$ref": "#/definitions/Action"
+        },
+        "onLoading": {
+          "$ref": "#/definitions/ActionOrList"
+        },
+        "onSuccess": {
+          "$ref": "#/definitions/ActionOrList"
+        },
+        "onError": {
+          "$ref": "#/definitions/ActionOrList"
+        },
+        "onComplete": {
+          "$ref": "#/definitions/ActionOrList"
+        }
       }
     },
     "ActionOrList": {
       "oneOf": [
-        { "$ref": "#/definitions/Action" },
-        { "type": "array", "items": { "$ref": "#/definitions/Action" } }
+        {
+          "$ref": "#/definitions/Action"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Action"
+          }
+        }
       ]
     },
     "UpdateSubPageAction": {
       "type": "object",
-      "required": ["type", "subPageId", "pageId", "mode"],
+      "required": [
+        "type",
+        "subPageId",
+        "pageId",
+        "mode"
+      ],
       "properties": {
-        "type": { "const": "updateSubPage" },
-        "subPageId": { "$ref": "#/definitions/ValueOrString" },
-        "pageId": { "$ref": "#/definitions/ValueOrString" },
-        "params": { "type": "object", "additionalProperties": { "$ref": "value.json#" } },
+        "type": {
+          "const": "updateSubPage"
+        },
+        "subPageId": {
+          "$ref": "#/definitions/ValueOrString"
+        },
+        "pageId": {
+          "$ref": "#/definitions/ValueOrString"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "value.json#"
+          }
+        },
         "mode": {
           "oneOf": [
-            { "enum": ["replace", "join"] },
-            { "$ref": "value.json#" }
+            {
+              "enum": [
+                "replace",
+                "join"
+              ]
+            },
+            {
+              "$ref": "value.json#"
+            }
           ]
+        }
+      }
+    },
+    "CloseDialogAction": {
+      "type": "object",
+      "description": "Close the top-most dialog opened by openDialog. Never pops a page route.",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "closeDialog"
+        }
+      }
+    },
+    "RefetchPageAction": {
+      "type": "object",
+      "description": "Re-request the current page from the server and re-render it.",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "refetchPage"
+        }
+      }
+    },
+    "DebugLogAction": {
+      "type": "object",
+      "description": "Client-side diagnostic log entry. Never reaches the server; every field is optional.",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "debugLog"
+        },
+        "level": {
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ]
+        },
+        "message": {
+          "$ref": "#/definitions/ValueOrString"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "data": {},
+        "includeState": {
+          "type": "boolean"
+        },
+        "includeEvent": {
+          "type": "boolean"
+        },
+        "includeRequest": {
+          "type": "boolean"
+        },
+        "includeStackTrace": {
+          "type": "boolean"
+        }
+      }
+    },
+    "OnceAction": {
+      "type": "object",
+      "description": "Fire the wrapped action at most once per (widget, trigger). Without a widget source it fires every time.",
+      "required": [
+        "type",
+        "action"
+      ],
+      "properties": {
+        "type": {
+          "const": "once"
+        },
+        "action": {
+          "$ref": "#/definitions/Action"
+        }
+      }
+    },
+    "AlwaysAction": {
+      "type": "object",
+      "description": "Fire the wrapped action on every trigger. Pairs with once for authoring clarity.",
+      "required": [
+        "type",
+        "action"
+      ],
+      "properties": {
+        "type": {
+          "const": "always"
+        },
+        "action": {
+          "$ref": "#/definitions/Action"
         }
       }
     },
     "CustomAction": {
       "type": "object",
       "description": "Plugin-defined action. `type` is the plugin action name; other fields are plugin-specific.",
-      "required": ["type"],
-      "properties": { "type": { "type": "string" } },
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
       "additionalProperties": true
     }
   }

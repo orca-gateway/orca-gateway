@@ -1,0 +1,93 @@
+{
+  "name": "actionGroup-sequential",
+  "description": "Sequential group: each action sees the state the previous one wrote; effects keep order.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 1
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "actionGroup",
+      "mode": "sequential",
+      "actions": [
+        {
+          "type": "setState",
+          "key": "count",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "count"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "setState",
+          "key": "count",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "count"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "showToast",
+          "message": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "count"
+            },
+            "by": [
+              {
+                "type": "template",
+                "template": "count is {{value}}"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 3
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "showToast",
+        "message": "count is 3",
+        "duration": 2000
+      }
+    ]
+  }
+}

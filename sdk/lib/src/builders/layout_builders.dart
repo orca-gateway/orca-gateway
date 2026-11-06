@@ -183,8 +183,8 @@ Widget _buildScrollView(OrcaComponentContext ctx) {
   // default (false) we leave the widget untouched.
   final wrapped = shrinkWrap
       ? (ctx.prop<String>('scrollDirection') == 'horizontal'
-          ? IntrinsicWidth(child: scrollView)
-          : IntrinsicHeight(child: scrollView))
+            ? IntrinsicWidth(child: scrollView)
+            : IntrinsicHeight(child: scrollView))
       : scrollView;
 
   return wrapScrollNotifier(ctx, wrapped);
@@ -664,6 +664,8 @@ Widget _buildReorderableListView(OrcaComponentContext ctx) {
     ReorderableListView(
       scrollDirection: scrollDirection,
       padding: padding,
+      // onReorderItem only exists on Flutter >= 3.41; the SDK supports >= 3.24.
+      // ignore: deprecated_member_use
       onReorder: (oldIndex, newIndex) {
         ctx.fireAction(
           'onReorder',

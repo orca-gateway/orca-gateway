@@ -10,16 +10,39 @@
         "type": "Text",
         "key": "lbl",
         "props": {
-          "data": { "type": "state", "scope": "page", "key": "theme.color" },
+          "data": {
+            "type": "state",
+            "scope": "page",
+            "key": "theme.color"
+          },
           "style": {
-            "background": { "type": "state", "scope": "page", "key": "count" },
-            "shadow": { "type": "state", "scope": "page", "key": "theme.color" }
+            "background": {
+              "type": "state",
+              "scope": "page",
+              "key": "count"
+            },
+            "shadow": {
+              "type": "state",
+              "scope": "page",
+              "key": "theme.color"
+            }
           }
         }
       }
     ]
   },
-  "context": { "pageState": { "theme": { "color": "red" }, "count": 2 }, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "context": {
+    "pageState": {
+      "theme": {
+        "color": "red"
+      },
+      "count": 2
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
   "expected": [
     {
       "id": "col",
@@ -27,7 +50,9 @@
       "kind": "layout",
       "childMode": "multi",
       "props": {},
-      "children": ["lbl"],
+      "children": [
+        "lbl"
+      ],
       "watches": []
     },
     {
@@ -36,14 +61,38 @@
       "kind": "primitive",
       "childMode": "none",
       "props": {
-        "data": { "type": "state", "scope": "page", "key": "theme.color" },
+        "data": {
+          "type": "state",
+          "scope": "page",
+          "key": "theme.color"
+        },
         "style": {
-          "background": { "type": "state", "scope": "page", "key": "count" },
-          "shadow": { "type": "state", "scope": "page", "key": "theme.color" }
+          "background": {
+            "type": "state",
+            "scope": "page",
+            "key": "count"
+          },
+          "shadow": {
+            "type": "state",
+            "scope": "page",
+            "key": "theme.color"
+          }
         }
       },
       "children": [],
-      "watches": ["count", "theme.color"]
+      "watches": [
+        "count",
+        "theme.color"
+      ]
     }
-  ]
+  ],
+  "resolved": {
+    "lbl": {
+      "data": "red",
+      "style": {
+        "background": 2,
+        "shadow": "red"
+      }
+    }
+  }
 }

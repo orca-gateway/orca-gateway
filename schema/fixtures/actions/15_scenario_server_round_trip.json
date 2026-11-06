@@ -1,0 +1,76 @@
+{
+  "name": "scenario-server-round-trip",
+  "description": "serverAction request, response actions applied to state, then a failing call surfaces its message as a snackbar.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "total": 0
+    },
+    "app": {}
+  },
+  "serverResponses": {
+    "checkout": {
+      "actions": [
+        {
+          "type": "setState",
+          "key": "total",
+          "value": 42
+        },
+        {
+          "type": "showToast",
+          "message": "Order placed"
+        }
+      ]
+    },
+    "refund": {
+      "error": "Refund window closed"
+    }
+  },
+  "actions": [
+    {
+      "type": "serverAction",
+      "id": "checkout",
+      "params": {
+        "coupon": {
+          "type": "static",
+          "value": "SAVE10"
+        }
+      }
+    },
+    {
+      "type": "serverAction",
+      "id": "refund"
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "total": 42
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "serverAction",
+        "id": "checkout",
+        "params": {
+          "coupon": "SAVE10"
+        }
+      },
+      {
+        "type": "showToast",
+        "message": "Order placed",
+        "duration": 2000
+      },
+      {
+        "type": "serverAction",
+        "id": "refund"
+      },
+      {
+        "type": "showSnackbar",
+        "message": "Refund window closed",
+        "duration": 4000
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "share-with-subject",
+  "description": "share emits text and subject (title maps to subject).",
+  "pageId": "home",
+  "state": {
+    "page": {},
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "share",
+      "title": "Orca",
+      "message": "Try Orca Gateway"
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {},
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "share",
+        "text": "Try Orca Gateway",
+        "subject": "Orca"
+      }
+    ]
+  }
+}

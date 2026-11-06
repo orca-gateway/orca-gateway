@@ -16,6 +16,8 @@ export interface CheckboxProps {
 
 export class Checkbox extends InputWidget {
   readonly type = "Checkbox";
+  /** No native iOS counterpart (Epic 23b); SwiftUI degrades it via the caps vector. */
+  static readonly targets = ["flutter", "web", "android"] as const;
   static readonly triggers = ["onChange"] as const;
   private props: Omit<CheckboxProps, "actions">;
 

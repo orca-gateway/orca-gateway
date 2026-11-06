@@ -1,0 +1,29 @@
+{
+  "name": "showToast-duration",
+  "description": "showToast honours an explicit duration.",
+  "pageId": "home",
+  "state": {
+    "page": {},
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "showToast",
+      "message": "Saved",
+      "duration": 1500
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {},
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "showToast",
+        "message": "Saved",
+        "duration": 1500
+      }
+    ]
+  }
+}

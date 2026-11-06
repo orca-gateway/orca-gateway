@@ -1,0 +1,25 @@
+{
+  "name": "goBack",
+  "description": "goBack emits a bare effect.",
+  "pageId": "home",
+  "state": {
+    "page": {},
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "goBack"
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {},
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "goBack"
+      }
+    ]
+  }
+}

@@ -5,19 +5,44 @@
     "type": "Text",
     "key": "t",
     "props": {
-      "data": { "type": "state", "scope": "page", "key": "counter" }
+      "data": {
+        "type": "state",
+        "scope": "page",
+        "key": "counter"
+      }
     }
   },
-  "context": { "pageState": { "counter": 0 }, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "context": {
+    "pageState": {
+      "counter": 0
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
   "expected": [
     {
       "id": "t",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
-      "props": { "data": { "type": "state", "scope": "page", "key": "counter" } },
+      "props": {
+        "data": {
+          "type": "state",
+          "scope": "page",
+          "key": "counter"
+        }
+      },
       "children": [],
-      "watches": ["counter"]
+      "watches": [
+        "counter"
+      ]
     }
-  ]
+  ],
+  "resolved": {
+    "t": {
+      "data": 0
+    }
+  }
 }

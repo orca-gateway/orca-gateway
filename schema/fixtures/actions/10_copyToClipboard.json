@@ -1,0 +1,35 @@
+{
+  "name": "copyToClipboard",
+  "description": "copyToClipboard emits the resolved text.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "code": "ORCA-2026"
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "copyToClipboard",
+      "text": {
+        "type": "state",
+        "scope": "page",
+        "key": "code"
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "code": "ORCA-2026"
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "copyToClipboard",
+        "text": "ORCA-2026"
+      }
+    ]
+  }
+}

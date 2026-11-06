@@ -1,0 +1,92 @@
+{
+  "name": "scenario-conditional-both-branches",
+  "description": "The same conditionalAction takes the then-branch, then the else-branch after a state flip.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "mode": "dark"
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "conditionalAction",
+      "branches": [
+        {
+          "when": {
+            "op": "eq",
+            "left": {
+              "type": "state",
+              "scope": "page",
+              "key": "mode"
+            },
+            "right": {
+              "type": "static",
+              "value": "dark"
+            }
+          },
+          "then": {
+            "type": "showToast",
+            "message": "dark on"
+          }
+        }
+      ],
+      "else": {
+        "type": "showToast",
+        "message": "light on"
+      }
+    },
+    {
+      "type": "setState",
+      "key": "mode",
+      "value": "light"
+    },
+    {
+      "type": "conditionalAction",
+      "branches": [
+        {
+          "when": {
+            "op": "eq",
+            "left": {
+              "type": "state",
+              "scope": "page",
+              "key": "mode"
+            },
+            "right": {
+              "type": "static",
+              "value": "dark"
+            }
+          },
+          "then": {
+            "type": "showToast",
+            "message": "dark on"
+          }
+        }
+      ],
+      "else": {
+        "type": "showToast",
+        "message": "light on"
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "mode": "light"
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "showToast",
+        "message": "dark on",
+        "duration": 2000
+      },
+      {
+        "type": "showToast",
+        "message": "light on",
+        "duration": 2000
+      }
+    ]
+  }
+}

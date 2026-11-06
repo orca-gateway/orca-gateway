@@ -1,0 +1,88 @@
+{
+  "name": "scenario-counter",
+  "description": "The counter example: plus, plus, then Reset = Sequential(setState 0, showSnackbar).",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 0
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "setState",
+      "key": "count",
+      "value": {
+        "type": "transform",
+        "input": {
+          "type": "state",
+          "scope": "page",
+          "key": "count"
+        },
+        "by": [
+          {
+            "type": "add",
+            "by": {
+              "type": "static",
+              "value": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "setState",
+      "key": "count",
+      "value": {
+        "type": "transform",
+        "input": {
+          "type": "state",
+          "scope": "page",
+          "key": "count"
+        },
+        "by": [
+          {
+            "type": "add",
+            "by": {
+              "type": "static",
+              "value": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "actionGroup",
+      "mode": "sequential",
+      "actions": [
+        {
+          "type": "setState",
+          "key": "count",
+          "value": {
+            "type": "static",
+            "value": 0
+          }
+        },
+        {
+          "type": "showSnackbar",
+          "message": "Counter reset to 0"
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 0
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "showSnackbar",
+        "message": "Counter reset to 0",
+        "duration": 4000
+      }
+    ]
+  }
+}

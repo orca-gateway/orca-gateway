@@ -71,16 +71,32 @@ class ValueResolver {
   dynamic _resolveState(Map<String, dynamic> map) {
     final key = map['key'] as String?;
     if (key == null) return null;
-    final value = state[key];
-    _activeTrace?.add(TransformTrace(operation: 'state', input: key, output: value, definition: map));
+    final value = _lookupState(key);
+    _activeTrace?.add(
+      TransformTrace(
+        operation: 'state',
+        input: key,
+        output: value,
+        definition: map,
+      ),
+    );
     return value;
   }
+
+  dynamic _lookupState(String key) => lookupStatePath(state, key);
 
   dynamic _resolveEvent(Map<String, dynamic> map) {
     final key = map['key'] as String?;
     if (key == null || eventData == null) return null;
     final value = eventData![key];
-    _activeTrace?.add(TransformTrace(operation: 'event', input: key, output: value, definition: map));
+    _activeTrace?.add(
+      TransformTrace(
+        operation: 'event',
+        input: key,
+        output: value,
+        definition: map,
+      ),
+    );
     return value;
   }
 
@@ -120,12 +136,14 @@ class ValueResolver {
         return _compareNum(expr['left'], expr['right']) <= 0;
       case 'and':
         final andExprs = expr['exprs'] as List? ?? [];
-        return andExprs.every((e) =>
-            e is Map<String, dynamic> && evaluateBoolExpr(e));
+        return andExprs.every(
+          (e) => e is Map<String, dynamic> && evaluateBoolExpr(e),
+        );
       case 'or':
         final orExprs = expr['exprs'] as List? ?? [];
-        return orExprs.any((e) =>
-            e is Map<String, dynamic> && evaluateBoolExpr(e));
+        return orExprs.any(
+          (e) => e is Map<String, dynamic> && evaluateBoolExpr(e),
+        );
       case 'not':
         final inner = expr['expr'] as Map<String, dynamic>?;
         return inner != null ? !evaluateBoolExpr(inner) : true;
@@ -139,12 +157,14 @@ class ValueResolver {
         if (haystack is List) return haystack.contains(needle);
         return false;
       case 'startsWith':
-        return '${ resolve(expr['str']) }'.startsWith('${ resolve(expr['prefix']) }');
+        return '${resolve(expr['str'])}'.startsWith(
+          '${resolve(expr['prefix'])}',
+        );
       case 'matches':
         final regex = expr['regex'] as String? ?? '';
         if (regex.length > _maxRegexPatternLength) return false;
         try {
-          final input = '${ resolve(expr['str']) }';
+          final input = '${resolve(expr['str'])}';
           final safeInput = input.length > _maxRegexInputLength
               ? input.substring(0, _maxRegexInputLength)
               : input;
@@ -170,7 +190,14 @@ class ValueResolver {
     final pipeline = map['by'] as List?;
     if (pipeline == null) return current;
 
-    _activeTrace?.add(TransformTrace(operation: 'input', input: null, output: current, definition: map['input']));
+    _activeTrace?.add(
+      TransformTrace(
+        operation: 'input',
+        input: null,
+        output: current,
+        definition: map['input'],
+      ),
+    );
 
     for (final step in pipeline) {
       if (step is! Map) continue;
@@ -182,7 +209,14 @@ class ValueResolver {
       if (op == null) continue;
       final prev = current;
       current = op(stepMap, current, this);
-      _activeTrace?.add(TransformTrace(operation: opType, input: prev, output: current, definition: stepMap));
+      _activeTrace?.add(
+        TransformTrace(
+          operation: opType,
+          input: prev,
+          output: current,
+          definition: stepMap,
+        ),
+      );
     }
 
     return current;
@@ -207,8 +241,10 @@ class ValueResolver {
       return begin + (end - begin) * t;
     }
 
-    if (begin is String && end is String &&
-        begin.startsWith('#') && end.startsWith('#')) {
+    if (begin is String &&
+        end is String &&
+        begin.startsWith('#') &&
+        end.startsWith('#')) {
       return _lerpColor(begin, end, t);
     }
 
@@ -248,8 +284,10 @@ class ValueResolver {
         if (prevValue is num && value is num) {
           return prevValue + (value - prevValue) * segmentProgress;
         }
-        if (prevValue is String && value is String &&
-            prevValue.startsWith('#') && value.startsWith('#')) {
+        if (prevValue is String &&
+            value is String &&
+            prevValue.startsWith('#') &&
+            value.startsWith('#')) {
           return _lerpColor(prevValue, value, segmentProgress);
         }
         return segmentProgress < 0.5 ? prevValue : value;
@@ -275,9 +313,9 @@ class ValueResolver {
     final b = parseHex(hexB);
 
     final alpha = lerpChannel((a >> 24) & 0xFF, (b >> 24) & 0xFF, t);
-    final red   = lerpChannel((a >> 16) & 0xFF, (b >> 16) & 0xFF, t);
-    final green = lerpChannel((a >> 8)  & 0xFF, (b >> 8)  & 0xFF, t);
-    final blue  = lerpChannel(a & 0xFF, b & 0xFF, t);
+    final red = lerpChannel((a >> 16) & 0xFF, (b >> 16) & 0xFF, t);
+    final green = lerpChannel((a >> 8) & 0xFF, (b >> 8) & 0xFF, t);
+    final blue = lerpChannel(a & 0xFF, b & 0xFF, t);
 
     final value = (alpha << 24) | (red << 16) | (green << 8) | blue;
     return '#${value.toRadixString(16).padLeft(8, '0').toUpperCase()}';
@@ -315,8 +353,15 @@ class ValueResolver {
 
   static bool _isValueType(String type) {
     return const {
-      'static', 'state', 'info', 'request', 'event', 'transform',
-      'conditional', 'tween', 'tweenSequence',
+      'static',
+      'state',
+      'info',
+      'request',
+      'event',
+      'transform',
+      'conditional',
+      'tween',
+      'tweenSequence',
     }.contains(type);
   }
 
@@ -350,7 +395,12 @@ class TransformTrace {
   final dynamic output;
   final dynamic definition;
 
-  TransformTrace({required this.operation, this.input, this.output, this.definition});
+  TransformTrace({
+    required this.operation,
+    this.input,
+    this.output,
+    this.definition,
+  });
 
   Map<String, dynamic> toJson() => {
     'op': operation,
@@ -363,8 +413,12 @@ class TransformTrace {
 ///
 /// Receives the operation definition, the current pipeline value,
 /// and the [ValueResolver] (to resolve nested value expressions like `by`).
-typedef PipeTransform = dynamic Function(
-    Map<String, dynamic> definition, dynamic current, ValueResolver resolver);
+typedef PipeTransform =
+    dynamic Function(
+      Map<String, dynamic> definition,
+      dynamic current,
+      ValueResolver resolver,
+    );
 
 /// Registry of pluggable pipeline transform operations.
 class PipeTransformRegistry {
@@ -467,6 +521,7 @@ class PipeTransformRegistry {
           );
           return _expandPlaceholders(backreffed, matched, params, resolver);
         }
+
         if (global) return safeInput.replaceAllMapped(re, expand);
         return safeInput.replaceFirstMapped(re, expand);
       } catch (_) {
@@ -477,7 +532,9 @@ class PipeTransformRegistry {
       final s = '$current';
       final start = (def['start'] as num?)?.toInt() ?? 0;
       final length = (def['length'] as num?)?.toInt();
-      return length != null ? s.substring(start, start + length) : s.substring(start);
+      return length != null
+          ? s.substring(start, start + length)
+          : s.substring(start);
     });
     register('split', (def, current, _) {
       final separator = def['separator'] as String? ?? '';
@@ -492,7 +549,10 @@ class PipeTransformRegistry {
     // Boolean transforms
     register('not', (_, current, _) => !(current == true));
     register('toBool', (_, current, _) {
-      if (current == null || current == false || current == 0 || current == '') {
+      if (current == null ||
+          current == false ||
+          current == 0 ||
+          current == '') {
         return false;
       }
       return true;
@@ -571,8 +631,9 @@ class PipeTransformRegistry {
 /// `regex` (replace-mode) transforms. Identifier-only, no dot paths, byte-
 /// for-byte with the TS + engine-dart implementations so all three resolve
 /// the same template string to the same output.
-final RegExp _placeholderRe =
-    RegExp(r'\{\{\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\}\}');
+final RegExp _placeholderRe = RegExp(
+  r'\{\{\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\}\}',
+);
 
 /// Expand `{{value}}` (the previous pipeline output) and `{{<name>}}`
 /// (resolved from [params]) placeholders in [template]. Unknown names render
@@ -592,4 +653,30 @@ String _expandPlaceholders(
     }
     return '';
   });
+}
+
+/// Read [key] from a flat state map, walking a dotted path (`theme.color`,
+/// `items.0.name`) through nested maps and lists when the flat key is absent.
+/// Matches the engine's `getByDotPath` in `engine/src/core/value-resolver.ts`;
+/// pinned by render fixture `06_nested_state`, which the client failed before
+/// this existed. Shared by [ValueResolver] and the watch snapshot so a widget
+/// watching `theme.color` both resolves and rebuilds.
+dynamic lookupStatePath(Map<String, dynamic> state, String key) {
+  if (state.containsKey(key)) return state[key];
+  if (!key.contains('.')) return null;
+  dynamic current = state;
+  for (final segment in key.split('.')) {
+    if (current is Map) {
+      current = current[segment];
+    } else if (current is List) {
+      final index = int.tryParse(segment);
+      current = (index != null && index >= 0 && index < current.length)
+          ? current[index]
+          : null;
+    } else {
+      return null;
+    }
+    if (current == null) return null;
+  }
+  return current;
 }

@@ -7,14 +7,34 @@
     "props": {
       "data": {
         "type": "transform",
-        "input": { "type": "info", "key": "base" },
+        "input": {
+          "type": "info",
+          "key": "base"
+        },
         "by": [
-          { "type": "add", "by": { "type": "state", "scope": "page", "key": "delta" } }
+          {
+            "type": "add",
+            "by": {
+              "type": "state",
+              "scope": "page",
+              "key": "delta"
+            }
+          }
         ]
       }
     }
   },
-  "context": { "pageState": { "delta": 7 }, "appState": {}, "infoData": { "base": 100 }, "requestInfo": {}, "config": {} },
+  "context": {
+    "pageState": {
+      "delta": 7
+    },
+    "appState": {},
+    "infoData": {
+      "base": 100
+    },
+    "requestInfo": {},
+    "config": {}
+  },
   "expected": [
     {
       "id": "t",
@@ -24,14 +44,31 @@
       "props": {
         "data": {
           "type": "transform",
-          "input": { "type": "static", "value": 100 },
+          "input": {
+            "type": "static",
+            "value": 100
+          },
           "by": [
-            { "type": "add", "by": { "type": "state", "scope": "page", "key": "delta" } }
+            {
+              "type": "add",
+              "by": {
+                "type": "state",
+                "scope": "page",
+                "key": "delta"
+              }
+            }
           ]
         }
       },
       "children": [],
-      "watches": ["delta"]
+      "watches": [
+        "delta"
+      ]
     }
-  ]
+  ],
+  "resolved": {
+    "t": {
+      "data": 107
+    }
+  }
 }

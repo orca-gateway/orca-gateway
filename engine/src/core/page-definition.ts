@@ -1,3 +1,4 @@
+import type { Platform } from "../types/platform";
 import type { Widget } from "../types/widget";
 import type { StateDefinition } from "../types/state";
 import type { PageContext } from "../types/context";
@@ -16,6 +17,8 @@ export interface PageDefinitionConfig {
   getInfoData?: (ctx: PageContext) => Promise<unknown> | unknown;
   render: (ctx: PageContext, infoData: unknown) => Widget;
   postRender?: (ctx: PageContext, response: PageResponse) => void;
+  /** Platforms this page targets; see `Page.targets`. */
+  targets?: readonly Platform[];
 }
 
 export class PageDefinition {
@@ -29,6 +32,7 @@ class InlinePage extends Page {
   readonly title: string;
   readonly cachePolicy: CachePolicy;
   readonly cacheTtl: number;
+  override readonly targets?: readonly Platform[];
   private config: PageDefinitionConfig;
 
   constructor(config: PageDefinitionConfig) {
@@ -37,6 +41,7 @@ class InlinePage extends Page {
     this.title = config.title;
     this.cachePolicy = config.cachePolicy ?? "none";
     this.cacheTtl = config.cacheTtl ?? 60;
+    this.targets = config.targets;
     this.config = config;
   }
 

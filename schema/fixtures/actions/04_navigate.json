@@ -1,0 +1,42 @@
+{
+  "name": "navigate-with-params",
+  "description": "navigate emits the resolved route and params; state is untouched.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "selectedUser": "u-42"
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "navigate",
+      "route": "/profile",
+      "params": {
+        "userId": {
+          "type": "state",
+          "scope": "page",
+          "key": "selectedUser"
+        }
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "selectedUser": "u-42"
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "navigate",
+        "route": "/profile",
+        "replace": false,
+        "params": {
+          "userId": "u-42"
+        }
+      }
+    ]
+  }
+}

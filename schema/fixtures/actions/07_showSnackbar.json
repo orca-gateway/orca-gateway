@@ -1,0 +1,45 @@
+{
+  "name": "showSnackbar-template",
+  "description": "showSnackbar resolves a template message and carries the default duration.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "name": "Amr"
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "showSnackbar",
+      "message": {
+        "type": "transform",
+        "input": {
+          "type": "state",
+          "scope": "page",
+          "key": "name"
+        },
+        "by": [
+          {
+            "type": "template",
+            "template": "Hello, {{value}}"
+          }
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "name": "Amr"
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "showSnackbar",
+        "message": "Hello, Amr",
+        "duration": 4000
+      }
+    ]
+  }
+}

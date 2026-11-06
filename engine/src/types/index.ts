@@ -138,3 +138,6 @@ export {
 
 // Icons
 export { type MaterialIcons } from "./icons";
+
+// Client platforms (Epic 23b)
+export { type Platform, ALL_PLATFORMS } from "./platform";

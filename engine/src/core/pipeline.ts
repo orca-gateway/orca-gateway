@@ -10,6 +10,7 @@ import type { TimingCollector } from "./timing";
 import type { FallbackPolicyResolver } from "./fallback-policy";
 import { createStaticPolicyResolver } from "./fallback-policy";
 import { filterByCapabilities } from "./capability-filter";
+import { findOffTargetWidgets, warnOffTargetOnce } from "./target-check";
 
 /** Default resolver used when a caller (test or internal) doesn't pass one.
  *  Production code path in engine.ts always passes the engine's configured
@@ -163,6 +164,13 @@ async function runStages1to3(
   timing?.mark("flattenStart");
   const flatComponents = flatten(widgetTree, { ctx: context, info: infoData });
   timing?.mark("flattenEnd");
+
+  // Epic 23b: author feedback. A page that declares `targets` gets one
+  // warning per page (dev only) naming the widgets a declared platform
+  // cannot render; those clients degrade them via the capability vector.
+  if (page.targets && page.targets.length > 0 && process.env.NODE_ENV !== "production") {
+    warnOffTargetOnce(page.id, findOffTargetWidgets(flatComponents, page.targets));
+  }
 
   // Stage 3.5 (Epic 25b slice 2): capability-aware filtering. Inserted
   // between flatten() and prop resolution so the filter operates on the
