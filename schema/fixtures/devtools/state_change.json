@@ -1,0 +1,12 @@
+{
+  "type": "state_change",
+  "deviceId": "fixture-device",
+  "timestamp": 1793980800000,
+  "payload": {
+    "scope": "page",
+    "pageId": "home",
+    "key": "count",
+    "oldValue": 0,
+    "newValue": 1
+  }
+}

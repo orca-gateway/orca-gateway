@@ -3,49 +3,52 @@ import XCTest
 
 @testable import OrcaGatewayCore
 
-/// schema/fixtures/actions through the Swift reducer, as the Flutter runner
-/// (sdk/test/conformance/action_fixtures_test.dart) runs them through the Dart
-/// executor: seed state, run the actions, compare state and effects as JSON.
-///
-/// S2 runs every fixture whose actions the reducer fully implements; S3 widens
-/// the set to all fifteen.
+/// T3.1: schema/fixtures/actions through the Swift executor, as the Flutter
+/// runner (sdk/test/conformance/action_fixtures_test.dart) runs them through
+/// the Dart executor. Each run seeds the state, runs the actions, and compares
+/// the state and the effects as JSON. A fixture with `serverResponses` talks
+/// to a stub of the `/action` route, as the Dart runner's stub client does.
 final class ActionFixtureTests: XCTestCase {
-    /// The fixtures S2 promised (gate 08): setState, actionGroup, showSnackbar,
-    /// showToast and the counter scenario.
-    static let promised = [
-        "01_setState.json", "02_actionGroup.json", "07_showSnackbar.json",
-        "08_showToast.json", "13_scenario_counter.json",
-    ]
-
-    func testEveryFixtureTheReducerImplementsPasses() throws {
-        var ran: [String] = []
-        for (name, fx) in try Fixtures.files("actions") {
+    @MainActor func testAllFifteenActionFixturesPass() async throws {
+        let files = try Fixtures.files("actions")
+        XCTAssertEqual(files.count, 15)
+        for (name, fx) in files {
             let actions = try (fx["actions"].arrayValue ?? []).map { try $0.decode(Action.self) }
-            guard actions.allSatisfy(ActionReducer.implements) else { continue }
-            ran.append(name)
+            XCTAssertTrue(actions.allSatisfy(ActionExecutor.implements), "\(name): every kind implemented")
 
-            var state = try fx["state"].decode(StoreState.self)
-            var effects: [ActionEffect] = []
-            let event = fx["event"].objectValue
-            for action in actions {
-                let (next, more) = ActionReducer().reduce(state, action, eventData: event)
-                state = next
-                effects += more
+            let store = ElmStore(try fx["state"].decode(StoreState.self))
+            var client: OrcaClient?
+            if case .object(let responses) = fx["serverResponses"] {
+                client = ActionStub.client(ActionStub(responses))
             }
-            assertJSONEqual(try jsonOf(state), fx["expected"]["state"], "\(name): state")
+            let executor = ActionExecutor(store: store, client: client)
+            var effects: [ActionEffect] = []
+            executor.onEffect = { effects.append($0) }
+
+            for action in actions {
+                try await executor.execute(action, eventData: fx["event"].objectValue)
+            }
+            assertJSONEqual(try jsonOf(store.state), fx["expected"]["state"], "\(name): state")
             assertJSONEqual(.array(effects.map(\.json)), fx["expected"]["effects"], "\(name): effects")
-        }
-        for name in Self.promised {
-            XCTAssertTrue(ran.contains(name), "\(name) should run in S2")
         }
     }
 
-    func testUnimplementedKindsChangeNothing() throws {
+    @MainActor func testUnimplementedKindsChangeNothing() async throws {
         let state = StoreState(page: ["count": 1])
-        let (next, effects) = ActionReducer().reduce(state, .goBack)
+        let (next, effects) = ActionReducer().reduce(state, .openDrawer)
         XCTAssertEqual(next, state)
         XCTAssertEqual(effects, [])
-        XCTAssertFalse(ActionReducer.implements(.actionGroup(.init(actions: [.setState(.init(key: "a", value: 1)), .goBack]))))
+
+        let store = ElmStore(state)
+        let executor = ActionExecutor(store: store)
+        var seen: [ActionEffect] = []
+        executor.onEffect = { seen.append($0) }
+        try await executor.execute(.openDrawer)
+        try await executor.execute(.closeDialog)
+        XCTAssertEqual(store.state, state)
+        XCTAssertEqual(seen, [])
+        XCTAssertFalse(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .openDrawer]))))
+        XCTAssertTrue(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .setState(.init(key: "a", value: 1))]))))
     }
 
     func testSetStateWritesTheAppScopeAndReadsEventData() {

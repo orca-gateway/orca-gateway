@@ -107,10 +107,7 @@ enum Props {
 
     /// URL schemes a tap may open (Dart `OrcaUrlPolicy`: http, https, mailto).
     static func openableURL(_ value: JSONValue?) -> URL? {
-        guard let text = value?.stringValue, let url = URL(string: text),
-            let scheme = url.scheme?.lowercased(), ["http", "https", "mailto"].contains(scheme)
-        else { return nil }
-        return url
+        value?.stringValue.flatMap(OrcaURLPolicy.standard.url)
     }
 }
 

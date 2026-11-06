@@ -223,6 +223,15 @@ class DebugErrorEvent {
 
   DebugErrorEvent({required this.message, this.stackTrace, this.context});
 
+  /// The warning an SDK reports when it draws a FallbackPrompt for a widget
+  /// type it cannot display: once per type per session, with a "warn"
+  /// context so DevTools files it under warnings. Every SDK sends the same
+  /// text (schema/fixtures/devtools/error-fallback-prompt.json).
+  factory DebugErrorEvent.fallbackPrompt(String widgetType) => DebugErrorEvent(
+        message: 'Unsupported widget type "$widgetType"; drew a FallbackPrompt',
+        context: 'warn: FallbackPrompt',
+      );
+
   Map<String, dynamic> toJson() => {
         'message': message,
         if (stackTrace != null) 'stackTrace': stackTrace,

@@ -26,6 +26,28 @@ If port 8080 is taken, start the server on another one (`PORT=8097 bun run index
 variables in Xcode, or pass `SIMCTL_CHILD_ORCA_SERVER_URL=http://localhost:8097` to
 `xcrun simctl launch`.
 
+## Other example apps
+
+The same app draws any app on the example server. Enable `ORCA_APP_ID` and `ORCA_PATH` in the
+scheme, or pass them to `simctl launch`:
+
+| App | `ORCA_APP_ID` | `ORCA_PATH` | Shows |
+|---|---|---|---|
+| Counter (default) | `counter` | `home` | state, a snackbar |
+| Basic actions | `basic-actions` | `home` | navigation, back, URL, clipboard, share, toasts |
+| Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
+
+```bash
+SIMCTL_CHILD_ORCA_APP_ID=server-actions SIMCTL_CHILD_ORCA_PATH=shop xcrun simctl launch booted com.orcagateway.examples.counter
+```
+
+## DevTools
+
+Debug builds connect to Orca DevTools on `ws://localhost:6363` (start it with `task devtools:dev`)
+and show up as "Orca Counter": network requests, page timing, state changes, actions, rebuilds and
+errors. Set `ORCA_DEVTOOLS=0` to turn it off, or `ORCA_DEVTOOLS_HOST` to the Mac's address when the
+app runs on a device.
+
 ## What it shows
 
 `+` and `-` change the count; `Reset` sets it to 0 and shows a snackbar. The page, the state and the

@@ -57,8 +57,13 @@ final class ModelRoundTripTests: XCTestCase {
             let effects = try decodeModel([ActionEffect].self, from: fixture["expected"]["effects"])
             assertJSONEqual(.array(effects.map(\.json)), fixture["expected"]["effects"], name)
         }
-        // The 12 alpha kinds all appear in the fixtures.
-        XCTAssertTrue(kinds.isSuperset(of: GeneratedCapabilities.actionKinds), "\(kinds)")
+        // Every advertised kind appears in the fixtures, except the three
+        // component kinds: a fixture compares state and effects, not the node
+        // tree, so ComponentMutationTests pins them against Dart's
+        // ComponentStore instead.
+        let structural: Set<String> = ["addComponent", "updateComponent", "deleteComponent"]
+        XCTAssertTrue(kinds.isSuperset(of: Set(GeneratedCapabilities.actionKinds).subtracting(structural)),
+                      "\(kinds)")
     }
 
     func testEveryActionKindRoundTrips() throws {

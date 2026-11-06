@@ -1,0 +1,9 @@
+{
+  "type": "error",
+  "deviceId": "fixture-device",
+  "timestamp": 1793980800000,
+  "payload": {
+    "message": "Unsupported widget type \"Checkbox\"; drew a FallbackPrompt",
+    "context": "warn: FallbackPrompt"
+  }
+}

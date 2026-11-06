@@ -1,0 +1,15 @@
+{
+  "type": "network",
+  "deviceId": "fixture-device",
+  "timestamp": 1793980800000,
+  "payload": {
+    "method": "GET",
+    "url": "http://localhost:8080/api/v1/app/counter/page/home",
+    "statusCode": 200,
+    "durationMs": 12.5,
+    "responseSizeBytes": 2048,
+    "requestHeaders": { "accept": "application/json", "x-api-key": "<redacted>" },
+    "responseHeaders": { "content-type": "application/json" },
+    "phases": [{ "phase": "wait", "durationMs": 12.5 }]
+  }
+}

@@ -49,8 +49,10 @@ public enum GeneratedCapabilities {
 
     public static let actionKinds: [String] = [
         "actionGroup",
+        "addComponent",
         "conditionalAction",
         "copyToClipboard",
+        "deleteComponent",
         "goBack",
         "lifecycle",
         "navigate",
@@ -60,6 +62,7 @@ public enum GeneratedCapabilities {
         "share",
         "showSnackbar",
         "showToast",
+        "updateComponent",
     ]
 
     public static let transformKinds: [String] = [
@@ -113,5 +116,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "38cde8c4132b2f5dadc75048d646fa0f9f171a0811c9b6819eb0f8694f104c36"
+    public static let capsHash = "6a68c38066b85406753f674bb9b625f791554fec3c5279f33d212ab33b3eca91"
 }
