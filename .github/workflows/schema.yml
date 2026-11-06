@@ -11,6 +11,9 @@ on:
       - "sdk-swift/VERSION"
       - "sdk-swift/capabilities.json"
       - "sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift"
+      - "sdk-swift/Tests/Pages/**"
+      - "engine/src/core/**"
+      - "examples/server/**"
       - ".github/workflows/schema.yml"
   pull_request:
     paths:
@@ -22,6 +25,9 @@ on:
       - "sdk-swift/VERSION"
       - "sdk-swift/capabilities.json"
       - "sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift"
+      - "sdk-swift/Tests/Pages/**"
+      - "engine/src/core/**"
+      - "examples/server/**"
       - ".github/workflows/schema.yml"
 
 jobs:
@@ -62,5 +68,17 @@ jobs:
         run: |
           if ! git diff --exit-code -- sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift; then
             echo "::error::Swift capability vector is out of date. Run 'bun run schema/gen-native-capabilities.ts' and commit the result."
+            exit 1
+          fi
+
+      # The Swift tests load pages recorded from the example server through the
+      # Swift caps handshake; re-record and fail when the server's output moved.
+      - name: Re-record the Swift test pages
+        run: bun run examples/server/record-page.ts counter home sdk-swift/Tests/Pages/counter-home.json
+
+      - name: Check the Swift test pages for drift
+        run: |
+          if ! git diff --exit-code -- sdk-swift/Tests/Pages/; then
+            echo "::error::A recorded Swift test page is out of date. Run 'task sdk-swift:record' and commit the result."
             exit 1
           fi

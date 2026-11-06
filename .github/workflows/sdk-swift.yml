@@ -1,7 +1,8 @@
 name: SDK Swift CI
 
-# The pure-Swift core of the iOS SDK (OrcaGatewayCore) on Linux, per PR.
-# The SwiftUI layer needs macOS and runs in a separate nightly job (Epic 23b, S2).
+# The pure-Swift core of the iOS SDK (OrcaGatewayCore) on Linux, per PR: the
+# T1 and T2 core tests (client handshake, render tree, reducers, fixtures).
+# The SwiftUI layer needs macOS and runs in sdk-swift-ui.yml (Epic 23b, S2).
 on:
   push:
     paths:
@@ -34,6 +35,6 @@ jobs:
         run: swift build --build-tests
         working-directory: sdk-swift
 
-      - name: Test (T1 group; fixtures read from ../schema)
+      - name: Test (T1 and T2 core; fixtures from ../schema, pages from Tests/Pages)
         run: swift test --skip-build
         working-directory: sdk-swift
