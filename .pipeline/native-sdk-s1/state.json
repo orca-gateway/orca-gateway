@@ -4,9 +4,9 @@
   "idea": "Epic 23b slice S1: the pure-Swift core of the iOS SDK (tasks 23b.9-23b.14) — sdk-swift/ package skeleton, Codable models for ComponentNode/Value/Action/PageResponse, ValueResolver with all transforms and BoolExpr ops, ElmStore with scoped watches, native capabilities generator, Taskfile task and ubuntu Swift CI job",
   "kind": "feature",
   "created_at": "2026-11-06T08:50:30Z",
-  "updated_at": "2026-11-06T08:54:12Z",
+  "updated_at": "2026-11-06T09:22:05Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "09",
+  "current": "10",
   "stages": {
     "01": {
       "status": "skipped",
@@ -44,7 +44,11 @@
       "approved_with": "A approve"
     },
     "09": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/09-r1.md",
+      "approved_at": "2026-11-06T09:22:05Z",
+      "approved_with": "A approve"
     },
     "10": {
       "status": "pending"
