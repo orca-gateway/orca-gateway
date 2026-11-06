@@ -4,9 +4,9 @@
   "idea": "Epic 23b slice S4: FallbackPrompt, the three policies, 426 and the debug placeholder on iOS (23b.23), and six extra widgets: Icon, Image, Container, Expanded, Spacer, TextField (23b.24)",
   "kind": "feature",
   "created_at": "2026-11-06T17:41:18Z",
-  "updated_at": "2026-11-06T18:36:41Z",
+  "updated_at": "2026-11-06T19:16:57Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "09",
+  "current": "10",
   "stages": {
     "01": {
       "status": "skipped",
@@ -44,12 +44,16 @@
       "approved_with": "A approve"
     },
     "09": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/09-r1.md"
+      "card": "cards/09-r1.md",
+      "approved_at": "2026-11-06T19:14:07Z",
+      "approved_with": "A approve"
     },
     "10": {
-      "status": "pending"
+      "status": "in_review",
+      "rounds": 1,
+      "card": "cards/10-r1.md"
     },
     "11": {
       "status": "pending"
