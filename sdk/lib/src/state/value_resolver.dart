@@ -614,6 +614,44 @@ class PipeTransformRegistry {
       if (decimals != null) return value.toStringAsFixed(decimals);
       return '$value';
     });
+    // The capability vector has always advertised `formatDate` (it scrapes
+    // the transform kinds from engine/src/types/value.ts), but it was never
+    // registered here, so `TV.formatDate(...)` passed its input through
+    // untouched. Follows the Dart engine's `_formatDateString`, and the Swift
+    // SDK's `formatDate`, so both clients render the same string.
+    register('formatDate', (def, current, _) {
+      final date = _toDateTime(current);
+      if (date == null) return current;
+      return _formatDateString(date, def['format'] as String? ?? '');
+    });
+  }
+
+  /// Read [value] as a date: an ISO-8601 string through [DateTime.tryParse]
+  /// (the fields as written, converted to UTC when it carries an offset), a
+  /// number as epoch milliseconds in UTC. Anything else, including a number
+  /// outside the ±8.64e15 ms a JS Date can hold, gives null, so the input is
+  /// returned unchanged rather than rendering "now".
+  static DateTime? _toDateTime(dynamic value) {
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    if (value is num) {
+      if (!value.isFinite || value.abs() > 8.64e15) return null;
+      return DateTime.fromMillisecondsSinceEpoch(value.floor(), isUtc: true);
+    }
+    return null;
+  }
+
+  /// Replace `yyyy MM dd HH mm ss` in [format], every occurrence, in that
+  /// order.
+  static String _formatDateString(DateTime date, String format) {
+    String pad(int n) => n.toString().padLeft(2, '0');
+    return format
+        .replaceAll('yyyy', '${date.year}')
+        .replaceAll('MM', pad(date.month))
+        .replaceAll('dd', pad(date.day))
+        .replaceAll('HH', pad(date.hour))
+        .replaceAll('mm', pad(date.minute))
+        .replaceAll('ss', pad(date.second));
   }
 
   static String _currencySymbol(String currency) {
