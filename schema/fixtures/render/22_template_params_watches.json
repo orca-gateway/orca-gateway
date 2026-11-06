@@ -7,13 +7,20 @@
     "props": {
       "data": {
         "type": "transform",
-        "input": { "type": "info", "key": "greeting" },
+        "input": {
+          "type": "info",
+          "key": "greeting"
+        },
         "by": [
           {
             "type": "template",
             "template": "{{value}}, {{userName}}!",
             "params": {
-              "userName": { "type": "state", "scope": "page", "key": "userName" }
+              "userName": {
+                "type": "state",
+                "scope": "page",
+                "key": "userName"
+              }
             }
           }
         ]
@@ -21,9 +28,13 @@
     }
   },
   "context": {
-    "pageState": { "userName": "Amr" },
+    "pageState": {
+      "userName": "Amr"
+    },
     "appState": {},
-    "infoData": { "greeting": "Hi" },
+    "infoData": {
+      "greeting": "Hi"
+    },
     "requestInfo": {},
     "config": {}
   },
@@ -36,20 +47,34 @@
       "props": {
         "data": {
           "type": "transform",
-          "input": { "type": "static", "value": "Hi" },
+          "input": {
+            "type": "static",
+            "value": "Hi"
+          },
           "by": [
             {
               "type": "template",
               "template": "{{value}}, {{userName}}!",
               "params": {
-                "userName": { "type": "state", "scope": "page", "key": "userName" }
+                "userName": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "userName"
+                }
               }
             }
           ]
         }
       },
       "children": [],
-      "watches": ["userName"]
+      "watches": [
+        "userName"
+      ]
     }
-  ]
+  ],
+  "resolved": {
+    "t": {
+      "data": "Hi, Amr!"
+    }
+  }
 }

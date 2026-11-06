@@ -19,6 +19,8 @@ export interface FloatingActionButtonProps {
 
 export class FloatingActionButton extends ButtonWidget {
   readonly type = "FloatingActionButton";
+  /** No native iOS counterpart (Epic 23b); SwiftUI degrades it via the caps vector. */
+  static readonly targets = ["flutter", "web", "android"] as const;
   static readonly triggers = ["onTap", "onLongPress"] as const;
   private props: Omit<FloatingActionButtonProps, "child" | "actions">;
 

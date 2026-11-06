@@ -1,0 +1,35 @@
+{
+  "name": "openUrl-resolved",
+  "description": "openUrl emits the resolved URL.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "docs": "https://orcagateway.com/docs"
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "openUrl",
+      "url": {
+        "type": "state",
+        "scope": "page",
+        "key": "docs"
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "docs": "https://orcagateway.com/docs"
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "openUrl",
+        "url": "https://orcagateway.com/docs"
+      }
+    ]
+  }
+}

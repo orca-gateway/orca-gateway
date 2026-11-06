@@ -12,6 +12,8 @@ export interface DrawerProps {
 
 export class Drawer extends SingleChildLayout {
   readonly type = "Drawer";
+  /** No native iOS counterpart (Epic 23b); SwiftUI degrades it via the caps vector. */
+  static readonly targets = ["flutter", "web", "android"] as const;
   private props: Omit<DrawerProps, "child" | "actions">;
 
   private constructor(opts: DrawerProps) {

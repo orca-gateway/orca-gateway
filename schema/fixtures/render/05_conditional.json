@@ -11,17 +11,40 @@
           {
             "when": {
               "op": "gt",
-              "left": { "type": "state", "scope": "page", "key": "n" },
-              "right": { "type": "static", "value": 0 }
+              "left": {
+                "type": "state",
+                "scope": "page",
+                "key": "n"
+              },
+              "right": {
+                "type": "static",
+                "value": 0
+              }
             },
-            "then": { "type": "info", "key": "label" }
+            "then": {
+              "type": "info",
+              "key": "label"
+            }
           }
         ],
-        "else": { "type": "static", "value": "zero" }
+        "else": {
+          "type": "static",
+          "value": "zero"
+        }
       }
     }
   },
-  "context": { "pageState": { "n": 3 }, "appState": {}, "infoData": { "label": "positive" }, "requestInfo": {}, "config": {} },
+  "context": {
+    "pageState": {
+      "n": 3
+    },
+    "appState": {},
+    "infoData": {
+      "label": "positive"
+    },
+    "requestInfo": {},
+    "config": {}
+  },
   "expected": [
     {
       "id": "t",
@@ -35,17 +58,37 @@
             {
               "when": {
                 "op": "gt",
-                "left": { "type": "state", "scope": "page", "key": "n" },
-                "right": { "type": "static", "value": 0 }
+                "left": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "n"
+                },
+                "right": {
+                  "type": "static",
+                  "value": 0
+                }
               },
-              "then": { "type": "static", "value": "positive" }
+              "then": {
+                "type": "static",
+                "value": "positive"
+              }
             }
           ],
-          "else": { "type": "static", "value": "zero" }
+          "else": {
+            "type": "static",
+            "value": "zero"
+          }
         }
       },
       "children": [],
-      "watches": ["n"]
+      "watches": [
+        "n"
+      ]
     }
-  ]
+  ],
+  "resolved": {
+    "t": {
+      "data": "positive"
+    }
+  }
 }

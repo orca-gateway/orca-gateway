@@ -1,3 +1,4 @@
+import type { Platform } from "../types/platform";
 import type { Widget } from "../types/widget";
 import type { ComponentNode } from "../types/node";
 import type { StateDefinition } from "../types/state";
@@ -34,6 +35,13 @@ export abstract class Page<TInfo = unknown> {
 
   /** Cache TTL in seconds. Default: 60. */
   readonly cacheTtl: number = 60;
+
+  /**
+   * Platforms this page is authored for (Epic 23b). When set, the pipeline
+   * warns once per page, in development, about widgets whose `targets`
+   * exclude one of them. Undefined means no check.
+   */
+  readonly targets?: readonly Platform[];
 
   /**
    * Declares which app state keys this page needs from the client.

@@ -19,6 +19,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -51,6 +57,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -97,6 +109,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -150,6 +168,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onComplete"
       ]
@@ -226,6 +250,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -258,6 +288,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -276,6 +312,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -346,6 +388,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -364,6 +412,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -389,6 +443,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -414,6 +474,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -453,6 +519,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -506,6 +578,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onChange"
       ]
@@ -554,6 +632,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -586,6 +670,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -653,6 +743,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -678,6 +774,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -745,6 +847,11 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android"
+      ],
       "triggers": [
         "onChange"
       ]
@@ -779,6 +886,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -789,6 +902,12 @@
       "props": [],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -799,6 +918,12 @@
       "props": [],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -817,6 +942,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -842,6 +973,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -902,6 +1039,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -920,6 +1063,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -987,6 +1136,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1026,6 +1181,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onScrollBegin",
         "onScrolling",
@@ -1055,6 +1216,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1094,6 +1261,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1133,6 +1306,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1172,6 +1351,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1204,6 +1389,11 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android"
+      ],
       "triggers": []
     },
     {
@@ -1285,6 +1475,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onTap",
         "onLongPress"
@@ -1306,6 +1502,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1352,6 +1554,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [],
       "frozen": true
     },
@@ -1378,6 +1586,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1403,6 +1617,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1484,6 +1704,11 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android"
+      ],
       "triggers": [
         "onTap",
         "onLongPress"
@@ -1497,6 +1722,12 @@
       "props": [],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1529,6 +1760,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1539,6 +1776,12 @@
       "props": [],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onTap",
         "onLongPress",
@@ -1610,6 +1853,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onScrollBegin",
         "onScrolling",
@@ -1632,6 +1881,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1671,6 +1926,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1745,6 +2006,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onTap",
         "onLongPress"
@@ -1766,6 +2033,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1833,6 +2106,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1865,6 +2144,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1897,6 +2182,11 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android"
+      ],
       "triggers": [
         "onTap",
         "onLongPress",
@@ -1940,6 +2230,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1950,6 +2246,12 @@
       "props": [],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -1975,6 +2277,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2000,6 +2308,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2039,6 +2353,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2099,6 +2419,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onScrollBegin",
         "onScrolling",
@@ -2121,6 +2447,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2139,6 +2471,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2192,6 +2530,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onTap",
         "onLongPress"
@@ -2213,6 +2557,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2245,6 +2595,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2298,6 +2654,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2330,6 +2692,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onRefresh"
       ]
@@ -2392,6 +2760,11 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android"
+      ],
       "triggers": [
         "onChange"
       ]
@@ -2419,6 +2792,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2458,6 +2837,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2476,6 +2861,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2536,6 +2927,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2575,6 +2972,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2615,6 +3018,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2640,6 +3049,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2679,6 +3094,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2725,6 +3146,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onScrollBegin",
         "onScrolling",
@@ -2754,6 +3181,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2835,6 +3268,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onChange"
       ]
@@ -2915,6 +3354,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2954,6 +3399,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2964,6 +3415,12 @@
       "props": [],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -2974,6 +3431,12 @@
       "props": [],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -3013,6 +3476,11 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android"
+      ],
       "triggers": [
         "onAction"
       ]
@@ -3033,6 +3501,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -3072,6 +3546,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -3104,6 +3584,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -3157,6 +3643,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onChange"
       ]
@@ -3191,6 +3683,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -3251,6 +3749,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -3297,6 +3801,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onTap",
         "onLongPress"
@@ -3409,6 +3919,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onChange"
       ]
@@ -3485,6 +4001,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": [
         "onChange"
       ]
@@ -3505,6 +4027,11 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android"
+      ],
       "triggers": []
     },
     {
@@ -3530,6 +4057,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -3576,6 +4109,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     },
     {
@@ -3615,6 +4154,12 @@
       ],
       "introducedIn": "1.0.0",
       "isSupportedOnWeb": true,
+      "targets": [
+        "flutter",
+        "web",
+        "android",
+        "ios"
+      ],
       "triggers": []
     }
   ]

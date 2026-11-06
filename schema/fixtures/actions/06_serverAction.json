@@ -1,0 +1,46 @@
+{
+  "name": "serverAction-request",
+  "description": "serverAction emits the request with resolved params; with no response stub nothing else happens.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "qty": 2
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "serverAction",
+      "id": "addToCart",
+      "params": {
+        "sku": {
+          "type": "static",
+          "value": "A1"
+        },
+        "qty": {
+          "type": "state",
+          "scope": "page",
+          "key": "qty"
+        }
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "qty": 2
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "serverAction",
+        "id": "addToCart",
+        "params": {
+          "sku": "A1",
+          "qty": 2
+        }
+      }
+    ]
+  }
+}

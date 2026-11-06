@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/action-fixture.json",
+  "title": "Action conformance fixture",
+  "description": "Executable spec for the client-side action executor. Every Orca SDK (Flutter, Swift, Kotlin) loads these files, seeds state, runs `actions` in order, and asserts the resulting state and the emitted effects. Effects are data: what the executor asked the host to do, with every Value already resolved.",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "pageId",
+    "state",
+    "actions",
+    "expected"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "pageId": {
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/definitions/StateSnapshot"
+    },
+    "event": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Event payload available to V.event(...) while the actions run."
+    },
+    "serverResponses": {
+      "type": "object",
+      "description": "Stubbed serverAction responses keyed by action id: {\"actions\": [...]} to return, or {\"error\": \"message\"} to fail with that message.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "action.schema.json#"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "action.schema.json#"
+      }
+    },
+    "expected": {
+      "type": "object",
+      "required": [
+        "state",
+        "effects"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "$ref": "#/definitions/StateSnapshot"
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Effect"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "StateSnapshot": {
+      "type": "object",
+      "required": [
+        "page",
+        "app"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "page": {
+          "type": "object"
+        },
+        "app": {
+          "type": "object"
+        }
+      }
+    },
+    "Effect": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "navigate",
+            "goBack",
+            "showSnackbar",
+            "showToast",
+            "openUrl",
+            "copyToClipboard",
+            "share",
+            "serverAction"
+          ]
+        }
+      },
+      "additionalProperties": true,
+      "description": "navigate {route, replace, params?} \u00b7 goBack {} \u00b7 showSnackbar {message, duration} \u00b7 showToast {message, duration} \u00b7 openUrl {url} \u00b7 copyToClipboard {text} \u00b7 share {text, subject?} \u00b7 serverAction {id, params?}"
+    }
+  }
+}

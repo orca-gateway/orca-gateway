@@ -1,13 +1,14 @@
 import 'dart:convert' show jsonEncode;
 import 'dart:developer' as developer;
 
-import 'package:flutter/material.dart' show
-    MaterialPageRoute,
-    Navigator,
-    Scaffold,
-    ScaffoldMessenger,
-    SnackBar,
-    SnackBarBehavior;
+import 'package:flutter/material.dart'
+    show
+        MaterialPageRoute,
+        Navigator,
+        Scaffold,
+        ScaffoldMessenger,
+        SnackBar,
+        SnackBarBehavior;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
@@ -37,8 +38,8 @@ class ActionSource {
 }
 
 /// Signature for an action handler.
-typedef ActionHandler = Future<void> Function(
-    Map<String, dynamic> action, ActionExecutor executor);
+typedef ActionHandler =
+    Future<void> Function(Map<String, dynamic> action, ActionExecutor executor);
 
 /// Execute a single action or a list of actions for lifecycle callbacks.
 Future<void> _execLifecycle(ActionExecutor exec, dynamic actions) async {
@@ -51,6 +52,27 @@ Future<void> _execLifecycle(ActionExecutor exec, dynamic actions) async {
 }
 
 /// Executes actions dispatched from component event handlers.
+/// A side effect an action asked the host to perform, expressed as data.
+///
+/// Emitted through [ActionExecutor.onEffect] *before* the default handler
+/// performs the effect (navigation push, snackbar, URL launch, server call).
+/// This is the seam the conformance fixtures in `schema/fixtures/actions/`
+/// assert against, so the payload shape is part of the wire contract: every
+/// Orca SDK must emit the same effects for the same action and state.
+class ActionEffect {
+  final String type;
+  final Map<String, dynamic> payload;
+  const ActionEffect(this.type, [this.payload = const {}]);
+
+  Map<String, dynamic> toJson() => <String, dynamic>{'type': type, ...payload};
+
+  @override
+  String toString() => 'ActionEffect(${toJson()})';
+}
+
+/// Receives every [ActionEffect] an executor emits.
+typedef ActionEffectSink = void Function(ActionEffect effect);
+
 class ActionExecutor {
   /// BuildContext for actions that need navigation/scaffold access.
   /// Null in unit-test scenarios where only setState is exercised.
@@ -81,7 +103,17 @@ class ActionExecutor {
   final Future<void> Function()? onRefetchPage;
 
   /// Callback to open a dialog by its stable key.
-  final Future<void> Function(String dialogId, double heightFactor)? onOpenDialog;
+  final Future<void> Function(String dialogId, double heightFactor)?
+  onOpenDialog;
+
+  /// Optional sink for effects-as-data (see [ActionEffect]). Null means the
+  /// executor performs effects silently, exactly as before.
+  final ActionEffectSink? onEffect;
+
+  void _emit(String type, [Map<String, dynamic> payload = const {}]) {
+    final sink = onEffect;
+    if (sink != null) sink(ActionEffect(type, payload));
+  }
 
   final Map<String, ActionHandler> _handlers = {};
   List<Map<String, dynamic>>? _lastTransformTrace;
@@ -113,6 +145,7 @@ class ActionExecutor {
     this.pagePath,
     this.onRefetchPage,
     this.onOpenDialog,
+    this.onEffect,
   }) {
     _registerDefaults();
   }
@@ -140,8 +173,9 @@ class ActionExecutor {
     // discriminated union stays exhaustive. Strip that prefix at dispatch
     // time so plugins can register handlers under their bare name
     // (`moveCamera`) without knowing the wire-format detail.
-    final bareType =
-        type.startsWith('custom:') ? type.substring('custom:'.length) : type;
+    final bareType = type.startsWith('custom:')
+        ? type.substring('custom:'.length)
+        : type;
     final handler = _handlers[type] ?? _handlers[bareType];
     if (handler != null) {
       final previousEventData = _currentEventData;
@@ -154,14 +188,16 @@ class ActionExecutor {
       await handler(action, this);
       if (sw != null) {
         sw.stop();
-        OrcaDebug.instance?.reportAction(DebugActionEvent(
-          actionType: type,
-          actionData: action,
-          pageId: pageId,
-          durationMs: sw.elapsedMicroseconds / 1000.0,
-          transformTrace: _lastTransformTrace,
-          affectedWidgets: _lastAffectedWidgets,
-        ));
+        OrcaDebug.instance?.reportAction(
+          DebugActionEvent(
+            actionType: type,
+            actionData: action,
+            pageId: pageId,
+            durationMs: sw.elapsedMicroseconds / 1000.0,
+            transformTrace: _lastTransformTrace,
+            affectedWidgets: _lastAffectedWidgets,
+          ),
+        );
         _lastTransformTrace = null;
         _lastAffectedWidgets = null;
       }
@@ -219,9 +255,15 @@ class ActionExecutor {
       List<Map<String, dynamic>>? trace;
       final dynamic resolvedValue;
       final rawValue = action['value'];
-      if (OrcaDebug.isEnabled && rawValue is Map && rawValue['type'] == 'transform') {
+      if (OrcaDebug.isEnabled &&
+          rawValue is Map &&
+          rawValue['type'] == 'transform') {
         final state = exec._mergedState();
-        final resolver = ValueResolver(state: state, transforms: exec.transforms, eventData: exec._currentEventData);
+        final resolver = ValueResolver(
+          state: state,
+          transforms: exec.transforms,
+          eventData: exec._currentEventData,
+        );
         final (value, steps) = resolver.resolveWithTrace(rawValue);
         resolvedValue = value;
         trace = steps.map((s) => s.toJson()).toList();
@@ -259,11 +301,21 @@ class ActionExecutor {
 
     // navigate — GoRouter-first with Navigator fallback
     _handlers['navigate'] = (action, exec) async {
-      final ctx = exec.context;
-      if (ctx == null) return;
       final path = exec.resolveString(action['route'] ?? action['path']);
       if (path.isEmpty) return;
       final replace = action['replace'] == true;
+      final rawParams = action['params'];
+      exec._emit('navigate', <String, dynamic>{
+        'route': path,
+        'replace': replace,
+        if (rawParams is Map)
+          'params': <String, dynamic>{
+            for (final e in rawParams.entries)
+              e.key.toString(): exec.resolveValue(e.value),
+          },
+      });
+      final ctx = exec.context;
+      if (ctx == null) return;
 
       if (GoRouter.maybeOf(ctx) != null) {
         final router = GoRouter.of(ctx);
@@ -273,14 +325,15 @@ class ActionExecutor {
           router.push(path);
         }
       } else if (exec.pageBuilder != null) {
-        Navigator.of(ctx).push(
-          MaterialPageRoute(builder: (_) => exec.pageBuilder!(path)),
-        );
+        Navigator.of(
+          ctx,
+        ).push(MaterialPageRoute(builder: (_) => exec.pageBuilder!(path)));
       }
     };
 
     // goBack — GoRouter-first with Navigator fallback
     _handlers['goBack'] = (action, exec) async {
+      exec._emit('goBack');
       final ctx = exec.context;
       if (ctx == null) return;
       if (GoRouter.maybeOf(ctx) != null) {
@@ -312,10 +365,11 @@ class ActionExecutor {
 
     // showSnackbar
     _handlers['showSnackbar'] = (action, exec) async {
-      final ctx = exec.context;
-      if (ctx == null) return;
       final message = exec.resolveString(action['message']);
       final duration = action['duration'] as int? ?? 4000;
+      exec._emit('showSnackbar', {'message': message, 'duration': duration});
+      final ctx = exec.context;
+      if (ctx == null) return;
       ScaffoldMessenger.of(ctx).showSnackBar(
         SnackBar(
           content: Text(message),
@@ -326,10 +380,11 @@ class ActionExecutor {
 
     // showToast (floating SnackBar)
     _handlers['showToast'] = (action, exec) async {
-      final ctx = exec.context;
-      if (ctx == null) return;
       final message = exec.resolveString(action['message']);
       final duration = action['duration'] as int? ?? 2000;
+      exec._emit('showToast', {'message': message, 'duration': duration});
+      final ctx = exec.context;
+      if (ctx == null) return;
       ScaffoldMessenger.of(ctx).showSnackBar(
         SnackBar(
           content: Text(message),
@@ -343,6 +398,7 @@ class ActionExecutor {
     // copyToClipboard
     _handlers['copyToClipboard'] = (action, exec) async {
       final text = exec.resolveString(action['text']);
+      exec._emit('copyToClipboard', {'text': text});
       await Clipboard.setData(ClipboardData(text: text));
     };
 
@@ -430,8 +486,9 @@ class ActionExecutor {
           if (pageStore != null) {
             entry['pageState'] = Map<String, dynamic>.from(pageStore.state);
           }
-          entry['appState'] =
-              Map<String, dynamic>.from(exec.stateManager.appStore.state);
+          entry['appState'] = Map<String, dynamic>.from(
+            exec.stateManager.appStore.state,
+          );
         }
         if (action['includeEvent'] == true && exec._currentEventData != null) {
           entry['event'] = Map<String, dynamic>.from(exec._currentEventData!);
@@ -484,6 +541,7 @@ class ActionExecutor {
     // openUrl
     _handlers['openUrl'] = (action, exec) async {
       final urlString = exec.resolveString(action['url']);
+      exec._emit('openUrl', {'url': urlString});
       final uri = Uri.tryParse(urlString);
       if (uri != null && OrcaUrlPolicy.isAllowed(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -498,9 +556,7 @@ class ActionExecutor {
 
       if (mode == 'parallel') {
         await Future.wait(
-          actions
-              .whereType<Map<String, dynamic>>()
-              .map((a) => exec.execute(a)),
+          actions.whereType<Map<String, dynamic>>().map((a) => exec.execute(a)),
         );
       } else {
         await exec.executeAll(actions);
@@ -511,7 +567,11 @@ class ActionExecutor {
     _handlers['conditionalAction'] = (action, exec) async {
       final branches = action['branches'] as List?;
       final state = exec._mergedState();
-      final resolver = ValueResolver(state: state, transforms: transforms, eventData: exec._currentEventData);
+      final resolver = ValueResolver(
+        state: state,
+        transforms: transforms,
+        eventData: exec._currentEventData,
+      );
 
       if (branches != null) {
         for (final branch in branches) {
@@ -565,20 +625,17 @@ class ActionExecutor {
     _handlers['share'] = (action, exec) async {
       final text = exec.resolveString(action['text'] ?? action['message']);
       final subject = exec.resolveString(action['subject'] ?? action['title']);
+      exec._emit('share', {
+        'text': text,
+        if (subject.isNotEmpty) 'subject': subject,
+      });
       await SharePlus.instance.share(
-        ShareParams(
-          text: text,
-          subject: subject.isNotEmpty ? subject : null,
-        ),
+        ShareParams(text: text, subject: subject.isNotEmpty ? subject : null),
       );
     };
 
     // ── Server Action ──────────────────────────────────────
     _handlers['serverAction'] = (action, exec) async {
-      final actionClient = exec.client;
-      final actionAppId = exec.appId;
-      if (actionClient == null || actionAppId == null) return;
-
       final id = action['id'] as String;
 
       // Resolve params (Value expressions → concrete values)
@@ -590,6 +647,14 @@ class ActionExecutor {
           resolvedParams[entry.key] = exec.resolveValue(entry.value);
         }
       }
+
+      // The request is an effect in its own right: fixtures pin its shape
+      // even when no client is attached (pure executor tests).
+      exec._emit('serverAction', {'id': id, 'params': ?resolvedParams});
+
+      final actionClient = exec.client;
+      final actionAppId = exec.appId;
+      if (actionClient == null || actionAppId == null) return;
 
       try {
         final response = await actionClient.executeAction(
@@ -604,10 +669,7 @@ class ActionExecutor {
         await exec.executeAll(response.actions);
       } on OrcaClientException catch (e) {
         // Server returned error — show error snackbar
-        await exec.execute({
-          'type': 'showSnackbar',
-          'message': e.message,
-        });
+        await exec.execute({'type': 'showSnackbar', 'message': e.message});
       }
     };
 
@@ -634,7 +696,9 @@ class ActionExecutor {
       final parentId = action['parentId'] as String;
       final componentsList = action['components'] as List;
       final components = componentsList
-          .map((e) => ComponentNode.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map(
+            (e) => ComponentNode.fromJson(Map<String, dynamic>.from(e as Map)),
+          )
           .toList();
       final position = action['position'] as int?;
       store.addComponent(parentId, components, position: position);
@@ -644,7 +708,10 @@ class ActionExecutor {
 
     /// Walk a props map and return a list of dot-paths that contain
     /// tween or tweenSequence values (e.g. ["left", "style.fontSize"]).
-    List<String> findTweenProps(Map<String, dynamic> props, [String prefix = '']) {
+    List<String> findTweenProps(
+      Map<String, dynamic> props, [
+      String prefix = '',
+    ]) {
       final result = <String>[];
       for (final entry in props.entries) {
         final path = prefix.isEmpty ? entry.key : '$prefix.${entry.key}';
@@ -662,7 +729,9 @@ class ActionExecutor {
     }
 
     List<Map<String, dynamic>>? findAnimationAffectedWidgets(
-        ActionExecutor exec, String animationId) {
+      ActionExecutor exec,
+      String animationId,
+    ) {
       final store = exec.componentStore;
       if (store == null) return null;
 
@@ -690,6 +759,7 @@ class ActionExecutor {
           collect(childId);
         }
       }
+
       collect(builderId);
       return affected.isNotEmpty ? affected : null;
     }
@@ -700,7 +770,9 @@ class ActionExecutor {
       final targetId = action['targetId'] as String;
       final componentsList = action['components'] as List;
       final components = componentsList
-          .map((e) => ComponentNode.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map(
+            (e) => ComponentNode.fromJson(Map<String, dynamic>.from(e as Map)),
+          )
           .toList();
       store.replaceComponent(targetId, components);
     };

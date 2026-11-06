@@ -1,0 +1,71 @@
+{
+  "name": "conditionalAction-then-branch",
+  "description": "First branch whose `when` holds runs; later branches and else do not.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "n": 3
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "conditionalAction",
+      "branches": [
+        {
+          "when": {
+            "op": "gt",
+            "left": {
+              "type": "state",
+              "scope": "page",
+              "key": "n"
+            },
+            "right": {
+              "type": "static",
+              "value": 0
+            }
+          },
+          "then": {
+            "type": "setState",
+            "key": "label",
+            "value": "positive"
+          }
+        },
+        {
+          "when": {
+            "op": "lt",
+            "left": {
+              "type": "state",
+              "scope": "page",
+              "key": "n"
+            },
+            "right": {
+              "type": "static",
+              "value": 0
+            }
+          },
+          "then": {
+            "type": "setState",
+            "key": "label",
+            "value": "negative"
+          }
+        }
+      ],
+      "else": {
+        "type": "setState",
+        "key": "label",
+        "value": "zero"
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "n": 3,
+        "label": "positive"
+      },
+      "app": {}
+    },
+    "effects": []
+  }
+}

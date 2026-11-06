@@ -1,0 +1,58 @@
+{
+  "name": "lifecycle-success-order",
+  "description": "lifecycle runs onLoading, the inner action, onSuccess, onComplete, in that order.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "saved": false
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "lifecycle",
+      "action": {
+        "type": "setState",
+        "key": "saved",
+        "value": true
+      },
+      "onLoading": {
+        "type": "showToast",
+        "message": "Saving"
+      },
+      "onSuccess": {
+        "type": "showSnackbar",
+        "message": "Saved"
+      },
+      "onComplete": {
+        "type": "showToast",
+        "message": "Done"
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "saved": true
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "showToast",
+        "message": "Saving",
+        "duration": 2000
+      },
+      {
+        "type": "showSnackbar",
+        "message": "Saved",
+        "duration": 4000
+      },
+      {
+        "type": "showToast",
+        "message": "Done",
+        "duration": 2000
+      }
+    ]
+  }
+}

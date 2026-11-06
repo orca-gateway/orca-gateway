@@ -7,14 +7,29 @@
     "props": {
       "pageId": "profile",
       "params": {
-        "userId": { "type": "state", "key": "selectedUser", "scope": "page" }
+        "userId": {
+          "type": "state",
+          "key": "selectedUser",
+          "scope": "page"
+        }
       }
     },
     "children": [
-      { "type": "CircularProgressIndicator", "key": "loader" }
+      {
+        "type": "CircularProgressIndicator",
+        "key": "loader"
+      }
     ]
   },
-  "context": { "pageState": { "selectedUser": "u-42" }, "appState": {}, "infoData": null, "requestInfo": {}, "config": {} },
+  "context": {
+    "pageState": {
+      "selectedUser": "u-42"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
   "expected": [
     {
       "id": "detail",
@@ -24,11 +39,19 @@
       "props": {
         "pageId": "profile",
         "params": {
-          "userId": { "type": "state", "key": "selectedUser", "scope": "page" }
+          "userId": {
+            "type": "state",
+            "key": "selectedUser",
+            "scope": "page"
+          }
         }
       },
-      "children": ["loader"],
-      "watches": ["selectedUser"]
+      "children": [
+        "loader"
+      ],
+      "watches": [
+        "selectedUser"
+      ]
     },
     {
       "id": "loader",
@@ -39,5 +62,12 @@
       "children": [],
       "watches": []
     }
-  ]
+  ],
+  "resolved": {
+    "detail": {
+      "params": {
+        "userId": "u-42"
+      }
+    }
+  }
 }

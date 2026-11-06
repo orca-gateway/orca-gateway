@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'elm_store.dart';
+import 'value_resolver.dart';
 
 /// A widget that subscribes to specific state keys across the app- and
 /// page-scoped [ElmStore]s and only rebuilds when one of those watched
@@ -27,7 +28,7 @@ class WatchBuilder extends StatefulWidget {
 
   /// Builder that receives the current merged (app + page) state snapshot.
   final Widget Function(BuildContext context, Map<String, dynamic> state)
-      builder;
+  builder;
 
   const WatchBuilder({
     super.key,
@@ -86,7 +87,10 @@ class _WatchBuilderState extends State<WatchBuilder> {
     final state = _mergedState();
     return {
       for (final key in widget.watches)
-        if (state.containsKey(key)) key: state[key],
+        if (state.containsKey(key))
+          key: state[key]
+        else if (key.contains('.'))
+          key: lookupStatePath(state, key),
     };
   }
 

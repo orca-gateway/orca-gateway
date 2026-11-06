@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "company": "orca-gateway",
+  "project": "open-source",
+  "decider": "",
+  "budget": { "front_page_lines": 25, "line_chars": 100 },
+  "skip_by_default": ["11"],
+  "deploy": { "stage": null, "prod": null, "store": "none" },
+  "logs": [],
+  "notify": []
+}

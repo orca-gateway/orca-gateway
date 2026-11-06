@@ -113,6 +113,12 @@ interface RegistryEntry {
    */
   isSupportedOnWeb: boolean;
   /**
+   * Platforms whose Orca SDK renders this widget natively (Epic 23b).
+   * Sourced from `static readonly targets = ["flutter", ...]` on the class;
+   * default is all four. `isSupportedOnWeb` is derived from it.
+   */
+  targets: string[];
+  /**
    * Action triggers this widget fires. Sourced from `static readonly triggers`
    * on the widget class. Empty when the widget fires no triggers (e.g. pure
    * display widgets like Text, Divider). Authors + tooling read this to know
@@ -194,7 +200,17 @@ function scrapeWidget(file: string): RegistryEntry | null {
   // match only the literal `false` so typos like `"false"` fail loudly instead
   // of silently flipping the bit.
   const webOptOutMatch = src.match(/static\s+readonly\s+isSupportedOnWeb\s*=\s*false\b/);
-  const isSupportedOnWeb = webOptOutMatch ? false : true;
+
+  // Epic 23b — per-platform targets. `static readonly targets = ["flutter",
+  // "web", "android"] as const` lists the platforms whose SDK renders the
+  // widget natively. Missing annotation = every platform. A legacy
+  // `isSupportedOnWeb = false` opt-out without a targets annotation drops
+  // "web" so the two never disagree; when both are present, targets wins
+  // and isSupportedOnWeb is derived from it.
+  const targets = scrapeTargets(src, className) ?? (webOptOutMatch
+    ? ALL_TARGETS.filter((t) => t !== "web")
+    : [...ALL_TARGETS]);
+  const isSupportedOnWeb = targets.includes("web");
 
   // Action triggers — scraped from `static readonly triggers = ["..."]`.
   // Missing annotation = empty array (no widget-specific triggers). We only
@@ -212,6 +228,7 @@ function scrapeWidget(file: string): RegistryEntry | null {
     props,
     introducedIn,
     isSupportedOnWeb,
+    targets,
     triggers,
     sourceFile: file,
   };
@@ -240,6 +257,28 @@ function scrapeWidget(file: string): RegistryEntry | null {
  * `Widget? child` from `childMode === 'single'` instead of from the props
  * list. Same logic for `children` on multi-child layouts.
  */
+const ALL_TARGETS = ["flutter", "web", "android", "ios"] as const;
+
+/**
+ * Scrape `static readonly targets = ["flutter", "web", "android"]` from the
+ * class body. Returns undefined when the annotation is absent. Unknown
+ * platform names or an empty list fail loudly: a typo must not silently
+ * mark a widget unsupported everywhere.
+ */
+function scrapeTargets(src: string, className: string): string[] | undefined {
+  const m = src.match(/static\s+readonly\s+targets\s*(?::\s*[^=]+)?=\s*\[([^\]]*)\]/);
+  if (!m) return undefined;
+  const items = [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+  if (items.length === 0) throw new Error(`${className}: targets must list at least one platform`);
+  for (const t of items) {
+    if (!(ALL_TARGETS as readonly string[]).includes(t)) {
+      throw new Error(`${className}: unknown target "${t}" (allowed: ${ALL_TARGETS.join(", ")})`);
+    }
+  }
+  // Canonical order so the manifest is stable regardless of authoring order.
+  return ALL_TARGETS.filter((t) => items.includes(t));
+}
+
 /**
  * Scrape `static readonly triggers = ["onTap", ...]` from the class body.
  * Returns `[]` when the annotation is missing. Matches only simple array
@@ -330,6 +369,7 @@ function emitTS(entries: RegistryEntry[]): string {
     + `  readonly removedIn?: string;\n`
     + `  readonly frozen?: boolean;\n`
     + `  readonly isSupportedOnWeb: boolean;\n`
+    + `  readonly targets: readonly string[];\n`
     + `  readonly triggers: readonly string[];\n`
     + `}\n\n`;
   const body = `export const WIDGET_REGISTRY: Readonly<Record<string, WidgetRegistryEntry>> = {\n`
@@ -343,6 +383,7 @@ function emitTS(entries: RegistryEntry[]): string {
           `props: ${JSON.stringify(e.props)}`,
           `introducedIn: ${JSON.stringify(e.introducedIn)}`,
           `isSupportedOnWeb: ${e.isSupportedOnWeb}`,
+          `targets: ${JSON.stringify(e.targets)}`,
           `triggers: ${JSON.stringify(e.triggers)}`,
         ];
         if (e.removedIn) parts.push(`removedIn: ${JSON.stringify(e.removedIn)}`);
@@ -377,6 +418,7 @@ function emitManifest(entries: RegistryEntry[]): string {
         props: e.props,
         introducedIn: e.introducedIn,
         isSupportedOnWeb: e.isSupportedOnWeb,
+        targets: e.targets,
         triggers: e.triggers,
       };
       if (e.removedIn) out.removedIn = e.removedIn;
