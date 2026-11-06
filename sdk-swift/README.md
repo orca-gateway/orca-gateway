@@ -22,11 +22,31 @@ Minimum: Swift tools 5.9 (Xcode 15+), iOS 16.
 
 | Slice | Content | State |
 |---|---|---|
-| S1 | Pure core: models, resolver, store, caps vector, Linux CI | this package |
-| S2 | `OrcaClient` with the 412 caps handshake, renderer, 15 core widgets, counter page | next |
-| S3 | Action executor (12 kinds), navigation, system and server adapters | planned |
-| S4 | Degrade policies, FallbackPrompt, six more widgets | planned |
+| S1 | Pure core: models, resolver, store, caps vector, Linux CI | done |
+| S2 | `OrcaClient` with the 412 caps handshake, renderer, 15 core widgets, counter page | done |
+| S3 | Action executor (15 kinds), navigation, system and server adapters, DevTools | done |
+| S4 | Degrade policies and the 426 page, ten more widgets, `OrcaTheme` button styles | this package |
 | S5 | `0.1.0-alpha.1` on the read-only `orca-gateway-swift` mirror | planned |
+
+## Styling buttons
+
+A Flutter host styles an Orca page's buttons through its `ThemeData`. An iOS host does it with
+`OrcaTheme`, one `OrcaButtonStyle` per button type:
+
+```swift
+OrcaApp(client: client, path: "home")
+    .orcaTheme(OrcaTheme(elevatedButton: OrcaButtonStyle { configuration in
+        configuration.label
+            .padding(.horizontal, 20).padding(.vertical, 12)
+            .background(Color.orange, in: Capsule())
+            .foregroundColor(.white)
+            .opacity(configuration.isPressed ? 0.7 : 1)
+    }))
+```
+
+The server wins: a button whose node carries its own style props (ElevatedButton
+`backgroundColor`, `foregroundColor`, `borderRadius`, `padding`; OutlinedButton `color`,
+`borderColor`; TextButton `color`) is drawn with those, not with the host style.
 
 ## Tests
 
