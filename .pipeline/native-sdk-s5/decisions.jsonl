@@ -17,3 +17,4 @@
 {"ts":"2026-11-06T20:19:43Z","stage":"09","key":"s5-pr","chosen":"push and open the S5 PR at stage 10","options":["open","hold"],"why":"A approve (defaults accepted)","topic":null,"new_to_you":false,"source":"you"}
 {"ts":"2026-11-06T20:19:43Z","stage":"09","key":"claude-md-release-row","chosen":"add sdk-swift to the workspace CLAUDE.md release table","options":["add","leave"],"why":"A approve (defaults accepted)","topic":null,"new_to_you":false,"source":"you"}
 {"ts":"2026-11-06T20:19:43Z","stage":"09","key":"first-release-owner","chosen":"after merge you create the mirror repo and key, then run release.sh","options":["you","me"],"why":"A approve (defaults accepted)","topic":null,"new_to_you":false,"source":"you"}
+{"ts":"2026-11-06T20:22:12Z","stage":"10","key":"auto-fix-pr10","chosen":"Auto-fix off for #10","options":["off","on"],"why":"as chosen for #8 at native-sdk-s4 gate 10","topic":null,"new_to_you":false,"source":"memory"}
