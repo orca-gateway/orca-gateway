@@ -1,6 +1,6 @@
-// The SwiftUI layer of the Orca Gateway iOS SDK: renderer, widget views and
-// platform adapters arrive in slice S2 (Epic 23b). Until then this module only
-// re-exports the pure core so apps can depend on one product.
+// The SwiftUI layer of the Orca Gateway iOS SDK (Epic 23b): OrcaApp, the
+// page and node views, the 15 widget views and the device headers. It
+// re-exports the pure core so apps depend on one product.
 //
 // Everything here sits behind `canImport(SwiftUI)` so the package still builds
 // (and `swift test` runs the core tests) on Linux.
@@ -9,7 +9,7 @@
 #if canImport(SwiftUI)
 import SwiftUI
 
-/// Namespace for the SDK's SwiftUI entry points (OrcaApp lands in S2).
+/// Namespace for SDK-wide UI information.
 public enum OrcaGatewayUI {
     /// The capability vector this build advertises, for diagnostics screens.
     public static var capabilities: CapabilityVector { .current }

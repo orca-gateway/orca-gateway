@@ -7,7 +7,8 @@
 //   OrcaGateway      the SwiftUI layer (renderer, views, adapters). Compiles to
 //                    an empty module where SwiftUI is unavailable.
 //
-// The tests read the conformance fixtures from ../schema at run time, so they
+// The tests read the conformance fixtures from ../schema, the recorded pages
+// from Tests/Pages and the goldens from Tests/Goldens at run time, so they
 // only run inside the monorepo; the read-only mirror ships no tests.
 import PackageDescription
 
@@ -25,5 +26,8 @@ let package = Package(
         .target(name: "OrcaGatewayCore"),
         .target(name: "OrcaGateway", dependencies: ["OrcaGatewayCore"]),
         .testTarget(name: "OrcaGatewayCoreTests", dependencies: ["OrcaGatewayCore"]),
+        // SwiftUI tests: the page model everywhere SwiftUI exists, the golden
+        // snapshot on an iOS simulator only. Empty on Linux.
+        .testTarget(name: "OrcaGatewayTests", dependencies: ["OrcaGateway"]),
     ]
 )

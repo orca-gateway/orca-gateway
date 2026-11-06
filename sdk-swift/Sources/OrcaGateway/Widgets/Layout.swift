@@ -1,0 +1,115 @@
+#if canImport(SwiftUI)
+import SwiftUI
+
+/// Column and Row (Flutter `Flex`): no implicit spacing, `gap` between
+/// children only, main-axis alignment with spacers, `mainAxisSize: max` (the
+/// default) fills the main axis. `spaceAround` is drawn like `spaceEvenly`.
+struct FlexView: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+    let axis: Axis
+
+    var body: some View {
+        let main = Props.mainAxis(node["mainAxisAlignment"])
+        let fill = Props.fillsMainAxis(node["mainAxisSize"])
+        let ids = node.childIds
+        let lead = fill && [.end, .center, .spaceAround, .spaceEvenly].contains(main)
+        let trail = fill && [.start, .center, .spaceAround, .spaceEvenly].contains(main)
+        let between = fill && [.spaceBetween, .spaceAround, .spaceEvenly].contains(main)
+        let gap = Props.number(node["gap"]) ?? 0
+
+        stack {
+            if lead { Spacer(minLength: 0) }
+            ForEach(Array(ids.enumerated()), id: \.element) { index, id in
+                if index > 0 {
+                    if gap > 0 { gapView(gap) }
+                    if between { Spacer(minLength: 0) }
+                }
+                child(id)
+            }
+            if trail { Spacer(minLength: 0) }
+        }
+    }
+
+    @ViewBuilder
+    private func stack<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        let cross = Props.crossAxis(node["crossAxisAlignment"])
+        if axis == .vertical {
+            let alignment: HorizontalAlignment = cross == .start ? .leading : cross == .end ? .trailing : .center
+            VStack(alignment: alignment, spacing: 0, content: content)
+        } else {
+            let alignment: VerticalAlignment =
+                cross == .start ? .top : cross == .end ? .bottom
+                : cross == .baseline ? .firstTextBaseline : .center
+            HStack(alignment: alignment, spacing: 0, content: content)
+        }
+    }
+
+    @ViewBuilder
+    private func child(_ id: String) -> some View {
+        if Props.crossAxis(node["crossAxisAlignment"]) == .stretch {
+            if axis == .vertical {
+                NodeView(id: id, model: model).frame(maxWidth: .infinity)
+            } else {
+                NodeView(id: id, model: model).frame(maxHeight: .infinity)
+            }
+        } else {
+            NodeView(id: id, model: model)
+        }
+    }
+
+    private func gapView(_ gap: CGFloat) -> some View {
+        Color.clear.frame(width: axis == .horizontal ? gap : 0, height: axis == .vertical ? gap : 0)
+    }
+}
+
+struct CenterView: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+
+    var body: some View {
+        ChildView(node: node, model: model)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+}
+
+struct PaddingView: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+
+    var body: some View {
+        ChildView(node: node, model: model)
+            .padding(Props.insets(node["padding"]) ?? EdgeInsets())
+    }
+}
+
+/// A fixed size on the axes it names; with no child, an empty box of that
+/// size (0 on an axis it leaves out).
+struct SizedBoxView: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+
+    var body: some View {
+        let width = Props.number(node["width"])
+        let height = Props.number(node["height"])
+        if node.childIds.isEmpty {
+            Color.clear.frame(width: width ?? 0, height: height ?? 0)
+        } else {
+            ChildView(node: node, model: model).frame(width: width, height: height)
+        }
+    }
+}
+
+struct ScrollNodeView: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+
+    var body: some View {
+        let horizontal = node["scrollDirection"]?.stringValue == "horizontal"
+        ScrollView(horizontal ? .horizontal : .vertical) {
+            ChildView(node: node, model: model)
+                .padding(Props.insets(node["padding"]) ?? EdgeInsets())
+        }
+    }
+}
+#endif
