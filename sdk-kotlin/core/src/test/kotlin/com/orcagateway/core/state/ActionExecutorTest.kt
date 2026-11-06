@@ -1,5 +1,7 @@
 package com.orcagateway.core.state
 
+import com.orcagateway.core.client.HttpResponse
+import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ActionList
 import com.orcagateway.core.render.ComponentMutation
@@ -28,7 +30,7 @@ class ActionExecutorTest {
 
     private fun executor(state: StoreState = StoreState(), stub: ActionStub? = null): Triple<ActionExecutor, ElmStore, Box> {
         val store = ElmStore(state)
-        val executor = ActionExecutor(store, stub)
+        val executor = ActionExecutor(store, stub?.let { ActionStub.client(it) })
         val box = Box()
         executor.onEffect = { box.effects.add(it) }
         executor.onMutation = { box.mutations.add(it) }
@@ -47,11 +49,13 @@ class ActionExecutorTest {
 
         val request = assertNotNull(stub.requests.firstOrNull())
         assertEquals(1, stub.requests.size, "no caps retry on actions")
-        // Method, URL and headers (POST to /api/v1/app/{appId}/action,
-        // Content-Type, x-orca-caps-hash, x-orca-platform) belong to the
-        // OkHttp OrcaClient, a later slice; the stub stands in for it here.
+        assertEquals("POST", request.method)
+        assertEquals("http://stub.invalid/api/v1/app/fixture-app/action", request.url.toString())
+        assertEquals("application/json", request.headers["Content-Type"])
+        assertNotNull(request.headers["x-orca-caps-hash"])
+        assertEquals("Android", request.headers["x-orca-platform"])
         assertJsonEqual(
-            request.body,
+            JsonValue.parse(request.body ?: ByteArray(0)),
             obj("action" to "save", "params" to obj("n" to 1), "pageState" to obj("n" to 1), "appState" to obj("user" to "amr")),
         )
     }
@@ -107,7 +111,7 @@ class ActionExecutorTest {
 
     @Test
     fun aBodyThatIsNotJsonThrowsToTheLifecycle() = runSuspend {
-        val stub = ActionStub(emptyMap(), raw = mapOf("html" to ActionStub.Response(502, "<html>")))
+        val stub = ActionStub(emptyMap(), raw = mapOf("html" to HttpResponse(502, body = "<html>".encodeToByteArray())))
         val (executor, store, box) = executor(stub = stub)
         executor.execute(
             Action.Lifecycle(
@@ -150,7 +154,7 @@ class ActionExecutorTest {
 
     @Test
     fun lifecycleWithoutOnErrorRethrowsAfterOnComplete() = runSuspend {
-        val stub = ActionStub(emptyMap(), raw = mapOf("bad" to ActionStub.Response(500, "oops")))
+        val stub = ActionStub(emptyMap(), raw = mapOf("bad" to HttpResponse(500, body = "oops".encodeToByteArray())))
         val (executor, _, box) = executor(stub = stub)
         try {
             executor.execute(

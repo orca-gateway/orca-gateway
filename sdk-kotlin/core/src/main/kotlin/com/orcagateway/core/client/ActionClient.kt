@@ -5,7 +5,7 @@ import com.orcagateway.core.models.Action
 
 /**
  * What the action executor needs from the HTTP client: the `/action` route.
- * The OkHttp `OrcaClient` (a later slice) implements it; tests stub it.
+ * [OrcaClient] implements it over an [HttpTransport]; tests stub the transport.
  */
 public interface ActionClient {
     /**
