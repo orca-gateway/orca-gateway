@@ -1408,6 +1408,64 @@ void main() {
       });
       expect(result, 'b a a');
     });
+
+    // formatDate rows match sdk-swift's TransformTests, so both SDKs render
+    // the same string for the same input.
+    dynamic formatDate(dynamic input, String format) {
+      return ValueResolver(state: {}).resolve({
+        'type': 'transform',
+        'input': {'type': 'static', 'value': input},
+        'by': [
+          {'type': 'formatDate', 'format': format},
+        ],
+      });
+    }
+
+    test('formatDate: ISO string without an offset keeps its fields', () {
+      expect(
+        formatDate('2024-03-05T07:08:09', 'yyyy-MM-dd HH:mm:ss'),
+        '2024-03-05 07:08:09',
+      );
+    });
+
+    test('formatDate: ISO string in UTC', () {
+      expect(formatDate('2024-03-05T23:30:00Z', 'dd/MM/yyyy'), '05/03/2024');
+    });
+
+    test('formatDate: ISO string with an offset is converted to UTC', () {
+      expect(formatDate('2024-03-05T23:30:00+02:00', 'HH:mm'), '21:30');
+    });
+
+    test('formatDate: a number is epoch milliseconds in UTC', () {
+      expect(formatDate(0, 'yyyy-MM-dd'), '1970-01-01');
+      expect(
+        formatDate(1709681289000, 'yyyy-MM-dd HH:mm:ss'),
+        '2024-03-05 23:28:09',
+      );
+      expect(formatDate(1709681289000.0, 'HH:mm'), '23:28');
+    });
+
+    test('formatDate: replaces every occurrence of a token', () {
+      expect(formatDate('2024-03-05T07:08:09', 'dd.dd'), '05.05');
+    });
+
+    test('formatDate: an unparseable input is returned unchanged', () {
+      expect(formatDate('not a date', 'yyyy'), 'not a date');
+      expect(formatDate(1e300, 'yyyy'), 1e300);
+      expect(formatDate(double.nan, 'yyyy'), isNaN);
+      expect(formatDate(true, 'yyyy'), true);
+      expect(formatDate(null, 'yyyy'), null);
+    });
+
+    // The capability vector tells the server what this build can render, so
+    // every transform kind it advertises must have an implementation here.
+    // `formatDate` used to be advertised without one.
+    test('every advertised transform kind is registered', () {
+      final registry = PipeTransformRegistry()..registerDefaults();
+      final missing =
+          kSupportedTransformKinds.where((k) => registry.get(k) == null);
+      expect(missing, isEmpty);
+    });
   });
 
   // ── Epic 8: Basic Actions ────────────────────────────────────
