@@ -149,6 +149,91 @@ else
   done
 fi
 
+# --- 1b. Logins, before anything is bumped or pushed -----------------------
+# Step 7 pushes the release commit to origin before it publishes, so a publish
+# that fails on auth leaves the bump on main and nothing on the registry. That
+# happened with engine 0.3.3 on 2026-11-06: an expired npm login makes
+# `npm publish` answer 404 for a scoped package. Check every login the
+# selected packages need here, while nothing has changed yet.
+
+trim_slash() { local s=$1; printf "%s" "${s%/}"; }
+
+# The registry `npm publish` will use for the package at $1. A
+# `@scope:registry` mapping in npm config beats publishConfig.registry; that
+# once sent engine releases to GitHub Packages, so a mapping that disagrees
+# with publishConfig stops the release.
+npm_target_registry() {
+  local path=$1 name scope mapped configured
+  name=$(cd "$path" && node -p "require('./package.json').name")
+  configured=$(cd "$path" && node -p \
+    "const p = require('./package.json'); (p.publishConfig && p.publishConfig.registry) || ''")
+  mapped=""
+  if [[ "$name" == @*/* ]]; then
+    scope="${name%%/*}"
+    mapped=$(cd "$path" && npm config get "$scope:registry" 2>/dev/null || true)
+    [[ "$mapped" == "undefined" || "$mapped" == "null" ]] && mapped=""
+  fi
+  if [[ -n "$mapped" && -n "$configured" \
+        && "$(trim_slash "$mapped")" != "$(trim_slash "$configured")" ]]; then
+    die "npm config maps $scope to $mapped, which beats publishConfig ($configured) in $path/package.json. Remove the '$scope:registry=' line from ~/.npmrc."
+  fi
+  if [[ -n "$mapped" ]]; then printf "%s" "$mapped"
+  elif [[ -n "$configured" ]]; then printf "%s" "$configured"
+  else (cd "$path" && npm config get registry)
+  fi
+}
+
+check_npm_login() {
+  local name=$1 path=$2 registry user pkg
+  command -v npm >/dev/null 2>&1 || die "npm is required to publish $name"
+  registry=$(npm_target_registry "$path") || exit 1
+  user=$(npm whoami --registry "$registry" 2>/dev/null) \
+    || die "$name: not logged in to $registry (an expired login makes npm publish answer 404). Run: npm login --registry $registry"
+  printf "  %s npm, %s as %s\n" "$(c_green ok)" "$registry" "$user"
+  pkg=$(cd "$path" && node -p "require('./package.json').name")
+  if npm view "$pkg" maintainers --json --registry "$registry" >/dev/null 2>&1 \
+     && ! npm view "$pkg" maintainers --json --registry "$registry" 2>/dev/null \
+          | grep -q "\"${user}[ \"]"; then
+    printf "  %s %s is not among the maintainers of %s; the publish may be refused\n" \
+      "$(c_yellow warning:)" "$user" "$pkg"
+  fi
+}
+
+# `flutter pub publish` reads OAuth credentials that `dart pub login` stores
+# here; with a refresh token they renew on their own.
+check_pub_login() {
+  local f found=""
+  for f in \
+    "${XDG_CONFIG_HOME:-$HOME/.config}/dart/pub-credentials.json" \
+    "$HOME/Library/Application Support/dart/pub-credentials.json" \
+    "${PUB_CACHE:-$HOME/.pub-cache}/credentials.json"; do
+    if [[ -s "$f" ]] && grep -q '"refreshToken"[[:space:]]*:[[:space:]]*"[^"]' "$f"; then
+      found=$f; break
+    fi
+  done
+  [[ -n "$found" ]] || die "not logged in to pub.dev. Run: dart pub login"
+  printf "  %s pub.dev, credentials in %s\n" "$(c_green ok)" "$found"
+}
+
+# Step 7 pushes the commit and every tag; a dry run checks the same auth.
+check_git_push() {
+  git push --dry-run --quiet origin "$BRANCH" >/dev/null 2>&1 \
+    || die "cannot push to origin/$BRANCH (auth, or the branch is behind). Run: git push --dry-run origin $BRANCH"
+  printf "  %s git push to origin/%s\n" "$(c_green ok)" "$BRANCH"
+}
+
+echo
+c_bold "Checking logins..."; echo
+NEED_PUB=0
+for idx in "${SELECTED[@]}"; do
+  case "${PKG_PUBS[$idx]}" in
+    npm) check_npm_login "${PKG_NAMES[$idx]}" "${PKG_PATHS[$idx]}" ;;
+    pub) NEED_PUB=1 ;;
+  esac
+done
+if [[ $NEED_PUB -eq 1 ]]; then check_pub_login; fi
+check_git_push
+
 # --- 2. Per-package bump level ---------------------------------------------
 echo
 NEW_VERS=()
