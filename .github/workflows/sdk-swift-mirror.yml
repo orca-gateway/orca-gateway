@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish again (e.g. sdk-swift-v0.1.0-alpha.1)"
+        description: "Release tag to publish again, from main (e.g. sdk-swift-v0.1.0-alpha.1)"
         required: true
 
 permissions:
@@ -55,10 +55,12 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#sdk-swift-v}" >> "$GITHUB_OUTPUT"
 
-      # The split walks the whole history, so the checkout needs all of it.
+      # The split walks the whole history, so the checkout needs all of it,
+      # tags included. The script reads the release through its tag, so the
+      # working tree is the workflow's own ref: a manual run from main uses
+      # main's script, fixes included, on an older tag.
       - uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ steps.tag.outputs.tag }}
           fetch-depth: 0
 
       - name: Deploy key
