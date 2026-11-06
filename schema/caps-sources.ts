@@ -4,6 +4,7 @@
  * Used by:
  *   - gen-sdk-capabilities.ts     → sdk/lib/src/capabilities/generated.dart (Flutter)
  *   - gen-native-capabilities.ts  → sdk-swift/.../Capabilities/Generated.swift (iOS)
+ *                                   and sdk-kotlin/.../capabilities/Generated.kt (Android)
  *
  * Both SDKs must agree on how kinds are scraped from the engine's TypeScript
  * unions, so the scraping lives here once.

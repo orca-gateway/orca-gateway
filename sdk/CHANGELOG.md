@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.3 - 2026-11-06
+
+### Added
+
+- The renderer reports each unknown widget type it draws to Orca DevTools as a `FallbackPrompt` warning, once per type per session (Epic 23b). The events the SDK sends DevTools now follow `schema/devtools-events.schema.json`: `OrcaDebug.envelope`, `DevToolsClient.deviceInfoPayload` and `DebugErrorEvent.fallbackPrompt` build them, and a conformance test compares each against the fixtures in `schema/fixtures/devtools/`.
+
+### Fixed
+
+- Below an app's minimum SDK version the engine answers 426 with a blocking update page. `fetchPage` now returns that page, so the app draws "Update required" instead of failing. A 426 without a page, and every other error status, still throws `OrcaClientException`.
+- A `Scaffold` page, or one whose root is a scroll view, now fits under the warn-policy fallback banner. Flutter threw "RenderCustomMultiChildLayoutBox object was given an infinite size", because the wrapping `Column` gave the page unbounded height. The page now gets the space left under the banner, and the banner alone takes the top inset. In unbounded height, such as a sub-page inside a scroll view, the plain `Column` is kept as before.
+
 ## 0.3.2 - 2026-11-06
 
 ### Added
