@@ -347,6 +347,12 @@ class OrcaClient {
         appState: appState,
         timingCollector: timingCollector,
       );
+      // Epic 25b.6: below the app's minimum SDK version the engine answers
+      // 426 with `{error, minSdkVersion, clientSdkVersion, page}`, where
+      // `page` is a single blocking FallbackPrompt. Render that page as the
+      // upgrade screen; a 426 without one still throws.
+      final upgradePage = _upgradeRequiredPage(response);
+      if (upgradePage != null) return upgradePage;
       throw OrcaClientException(
         'Failed to fetch page: ${response.statusCode}',
         statusCode: response.statusCode,
@@ -383,6 +389,21 @@ class OrcaClient {
     }
 
     return PageResponse.fromJson(json);
+  }
+
+  /// The upgrade page embedded in a 426 response, or null when the response
+  /// is another status or carries no page.
+  PageResponse? _upgradeRequiredPage(http.Response response) {
+    if (response.statusCode != 426) return null;
+    try {
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic>) return null;
+      final page = body['page'];
+      if (page is! Map<String, dynamic>) return null;
+      return PageResponse.fromJson(page);
+    } catch (_) {
+      return null;
+    }
   }
 
   // ─── Debug error / failed-request reporting ────────────────────────
