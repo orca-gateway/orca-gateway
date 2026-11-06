@@ -52,6 +52,19 @@ final class GoldenTests: XCTestCase {
         try assertGolden(image, named: "degrade-require")
     }
 
+    /// T4.4 and T4.5: the S4 demo page. Network images would make the
+    /// picture depend on the network, so each Image's src is emptied and the
+    /// box draws its "!" placeholder; layout, colours and icons stay.
+    func testNativeWidgetsPage() throws {
+        var page = try recordedPage("native-widgets-home")
+        for index in page.components.indices where page.components[index].type == "Image" {
+            page.components[index].props["src"] = ""
+        }
+        let model = OrcaPageModel(page: page)
+        let image = render(NavigationStack { OrcaPageView(model: model) })
+        try assertGolden(image, named: "native-widgets-home")
+    }
+
     // MARK: rendering and comparison
 
     func render<V: View>(_ view: V) -> UIImage {

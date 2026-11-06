@@ -110,6 +110,7 @@ tasks:
       - bun run examples/server/record-page.ts capability-demo degrade sdk-swift/Tests/Pages/degrade-warn.json --policy warn
       - bun run examples/server/record-page.ts capability-demo degrade sdk-swift/Tests/Pages/degrade-require.json --policy require
       - bun run examples/server/record-page.ts capability-demo degrade sdk-swift/Tests/Pages/degrade-426.json --min-sdk 99.0.0 --sdk-version 0.1.0
+      - bun run examples/server/record-page.ts native-widgets home sdk-swift/Tests/Pages/native-widgets-home.json
 
   # === Example app ===
   example:dev:

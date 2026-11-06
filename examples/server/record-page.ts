@@ -26,6 +26,7 @@ import { counterApp } from "./counter";
 import { basicActionsApp } from "./basic-actions";
 import { serverActionsApp } from "./server-actions";
 import { capabilityDemoApp } from "./capability-demo";
+import { nativeWidgetsApp } from "./native-widgets";
 
 const args = process.argv.slice(2);
 function option(name: string): string | undefined {
@@ -48,7 +49,7 @@ if (!appId || !path || !out || !["graceful", "warn", "require"].includes(policy)
 }
 
 const engine = new Engine();
-for (const app of [counterApp, basicActionsApp, serverActionsApp, capabilityDemoApp]) {
+for (const app of [counterApp, basicActionsApp, serverActionsApp, capabilityDemoApp, nativeWidgetsApp]) {
   engine.registerApp(app);
 }
 // Same policy as examples/server/index.ts, so recordings match the dev server.

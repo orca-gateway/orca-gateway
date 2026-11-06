@@ -7,6 +7,7 @@ import { staticFlowsApp } from "./static-flows";
 import { animationsApp } from "./animations";
 import { customApp } from "./custom";
 import { capabilityDemoApp } from "./capability-demo";
+import { nativeWidgetsApp } from "./native-widgets";
 import { recoveryMiddleware } from "../../engine/src/middlewares/recovery";
 import { loggingMiddleware } from "../../engine/src/middlewares/logging";
 import { corsMiddleware } from "../../engine/src/middlewares/cors";
@@ -15,7 +16,7 @@ import { rateLimitMiddleware } from "../../engine/src/middlewares/rate-limit";
 
 // ── Register middleware on each app ──────────────────────────
 
-const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp];
+const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp];
 
 for (const app of apps) {
   app
@@ -78,3 +79,4 @@ console.log("  - capability:     /api/v1/app/capability-demo/page/upgrade");
 console.log("  - capability:     /api/v1/app/capability-demo/page/blocked");
 console.log("  - capability:     /api/v1/app/capability-demo/page/negotiation  (Epic 25b slice 2 live filter)");
 console.log("  - capability:     /api/v1/app/capability-demo/page/degrade  (a Checkbox iOS lacks)");
+console.log("  - native-widgets: /api/v1/app/native-widgets/page/home");

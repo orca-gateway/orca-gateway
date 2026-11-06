@@ -18,6 +18,32 @@ final class RenderTreeTests: XCTestCase {
         tree.first { $0.type == "ElevatedButton" && text(of: $0) == label }
     }
 
+    // MARK: T4.4 native-widgets page
+
+    /// Every node of the S4 demo page is a widget this build draws, so
+    /// nothing degrades to a FallbackPrompt.
+    func testTheNativeWidgetsPageDrawsWithoutDegrading() throws {
+        let page = try JSONDecoder().decode(
+            PageResponse.self, from: try Fixtures.data("sdk-swift/Tests/Pages/native-widgets-home.json"))
+        let registry = WidgetRegistry()
+        let renderer = PageRenderer(page: page, registry: registry)
+        let store = ElmStore()
+        store.seed(page.state)
+        let tree = try XCTUnwrap(renderer.tree(state: store.state))
+        XCTAssertEqual(tree.all.count, page.components.count)
+        XCTAssertEqual(tree.all.filter { $0.node.degradedFrom != nil }.map(\.type), [])
+        XCTAssertEqual(registry.reportedTypes, [])
+        let types = Set(tree.all.map(\.type))
+        for added in ["Icon", "Image", "Container", "Expanded", "Spacer", "TextField",
+                      "Stack", "Positioned", "ClipRRect", "GestureDetector"] {
+            XCTAssertTrue(types.contains(added), "\(added) is not on the page")
+        }
+        // The favourite icon follows its state: bowl starts on, pizza off.
+        let icons = tree.all.filter { $0.type == "Icon" }.compactMap { $0.props["name"]?.stringValue }
+        XCTAssertTrue(icons.contains("favorite"))
+        XCTAssertTrue(icons.contains("favorite_border"))
+    }
+
     // MARK: T2.3 counter page
 
     func testCounterPageCountsAndResetsWithASnackbar() throws {
