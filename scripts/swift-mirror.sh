@@ -57,7 +57,7 @@ publish() {
 
   say "Splitting $PREFIX/ at $tag"
   local split
-  split=$(git subtree split --prefix="$PREFIX" "$tag^{commit}")
+  split=$(git subtree split --quiet --prefix="$PREFIX" "$tag^{commit}")
   say "Split commit $split"
 
   # Build the split tree alone: nothing in it may need the rest of the repo.
@@ -165,7 +165,7 @@ SWIFT
       || die "the mirror at $version reports sdkSemver $printed"
     say "The mirror at $version builds and reports sdkSemver $printed"
   else
-    xcodebuild -quiet -scheme MirrorCheckLib \
+    xcodebuild -quiet -scheme MirrorCheck \
       -destination "generic/platform=iOS Simulator" build
     say "The mirror at $version builds for the iOS simulator"
   fi
