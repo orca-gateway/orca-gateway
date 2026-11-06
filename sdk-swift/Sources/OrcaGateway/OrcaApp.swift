@@ -53,7 +53,8 @@ private struct ToastView: View {
     }
 }
 
-/// Loads a page through OrcaClient and keeps the result.
+/// Loads a page through OrcaClient and keeps the result. Under a router the
+/// fetch carries the shared app state, and the page joins the router.
 @MainActor
 public final class OrcaPageLoader: ObservableObject {
     public enum Phase {
@@ -65,11 +66,13 @@ public final class OrcaPageLoader: ObservableObject {
     @Published public private(set) var phase: Phase = .loading
     public let client: OrcaClient
     public let path: String
+    private weak var router: OrcaRouter?
     private var started = false
 
-    public init(client: OrcaClient, path: String) {
+    public init(client: OrcaClient, path: String, router: OrcaRouter? = nil) {
         self.client = client
         self.path = path
+        self.router = router
     }
 
     /// Fetch once; `reload()` fetches again.
@@ -83,8 +86,12 @@ public final class OrcaPageLoader: ObservableObject {
         phase = .loading
         var client = self.client
         if client.device == DeviceInfo() { client.device = .current() }
+        let app = router?.appState ?? [:]
         do {
-            phase = .loaded(OrcaPageModel(page: try await client.fetchPage(path)))
+            let page = try await client.fetchPage(path, appState: app)
+            let model = OrcaPageModel(page: page, store: ElmStore(app: app), client: client)
+            router?.attach(model)
+            phase = .loaded(model)
         } catch OrcaClientError.http(let status, let body) {
             phase = .failed("HTTP \(status): \(body.prefix(200))")
         } catch {
@@ -93,20 +100,41 @@ public final class OrcaPageLoader: ObservableObject {
     }
 }
 
-/// The root view of an Orca-driven app: one NavigationStack showing the page
-/// at `path`, with loading and error states.
+/// The root view of an Orca-driven app: a NavigationStack of server pages,
+/// each with loading and error states. `navigate` pushes a page, `goBack`
+/// pops one, and app state is shared by every page on the stack.
 ///
 ///     OrcaApp(client: OrcaClient(baseURL: url, appId: "counter", apiKey: "demo-key"))
 @MainActor
 public struct OrcaApp: View {
-    @StateObject private var loader: OrcaPageLoader
+    @StateObject private var router: OrcaRouter
 
-    public init(client: OrcaClient, path: String = "home") {
-        _loader = StateObject(wrappedValue: OrcaPageLoader(client: client, path: path))
+    public init(client: OrcaClient, path: String = "home", system: SystemActions? = nil) {
+        _router = StateObject(wrappedValue: OrcaRouter(client: client, path: path, system: system))
+    }
+
+    public init(router: @autoclosure @escaping () -> OrcaRouter) {
+        _router = StateObject(wrappedValue: router())
     }
 
     public var body: some View {
-        NavigationStack {
+        NavigationStack(path: $router.stack) {
+            RoutePage(loader: router.loader(for: router.root))
+                .id(router.root.id)
+                .navigationDestination(for: OrcaRoute.self) { route in
+                    RoutePage(loader: router.loader(for: route))
+                }
+        }
+    }
+}
+
+/// One route's page: a spinner, the page, or the error with a retry.
+@MainActor
+struct RoutePage: View {
+    @ObservedObject var loader: OrcaPageLoader
+
+    var body: some View {
+        Group {
             switch loader.phase {
             case .loading:
                 ProgressView()

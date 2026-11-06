@@ -1,4 +1,5 @@
 #if canImport(SwiftUI)
+import Combine
 import SwiftUI
 
 /// A snackbar or toast on screen. Both are drawn as a floating message at the
@@ -11,25 +12,39 @@ public struct OrcaToast: Identifiable, Equatable, Sendable {
     public var style: Style
 }
 
-/// One rendered page: its nodes, its store, and the effects its actions ask
-/// for. Views resolve nodes through it and fire triggers into it.
+/// One rendered page: its nodes, its store, and the executor that runs its
+/// actions. Views resolve nodes through it and fire triggers into it.
+///
+/// Snackbars and toasts are drawn by the page itself. Navigation and system
+/// effects go to `effectHandler` (OrcaApp's router sets it), and a server
+/// action's structural changes edit the node tree here.
 @MainActor
 public final class OrcaPageModel: ObservableObject {
-    public let renderer: PageRenderer
+    public private(set) var renderer: PageRenderer
     public let store: ElmStore
-    public let reducer: ActionReducer
+    public let executor: ActionExecutor
     /// The snackbar or toast showing now.
     @Published public var toast: OrcaToast?
-    /// Effects the page does not handle itself (everything but snackbars and
-    /// toasts until S3 adds navigation, system and server adapters).
+    /// Bumped after every change to the node tree (a server action adding,
+    /// updating, replacing or deleting components).
+    @Published public private(set) var structureRevision = 0
+    /// Every effect as data, before it is performed (DevTools, logging).
     public var onEffect: ((ActionEffect) -> Void)?
+    /// Performs what the page does not: navigation, URL, clipboard, share.
+    public var effectHandler: ((ActionEffect) -> Void)?
+    /// An action that threw and had no lifecycle `onError` to catch it. Dart
+    /// leaves such a future unhandled; Swift reports it here and moves on.
+    public var onError: ((Error) -> Void)?
 
     public init(page: PageResponse, store: ElmStore = ElmStore(),
-                registry: WidgetRegistry = .shared, reducer: ActionReducer = ActionReducer()) {
+                registry: WidgetRegistry = .shared, client: OrcaClient? = nil) {
         self.renderer = PageRenderer(page: page, registry: registry)
         self.store = store
-        self.reducer = reducer
+        self.executor = ActionExecutor(store: store, client: client)
         store.seed(page.state)
+        executor.onEffect = { [weak self] effect in self?.onEffect?(effect) }
+        executor.perform = { [weak self] effect in self?.perform(effect) }
+        executor.onMutation = { [weak self] mutation in self?.apply(mutation) }
     }
 
     public var page: PageResponse { renderer.page }
@@ -43,12 +58,23 @@ public final class OrcaPageModel: ObservableObject {
     }
 
     /// Run the node's action for a trigger (`onTap`, `onLongPress`, ...), the
-    /// Flutter `fireAction`: nothing happens when the node has none.
-    public func fire(_ trigger: String, on node: ResolvedNode, eventData: [String: JSONValue]? = nil) {
-        guard let action = node.actions[trigger] else { return }
-        let (next, effects) = reducer.reduce(store.state, action, eventData: eventData)
-        store.commit(next)
-        effects.forEach(perform)
+    /// Flutter `fireAction`: nothing happens when the node has none. The run
+    /// is asynchronous (a server action waits on the network); the returned
+    /// task finishes when the action does, which tests await.
+    @discardableResult
+    public func fire(_ trigger: String, on node: ResolvedNode,
+                     eventData: [String: JSONValue]? = nil) -> Task<Void, Never>? {
+        guard let action = node.actions[trigger] else { return nil }
+        return Task { await run(action, eventData: eventData) }
+    }
+
+    /// Run one action to the end.
+    public func run(_ action: Action, eventData: [String: JSONValue]? = nil) async {
+        do {
+            try await executor.execute(action, eventData: eventData)
+        } catch {
+            onError?(error)
+        }
     }
 
     func perform(_ effect: ActionEffect) {
@@ -59,24 +85,52 @@ public final class OrcaPageModel: ObservableObject {
                 duration: Double(effect.payload["duration"]?.intValue ?? 4000) / 1000,
                 style: effect.type == "showSnackbar" ? .snackbar : .toast)
         default:
-            onEffect?(effect)
+            effectHandler?(effect)
         }
+    }
+
+    func apply(_ mutation: ComponentMutation) {
+        renderer.apply(mutation)
+        structureRevision += 1
     }
 }
 
 /// Re-renders one node when a key it watches changes, the Flutter
-/// `WatchBuilder`: other nodes of the page are left alone.
+/// `WatchBuilder`: other nodes of the page are left alone. A change to the
+/// node tree redraws every node, and picks up watches an update changed.
 @MainActor
 final class NodeObserver: ObservableObject {
     @Published private(set) var revision = 0
+    private weak var model: OrcaPageModel?
+    private let id: String
+    private var watches: [String] = []
     private var subscription: ElmStore.Subscription?
+    private var structure: AnyCancellable?
 
     init(model: OrcaPageModel, id: String) {
-        let watches = model.watches(of: id)
-        guard !watches.isEmpty else { return }
-        subscription = model.store.subscribe(watches) { [weak self] _ in
+        self.model = model
+        self.id = id
+        subscribe()
+        // `apply` edits the tree before it bumps the revision, so the tree is
+        // already new when this runs.
+        structure = model.$structureRevision.dropFirst().sink { [weak self] _ in
+            self?.structureChanged()
+        }
+    }
+
+    private func subscribe() {
+        guard let model else { return }
+        let next = model.watches(of: id)
+        guard next != watches || subscription == nil else { return }
+        watches = next
+        subscription = next.isEmpty ? nil : model.store.subscribe(next) { [weak self] _ in
             self?.revision += 1
         }
+    }
+
+    private func structureChanged() {
+        subscribe()
+        revision += 1
     }
 }
 #endif

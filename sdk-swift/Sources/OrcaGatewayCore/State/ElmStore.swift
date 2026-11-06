@@ -111,6 +111,10 @@ public final class ElmStore {
         var onChange: (StoreState) -> Void
     }
 
+    /// Called after every commit with the new state, before subscribers are
+    /// notified: how a navigator keeps the app scope shared between pages.
+    public var onCommit: ((StoreState) -> Void)?
+
     public init(_ state: StoreState = StoreState()) {
         self.state = state
     }
@@ -157,6 +161,7 @@ public final class ElmStore {
     /// changed. Subscribers are notified in subscription order.
     public func commit(_ next: StoreState) {
         state = next
+        onCommit?(next)
         let merged = next.merged
         for id in subscribers.keys.sorted() {
             guard var sub = subscribers[id] else { continue }

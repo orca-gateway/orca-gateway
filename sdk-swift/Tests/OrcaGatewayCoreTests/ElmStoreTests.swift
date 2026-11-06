@@ -151,4 +151,32 @@ final class ElmStoreTests: XCTestCase {
         XCTAssertEqual(b, StoreState(page: ["x": 2], app: ["y": true]))
         XCTAssertEqual(try jsonOf(b), ["page": ["x": 2], "app": ["y": true]])
     }
+
+    /// A navigator shares the app scope through `onCommit`: it sees every
+    /// commit, before the watchers do, whether or not a watched key changed.
+    func testOnCommitSeesEveryCommitBeforeWatchers() {
+        let store = ElmStore(page: ["n": 0])
+        var order: [String] = []
+        store.onCommit = { order.append("commit \($0.app["cart"]?.intValue ?? -1)") }
+        let sub = store.subscribe(["cart"]) { _ in order.append("watcher") }
+        store.dispatch(["cart": 2], scope: .app)
+        store.dispatch(["n": 1])
+        XCTAssertEqual(order, ["commit 2", "watcher", "commit 2"])
+        withExtendedLifetime(sub) {}
+    }
+
+    /// openUrl's scheme policy (Flutter `OrcaUrlPolicy`): http, https and
+    /// mailto by default, more only when the host opts in.
+    func testURLPolicy() {
+        let policy = OrcaURLPolicy.standard
+        for allowed in ["https://orca.example", "HTTP://orca.example/a?b=1", "mailto:hi@orca.example"] {
+            XCTAssertNotNil(policy.url(allowed), allowed)
+        }
+        for blocked in ["javascript:alert(1)", "tel:123", "sms:123", "file:///etc/hosts",
+                        "data:text/html,hi", "orca.example", "", "not a url"] {
+            XCTAssertNil(policy.url(blocked), blocked)
+        }
+        XCTAssertNotNil(OrcaURLPolicy(extraSchemes: ["Tel"]).url("tel:123"))
+        XCTAssertEqual(OrcaURLPolicy(extraSchemes: ["tel"]).allowedSchemes, ["http", "https", "mailto", "tel"])
+    }
 }
