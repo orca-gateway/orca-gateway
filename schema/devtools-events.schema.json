@@ -1,0 +1,183 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/devtools-events.json",
+  "title": "DevTools event",
+  "description": "One message an Orca SDK sends to Orca DevTools over the WebSocket on ws://<host>:6363. Every SDK (Flutter, Swift, future ports) sends the same envelope and the same payload per type; DevTools reads nothing else. A client sends `device_info` first after each connect, then any other type in any order. schema/fixtures/devtools holds one event per type (two for `error`), and every SDK's tests build those events and compare them to the files exactly.",
+  "type": "object",
+  "required": ["type", "deviceId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "enum": ["device_info", "timing", "state_change", "action", "network", "widget_rebuild", "error"]
+    },
+    "deviceId": {
+      "type": "string",
+      "description": "Stable for one client connection; DevTools groups events by it."
+    },
+    "timestamp": {
+      "type": "integer",
+      "description": "When the event was sent, in milliseconds since the Unix epoch."
+    },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "const": "device_info" } } },
+      "then": { "properties": { "payload": { "$ref": "#/definitions/DeviceInfo" } } } },
+    { "if": { "properties": { "type": { "const": "timing" } } },
+      "then": { "properties": { "payload": { "$ref": "#/definitions/Timing" } } } },
+    { "if": { "properties": { "type": { "const": "state_change" } } },
+      "then": { "properties": { "payload": { "$ref": "#/definitions/StateChange" } } } },
+    { "if": { "properties": { "type": { "const": "action" } } },
+      "then": { "properties": { "payload": { "$ref": "#/definitions/Action" } } } },
+    { "if": { "properties": { "type": { "const": "network" } } },
+      "then": { "properties": { "payload": { "$ref": "#/definitions/Network" } } } },
+    { "if": { "properties": { "type": { "const": "widget_rebuild" } } },
+      "then": { "properties": { "payload": { "$ref": "#/definitions/WidgetRebuild" } } } },
+    { "if": { "properties": { "type": { "const": "error" } } },
+      "then": { "properties": { "payload": { "$ref": "#/definitions/Error" } } } }
+  ],
+  "definitions": {
+    "DeviceInfo": {
+      "type": "object",
+      "description": "The handshake: who is connecting.",
+      "required": ["platform", "appVersion", "deviceModel"],
+      "properties": {
+        "platform": {
+          "type": "string",
+          "description": "iOS, Android, macOS, Windows, Linux, Fuchsia or Web."
+        },
+        "appVersion": { "type": "string" },
+        "deviceModel": { "type": "string" },
+        "appName": { "type": "string", "description": "Omitted when the host sets none." }
+      }
+    },
+    "Timing": {
+      "type": "object",
+      "description": "One page load: the engine's x-orca-timing header (when sent) and the client's marks, each in milliseconds from the request start.",
+      "required": ["pageId", "path", "client"],
+      "properties": {
+        "pageId": { "type": "string" },
+        "path": { "type": "string" },
+        "server": {
+          "type": "object",
+          "description": "The engine's TimingData (engine/src/core/timing.ts), passed through as parsed.",
+          "properties": {
+            "path": { "type": "string" },
+            "method": { "type": "string" },
+            "stages": { "type": "object", "additionalProperties": { "type": "number" } },
+            "componentCount": { "type": "integer" },
+            "responseSizeBytes": { "type": "integer" },
+            "cacheStatus": { "enum": ["hit", "miss", "none"] },
+            "totalMs": { "type": "number" },
+            "timestamp": { "type": "number" }
+          }
+        },
+        "client": {
+          "type": "object",
+          "required": ["requestStartMs", "responseReceivedMs", "parseCompleteMs", "renderStartMs", "renderCompleteMs", "firstFrameMs"],
+          "properties": {
+            "requestStartMs": { "type": "number" },
+            "responseReceivedMs": { "type": "number" },
+            "parseCompleteMs": { "type": "number" },
+            "renderStartMs": { "type": "number" },
+            "renderCompleteMs": { "type": "number" },
+            "firstFrameMs": { "type": "number" }
+          }
+        }
+      }
+    },
+    "StateChange": {
+      "type": "object",
+      "description": "One key of one scope changed. Both values are always present; null means unset.",
+      "required": ["scope", "pageId", "key", "oldValue", "newValue"],
+      "properties": {
+        "scope": { "enum": ["page", "app"] },
+        "pageId": { "type": "string" },
+        "key": { "type": "string" },
+        "oldValue": {},
+        "newValue": {}
+      }
+    },
+    "Action": {
+      "type": "object",
+      "description": "One action ran (nested ones too).",
+      "required": ["actionType", "family", "pageId", "data", "durationMs"],
+      "properties": {
+        "actionType": { "type": "string" },
+        "family": {
+          "enum": ["navigation", "state", "ui-feedback", "data", "lifecycle", "custom"],
+          "description": "inferActionFamily in sdk/lib/src/debug/debug_events.dart."
+        },
+        "pageId": { "type": "string" },
+        "data": {
+          "type": ["object", "null"],
+          "description": "The action as sent on the wire (action.schema.json)."
+        },
+        "durationMs": { "type": "number" },
+        "transformTrace": { "type": "array", "items": { "$ref": "#/definitions/TraceStep" } },
+        "affectedWidgets": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "Network": {
+      "type": "object",
+      "description": "One HTTP request. statusCode 0 means the transport failed. Credential headers (authorization, cookie, set-cookie, x-api-key, proxy-authorization) are sent as <redacted>.",
+      "required": ["method", "url", "statusCode", "durationMs"],
+      "properties": {
+        "method": { "type": "string" },
+        "url": { "type": "string" },
+        "statusCode": { "type": "integer" },
+        "durationMs": { "type": "number" },
+        "requestSizeBytes": { "type": "integer" },
+        "responseSizeBytes": { "type": "integer" },
+        "requestHeaders": { "type": "object", "additionalProperties": { "type": "string" } },
+        "responseHeaders": { "type": "object", "additionalProperties": { "type": "string" } },
+        "phases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["phase", "durationMs"],
+            "properties": {
+              "phase": { "enum": ["dns", "connect", "tls", "request", "wait", "download"] },
+              "durationMs": { "type": "number" }
+            }
+          }
+        },
+        "requestBody": { "description": "Only when the host opts into bodies." },
+        "responseBody": { "description": "Only when the host opts into bodies." }
+      }
+    },
+    "WidgetRebuild": {
+      "type": "object",
+      "description": "A node redrew because a key it watches changed.",
+      "required": ["widgetId", "widgetType", "watches", "propTraces"],
+      "properties": {
+        "widgetId": { "type": "string" },
+        "widgetType": { "type": "string" },
+        "watches": { "type": "array", "items": { "type": "string" } },
+        "propTraces": {
+          "type": "object",
+          "description": "Per prop, the transform steps its value went through; empty when the SDK does not trace.",
+          "additionalProperties": { "type": "array", "items": { "$ref": "#/definitions/TraceStep" } }
+        }
+      }
+    },
+    "Error": {
+      "type": "object",
+      "description": "An error, or a warning when the message or context contains warn, notfound or 404 (DevTools' severity rule). A drawn FallbackPrompt is reported once per unknown type per session, with context \"warn: FallbackPrompt\".",
+      "required": ["message"],
+      "properties": {
+        "message": { "type": "string" },
+        "stackTrace": { "type": "string" },
+        "context": { "type": "string" }
+      }
+    },
+    "TraceStep": {
+      "type": "object",
+      "required": ["op", "out"],
+      "properties": {
+        "op": { "type": "string" },
+        "in": { "type": "string" },
+        "out": { "type": "string" }
+      }
+    }
+  }
+}

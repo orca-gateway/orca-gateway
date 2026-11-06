@@ -13,11 +13,12 @@ tasks:
       - task: engine:dev
 
   test:all:
-    desc: Run all tests (engine + engine-dart + SDK)
+    desc: Run all tests (engine + engine-dart + SDK + DevTools)
     cmds:
       - task: engine:test
       - task: engine-dart:test
       - task: sdk:test
+      - task: devtools:test
 
   # === Engine ===
   engine:dev:
@@ -164,6 +165,12 @@ tasks:
     dir: devtools
     cmds:
       - flutter run -d macos
+
+  devtools:test:
+    desc: Run DevTools tests (includes the DevTools events fixture parse test)
+    dir: devtools
+    cmds:
+      - flutter test
 
   # === Docker ===
   docker:up:

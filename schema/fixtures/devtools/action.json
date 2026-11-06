@@ -1,0 +1,12 @@
+{
+  "type": "action",
+  "deviceId": "fixture-device",
+  "timestamp": 1793980800000,
+  "payload": {
+    "actionType": "setState",
+    "family": "state",
+    "pageId": "home",
+    "data": { "type": "setState", "key": "count", "scope": "page", "value": 1 },
+    "durationMs": 0.75
+  }
+}

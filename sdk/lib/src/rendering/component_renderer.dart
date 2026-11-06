@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/widgets.dart';
 import '../debug/orca_debug.dart';
 import '../debug/debug_events.dart';
@@ -13,6 +13,13 @@ import 'component_registry.dart';
 
 /// Renders a flat list of ComponentNodes into a Flutter widget tree.
 class ComponentRenderer {
+  /// Unknown widget types already reported to DevTools this session.
+  static final Set<String> _fallbackTypesReported = <String>{};
+
+  /// Forget the DevTools FallbackPrompt reports (tests).
+  @visibleForTesting
+  static void resetFallbackReports() => _fallbackTypesReported.clear();
+
   final ComponentRegistry registry;
   final Map<String, dynamic> state;
   final ActionExecutor? actionExecutor;
@@ -161,6 +168,12 @@ class ComponentRenderer {
       OrcaTelemetry.reportUnknownWidgetOnce(node.type);
       final fallbackBuilder = registry.get('FallbackPrompt');
       if (fallbackBuilder != null) {
+        // DevTools hears about each unknown type once per session, like
+        // telemetry: a report per rebuild would fill the Errors tab.
+        if (OrcaDebug.isEnabled && _fallbackTypesReported.add(node.type)) {
+          OrcaDebug.instance
+              ?.reportError(DebugErrorEvent.fallbackPrompt(node.type));
+        }
         final syntheticNode = node.copyWith(
           type: 'FallbackPrompt',
           kind: 'primitive',

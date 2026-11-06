@@ -1,0 +1,27 @@
+{
+  "type": "timing",
+  "deviceId": "fixture-device",
+  "timestamp": 1793980800000,
+  "payload": {
+    "pageId": "home",
+    "path": "home",
+    "server": {
+      "path": "/api/v1/app/counter/page/home",
+      "method": "GET",
+      "stages": { "getInfo": 0.12, "getState": 0.05, "render": 0.41, "flatten": 0.2 },
+      "componentCount": 16,
+      "responseSizeBytes": 2048,
+      "cacheStatus": "miss",
+      "totalMs": 1.5,
+      "timestamp": 1793980799990
+    },
+    "client": {
+      "requestStartMs": 0,
+      "responseReceivedMs": 12.5,
+      "parseCompleteMs": 13.25,
+      "renderStartMs": 13.5,
+      "renderCompleteMs": 20.75,
+      "firstFrameMs": 21.5
+    }
+  }
+}

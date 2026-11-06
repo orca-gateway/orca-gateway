@@ -88,13 +88,28 @@ class OrcaDebug {
   }
 
   void _send(String type, Map<String, dynamic> payload) {
-    _client?.send({
-      'type': type,
-      'deviceId': _client?.deviceId ?? 'unknown',
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'payload': payload,
-    });
+    _client?.send(envelope(
+      type: type,
+      deviceId: _client?.deviceId ?? 'unknown',
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: payload,
+    ));
   }
+
+  /// One DevTools message: the envelope every SDK sends
+  /// (schema/devtools-events.schema.json).
+  static Map<String, dynamic> envelope({
+    required String type,
+    required String deviceId,
+    required int timestamp,
+    required Map<String, dynamic> payload,
+  }) =>
+      {
+        'type': type,
+        'deviceId': deviceId,
+        'timestamp': timestamp,
+        'payload': payload,
+      };
 
   void dispose() {
     _client?.disconnect();

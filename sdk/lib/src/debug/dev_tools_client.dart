@@ -62,12 +62,11 @@ class DevToolsClient {
         'type': 'device_info',
         'deviceId': _deviceId,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'payload': {
-          'platform': _detectPlatform(),
-          'appVersion': '1.0.0',
-          'deviceModel': deviceModel,
-          if (appName != null) 'appName': appName,
-        },
+        'payload': deviceInfoPayload(
+          platform: _detectPlatform(),
+          deviceModel: deviceModel,
+          appName: appName,
+        ),
       });
 
       _channel!.stream.listen(
@@ -80,6 +79,21 @@ class DevToolsClient {
       _onDisconnect();
     }
   }
+
+  /// The `device_info` payload sent first on every connect
+  /// (schema/devtools-events.schema.json).
+  static Map<String, dynamic> deviceInfoPayload({
+    required String platform,
+    required String deviceModel,
+    String appVersion = '1.0.0',
+    String? appName,
+  }) =>
+      {
+        'platform': platform,
+        'appVersion': appVersion,
+        'deviceModel': deviceModel,
+        'appName': ?appName,
+      };
 
   void send(Map<String, dynamic> event) {
     if (!_connected || _channel == null) return;
