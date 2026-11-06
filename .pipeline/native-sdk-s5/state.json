@@ -4,9 +4,9 @@
   "idea": "Epic 23b slice S5: the release.sh mirror publisher and subtree-split CI job that tags the iOS SDK on a read-only orca-gateway-swift repo (23b.25), docs: an \"iOS SDK (alpha)\" page, README banner, epic row ticked (23b.26), and the engine's min-SDK gate accepting pre-release versions (S4 gate 09)",
   "kind": "feature",
   "created_at": "2026-11-06T19:46:26Z",
-  "updated_at": "2026-11-06T19:50:46Z",
+  "updated_at": "2026-11-06T20:12:16Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "08",
+  "current": "09",
   "stages": {
     "01": {
       "status": "skipped",
@@ -37,12 +37,16 @@
       "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S5 started at native-sdk-s4 gate 12 (A)"
     },
     "08": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/08-r1.md"
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-06T19:51:52Z",
+      "approved_with": "A approve"
     },
     "09": {
-      "status": "pending"
+      "status": "in_review",
+      "rounds": 1,
+      "card": "cards/09-r1.md"
     },
     "10": {
       "status": "pending"
@@ -67,6 +71,6 @@
     }
   },
   "gates": {
-    "code_unlocked": false
+    "code_unlocked": true
   }
 }
