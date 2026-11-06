@@ -78,9 +78,46 @@ void registerLayoutBuilders(ComponentRegistry registry) {
   registry.register('ReorderableListView', _buildReorderableListView);
 }
 
-Widget _buildColumn(OrcaComponentContext ctx) {
-  final gap = (ctx.prop<num>('gap'))?.toDouble();
+/// Reserved id of the Column the engine wraps a page in under the `warn`
+/// fallback policy: children are the FallbackPrompt banner and the original
+/// page root (engine/src/core/capability-filter.ts, pinned by
+/// schema/fixtures/render/13_caps_warn_banner.json).
+const _capsWarnRootId = '__caps_warn_root__';
+
+/// The page root under the warn banner is usually a Scaffold or a scroll
+/// view, which cannot size itself in a Column's unbounded height, so it gets
+/// the height left under the banner. The banner then sits at the top edge,
+/// so it takes the top inset and the page below it does not (as a Scaffold
+/// does for its body under an AppBar). In unbounded height, such as a
+/// SubPage inside a scroll view, the plain Column is kept.
+Widget _buildCapsWarnRoot(OrcaComponentContext ctx) {
   final children = renderChildren(ctx);
+  if (children.length != 2) return _column(ctx, children);
+  final [banner, page] = children;
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      if (!constraints.hasBoundedHeight) return _column(ctx, children);
+      return _column(ctx, [
+        SafeArea(bottom: false, child: banner),
+        Expanded(
+          child: MediaQuery.removePadding(
+            context: context,
+            removeTop: true,
+            child: page,
+          ),
+        ),
+      ]);
+    },
+  );
+}
+
+Widget _buildColumn(OrcaComponentContext ctx) {
+  if (ctx.node.id == _capsWarnRootId) return _buildCapsWarnRoot(ctx);
+  return _column(ctx, renderChildren(ctx));
+}
+
+Widget _column(OrcaComponentContext ctx, List<Widget> children) {
+  final gap = (ctx.prop<num>('gap'))?.toDouble();
 
   return Column(
     mainAxisAlignment: parseMainAxisAlignment(
