@@ -33,11 +33,15 @@ TAG_PREFIX="sdk-swift-v"
 die() { printf "error: %s\n" "$*" >&2; exit 1; }
 say() { printf "==> %s\n" "$*"; }
 
+# Cleanup never decides the outcome: under `set -e` a failing command in an
+# EXIT trap becomes the script's exit status, which once failed a release
+# whose pushes had all succeeded (sdk-swift-v0.1.0-alpha.1, run 42296248558).
 WORK=""
 cleanup() {
   if [[ -n "$WORK" ]]; then
     git -C "$REPO_ROOT" worktree remove --force "$WORK/tree" >/dev/null 2>&1 || true
-    rm -rf "$WORK"
+    rm -rf "$WORK" 2>/dev/null || true
+    git -C "$REPO_ROOT" worktree prune >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -67,7 +71,10 @@ publish() {
   [[ -f "$WORK/tree/LICENSE" ]] || die "the split has no LICENSE"
   say "Building the split tree on its own"
   if [[ -n "${SWIFT_DOCKER_IMAGE:-}" ]]; then
-    docker run --rm -v "$WORK/tree:/src" -w /src "$SWIFT_DOCKER_IMAGE" swift build
+    # The container runs as root. Its build products go to the container's
+    # own /tmp, so nothing root-owned is left in the runner's tree.
+    docker run --rm -v "$WORK/tree:/src:ro" -w /src "$SWIFT_DOCKER_IMAGE" \
+      swift build --scratch-path /tmp/split-build
   else
     (cd "$WORK/tree" && swift build)
   fi
