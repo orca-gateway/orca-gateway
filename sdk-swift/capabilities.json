@@ -1,0 +1,34 @@
+{
+  "$comment": "What this Swift build implements. gen-native-capabilities.ts advertises these widgets (each must carry the ios target in schema/widget-registry.json) and these action kinds; value kinds, transforms and BoolExpr ops are scraped from the engine like the Dart SDK's. Add a name here only in the PR that lands its implementation.",
+  "widgets": [
+    "AppBar",
+    "Card",
+    "Center",
+    "Column",
+    "Divider",
+    "ElevatedButton",
+    "FallbackPrompt",
+    "OutlinedButton",
+    "Padding",
+    "Row",
+    "Scaffold",
+    "SingleChildScrollView",
+    "SizedBox",
+    "Text",
+    "TextButton"
+  ],
+  "actionKinds": [
+    "actionGroup",
+    "conditionalAction",
+    "copyToClipboard",
+    "goBack",
+    "lifecycle",
+    "navigate",
+    "openUrl",
+    "serverAction",
+    "setState",
+    "share",
+    "showSnackbar",
+    "showToast"
+  ]
+}

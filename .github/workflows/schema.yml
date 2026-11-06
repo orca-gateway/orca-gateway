@@ -8,6 +8,9 @@ on:
       - "engine/src/types/**"
       - "sdk/pubspec.yaml"
       - "sdk/lib/src/capabilities/**"
+      - "sdk-swift/VERSION"
+      - "sdk-swift/capabilities.json"
+      - "sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift"
       - ".github/workflows/schema.yml"
   pull_request:
     paths:
@@ -16,6 +19,9 @@ on:
       - "engine/src/types/**"
       - "sdk/pubspec.yaml"
       - "sdk/lib/src/capabilities/**"
+      - "sdk-swift/VERSION"
+      - "sdk-swift/capabilities.json"
+      - "sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift"
       - ".github/workflows/schema.yml"
 
 jobs:
@@ -46,5 +52,15 @@ jobs:
         run: |
           if ! git diff --exit-code -- sdk/lib/src/capabilities/generated.dart; then
             echo "::error::Dart SDK capability vector is out of date. Run 'bun run schema/gen-sdk-capabilities.ts' and commit the result."
+            exit 1
+          fi
+
+      - name: Regenerate native (Swift) capabilities
+        run: bun run schema/gen-native-capabilities.ts
+
+      - name: Check native capabilities for drift
+        run: |
+          if ! git diff --exit-code -- sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift; then
+            echo "::error::Swift capability vector is out of date. Run 'bun run schema/gen-native-capabilities.ts' and commit the result."
             exit 1
           fi

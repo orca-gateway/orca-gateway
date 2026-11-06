@@ -2,7 +2,7 @@
 /**
  * Umbrella codegen runner.
  *
- * Schema-driven artifacts in this repo are produced by two scripts that
+ * Schema-driven artifacts in this repo are produced by three scripts that
  * MUST run in a specific order:
  *
  *   1. gen-widget-registry.ts   — scans engine/src/components/ and emits
@@ -12,9 +12,13 @@
  *                                 plus schema/protocol.json and the action /
  *                                 value type files, and emits
  *                                 sdk/lib/src/capabilities/generated.dart.
+ *   3. gen-native-capabilities.ts — reads the same manifest plus
+ *                                 sdk-swift/VERSION and capabilities.json,
+ *                                 and emits the Swift capability vector
+ *                                 (sdk-swift/.../Capabilities/Generated.swift).
  *
- * Step 2 reads what step 1 writes, so order is load-bearing — running them
- * out of order leaves the SDK capability vector stale.
+ * Steps 2 and 3 read what step 1 writes, so order is load-bearing — running
+ * them out of order leaves the SDK capability vectors stale.
  *
  * Run from the repo root:
  *
@@ -29,6 +33,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const steps = [
   resolve(here, "gen-widget-registry.ts"),
   resolve(here, "gen-sdk-capabilities.ts"),
+  resolve(here, "gen-native-capabilities.ts"),
 ];
 
 for (const script of steps) {
