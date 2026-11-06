@@ -30,6 +30,11 @@ android {
             isIncludeAndroidResources = true
             all { test ->
                 test.systemProperty("orca.repoRoot", rootDir.parentFile.absolutePath)
+                // -Porca.recordGoldens=true records the goldens instead of comparing them.
+                test.systemProperty(
+                    "orca.recordGoldens",
+                    providers.gradleProperty("orca.recordGoldens").getOrElse("false"),
+                )
                 test.testLogging {
                     events("failed")
                     exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
