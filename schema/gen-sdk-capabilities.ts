@@ -39,17 +39,18 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join, dirname, relative } from "path";
+import {
+  OSS_ROOT,
+  minus,
+  readManifestWidgets,
+  readProtocolVersion,
+  scrapeEngineKinds,
+} from "./caps-sources";
 
 // ── Paths ───────────────────────────────────────────────────────────────────
 
-const HERE = import.meta.dir;                     // open-source/schema
-const HARPY_ROOT = join(HERE, "..");              // open-source/
-const PROTOCOL_JSON = join(HARPY_ROOT, "schema/protocol.json");
-const PUBSPEC = join(HARPY_ROOT, "sdk/pubspec.yaml");
-const WIDGET_MANIFEST = join(HARPY_ROOT, "schema/widget-registry.json");
-const ACTION_TS = join(HARPY_ROOT, "engine/src/types/action.ts");
-const VALUE_TS = join(HARPY_ROOT, "engine/src/types/value.ts");
-const OUT_DART = join(HARPY_ROOT, "sdk/lib/src/capabilities/generated.dart");
+const PUBSPEC = join(OSS_ROOT, "sdk/pubspec.yaml");
+const OUT_DART = join(OSS_ROOT, "sdk/lib/src/capabilities/generated.dart");
 
 // Sentinels that must never appear in a capability vector, even if a stray
 // `type: "..."` literal sneaks in. CustomAction is caught by the
@@ -60,15 +61,6 @@ const SKIP_TRANSFORM_KINDS = new Set<string>([]);
 const SKIP_BOOL_EXPR_OPS = new Set<string>([]);
 
 // ── Readers ─────────────────────────────────────────────────────────────────
-
-function readProtocolVersion(): string {
-  const raw = readFileSync(PROTOCOL_JSON, "utf8");
-  const { protocolVersion } = JSON.parse(raw) as { protocolVersion: string };
-  if (typeof protocolVersion !== "string" || !protocolVersion) {
-    throw new Error(`protocol.json: missing or invalid protocolVersion`);
-  }
-  return protocolVersion;
-}
 
 function readSdkSemver(): string {
   const raw = readFileSync(PUBSPEC, "utf8");
@@ -82,35 +74,8 @@ function readSdkSemver(): string {
   return m[1].trim();
 }
 
-interface ManifestEntry {
-  type: string;
-  introducedIn?: string;
-  removedIn?: string;
-}
-
 function readSupportedWidgets(): string[] {
-  const raw = readFileSync(WIDGET_MANIFEST, "utf8");
-  const manifest = JSON.parse(raw) as { widgets: ManifestEntry[] };
-  return manifest.widgets.map((w) => w.type);
-}
-
-// Scrape a TS file for discriminator literals of the form `<field>: "<kind>";`.
-// Matches `type: "navigate";`, `op: "eq";`, etc. The `<field>` argument locks
-// down which field name we're extracting so value-kind scraping doesn't
-// accidentally pick up BoolExpr `op:` literals from the same file.
-function scrapeDiscriminatorLiterals(path: string, field: string): Set<string> {
-  const src = readFileSync(path, "utf8");
-  const re = new RegExp(`\\b${field}:\\s*"([^"]+)"`, "g");
-  const kinds = new Set<string>();
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src)) !== null) {
-    kinds.add(m[1]);
-  }
-  return kinds;
-}
-
-function minus(set: Set<string>, skip: Set<string>): string[] {
-  return [...set].filter((x) => !skip.has(x)).sort();
+  return readManifestWidgets().map((w) => w.type);
 }
 
 // ── Emitter ─────────────────────────────────────────────────────────────────
@@ -205,55 +170,10 @@ function main() {
 
   const widgets = readSupportedWidgets().sort();
 
-  // Value kinds and BoolExpr ops live in value.ts together. Value kinds use
-  // `type: "..."`, BoolExpr ops use `op: "..."` — the field-specific regex
-  // keeps them cleanly separated.
-  const valueKindsRaw = scrapeDiscriminatorLiterals(VALUE_TS, "type");
-  // Transform kinds also use `type: "..."` inside value.ts, so the `type:`
-  // regex above catches BOTH value kinds and transform kinds. We split them
-  // by consulting the manifest-declared value kinds: everything else in the
-  // `type:` set that is NOT a value kind must be a transform kind. The
-  // authoritative value-kind list is short and stable, so we hardcode it
-  // here as the anchor for the partition. (Keeping this anchor means the
-  // scraper will fail loudly if someone introduces a new Value kind without
-  // updating this list — which is the right failure mode, because any new
-  // Value kind must also land in the SDK's value_resolver.dart.)
-  const VALUE_KIND_ANCHOR = new Set([
-    "static",
-    "state",
-    "info",
-    "request",
-    "event",
-    "transform",
-    "conditional",
-    "tween",
-    "tweenSequence",
-  ]);
-
-  const valueKinds = new Set<string>();
-  const transformKinds = new Set<string>();
-  for (const kind of valueKindsRaw) {
-    if (VALUE_KIND_ANCHOR.has(kind)) {
-      valueKinds.add(kind);
-    } else {
-      transformKinds.add(kind);
-    }
-  }
-
-  // Assert the anchor matched reality. If someone removes a Value kind from
-  // value.ts, the anchor will contain a phantom entry — fail loudly so the
-  // anchor stays in sync.
-  for (const anchor of VALUE_KIND_ANCHOR) {
-    if (!valueKinds.has(anchor)) {
-      throw new Error(
-        `gen-sdk-capabilities: VALUE_KIND_ANCHOR includes "${anchor}" but it ` +
-          `was not found in ${VALUE_TS}. Update the anchor set in this script.`,
-      );
-    }
-  }
-
-  const actionKinds = scrapeDiscriminatorLiterals(ACTION_TS, "type");
-  const boolExprOps = scrapeDiscriminatorLiterals(VALUE_TS, "op");
+  // Value kinds, transform kinds and BoolExpr ops live in value.ts, action
+  // kinds in action.ts; caps-sources.ts partitions them (shared with the
+  // native generator so every SDK scrapes the engine the same way).
+  const { valueKinds, transformKinds, actionKinds, boolExprOps } = scrapeEngineKinds();
 
   const out = emitDart(
     protocolVersion,
