@@ -92,7 +92,7 @@ tasks:
       - swift test
 
   sdk-swift:gen:
-    desc: Regenerate the Swift capability vector (run after schema/gen-widget-registry.ts)
+    desc: Regenerate the Swift and Kotlin capability vectors (run after schema/gen-widget-registry.ts)
     cmds:
       - bun run schema/gen-native-capabilities.ts
 
@@ -111,6 +111,24 @@ tasks:
       - bun run examples/server/record-page.ts capability-demo degrade sdk-swift/Tests/Pages/degrade-require.json --policy require
       - bun run examples/server/record-page.ts capability-demo degrade sdk-swift/Tests/Pages/degrade-426.json --min-sdk 99.0.0 --sdk-version 0.1.0
       - bun run examples/server/record-page.ts native-widgets home sdk-swift/Tests/Pages/native-widgets-home.json
+
+  # === SDK (Kotlin, experimental: Epic 23b) ===
+  sdk-kotlin:test:
+    desc: Run the Android SDK core tests (Kotlin/JVM through the Gradle wrapper; any JDK 17 or later)
+    dir: sdk-kotlin
+    cmds:
+      - ./gradlew :core:test --console=plain
+
+  sdk-kotlin:build:
+    desc: Build the Android SDK core and run its tests, warnings as errors (what CI runs)
+    dir: sdk-kotlin
+    cmds:
+      - ./gradlew :core:build --console=plain
+
+  sdk-kotlin:gen:
+    desc: Regenerate the Kotlin and Swift capability vectors (run after schema/gen-widget-registry.ts)
+    cmds:
+      - bun run schema/gen-native-capabilities.ts
 
   # === Example app ===
   example:dev:
