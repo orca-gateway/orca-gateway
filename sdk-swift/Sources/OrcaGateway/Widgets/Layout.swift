@@ -4,6 +4,7 @@ import SwiftUI
 /// Column and Row (Flutter `Flex`): no implicit spacing, `gap` between
 /// children only, main-axis alignment with spacers, `mainAxisSize: max` (the
 /// default) fills the main axis. `spaceAround` is drawn like `spaceEvenly`.
+@MainActor
 struct FlexView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
@@ -63,6 +64,7 @@ struct FlexView: View {
     }
 }
 
+@MainActor
 struct CenterView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
@@ -73,6 +75,7 @@ struct CenterView: View {
     }
 }
 
+@MainActor
 struct PaddingView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
@@ -85,6 +88,7 @@ struct PaddingView: View {
 
 /// A fixed size on the axes it names; with no child, an empty box of that
 /// size (0 on an axis it leaves out).
+@MainActor
 struct SizedBoxView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
@@ -100,6 +104,7 @@ struct SizedBoxView: View {
     }
 }
 
+@MainActor
 struct ScrollNodeView: View {
     let node: ResolvedNode
     let model: OrcaPageModel

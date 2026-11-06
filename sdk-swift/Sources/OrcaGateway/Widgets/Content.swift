@@ -1,6 +1,7 @@
 #if canImport(SwiftUI)
 import SwiftUI
 
+@MainActor
 struct TextNodeView: View {
     let node: ResolvedNode
 
@@ -19,6 +20,7 @@ struct TextNodeView: View {
 
 /// A line as thick as `thickness` (default 1, colour #E0E0E0), inset by
 /// `indent` and `endIndent`; no extra vertical space, as the Flutter builder.
+@MainActor
 struct DividerView: View {
     let node: ResolvedNode
 
@@ -36,6 +38,7 @@ struct DividerView: View {
 /// per severity (blocking red, warn orange, info blue), tinted background,
 /// title, body, and a link-style button that opens `ctaUrl` (http, https,
 /// mailto only). S4 adds the page-level policies around it.
+@MainActor
 struct FallbackPromptView: View {
     let node: ResolvedNode
     @Environment(\.openURL) private var openURL

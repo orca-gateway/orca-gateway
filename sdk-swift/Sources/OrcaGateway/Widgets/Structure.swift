@@ -7,6 +7,7 @@ import SwiftUI
 /// `floatingActionButton` floats bottom-trailing; `bottomNavigationBar` and
 /// `persistentFooterButton_N` sit above the bottom safe area. Drawers and
 /// bottom sheets are not drawn yet.
+@MainActor
 struct ScaffoldView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
@@ -61,6 +62,7 @@ func indexedSlots(_ node: ResolvedNode, _ name: String) -> [String] {
 
 /// Puts a Scaffold's AppBar into the navigation bar. A slot that is not an
 /// AppBar is drawn above the body instead.
+@MainActor
 private struct AppBarChrome: ViewModifier {
     let appBar: ResolvedNode?
     let model: OrcaPageModel
@@ -115,6 +117,7 @@ private struct AppBarChrome: ViewModifier {
 }
 
 /// An AppBar outside a Scaffold's appBar slot: a bar with the title centred.
+@MainActor
 struct AppBarView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
@@ -141,6 +144,7 @@ struct AppBarView: View {
 
 /// Card: rounded surface with a shadow from `elevation` (default 1), inner
 /// `padding`, outer `margin` (default 4, the Material default).
+@MainActor
 struct CardView: View {
     let node: ResolvedNode
     let model: OrcaPageModel

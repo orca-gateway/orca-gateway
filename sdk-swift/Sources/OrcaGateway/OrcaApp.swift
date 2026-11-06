@@ -4,6 +4,7 @@ import SwiftUI
 /// One page with its snackbar and toast overlay. Put it inside a
 /// NavigationStack (OrcaApp does) so a Scaffold's AppBar becomes the
 /// navigation bar.
+@MainActor
 public struct OrcaPageView: View {
     @ObservedObject var model: OrcaPageModel
 
@@ -24,6 +25,7 @@ public struct OrcaPageView: View {
 }
 
 /// The snackbar or toast at the bottom; it leaves after its duration.
+@MainActor
 private struct ToastView: View {
     @ObservedObject var model: OrcaPageModel
 
@@ -95,6 +97,7 @@ public final class OrcaPageLoader: ObservableObject {
 /// at `path`, with loading and error states.
 ///
 ///     OrcaApp(client: OrcaClient(baseURL: url, appId: "counter", apiKey: "demo-key"))
+@MainActor
 public struct OrcaApp: View {
     @StateObject private var loader: OrcaPageLoader
 

@@ -3,8 +3,10 @@ import Foundation
 import FoundationNetworking
 #endif
 
-/// One HTTP request as OrcaClient builds it.
-public struct HTTPRequest: Equatable, Sendable {
+/// One HTTP request as OrcaClient builds it. `@unchecked` only because Linux
+/// Foundation before Swift 6 does not mark the (immutable, value-type) URL
+/// Sendable.
+public struct HTTPRequest: Equatable, @unchecked Sendable {
     public var method: String
     public var url: URL
     public var headers: [String: String]

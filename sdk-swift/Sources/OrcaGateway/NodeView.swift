@@ -4,6 +4,7 @@ import SwiftUI
 /// Draws one node of a page by id, and everything below it. Each node
 /// observes only its own watched keys; the model itself is not observed here,
 /// so a toast appearing does not redraw the page's nodes.
+@MainActor
 public struct NodeView: View {
     let id: String
     let model: OrcaPageModel
@@ -18,6 +19,7 @@ public struct NodeView: View {
     }
 }
 
+@MainActor
 private struct WatchedNode: View {
     let id: String
     let model: OrcaPageModel
@@ -41,6 +43,7 @@ private struct WatchedNode: View {
 /// The registry's builders: wire type to SwiftUI view. The 15 types listed in
 /// sdk-swift/capabilities.json; anything else has already been degraded by
 /// the renderer.
+@MainActor
 struct WidgetView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
@@ -66,6 +69,7 @@ struct WidgetView: View {
 }
 
 /// The first child, or nothing (Flutter `renderChild`).
+@MainActor
 struct ChildView: View {
     let node: ResolvedNode
     let model: OrcaPageModel

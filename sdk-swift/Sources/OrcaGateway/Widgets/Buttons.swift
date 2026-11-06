@@ -5,6 +5,7 @@ import SwiftUI
 /// long press `onLongPress`; `enabled: false` disables both, as in Flutter.
 /// The look is native: a prominent bordered button, an outlined one, and a
 /// borderless one.
+@MainActor
 struct ButtonNodeView: View {
     let node: ResolvedNode
     let model: OrcaPageModel

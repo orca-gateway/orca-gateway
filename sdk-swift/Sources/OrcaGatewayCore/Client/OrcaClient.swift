@@ -18,7 +18,10 @@ public enum OrcaClientError: Error, Equatable, Sendable {
 /// retries exactly once as a POST with the full vector under `_orcaCapsVector`,
 /// and the server caches it, so later requests take the fast path. A second
 /// 412 is returned to the caller as an error, never retried again.
-public struct OrcaClient: Sendable {
+///
+/// `@unchecked Sendable` only because Linux Foundation before Swift 6 does not
+/// mark URL Sendable; every stored property is an immutable value or Sendable.
+public struct OrcaClient: @unchecked Sendable {
     public var baseURL: URL
     public var appId: String
     /// Sent as `Authorization: Bearer <apiKey>`.
