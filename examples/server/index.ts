@@ -43,12 +43,23 @@ engine.registerMonitor(new ConsoleMonitor());
 // Self-hosters configure this once at engine bootstrap. Cloud slice 3 will
 // expose the same knobs via dashboard UI backed by Postgres — the internal
 // FallbackPolicyResolver interface stays the same either way.
+//
+// For trying the policies on a device: ORCA_FALLBACK_POLICY=warn|require
+// changes the default, and ORCA_MIN_SDK_VERSION=99.0.0 makes every page
+// answer 426 with the "Update required" page.
+const fallbackDefault = process.env.ORCA_FALLBACK_POLICY ?? "graceful";
+if (!["graceful", "warn", "require"].includes(fallbackDefault)) {
+  throw new Error(`ORCA_FALLBACK_POLICY must be graceful, warn or require, not "${fallbackDefault}"`);
+}
 engine.setFallbackPolicy({
-  default: "graceful",
+  default: fallbackDefault as "graceful" | "warn" | "require",
   features: {
     "widget.Divider": "warn",
   },
 });
+if (process.env.ORCA_MIN_SDK_VERSION) {
+  engine.setMinSdkVersion({ appDefault: process.env.ORCA_MIN_SDK_VERSION });
+}
 
 engine.start();
 
@@ -66,3 +77,4 @@ console.log("  - capability:     /api/v1/app/capability-demo/page/home");
 console.log("  - capability:     /api/v1/app/capability-demo/page/upgrade");
 console.log("  - capability:     /api/v1/app/capability-demo/page/blocked");
 console.log("  - capability:     /api/v1/app/capability-demo/page/negotiation  (Epic 25b slice 2 live filter)");
+console.log("  - capability:     /api/v1/app/capability-demo/page/degrade  (a Checkbox iOS lacks)");

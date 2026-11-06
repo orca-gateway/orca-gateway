@@ -62,7 +62,7 @@ struct WidgetView: View {
         case "Text": TextNodeView(node: node)
         case "Divider": DividerView(node: node)
         case "ElevatedButton", "OutlinedButton", "TextButton": ButtonNodeView(node: node, model: model)
-        case "FallbackPrompt": FallbackPromptView(node: node)
+        case "FallbackPrompt": FallbackPromptView(node: node, model: model)
         default: EmptyView()
         }
     }

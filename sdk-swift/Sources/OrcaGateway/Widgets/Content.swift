@@ -36,11 +36,12 @@ struct DividerView: View {
 
 /// The frozen v1 FallbackPrompt, as the Flutter builder draws it: an accent
 /// per severity (blocking red, warn orange, info blue), tinted background,
-/// title, body, and a link-style button that opens `ctaUrl` (http, https,
-/// mailto only). S4 adds the page-level policies around it.
+/// title, body, and a link-style button that opens `ctaUrl` through the URL
+/// policy (http, https, mailto only), as `OrcaPageModel.openLink`.
 @MainActor
 struct FallbackPromptView: View {
     let node: ResolvedNode
+    let model: OrcaPageModel
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -63,7 +64,7 @@ struct FallbackPromptView: View {
                 HStack {
                     Spacer(minLength: 0)
                     Button {
-                        if let url = Props.openableURL(.string(rawURL)) { openURL(url) }
+                        model.openLink(rawURL) { openURL($0) }
                     } label: {
                         Text(label)
                             .font(.system(size: 14, weight: .semibold))

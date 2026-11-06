@@ -7,6 +7,14 @@
  * therefore also proves the Swift caps hash is accepted by a real engine.
  *
  *   bun run examples/server/record-page.ts <appId> <path> <out.json>
+ *       [--policy graceful|warn|require] [--min-sdk <version>] [--sdk-version <version>]
+ *
+ * `--policy` sets the default fallback policy (graceful when left out), and
+ * `--min-sdk` the app's minimum SDK version. Below it the engine answers 426;
+ * the recording is then the whole 426 body, `{error, minSdkVersion,
+ * clientSdkVersion, page}`. `--sdk-version` replaces the `x-orca-sdk-version`
+ * header: the engine skips the gate for a version that is not plain X.Y.Z,
+ * and the Swift SDK's own version is `0.1.0-alpha.1`.
  *
  * Used by `t sdk-swift:record`. Writes the page JSON with a 2-space indent
  * (to a file, because the engine logs its start line to stdout).
@@ -19,9 +27,23 @@ import { basicActionsApp } from "./basic-actions";
 import { serverActionsApp } from "./server-actions";
 import { capabilityDemoApp } from "./capability-demo";
 
-const [appId, path, out] = process.argv.slice(2);
-if (!appId || !path || !out) {
-  console.error("usage: bun run examples/server/record-page.ts <appId> <path> <out.json>");
+const args = process.argv.slice(2);
+function option(name: string): string | undefined {
+  const i = args.indexOf(name);
+  if (i < 0) return undefined;
+  const value = args[i + 1];
+  args.splice(i, 2);
+  return value;
+}
+const policy = option("--policy") ?? "graceful";
+const minSdk = option("--min-sdk");
+const sdkVersion = option("--sdk-version");
+const [appId, path, out] = args;
+if (!appId || !path || !out || !["graceful", "warn", "require"].includes(policy)) {
+  console.error(
+    "usage: bun run examples/server/record-page.ts <appId> <path> <out.json> " +
+      "[--policy graceful|warn|require] [--min-sdk <version>] [--sdk-version <version>]",
+  );
   process.exit(2);
 }
 
@@ -30,7 +52,11 @@ for (const app of [counterApp, basicActionsApp, serverActionsApp, capabilityDemo
   engine.registerApp(app);
 }
 // Same policy as examples/server/index.ts, so recordings match the dev server.
-engine.setFallbackPolicy({ default: "graceful", features: { "widget.Divider": "warn" } });
+engine.setFallbackPolicy({
+  default: policy as "graceful" | "warn" | "require",
+  features: { "widget.Divider": "warn" },
+});
+if (minSdk) engine.setMinSdkVersion({ appDefault: minSdk });
 const server = await engine.start({ port: 0, cache: false });
 
 try {
@@ -38,7 +64,7 @@ try {
   const url = `http://localhost:${server.port}/api/v1/app/${appId}/page/${path}`;
   const headers = {
     "x-orca-platform": "iOS",
-    "x-orca-sdk-version": vector.sdkSemver,
+    "x-orca-sdk-version": sdkVersion ?? vector.sdkSemver,
     "x-orca-caps-hash": capsHash,
   };
 
@@ -52,7 +78,8 @@ try {
       body: JSON.stringify({ _orcaCapsVector: vector }),
     });
   }
-  if (res.status !== 200) throw new Error(`${url} answered ${res.status}: ${await res.text()}`);
+  const expected = minSdk ? 426 : 200;
+  if (res.status !== expected) throw new Error(`${url} answered ${res.status}: ${await res.text()}`);
 
   writeFileSync(out, JSON.stringify(await res.json(), null, 2) + "\n");
   console.error(`recorded ${appId}/${path} -> ${out}`);

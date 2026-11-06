@@ -10,6 +10,7 @@ import {
   Padding,
   EdgeInsets,
   Divider,
+  Checkbox,
 } from "../../engine/src/components";
 
 // Capability negotiation demo (Epic 25b, foundation slice).
@@ -194,6 +195,39 @@ const negotiationPage = PageDefinition.create({
     }),
 });
 
+// ── /degrade: a widget one SDK lacks ─────────────────────────
+//
+// Checkbox has no iOS counterpart (its `targets` leave ios out), so the iOS
+// SDK does not advertise it. Flutter draws the checkbox; for iOS the engine
+// applies the fallback policy: `graceful` strips it, `warn` prepends a banner,
+// `require` replaces the page. examples/server/index.ts reads the policy
+// from ORCA_FALLBACK_POLICY, and record-page.ts records each one for the
+// Swift tests (`t sdk-swift:record`).
+
+const degradePage = PageDefinition.create({
+  id: "degrade",
+  title: "Degrade",
+  state: [],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({
+        title: Text.new({ data: "Degrade" }),
+        centerTitle: true,
+      }),
+      body: Padding.new({
+        padding: EdgeInsets.all(16),
+        child: Column.new({
+          crossAxisAlignment: "stretch",
+          children: [
+            Text.new({ data: "Above the checkbox." }),
+            Checkbox.new({ value: true, label: "Only some SDKs draw this" }),
+            Text.new({ data: "Below the checkbox." }),
+          ],
+        }),
+      }),
+    }),
+});
+
 // ── App ──────────────────────────────────────────────────────
 
 const demoFlow = Flow.create({
@@ -203,6 +237,7 @@ const demoFlow = Flow.create({
     { path: "upgrade", page: upgradePage },
     { path: "blocked", page: blockedPage },
     { path: "negotiation", page: negotiationPage },
+    { path: "degrade", page: degradePage },
   ],
 });
 

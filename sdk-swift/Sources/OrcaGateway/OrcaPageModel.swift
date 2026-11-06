@@ -89,6 +89,20 @@ public final class OrcaPageModel: ObservableObject {
         first?()
     }
 
+    /// A link the page itself draws, such as a FallbackPrompt's call to
+    /// action (Flutter: `OrcaUrlPolicy.isAllowed`, then `launchUrl`). A URL
+    /// the policy refuses does nothing. Under OrcaApp it goes out as an
+    /// `openUrl` effect, like the action; a page shown on its own opens it
+    /// with `fallback` (SwiftUI's `openURL`).
+    func openLink(_ raw: String, fallback: (URL) -> Void) {
+        guard let url = OrcaURLPolicy.standard.url(raw) else { return }
+        if let effectHandler {
+            effectHandler(ActionEffect("openUrl", ["url": .string(url.absoluteString)]))
+        } else {
+            fallback(url)
+        }
+    }
+
     func perform(_ effect: ActionEffect) {
         switch effect.type {
         case "showSnackbar", "showToast":

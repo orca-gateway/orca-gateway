@@ -105,10 +105,6 @@ enum Props {
         }
     }
 
-    /// URL schemes a tap may open (Dart `OrcaUrlPolicy`: http, https, mailto).
-    static func openableURL(_ value: JSONValue?) -> URL? {
-        value?.stringValue.flatMap(OrcaURLPolicy.standard.url)
-    }
 }
 
 /// Flutter `TextStyleData` applied to a SwiftUI `Text`.
