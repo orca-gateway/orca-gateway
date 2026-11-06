@@ -4,7 +4,9 @@ import SwiftUI
 /// Flutter `TextField` (`_buildTextField`). The text lives in the field.
 /// Each edit runs `setState` on `stateKey` when the node has one, then fires
 /// `onChange` with `eventData: {value}`. When the page's value changes from
-/// elsewhere (a reset, a server action), the field takes it without firing.
+/// elsewhere (a reset, a server action), the field takes it without firing;
+/// the value coming back from the field's own edits is ignored, since it
+/// arrives after newer typing.
 ///
 /// Without `decoration` the field is bare, as Flutter's EditableText path
 /// (16 point text, grey placeholder). With one it draws the label above,
@@ -20,6 +22,10 @@ struct TextFieldNodeView: View {
     /// Set while the field takes the page's value, so that change is not
     /// sent back as an edit.
     @State private var pageText: String?
+    /// Edits sent to the page whose echo has not come back yet. The page's
+    /// value follows the typing a render later, so an echo is not a change
+    /// from elsewhere and must not overwrite newer text.
+    @State private var echoes: [String] = []
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -33,6 +39,10 @@ struct TextFieldNodeView: View {
                 if node["autofocus"]?.boolValue == true { focused = true }
             }
             .onChange(of: value) { new in
+                if let index = echoes.firstIndex(of: new) {
+                    echoes.removeFirst(index + 1)
+                    return
+                }
                 guard new != text else { return }
                 pageText = new
                 text = new
@@ -46,7 +56,10 @@ struct TextFieldNodeView: View {
                     text = String(new.prefix(max))
                     return
                 }
-                model.textChanged(new, on: node)
+                if model.textChanged(new, on: node) != nil {
+                    echoes.append(new)
+                    if echoes.count > 64 { echoes.removeFirst(echoes.count - 64) }
+                }
             }
     }
 

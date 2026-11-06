@@ -183,16 +183,47 @@ struct GestureNodeView: View {
         if tap || doubleTap || longPress {
             ChildView(node: node, model: model)
                 .contentShape(Rectangle())
-                // A double tap is declared first, so a single tap waits for it.
-                .gesture(TapGesture(count: 2).onEnded { model.fire("onDoubleTap", on: node) },
-                         including: doubleTap ? .all : .subviews)
-                .gesture(TapGesture().onEnded { model.fire("onTap", on: node) },
-                         including: tap ? .all : .subviews)
-                .simultaneousGesture(LongPressGesture().onEnded { _ in model.fire("onLongPress", on: node) },
-                                     including: longPress ? .all : .subviews)
+                .modifier(Taps(
+                    single: tap ? { model.fire("onTap", on: node) } : nil,
+                    double: doubleTap ? { model.fire("onDoubleTap", on: node) } : nil))
+                .modifier(LongPress(action: longPress ? { model.fire("onLongPress", on: node) } : nil))
                 .accessibilityAddTraits(tap ? .isButton : [])
         } else {
             ChildView(node: node, model: model)
+        }
+    }
+}
+
+/// Only the tap gestures that have actions. With both, the double tap is
+/// attached first, so a single tap fires once the double tap has failed
+/// (Flutter waits the same way, `kDoubleTapTimeout`); without a double tap,
+/// a single tap fires at once.
+private struct Taps: ViewModifier {
+    let single: (() -> Void)?
+    let double: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        switch (single, double) {
+        case let (single?, double?):
+            content.onTapGesture(count: 2, perform: double).onTapGesture(perform: single)
+        case let (single?, nil):
+            content.onTapGesture(perform: single)
+        case let (nil, double?):
+            content.onTapGesture(count: 2, perform: double)
+        case (nil, nil):
+            content
+        }
+    }
+}
+
+private struct LongPress: ViewModifier {
+    let action: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let action {
+            content.simultaneousGesture(LongPressGesture().onEnded { _ in action() })
+        } else {
+            content
         }
     }
 }

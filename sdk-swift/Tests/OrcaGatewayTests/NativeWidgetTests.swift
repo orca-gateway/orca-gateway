@@ -170,6 +170,26 @@ final class NativeWidgetTests: XCTestCase {
         XCTAssertEqual(model.resolve("f")?["value"], "piz")
     }
 
+    /// Fast typing: every edit is started before any has run, and the page
+    /// still ends on the last one.
+    func testEditsRunInTypingOrder() async throws {
+        let model = OrcaPageModel(page: try page(field: [
+            "id": "f", "type": "TextField", "kind": "primitive", "childMode": "none",
+            "props": ["value": ["type": "state", "key": "query"]],
+            "actions": ["onChange": ["type": "setState", "key": "query",
+                                     "value": ["type": "event", "key": "value"]]],
+            "children": [], "watches": ["query"],
+        ]))
+        let field = try XCTUnwrap(model.resolve("f"))
+        let word = "margherita pizza"
+        var last: Task<Void, Never>?
+        for end in word.indices {
+            last = model.textChanged(String(word[...end]), on: field)
+        }
+        await last?.value
+        XCTAssertEqual(model.store.value("query"), .string(word))
+    }
+
     func testAFieldWithNoBindingFiresNothing() throws {
         let model = OrcaPageModel(page: try page(field: [
             "id": "f", "type": "TextField", "kind": "primitive", "childMode": "none",

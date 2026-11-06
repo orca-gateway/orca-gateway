@@ -89,16 +89,23 @@ public final class OrcaPageModel: ObservableObject {
         first?()
     }
 
+    /// The last text edit's run; each edit waits for the one before.
+    private var textEdits: Task<Void, Never>?
+
     /// The user edited a TextField (Flutter `_buildTextField`'s onChanged):
     /// `setState` on the node's `stateKey` when it has one, then its
-    /// `onChange` with `eventData: {value}`. The returned task finishes when
-    /// both have run.
+    /// `onChange` with `eventData: {value}`. Edits run one after another in
+    /// typing order: Flutter runs each one synchronously, and two runs that
+    /// overlapped could leave the page with an older value. The returned
+    /// task finishes when this edit has run.
     @discardableResult
     func textChanged(_ value: String, on node: ResolvedNode) -> Task<Void, Never>? {
         let stateKey = node["stateKey"]?.stringValue
         let onChange = node.actions["onChange"]
         guard stateKey != nil || onChange != nil else { return nil }
-        return Task {
+        let previous = textEdits
+        let edit = Task {
+            await previous?.value
             if let stateKey {
                 await run(.setState(Action.SetState(key: stateKey, value: .string(value))))
             }
@@ -106,6 +113,8 @@ public final class OrcaPageModel: ObservableObject {
                 await run(onChange, eventData: ["value": .string(value)])
             }
         }
+        textEdits = edit
+        return edit
     }
 
     /// A link the page itself draws, such as a FallbackPrompt's call to

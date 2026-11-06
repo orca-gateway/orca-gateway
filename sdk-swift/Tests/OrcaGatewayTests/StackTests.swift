@@ -48,6 +48,30 @@ final class StackTests: XCTestCase {
         XCTAssertEqual(frames["stack"]?.size, CGSize(width: 320, height: 200))
     }
 
+    /// The demo's favourite button: a GestureDetector whose onTap flips a
+    /// page-state flag the icon's name follows.
+    func testTheFavouriteGestureTogglesItsIcon() async throws {
+        let model = OrcaPageModel(page: try recordedPage("native-widgets-home"))
+        let detectors = model.page.components.filter {
+            $0.type == "GestureDetector" && $0.actions?["onTap"] != nil
+        }
+        let favourite = try XCTUnwrap(detectors.first { node in
+            if case .setState(let set)? = node.actions?["onTap"] { return set.key == "fav_pizza" }
+            return false
+        })
+        let iconId = try XCTUnwrap(model.page.components.first {
+            $0.type == "Icon" && $0.watches == ["fav_pizza"]
+        }?.id)
+        XCTAssertEqual(model.resolve(iconId)?["name"], "favorite_border")
+
+        await model.fire("onTap", on: try XCTUnwrap(model.resolve(favourite.id)))?.value
+        XCTAssertEqual(model.store.value("fav_pizza"), true)
+        XCTAssertEqual(model.resolve(iconId)?["name"], "favorite")
+
+        await model.fire("onTap", on: try XCTUnwrap(model.resolve(favourite.id)))?.value
+        XCTAssertEqual(model.store.value("fav_pizza"), false)
+    }
+
     func testPositionedSpecFollowsFlutter() {
         let both = PositionedSpec(right: 10, left: 10)
         XCTAssertEqual(both.width(in: 100), 80)
