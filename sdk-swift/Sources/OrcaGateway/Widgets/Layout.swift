@@ -15,6 +15,13 @@ struct FlexView: View {
     let axis: Axis
 
     var body: some View {
+        content.environment(\.orcaTight, stretched ? TightAxes(axis == .vertical ? .horizontal : .vertical) : [])
+    }
+
+    private var stretched: Bool { Props.crossAxis(node["crossAxisAlignment"]) == .stretch }
+
+    @ViewBuilder
+    private var content: some View {
         let flexes = node.childIds.map(flex(of:))
         if flexes.contains(where: { $0 > 0 }) {
             FlexLayout(axis: axis, cross: Props.crossAxis(node["crossAxisAlignment"]),
@@ -101,6 +108,7 @@ struct CenterView: View {
 
     var body: some View {
         ChildView(node: node, model: model)
+            .environment(\.orcaTight, [])
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }
@@ -129,7 +137,9 @@ struct SizedBoxView: View {
         if node.childIds.isEmpty {
             Color.clear.frame(width: width ?? 0, height: height ?? 0)
         } else {
-            ChildView(node: node, model: model).frame(width: width, height: height)
+            ChildView(node: node, model: model)
+                .modifier(AddTight(axes: [width != nil ? .horizontal : [], height != nil ? .vertical : []]))
+                .frame(width: width, height: height)
         }
     }
 }
@@ -145,6 +155,15 @@ struct ScrollNodeView: View {
             ChildView(node: node, model: model)
                 .padding(Props.insets(node["padding"]) ?? EdgeInsets())
         }
+    }
+}
+/// Adds axes to the tight set the children see.
+struct AddTight: ViewModifier {
+    let axes: TightAxes
+    @Environment(\.orcaTight) private var tight
+
+    func body(content: Content) -> some View {
+        content.environment(\.orcaTight, tight.union(axes))
     }
 }
 #endif

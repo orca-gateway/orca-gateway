@@ -11,11 +11,40 @@ private struct FlexAxisKey: EnvironmentKey {
     static let defaultValue: Axis? = nil
 }
 
+/// The axes on which a node's parent forces its size, Flutter's tight
+/// constraints: the cross axis under `stretch`, the main axis inside
+/// Expanded, a Positioned child's set width or height. SwiftUI lets a view
+/// pick its own size, so a Container reads this to fill those axes, as a
+/// Flutter Container does. Pass-through widgets (Padding, GestureDetector,
+/// ClipRRect) keep it; widgets that loosen constraints (Center, Stack, a
+/// Container with `alignment`, a Row or Column on its other axis) reset it.
+struct TightAxes: OptionSet {
+    let rawValue: Int
+    static let horizontal = TightAxes(rawValue: 1)
+    static let vertical = TightAxes(rawValue: 2)
+
+    init(rawValue: Int) { self.rawValue = rawValue }
+
+    init(_ axis: Axis) {
+        self = axis == .horizontal ? .horizontal : .vertical
+    }
+}
+
+private struct TightAxesKey: EnvironmentKey {
+    static let defaultValue: TightAxes = []
+}
+
 extension EnvironmentValues {
     /// The main axis of the Row or Column a node sits in, for Expanded.
     var orcaFlexAxis: Axis? {
         get { self[FlexAxisKey.self] }
         set { self[FlexAxisKey.self] = newValue }
+    }
+
+    /// The axes the parent forces (see TightAxes).
+    var orcaTight: TightAxes {
+        get { self[TightAxesKey.self] }
+        set { self[TightAxesKey.self] = newValue }
     }
 }
 
@@ -129,9 +158,11 @@ struct ExpandedView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
     @Environment(\.orcaFlexAxis) private var axis
+    @Environment(\.orcaTight) private var tight
 
     var body: some View {
         ChildView(node: node, model: model)
+            .environment(\.orcaTight, axis.map { tight.union(TightAxes($0)) } ?? tight)
             .frame(maxWidth: axis == .horizontal ? .infinity : nil,
                    maxHeight: axis == .vertical ? .infinity : nil,
                    alignment: .topLeading)

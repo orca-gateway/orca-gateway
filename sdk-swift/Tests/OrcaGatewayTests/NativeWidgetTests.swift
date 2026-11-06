@@ -58,6 +58,33 @@ final class NativeWidgetTests: XCTestCase {
         XCTAssertEqual(frames["rest"]?.width, 200)
     }
 
+    /// Flutter's tight constraints: a Container whose parent forces its width
+    /// (a stretched Column, Expanded) fills it; the same Container left loose
+    /// (under Center, a Stack) is as wide as its padded text.
+    func testAContainerFillsOnlyTheAxisItsParentForces() throws {
+        let text: JSONValue = ["id": "t", "type": "Text", "kind": "primitive", "childMode": "none",
+                               "props": ["data": "hi"], "children": [], "watches": []]
+        let model = OrcaPageModel(page: try JSONValue.object([
+            "pageId": "p", "title": "T", "state": [],
+            "components": [
+                ["id": "c", "type": "Container", "kind": "layout", "childMode": "single",
+                 "props": ["padding": ["top": 8, "right": 8, "bottom": 8, "left": 8]],
+                 "children": ["t"], "watches": []],
+                text,
+            ],
+        ]).decode(PageResponse.self))
+        let frames = layout(width: 300, height: 200) {
+            VStack(alignment: .leading, spacing: 0) {
+                NodeView(id: "c", model: model).environment(\.orcaTight, .horizontal).record("forced")
+                NodeView(id: "c", model: model).record("loose")
+            }
+        }
+        XCTAssertEqual(frames["forced"]?.width, 300)
+        let loose = try XCTUnwrap(frames["loose"]?.width)
+        XCTAssertLessThan(loose, 100)
+        XCTAssertGreaterThan(loose, 16)
+    }
+
     // MARK: props
 
     func testAlignmentNamesFollowFlutter() {

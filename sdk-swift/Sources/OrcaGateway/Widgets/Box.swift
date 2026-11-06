@@ -176,19 +176,28 @@ struct DecorationBackground: View {
 /// include the padding, and `alignment`, which makes the box fill its parent
 /// and places the child in it. With no child the box takes the space it is
 /// offered. `clipBehavior` other than `none` clips to the decoration's shape.
+///
+/// Where the parent forces its size (TightAxes: a stretched Column, an
+/// Expanded), the box fills that axis, decoration included, as Flutter's
+/// tight constraints make it.
 @MainActor
 struct ContainerView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
+    @Environment(\.orcaTight) private var tight
 
     var body: some View {
         let decoration = BoxDecorationProps(node["decoration"])
         let width = Props.number(node["width"])
         let height = Props.number(node["height"])
         let shape = decoration?.shape ?? CornersShape(radii: .zero)
+        let fillsWidth = width == nil && tight.contains(.horizontal)
+        let fillsHeight = height == nil && tight.contains(.vertical)
 
         aligned
             .padding(Props.insets(node["padding"]) ?? EdgeInsets())
+            .frame(maxWidth: fillsWidth ? .infinity : nil, maxHeight: fillsHeight ? .infinity : nil,
+                   alignment: .topLeading)
             .frame(width: width, height: height, alignment: .topLeading)
             .background {
                 if let decoration {
@@ -207,9 +216,12 @@ struct ContainerView: View {
             Color.clear
         } else if node["alignment"] != nil {
             ChildView(node: node, model: model)
+                .environment(\.orcaTight, [])
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: Props.alignment(node["alignment"]))
         } else {
             ChildView(node: node, model: model)
+                .modifier(AddTight(axes: [Props.number(node["width"]) != nil ? .horizontal : [],
+                                          Props.number(node["height"]) != nil ? .vertical : []]))
         }
     }
 }

@@ -122,6 +122,9 @@ struct StackNodeView: View {
                 NodeView(id: id, model: model).layoutValue(key: PositionedKey.self, value: positioned(id))
             }
         }
+        // A Stack loosens its ordinary children (fit: expand would tighten
+        // them; that is left to the layout's proposal).
+        .environment(\.orcaTight, [])
         .modifier(ClipIf(shape: Props.clips(node["clipBehavior"]) ? CornersShape(radii: .zero) : nil))
     }
 
@@ -144,6 +147,7 @@ struct PositionedView: View {
         let fillsWidth = spec.width != nil || (spec.left != nil && spec.right != nil)
         let fillsHeight = spec.height != nil || (spec.top != nil && spec.bottom != nil)
         ChildView(node: node, model: model)
+            .environment(\.orcaTight, [fillsWidth ? .horizontal : [], fillsHeight ? .vertical : []])
             .frame(maxWidth: fillsWidth ? .infinity : nil, maxHeight: fillsHeight ? .infinity : nil,
                    alignment: .topLeading)
     }

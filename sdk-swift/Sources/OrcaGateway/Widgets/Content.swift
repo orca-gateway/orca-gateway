@@ -1,9 +1,13 @@
 #if canImport(SwiftUI)
 import SwiftUI
 
+/// Flutter `Text`. Where the parent forces the width (TightAxes: a
+/// stretched Column, a Container that fills), the text spans it and
+/// `textAlign` places the lines, as Flutter lays a Text out in a tight box.
 @MainActor
 struct TextNodeView: View {
     let node: ResolvedNode
+    @Environment(\.orcaTight) private var tight
 
     var body: some View {
         let style = TextStyleProps(node["style"])
@@ -14,6 +18,8 @@ struct TextNodeView: View {
             .multilineTextAlignment(alignment ?? .leading)
             .lineLimit(node["softWrap"]?.boolValue == false ? 1 : maxLines)
             .background(style.background)
+            .frame(maxWidth: tight.contains(.horizontal) ? .infinity : nil,
+                   alignment: Props.frameAlignment(alignment))
             .accessibilityLabel(node["semanticsLabel"]?.stringValue.map { Text($0) } ?? Text(Props.text(node["data"])))
     }
 }
