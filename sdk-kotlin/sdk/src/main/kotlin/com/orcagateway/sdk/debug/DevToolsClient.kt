@@ -75,7 +75,13 @@ public fun OrcaDebug.stop() {
  * - `device_info` goes first on every connect;
  * - events are dropped while not connected, as in Flutter;
  * - a lost or refused connection is retried after 1, 2, 4, 8, 16, then
- *   30 s, at most 10 times in a row; a connect resets the count.
+ *   30 s, at most 10 times in a row; a connect resets the count;
+ * - no compression is offered. OkHttp offers `permessage-deflate` on every
+ *   WebSocket, DevTools (dart:io) answers it with `client_max_window_bits=15`,
+ *   and OkHttp refuses that answer (it closes with 1010, "unexpected
+ *   Sec-WebSocket-Extensions in response header"), so the app would never
+ *   stay connected. The offer is taken off the upgrade request by an
+ *   application interceptor: OkHttp skips network interceptors on WebSockets.
  *
  * [backoff] replaces [reconnectDelay] (tests use short waits). [url] must be
  * a `ws://` address OkHttp can parse.
@@ -87,7 +93,11 @@ public class DevToolsClient(
     private val backoff: (attempt: Int) -> Duration? = { reconnectDelay(it) },
 ) : DevToolsReporter {
     private val request = Request.Builder().url(url).build()
-    private val http = OkHttpClient()
+    private val http = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            chain.proceed(chain.request().newBuilder().removeHeader(EXTENSIONS).build())
+        }
+        .build()
 
     // One thread runs everything below, like Swift's serial queue; it ends
     // when the client is idle and comes back for the next task.
@@ -195,6 +205,7 @@ public class DevToolsClient(
 
         private const val NORMAL = 1000
         private const val GOING_AWAY = 1001
+        private const val EXTENSIONS = "Sec-WebSocket-Extensions"
 
         internal const val platform: String = "Android"
 

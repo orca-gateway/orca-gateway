@@ -3,6 +3,7 @@ package com.orcagateway.sdk.debug
 import com.orcagateway.core.debug.DevToolsEvent
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
+import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okhttp3.mockwebserver.Dispatcher
@@ -12,6 +13,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Test
 import java.net.InetAddress
+import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -22,18 +24,50 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * A local stand-in for Orca DevTools' WebSocket server, on 127.0.0.1: every
- * connection is upgraded, and every text message it receives is kept,
- * parsed. [port] 0 lets the OS pick one; a given port is reused, so a stub
- * can come back where a stopped one was.
+ * A local stand-in for Orca DevTools' WebSocket server, on 127.0.0.1 at a
+ * port the OS picks: every connection is upgraded, and every text message
+ * it receives is kept, parsed, per connection. [goAway] and [comeBack] play
+ * a DevTools restart on the same address without binding the port twice.
+ * With [likeDart] it answers a compression offer the way DevTools (dart:io)
+ * does: `permessage-deflate; client_max_window_bits=15`.
  */
-private class DevToolsStub(port: Int = 0) {
-    private val received = mutableListOf<JsonValue>()
+private class DevToolsStub(likeDart: Boolean = false) {
+    private val lock = Any()
+    private val opened = mutableListOf<List<JsonValue>>()
+    private val sockets = mutableListOf<WebSocket>()
+
+    @Volatile
+    private var away = false
     private val server = MockWebServer()
 
-    private val listener = object : WebSocketListener() {
+    init {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (away) return MockResponse().setResponseCode(503)
+                val response = MockResponse().withWebSocketUpgrade(connection())
+                val offer = request.getHeader("Sec-WebSocket-Extensions")
+                if (likeDart && offer?.contains("permessage-deflate", ignoreCase = true) == true) {
+                    response.setHeader("Sec-WebSocket-Extensions", "permessage-deflate; client_max_window_bits=15")
+                }
+                return response
+            }
+        }
+        server.start(InetAddress.getByName("127.0.0.1"), 0)
+    }
+
+    /** The server side of one upgraded connection. */
+    private fun connection() = object : WebSocketListener() {
+        private val received = mutableListOf<JsonValue>()
+
+        override fun onOpen(webSocket: WebSocket, response: Response) {
+            synchronized(lock) {
+                opened.add(received)
+                sockets.add(webSocket)
+            }
+        }
+
         override fun onMessage(webSocket: WebSocket, text: String) {
-            synchronized(received) { received += JsonValue.parse(text) }
+            synchronized(lock) { received += JsonValue.parse(text) }
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -41,17 +75,30 @@ private class DevToolsStub(port: Int = 0) {
         }
     }
 
-    init {
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse =
-                MockResponse().withWebSocketUpgrade(listener)
-        }
-        server.start(InetAddress.getByName("127.0.0.1"), port)
+    val url: String get() = "ws://127.0.0.1:${server.port}"
+
+    /** Every message received, connection after connection. */
+    val messages: List<JsonValue> get() = synchronized(lock) { opened.flatten() }
+
+    /** The messages of each upgraded connection, in the order they opened. */
+    val connections: List<List<JsonValue>> get() = synchronized(lock) { opened.map { it.toList() } }
+
+    /** The next request the server read (the upgrade), or null after 5 s. */
+    fun takeRequest(): RecordedRequest? = server.takeRequest(5, TimeUnit.SECONDS)
+
+    /**
+     * DevTools quits: every open connection is closed from this side, going
+     * away (1001), and upgrades are turned down (503) until [comeBack].
+     */
+    fun goAway() {
+        away = true
+        synchronized(lock) { sockets.toList() }.forEach { it.close(1001, "DevTools quit") }
     }
 
-    val port: Int get() = server.port
-    val url: String get() = "ws://127.0.0.1:$port"
-    val messages: List<JsonValue> get() = synchronized(received) { received.toList() }
+    /** DevTools is back on the same address. */
+    fun comeBack() {
+        away = false
+    }
 
     /** Closes the port and every open connection. */
     fun stop() = server.shutdown()
@@ -104,32 +151,67 @@ class DevToolsClientTest {
     }
 
     /**
-     * Swift `testReconnectsAfterDevToolsRestarts`. The client here never
-     * gives up, so the restart does not race the ten tries.
+     * DevTools is a Flutter app: dart:io answers an offer of
+     * `permessage-deflate` with `client_max_window_bits=15`, which OkHttp
+     * refuses by closing with 1010 ("unexpected Sec-WebSocket-Extensions in
+     * response header"), so a client that offers compression reconnects over
+     * and over and never delivers an event. Offering none, it stays.
+     */
+    @Test
+    fun c1_aDartDevToolsServerKeepsTheClient() {
+        val stub = DevToolsStub(likeDart = true)
+        val client = client(stub.url)
+        try {
+            client.connect()
+            assertTrue(eventually { client.isConnected && stub.messages.isNotEmpty() }, "device_info arrives")
+            client.report(DevToolsEvent.error(message = "after connect"))
+            assertTrue(eventually { stub.messages.size >= 2 }, "a later event arrives")
+
+            assertEquals(listOf("device_info", "error"), stub.messages.map { it["type"].stringValue })
+            assertEquals(1, stub.connections.size, "one connection, kept")
+            assertTrue(client.isConnected)
+            val upgrade = assertNotNull(stub.takeRequest())
+            assertNull(upgrade.getHeader("Sec-WebSocket-Extensions"), "no compression offered")
+        } finally {
+            client.disconnect()
+            stub.stop()
+        }
+    }
+
+    /**
+     * Swift `testReconnectsAfterDevToolsRestarts`. One stub plays DevTools
+     * quitting and coming back on the same address: MockWebServer binds a
+     * picked port without SO_REUSEADDR, so on Linux a second server on that
+     * port fails ("Address already in use") while the first one's closed
+     * connection sits in TIME_WAIT. The client here never gives up, so the
+     * restart does not race the ten tries.
      */
     @Test
     fun c2_reconnectsAfterDevToolsRestarts() {
         val stub = DevToolsStub()
-        val port = stub.port
         val client = client(stub.url) { 50.milliseconds }
-        var again: DevToolsStub? = null
         try {
             client.connect()
             assertTrue(eventually { stub.messages.size == 1 })
 
-            stub.stop()
+            stub.goAway()
             assertTrue(eventually { !client.isConnected })
 
-            again = DevToolsStub(port)
-            val restarted = again
+            stub.comeBack()
             assertTrue(
-                eventually { restarted.messages.firstOrNull()?.get("type")?.stringValue == "device_info" },
-                "device_info again on the new connection",
+                eventually { client.isConnected && stub.connections.getOrNull(1)?.isNotEmpty() == true },
+                "a new connection",
+            )
+            client.report(DevToolsEvent.error(message = "after restart"))
+            assertTrue(eventually { stub.connections[1].size >= 2 })
+            assertEquals(
+                listOf("device_info", "error"),
+                stub.connections[1].map { it["type"].stringValue },
+                "device_info again on the new connection, then events",
             )
         } finally {
             client.disconnect()
             stub.stop()
-            again?.stop()
         }
     }
 
