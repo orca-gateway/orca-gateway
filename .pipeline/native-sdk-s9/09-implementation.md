@@ -3,21 +3,23 @@
 ## Front page
 
 ### In one breath
-group 3 of 4 · tasks: 2 green, 0 blocked · cases: 35 of 40 green · build: core 113, sdk 121
-S9.13 Registered: pages draw the ten now; Kotlin advertises Swift's 25 (same caps hash).
-S9.11b Image sizing: Flutter's rule, image pixels as dp, one side keeps the aspect ratio.
+group 4 of 4 · tasks: 2 green, 0 blocked · cases: 40 of 40 green · build: core 113, sdk 126
+S9.14 native-widgets: recorded (same as Swift's), the heart toggles, its golden drawn.
+S9.15 OrcaTheme: the host styles plain buttons, the server's style wins; READMEs updated.
+All 17 tasks of S9 are built and reviewed, one commit each; lint clean; nothing pushed.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 needs you: an Image's intrinsic size, only asked by a few layouts, stays Compose's (question 2).
-3 auto-decided: test style and rounding, same output (decisions log, stage 09).
+1 needs you: a host button style is a class of parts, not a slot drawing the whole button.
+3 auto-decided: theme via LocalOrcaTheme, elevation keeps it, record flag order (decisions log).
 
 ### Questions for you
-1. Next: group 4: S9.14 native-widgets page (recording, heart, golden), S9.15 OrcaTheme
-   and the READMEs? (default: go)
-2. Leave the Image's intrinsic size as Compose's? No widget we draw asks for it. (default: yes)
+1. `A` approves stage 09; then stage 10, by hand on the Pixel 3a: capability-demo under each
+   policy, the 426 page, native-widgets. (default: go)
+2. Keep the host button style as a class (shape, colours, border, padding), with Material's
+   ripple and disabled look? Swift's lets the host draw the whole button. (default: yes)
 
 ## Appendix
 
@@ -204,6 +206,38 @@ you (question 2): intrinsic sizes stay Compose's.
 Review fit: pass
 Review quality: pass
 
+### Group 4
+Commits, one per task: S9.14 a68609e, S9.15 5da3bf1. Nothing pushed.
+
+#### Task S9.14 · native-widgets page: recording, heart, golden
+Files: `Taskfile.yml`, `sdk/src/test/resources/pages/native-widgets-home.json` (new),
+`sdk/…/NativeWidgetsPageTest.kt` (new), `sdk/src/test/resources/goldens/native-widgets-home.{png,runtime}` (new)
+Cases: K4, G3 → green · red first: both failed "no page native-widgets-home" before the recording;
+then G3 skipped (no golden), the recording run failed on purpose, the compare run passed.
+Changed: `sdk-kotlin:record` gains the four degrade lines and native-widgets; the re-record left
+counter and the four degrade pages byte-identical; the new page has all ten types, no fallback,
+and equals Swift's recording. K4 toggles the heart; G3 draws the page with images emptied.
+Golden (viewed): app bar, search field, two cards with hearts and badges, Flex and Spacer rows.
+Emptied Images draw as empty white boxes, where Swift draws "!" (S9.11's Image, unchanged).
+Decisions: `--sdk kotlin` right after the output path, as the counter line (same output).
+Review fit: pass
+Review quality: pass
+
+#### Task S9.15 · OrcaTheme button styles and the READMEs
+Files: `sdk/…/style/OrcaTheme.kt` (new), `sdk/…/widgets/Buttons.kt`, `sdk/…/style/OrcaThemeTest.kt`
+(new), `sdk-kotlin/README.md`, `examples/app-android/README.md`
+Cases: H1, H2, H3 → green · red first: all three "expected 40dp, was 24dp" with Buttons.kt not
+reading the theme (H2's server-wins checks passed on the stub) · GoldenTest unchanged and green.
+Changed: `OrcaTheme` (one optional `OrcaButtonStyle` per button type: shape, colours, border,
+padding) through `LocalOrcaTheme`; per part, server prop, then host style, then Material's. H3
+runs OrcaApp: nested buttons and a pushed page. READMEs: 25 widgets, the policies, S8 done, S9
+this package, "Styling buttons"; the example app's capability-demo and native-widgets rows and
+the policy env vars (not run on a device; that is stage 10).
+Decisions: theme through a public `LocalOrcaTheme`, no OrcaApp parameter; a server `elevation`
+keeps the host style (Swift's list); needs you (question 2): a class of parts, not a slot.
+Review fit: pass
+Review quality: pass
+
 ### Test run
 Group 1: `cd sdk-kotlin && ./gradlew build --console=plain --rerun-tasks`: BUILD SUCCESSFUL; core
 112 (106 + 6), sdk 98 (71 + 27), 0 failures; lint "No issues found".
@@ -211,6 +245,8 @@ Group 2, the same command after all six returned: BUILD SUCCESSFUL; core 112, sd
 0 failures; lint "No issues found".
 Group 3, the same command: BUILD SUCCESSFUL; core 113, sdk 121, 0 failures; lint "No issues
 found"; `git diff --stat -- sdk-swift` empty. Every changed file sits in its task's `Files`.
+Group 4, the same command after both returned: BUILD SUCCESSFUL; core 113, sdk 126 (121 + 5), 0
+failures, 0 skipped; lint "No issues found". Every changed file sits in its task's `Files`.
 
 ### Blocked
 none
@@ -221,4 +257,8 @@ none
 ### For ship (stage 10) to know
 The Kotlin caps vector now advertises 25 widgets (hash equal to Swift's), so the engine stops
 stripping the ten for Android; Schema CI's drift check covers Generated.kt. material-icons-extended
-is a new runtime dependency of the sdk (BOM-pinned). The record lines join Taskfile.yml in S9.14.
+is a new runtime dependency of the sdk (BOM-pinned). `task sdk-kotlin:record` now records all six
+pages. `OrcaTheme`, `OrcaButtonStyle` and `LocalOrcaTheme` are new public API. U1 runs by hand on
+the Pixel 3a: capability-demo `degrade` under each policy (`ORCA_FALLBACK_POLICY=warn|require`),
+the 426 page (`ORCA_MIN_SDK_VERSION=99.0.0`), native-widgets with its network images. For 23b.33:
+an Image with an empty `src` draws an empty box in Kotlin and "!" in Swift.
