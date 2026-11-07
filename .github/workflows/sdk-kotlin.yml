@@ -1,24 +1,27 @@
 name: SDK Kotlin CI
 
-# The pure-Kotlin core of the Android SDK (sdk-kotlin/core, JVM only) on Linux,
-# per PR: models, resolver, store, executor and render tree against the shared
-# conformance fixtures in schema/fixtures (Epic 23b, S6). The Compose layer and
-# its emulator jobs join from S7.
+# The Android SDK on Linux, per PR (Epic 23b): the pure-Kotlin core
+# (sdk-kotlin/core, JVM) against the shared conformance fixtures in
+# schema/fixtures, the Android library (sdk-kotlin/sdk) with its Compose UI
+# tests under Robolectric, and the example app's debug build. No emulator: the
+# example runs on one by hand (examples/app-android/README.md).
 on:
   push:
     paths:
       - "sdk-kotlin/**"
       - "schema/**"
+      - "examples/app-android/**"
       - ".github/workflows/sdk-kotlin.yml"
   pull_request:
     paths:
       - "sdk-kotlin/**"
       - "schema/**"
+      - "examples/app-android/**"
       - ".github/workflows/sdk-kotlin.yml"
 
 jobs:
-  core-tests:
-    name: Core tests (JDK ${{ matrix.java }}, linux)
+  sdk:
+    name: SDK tests and example (JDK ${{ matrix.java }}, linux)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -36,13 +39,22 @@ jobs:
       # Caches ~/.gradle and checks the committed wrapper jar against Gradle's checksums.
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build and test (warnings as errors; fixtures from ../schema)
-        run: ./gradlew :core:build --console=plain
+      # Both modules: compile with warnings as errors, unit tests (core on the
+      # JVM, sdk under Robolectric), lint. The runner's Android SDK suffices.
+      - name: Build and test the SDK (fixtures from ../schema)
+        run: ./gradlew build --console=plain
         working-directory: sdk-kotlin
+
+      - name: Build the example app (debug)
+        run: ./gradlew :app:assembleDebug --console=plain
+        working-directory: examples/app-android
 
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: sdk-kotlin-core-tests-jdk${{ matrix.java }}
-          path: sdk-kotlin/core/build/reports/tests/test
+          name: sdk-kotlin-tests-jdk${{ matrix.java }}
+          path: |
+            sdk-kotlin/core/build/reports/tests
+            sdk-kotlin/sdk/build/reports/tests
+            sdk-kotlin/sdk/build/reports/lint-results-*.html
