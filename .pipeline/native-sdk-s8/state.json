@@ -4,9 +4,9 @@
   "idea": "Epic 23b slice S8: the Android adapters (23b.27c) — navigation (NavHost routes, back, app state shared across pages), system actions (openUrl, clipboard, share), DevTools events and client, basic-actions and server-actions on the emulator",
   "kind": "feature",
   "created_at": "2026-11-07T09:20:52Z",
-  "updated_at": "2026-11-07T12:53:41Z",
+  "updated_at": "2026-11-07T12:54:45Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "12",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -62,21 +62,27 @@
       "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/12-r1.md"
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-07T12:54:44Z",
+      "approved_with": "A"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S8 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S8 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S8 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S8 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     }
   },
   "gates": {
