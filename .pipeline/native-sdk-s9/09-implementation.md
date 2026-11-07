@@ -21,7 +21,7 @@ nothing new
 ### Questions for you
 1. Next: group 3, S9.13, registers and advertises the ten widgets? (default: go)
 2. An Image with no width or height: size it as Flutter (aspect ratio kept) in S9.11b,
-   beside S9.13? Compose's sizing shows the demo's food images wrong. (default: yes)
+   beside S9.13? The demo's food images set only a height. (default: yes)
 3. Stack keeps Flutter's builder defaults (centred, no clip; top -8 hangs over)? (default: yes)
 4. 9 icons mirror unlike Flutter in right-to-left apps; leave as Swift does? (default: yes)
 
