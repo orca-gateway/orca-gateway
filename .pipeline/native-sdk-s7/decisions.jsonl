@@ -14,3 +14,4 @@
 {"ts":"2026-11-07T09:05:47Z","stage":"09","key":"swift-flex-drifts-row","chosen":"Swift's three flex drifts join row 23b.33, after S10","options":["add to 23b.33","leave"],"why":"A (defaults accepted)","topic":null,"new_to_you":false,"source":"you"}
 {"ts":"2026-11-07T09:05:47Z","stage":"09","key":"s7-pr","chosen":"push and open the S7 PR at stage 10","options":["yes","no"],"why":"A (defaults accepted)","topic":null,"new_to_you":false,"source":"you"}
 {"ts":"2026-11-07T09:13:19Z","stage":"10","key":"s7-autofix","chosen":"Auto-fix off for PR #13","options":["off","on"],"why":"same as #8, #10 and #12","topic":null,"new_to_you":false,"source":"memory"}
+{"ts":"2026-11-07T09:18:48Z","stage":"12","key":"consistent-cross-platform-look","chosen":"open","options":["host theme per platform","server-wide theme"],"why":"your question at gate 10; idioms stay the default (native-sdk gates 02-03)","topic":null,"new_to_you":false,"source":"agent"}
