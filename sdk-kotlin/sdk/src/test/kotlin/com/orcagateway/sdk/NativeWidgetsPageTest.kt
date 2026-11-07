@@ -1,6 +1,9 @@
 package com.orcagateway.sdk
 
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.dp
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.sdk.support.recordedPage
@@ -20,7 +23,8 @@ import kotlin.test.assertNotNull
  * `testTheFavouriteGestureTogglesItsIcon` (StackTests): the heart's
  * GestureDetector flips the page-state flag its Icon follows. G3 ports
  * Swift's `testNativeWidgetsPage` (GoldenTests): the whole page as a golden,
- * at the size and density of [GoldenTest].
+ * at the size and density of [GoldenTest]. R1 (gate 10) checks that each
+ * card's photo spans its card.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -67,5 +71,35 @@ class NativeWidgetsPageTest {
             },
         )
         compose.assertPageGolden(OrcaPageModel(page), "native-widgets-home")
+    }
+
+    /**
+     * R1, the gate-10 report "images in cards not stretched": by Flutter's
+     * rules each card's photo spans its card and is 160 dp high. The photo
+     * is found by its `alt`, the card as the innermost layout holding both
+     * the photo and the dish's name. Images are emptied as in G3.
+     */
+    @Test
+    fun r1_theCardPhotoSpansTheCard() {
+        val recorded = recordedPage("native-widgets-home")
+        val page = recorded.copy(
+            components = recorded.components.map { node ->
+                if (node.type == "Image") node.copy(props = node.props + ("src" to JsonValue.String(""))) else node
+            },
+        )
+        compose.setContent { OrcaPageView(OrcaPageModel(page)) }
+        compose.waitForIdle()
+        val height = with(compose.density) { 160.dp.roundToPx() }
+        for (dish in listOf("Margherita Pizza", "Salmon Poke Bowl")) {
+            val photo = compose.onNodeWithContentDescription(dish).fetchSemanticsNode().layoutInfo
+            val name = compose.onNodeWithText(dish).fetchSemanticsNode().layoutInfo
+            val holdsName = generateSequence(name) { it.parentInfo }.toList()
+            val card = assertNotNull(
+                generateSequence(photo.parentInfo) { it.parentInfo }.firstOrNull { a -> holdsName.any { it === a } },
+                "$dish: a layout holding both the photo and the name",
+            )
+            assertEquals(card.width, photo.width, "$dish: the photo's width in px, against its card's")
+            assertEquals(height, photo.height, "$dish: the photo's height in px")
+        }
     }
 }

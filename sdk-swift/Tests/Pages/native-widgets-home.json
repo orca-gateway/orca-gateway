@@ -79,25 +79,25 @@
         "15",
         "16",
         "17",
-        "44",
-        "71",
-        "72",
+        "45",
         "73",
-        "81",
-        "82",
-        "86",
-        "87"
+        "74",
+        "75",
+        "83",
+        "84",
+        "88",
+        "89"
       ],
       "watches": []
     },
     {
-      "id": "87",
+      "id": "89",
       "type": "GestureDetector",
       "kind": "layout",
       "childMode": "single",
       "props": {},
       "children": [
-        "88"
+        "90"
       ],
       "watches": [],
       "actions": {
@@ -112,7 +112,7 @@
       }
     },
     {
-      "id": "88",
+      "id": "90",
       "type": "Container",
       "kind": "layout",
       "childMode": "single",
@@ -132,12 +132,12 @@
         }
       },
       "children": [
-        "89"
+        "91"
       ],
       "watches": []
     },
     {
-      "id": "89",
+      "id": "91",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -149,7 +149,7 @@
       "watches": []
     },
     {
-      "id": "86",
+      "id": "88",
       "type": "SizedBox",
       "kind": "layout",
       "childMode": "single",
@@ -160,20 +160,20 @@
       "watches": []
     },
     {
-      "id": "82",
+      "id": "84",
       "type": "Row",
       "kind": "layout",
       "childMode": "multi",
       "props": {},
       "children": [
-        "83",
-        "84",
-        "85"
+        "85",
+        "86",
+        "87"
       ],
       "watches": []
     },
     {
-      "id": "85",
+      "id": "87",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -184,7 +184,7 @@
       "watches": []
     },
     {
-      "id": "84",
+      "id": "86",
       "type": "Spacer",
       "kind": "primitive",
       "childMode": "none",
@@ -193,7 +193,7 @@
       "watches": []
     },
     {
-      "id": "83",
+      "id": "85",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -204,7 +204,7 @@
       "watches": []
     },
     {
-      "id": "81",
+      "id": "83",
       "type": "SizedBox",
       "kind": "layout",
       "childMode": "single",
@@ -215,20 +215,20 @@
       "watches": []
     },
     {
-      "id": "73",
+      "id": "75",
       "type": "Row",
       "kind": "layout",
       "childMode": "multi",
       "props": {},
       "children": [
-        "74",
-        "77",
-        "78"
+        "76",
+        "79",
+        "80"
       ],
       "watches": []
     },
     {
-      "id": "78",
+      "id": "80",
       "type": "Expanded",
       "kind": "layout",
       "childMode": "single",
@@ -236,12 +236,12 @@
         "flex": 2
       },
       "children": [
-        "79"
+        "81"
       ],
       "watches": []
     },
     {
-      "id": "79",
+      "id": "81",
       "type": "Container",
       "kind": "layout",
       "childMode": "single",
@@ -261,12 +261,12 @@
         }
       },
       "children": [
-        "80"
+        "82"
       ],
       "watches": []
     },
     {
-      "id": "80",
+      "id": "82",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -280,7 +280,7 @@
       "watches": []
     },
     {
-      "id": "77",
+      "id": "79",
       "type": "SizedBox",
       "kind": "layout",
       "childMode": "single",
@@ -291,7 +291,7 @@
       "watches": []
     },
     {
-      "id": "74",
+      "id": "76",
       "type": "Expanded",
       "kind": "layout",
       "childMode": "single",
@@ -299,12 +299,12 @@
         "flex": 1
       },
       "children": [
-        "75"
+        "77"
       ],
       "watches": []
     },
     {
-      "id": "75",
+      "id": "77",
       "type": "Container",
       "kind": "layout",
       "childMode": "single",
@@ -317,12 +317,12 @@
         }
       },
       "children": [
-        "76"
+        "78"
       ],
       "watches": []
     },
     {
-      "id": "76",
+      "id": "78",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -333,7 +333,7 @@
       "watches": []
     },
     {
-      "id": "72",
+      "id": "74",
       "type": "SizedBox",
       "kind": "layout",
       "childMode": "single",
@@ -344,7 +344,7 @@
       "watches": []
     },
     {
-      "id": "71",
+      "id": "73",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -359,7 +359,7 @@
       "watches": []
     },
     {
-      "id": "44",
+      "id": "45",
       "type": "Container",
       "kind": "layout",
       "childMode": "single",
@@ -386,12 +386,12 @@
         }
       },
       "children": [
-        "45"
+        "46"
       ],
       "watches": []
     },
     {
-      "id": "45",
+      "id": "46",
       "type": "Column",
       "kind": "layout",
       "childMode": "multi",
@@ -399,13 +399,13 @@
         "crossAxisAlignment": "stretch"
       },
       "children": [
-        "46",
-        "56"
+        "47",
+        "58"
       ],
       "watches": []
     },
     {
-      "id": "56",
+      "id": "58",
       "type": "Padding",
       "kind": "layout",
       "childMode": "single",
@@ -418,12 +418,12 @@
         }
       },
       "children": [
-        "57"
+        "59"
       ],
       "watches": []
     },
     {
-      "id": "57",
+      "id": "59",
       "type": "Column",
       "kind": "layout",
       "childMode": "multi",
@@ -431,29 +431,29 @@
         "crossAxisAlignment": "stretch"
       },
       "children": [
-        "58",
-        "64",
-        "65"
+        "60",
+        "66",
+        "67"
       ],
       "watches": []
     },
     {
-      "id": "65",
+      "id": "67",
       "type": "Row",
       "kind": "layout",
       "childMode": "multi",
       "props": {},
       "children": [
-        "66",
-        "67",
         "68",
         "69",
-        "70"
+        "70",
+        "71",
+        "72"
       ],
       "watches": []
     },
     {
-      "id": "70",
+      "id": "72",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -469,7 +469,7 @@
       "watches": []
     },
     {
-      "id": "69",
+      "id": "71",
       "type": "Spacer",
       "kind": "primitive",
       "childMode": "none",
@@ -478,7 +478,7 @@
       "watches": []
     },
     {
-      "id": "68",
+      "id": "70",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -492,7 +492,7 @@
       "watches": []
     },
     {
-      "id": "67",
+      "id": "69",
       "type": "SizedBox",
       "kind": "layout",
       "childMode": "single",
@@ -503,7 +503,7 @@
       "watches": []
     },
     {
-      "id": "66",
+      "id": "68",
       "type": "Icon",
       "kind": "primitive",
       "childMode": "none",
@@ -516,7 +516,7 @@
       "watches": []
     },
     {
-      "id": "64",
+      "id": "66",
       "type": "SizedBox",
       "kind": "layout",
       "childMode": "single",
@@ -527,21 +527,21 @@
       "watches": []
     },
     {
-      "id": "58",
+      "id": "60",
       "type": "Row",
       "kind": "layout",
       "childMode": "multi",
       "props": {},
       "children": [
-        "59",
         "61",
-        "62",
-        "63"
+        "63",
+        "64",
+        "65"
       ],
       "watches": []
     },
     {
-      "id": "63",
+      "id": "65",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -552,7 +552,7 @@
       "watches": []
     },
     {
-      "id": "62",
+      "id": "64",
       "type": "SizedBox",
       "kind": "layout",
       "childMode": "single",
@@ -563,7 +563,7 @@
       "watches": []
     },
     {
-      "id": "61",
+      "id": "63",
       "type": "Icon",
       "kind": "primitive",
       "childMode": "none",
@@ -576,18 +576,18 @@
       "watches": []
     },
     {
-      "id": "59",
+      "id": "61",
       "type": "Expanded",
       "kind": "layout",
       "childMode": "single",
       "props": {},
       "children": [
-        "60"
+        "62"
       ],
       "watches": []
     },
     {
-      "id": "60",
+      "id": "62",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -603,20 +603,35 @@
       "watches": []
     },
     {
-      "id": "46",
-      "type": "Stack",
+      "id": "47",
+      "type": "Container",
       "kind": "layout",
-      "childMode": "multi",
-      "props": {},
+      "childMode": "single",
+      "props": {
+        "height": 160
+      },
       "children": [
-        "47",
-        "49",
-        "52"
+        "48"
       ],
       "watches": []
     },
     {
-      "id": "52",
+      "id": "48",
+      "type": "Stack",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "fit": "expand"
+      },
+      "children": [
+        "49",
+        "51",
+        "54"
+      ],
+      "watches": []
+    },
+    {
+      "id": "54",
       "type": "Positioned",
       "kind": "layout",
       "childMode": "single",
@@ -625,18 +640,18 @@
         "left": 12
       },
       "children": [
-        "53"
+        "55"
       ],
       "watches": []
     },
     {
-      "id": "53",
+      "id": "55",
       "type": "GestureDetector",
       "kind": "layout",
       "childMode": "single",
       "props": {},
       "children": [
-        "54"
+        "56"
       ],
       "watches": [],
       "actions": {
@@ -679,7 +694,7 @@
       }
     },
     {
-      "id": "54",
+      "id": "56",
       "type": "Container",
       "kind": "layout",
       "childMode": "single",
@@ -693,12 +708,12 @@
         }
       },
       "children": [
-        "55"
+        "57"
       ],
       "watches": []
     },
     {
-      "id": "55",
+      "id": "57",
       "type": "Icon",
       "kind": "primitive",
       "childMode": "none",
@@ -739,7 +754,7 @@
       ]
     },
     {
-      "id": "49",
+      "id": "51",
       "type": "Positioned",
       "kind": "layout",
       "childMode": "single",
@@ -748,12 +763,12 @@
         "right": 12
       },
       "children": [
-        "50"
+        "52"
       ],
       "watches": []
     },
     {
-      "id": "50",
+      "id": "52",
       "type": "Container",
       "kind": "layout",
       "childMode": "single",
@@ -770,12 +785,12 @@
         }
       },
       "children": [
-        "51"
+        "53"
       ],
       "watches": []
     },
     {
-      "id": "51",
+      "id": "53",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -791,7 +806,7 @@
       "watches": []
     },
     {
-      "id": "47",
+      "id": "49",
       "type": "ClipRRect",
       "kind": "layout",
       "childMode": "single",
@@ -804,12 +819,12 @@
         }
       },
       "children": [
-        "48"
+        "50"
       ],
       "watches": []
     },
     {
-      "id": "48",
+      "id": "50",
       "type": "Image",
       "kind": "primitive",
       "childMode": "none",
@@ -864,12 +879,12 @@
       },
       "children": [
         "19",
-        "29"
+        "30"
       ],
       "watches": []
     },
     {
-      "id": "29",
+      "id": "30",
       "type": "Padding",
       "kind": "layout",
       "childMode": "single",
@@ -882,12 +897,12 @@
         }
       },
       "children": [
-        "30"
+        "31"
       ],
       "watches": []
     },
     {
-      "id": "30",
+      "id": "31",
       "type": "Column",
       "kind": "layout",
       "childMode": "multi",
@@ -895,29 +910,29 @@
         "crossAxisAlignment": "stretch"
       },
       "children": [
-        "31",
-        "37",
-        "38"
+        "32",
+        "38",
+        "39"
       ],
       "watches": []
     },
     {
-      "id": "38",
+      "id": "39",
       "type": "Row",
       "kind": "layout",
       "childMode": "multi",
       "props": {},
       "children": [
-        "39",
         "40",
         "41",
         "42",
-        "43"
+        "43",
+        "44"
       ],
       "watches": []
     },
     {
-      "id": "43",
+      "id": "44",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -933,7 +948,7 @@
       "watches": []
     },
     {
-      "id": "42",
+      "id": "43",
       "type": "Spacer",
       "kind": "primitive",
       "childMode": "none",
@@ -942,7 +957,7 @@
       "watches": []
     },
     {
-      "id": "41",
+      "id": "42",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -956,7 +971,7 @@
       "watches": []
     },
     {
-      "id": "40",
+      "id": "41",
       "type": "SizedBox",
       "kind": "layout",
       "childMode": "single",
@@ -967,7 +982,7 @@
       "watches": []
     },
     {
-      "id": "39",
+      "id": "40",
       "type": "Icon",
       "kind": "primitive",
       "childMode": "none",
@@ -980,7 +995,7 @@
       "watches": []
     },
     {
-      "id": "37",
+      "id": "38",
       "type": "SizedBox",
       "kind": "layout",
       "childMode": "single",
@@ -991,21 +1006,21 @@
       "watches": []
     },
     {
-      "id": "31",
+      "id": "32",
       "type": "Row",
       "kind": "layout",
       "childMode": "multi",
       "props": {},
       "children": [
-        "32",
-        "34",
+        "33",
         "35",
-        "36"
+        "36",
+        "37"
       ],
       "watches": []
     },
     {
-      "id": "36",
+      "id": "37",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -1016,7 +1031,7 @@
       "watches": []
     },
     {
-      "id": "35",
+      "id": "36",
       "type": "SizedBox",
       "kind": "layout",
       "childMode": "single",
@@ -1027,7 +1042,7 @@
       "watches": []
     },
     {
-      "id": "34",
+      "id": "35",
       "type": "Icon",
       "kind": "primitive",
       "childMode": "none",
@@ -1040,18 +1055,18 @@
       "watches": []
     },
     {
-      "id": "32",
+      "id": "33",
       "type": "Expanded",
       "kind": "layout",
       "childMode": "single",
       "props": {},
       "children": [
-        "33"
+        "34"
       ],
       "watches": []
     },
     {
-      "id": "33",
+      "id": "34",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -1068,19 +1083,34 @@
     },
     {
       "id": "19",
-      "type": "Stack",
+      "type": "Container",
       "kind": "layout",
-      "childMode": "multi",
-      "props": {},
+      "childMode": "single",
+      "props": {
+        "height": 160
+      },
       "children": [
-        "20",
-        "22",
-        "25"
+        "20"
       ],
       "watches": []
     },
     {
-      "id": "25",
+      "id": "20",
+      "type": "Stack",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "fit": "expand"
+      },
+      "children": [
+        "21",
+        "23",
+        "26"
+      ],
+      "watches": []
+    },
+    {
+      "id": "26",
       "type": "Positioned",
       "kind": "layout",
       "childMode": "single",
@@ -1089,18 +1119,18 @@
         "left": 12
       },
       "children": [
-        "26"
+        "27"
       ],
       "watches": []
     },
     {
-      "id": "26",
+      "id": "27",
       "type": "GestureDetector",
       "kind": "layout",
       "childMode": "single",
       "props": {},
       "children": [
-        "27"
+        "28"
       ],
       "watches": [],
       "actions": {
@@ -1143,7 +1173,7 @@
       }
     },
     {
-      "id": "27",
+      "id": "28",
       "type": "Container",
       "kind": "layout",
       "childMode": "single",
@@ -1157,12 +1187,12 @@
         }
       },
       "children": [
-        "28"
+        "29"
       ],
       "watches": []
     },
     {
-      "id": "28",
+      "id": "29",
       "type": "Icon",
       "kind": "primitive",
       "childMode": "none",
@@ -1203,7 +1233,7 @@
       ]
     },
     {
-      "id": "22",
+      "id": "23",
       "type": "Positioned",
       "kind": "layout",
       "childMode": "single",
@@ -1212,12 +1242,12 @@
         "right": 12
       },
       "children": [
-        "23"
+        "24"
       ],
       "watches": []
     },
     {
-      "id": "23",
+      "id": "24",
       "type": "Container",
       "kind": "layout",
       "childMode": "single",
@@ -1234,12 +1264,12 @@
         }
       },
       "children": [
-        "24"
+        "25"
       ],
       "watches": []
     },
     {
-      "id": "24",
+      "id": "25",
       "type": "Text",
       "kind": "primitive",
       "childMode": "none",
@@ -1255,7 +1285,7 @@
       "watches": []
     },
     {
-      "id": "20",
+      "id": "21",
       "type": "ClipRRect",
       "kind": "layout",
       "childMode": "single",
@@ -1268,12 +1298,12 @@
         }
       },
       "children": [
-        "21"
+        "22"
       ],
       "watches": []
     },
     {
-      "id": "21",
+      "id": "22",
       "type": "Image",
       "kind": "primitive",
       "childMode": "none",

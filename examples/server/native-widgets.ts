@@ -55,46 +55,52 @@ function foodCard(opts: {
     child: Column.new({
       crossAxisAlignment: "stretch",
       children: [
-        Stack.new({
-          children: [
-            ClipRRect.new({
-              borderRadius: { topLeft: 16, topRight: 16, bottomLeft: 0, bottomRight: 0 },
-              child: Image.new({ src: opts.image, height: 160, fit: "cover", alt: opts.name }),
-            }),
-            Positioned.new({
-              top: 12,
-              right: 12,
-              child: Container.new({
-                padding: EdgeInsets.symmetric({ horizontal: 8, vertical: 4 }),
-                decoration: { color: orange, borderRadius: 8 },
-                child: Text.new({
-                  data: opts.badge,
-                  style: { color: "#FFFFFF", fontSize: 12, fontWeight: "bold" },
-                }),
+        // A fixed height and an expanding Stack: the photo fills the card's
+        // width by Flutter's rules (a loose Stack would size it by its ratio).
+        Container.new({
+          height: 160,
+          child: Stack.new({
+            fit: "expand",
+            children: [
+              ClipRRect.new({
+                borderRadius: { topLeft: 16, topRight: 16, bottomLeft: 0, bottomRight: 0 },
+                child: Image.new({ src: opts.image, height: 160, fit: "cover", alt: opts.name }),
               }),
-            }),
-            Positioned.new({
-              top: 12,
-              left: 12,
-              child: GestureDetector.new({
-                actions: {
-                  onTap: SetState(favKey, V.when([{ when: Expr.eq(V.pageState(favKey), true), then: V.static(false) }], V.static(true))),
-                  onLongPress: ShowToast(`${opts.name}: long press`),
-                },
+              Positioned.new({
+                top: 12,
+                right: 12,
                 child: Container.new({
-                  width: 36,
-                  height: 36,
-                  alignment: "center",
-                  decoration: { color: "#FFFFFF", borderRadius: 18 },
-                  child: Icon.new({
-                    name: V.when([{ when: Expr.eq(V.pageState(favKey), true), then: V.static("favorite") }], V.static("favorite_border")),
-                    color: orange,
-                    size: 20,
+                  padding: EdgeInsets.symmetric({ horizontal: 8, vertical: 4 }),
+                  decoration: { color: orange, borderRadius: 8 },
+                  child: Text.new({
+                    data: opts.badge,
+                    style: { color: "#FFFFFF", fontSize: 12, fontWeight: "bold" },
                   }),
                 }),
               }),
-            }),
-          ],
+              Positioned.new({
+                top: 12,
+                left: 12,
+                child: GestureDetector.new({
+                  actions: {
+                    onTap: SetState(favKey, V.when([{ when: Expr.eq(V.pageState(favKey), true), then: V.static(false) }], V.static(true))),
+                    onLongPress: ShowToast(`${opts.name}: long press`),
+                  },
+                  child: Container.new({
+                    width: 36,
+                    height: 36,
+                    alignment: "center",
+                    decoration: { color: "#FFFFFF", borderRadius: 18 },
+                    child: Icon.new({
+                      name: V.when([{ when: Expr.eq(V.pageState(favKey), true), then: V.static("favorite") }], V.static("favorite_border")),
+                      color: orange,
+                      size: 20,
+                    }),
+                  }),
+                }),
+              }),
+            ],
+          }),
         }),
         Padding.new({
           padding: EdgeInsets.all(12),
