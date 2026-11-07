@@ -23,18 +23,28 @@ public object GeneratedCapabilities {
         "AppBar",
         "Card",
         "Center",
+        "ClipRRect",
         "Column",
+        "Container",
         "Divider",
         "ElevatedButton",
+        "Expanded",
         "FallbackPrompt",
+        "GestureDetector",
+        "Icon",
+        "Image",
         "OutlinedButton",
         "Padding",
+        "Positioned",
         "Row",
         "Scaffold",
         "SingleChildScrollView",
         "SizedBox",
+        "Spacer",
+        "Stack",
         "Text",
         "TextButton",
+        "TextField",
     )
 
     public val valueKinds: List<String> = listOf(
@@ -118,5 +128,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "6a68c38066b85406753f674bb9b625f791554fec3c5279f33d212ab33b3eca91"
+    public const val capsHash: String = "277cc2e0ee594953a06718433976b76542859fe36020c197187715b24fa51254"
 }

@@ -1,11 +1,16 @@
 package com.orcagateway.sdk.style
 
+import androidx.compose.ui.AbsoluteAlignment
+import androidx.compose.ui.BiasAbsoluteAlignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -172,5 +177,73 @@ class PropsTest {
         assertNull(plain.fontWeight)
         assertNull(plain.textDecoration)
         assertEquals(TextDecoration.Underline, TextStyleProps(JsonValue.obj("decoration" to "underline")).textStyle().textDecoration)
+    }
+
+    /**
+     * W5: Flutter's nine `Alignment` names, anything else center. Flutter's
+     * `Alignment` is absolute, so right to left does not flip a side.
+     */
+    @Test
+    fun w5_alignmentNamesFollowFlutter() {
+        val names = mapOf(
+            "topLeft" to AbsoluteAlignment.TopLeft, "topCenter" to BiasAbsoluteAlignment(0f, -1f),
+            "topRight" to AbsoluteAlignment.TopRight, "centerLeft" to AbsoluteAlignment.CenterLeft,
+            "center" to BiasAbsoluteAlignment(0f, 0f), "centerRight" to AbsoluteAlignment.CenterRight,
+            "bottomLeft" to AbsoluteAlignment.BottomLeft, "bottomCenter" to BiasAbsoluteAlignment(0f, 1f),
+            "bottomRight" to AbsoluteAlignment.BottomRight,
+        )
+        for ((name, alignment) in names) assertEquals(alignment, Props.alignment(s(name)), name)
+        val center = BiasAbsoluteAlignment(0f, 0f)
+        assertEquals(center, Props.alignment(s("nonsense")))
+        assertEquals(center, Props.alignment(s("topStart")))
+        assertEquals(center, Props.alignment(JsonValue.Int(1)))
+        assertEquals(center, Props.alignment(null))
+
+        val child = IntSize(10, 10)
+        val box = IntSize(100, 50)
+        assertEquals(IntOffset(0, 0), Props.alignment(s("topLeft")).align(child, box, LayoutDirection.Rtl))
+        assertEquals(IntOffset(90, 20), Props.alignment(s("centerRight")).align(child, box, LayoutDirection.Rtl))
+        assertEquals(IntOffset(45, 40), Props.alignment(s("bottomCenter")).align(child, box, LayoutDirection.Rtl))
+
+        // The same names as points of the unit square, where a gradient starts and ends.
+        assertEquals(Offset(0f, 0f), Props.unitPoint(s("topLeft")))
+        assertEquals(Offset(1f, 0.5f), Props.unitPoint(s("centerRight")))
+        assertEquals(Offset(0.5f, 1f), Props.unitPoint(s("bottomCenter")))
+        assertEquals(Offset(1f, 1f), Props.unitPoint(s("bottomRight")))
+        assertEquals(Offset(0.5f, 0.5f), Props.unitPoint(s("nonsense")))
+        assertEquals(Offset(0.5f, 0.5f), Props.unitPoint(null))
+    }
+
+    /** W6: a number rounds every corner, an object names each corner and a missing one is 0. */
+    @Test
+    fun w6_radiiFromANumberOrCorners() {
+        assertEquals(CornerRadii.all(12.0), Props.radii(JsonValue.Int(12)))
+        assertEquals(
+            CornerRadii(topLeft = 2.5, topRight = 2.5, bottomLeft = 2.5, bottomRight = 2.5),
+            Props.radii(JsonValue.Double(2.5)),
+        )
+        assertEquals(
+            CornerRadii(topLeft = 8.0, topRight = 8.0, bottomLeft = 0.0, bottomRight = 0.0),
+            Props.radii(JsonValue.obj("topLeft" to 8, "topRight" to 8)),
+        )
+        assertEquals(
+            CornerRadii(topLeft = 1.0, topRight = 2.0, bottomLeft = 3.0, bottomRight = 4.0),
+            Props.radii(JsonValue.obj("topLeft" to 1, "topRight" to 2, "bottomLeft" to 3, "bottomRight" to 4)),
+        )
+        assertEquals(CornerRadii.Zero, Props.radii(JsonValue.obj()))
+        assertNull(Props.radii(s("12")))
+        assertNull(Props.radii(JsonValue.arr(12)))
+        assertNull(Props.radii(JsonValue.Null))
+        assertNull(Props.radii(null))
+    }
+
+    /** W7: `hardEdge`, `antiAlias` and `antiAliasWithSaveLayer` clip; `none`, no value and anything else do not. */
+    @Test
+    fun w7_clipBehaviourIsOffUnlessAsked() {
+        assertFalse(Props.clips(null))
+        assertFalse(Props.clips(s("none")))
+        assertFalse(Props.clips(s("nonsense")))
+        assertFalse(Props.clips(JsonValue.Bool(true)))
+        for (clip in listOf("hardEdge", "antiAlias", "antiAliasWithSaveLayer")) assertTrue(Props.clips(s(clip)), clip)
     }
 }

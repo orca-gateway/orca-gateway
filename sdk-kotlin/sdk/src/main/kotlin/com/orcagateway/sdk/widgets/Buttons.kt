@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.ChildView
 import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.style.LocalOrcaTheme
 import com.orcagateway.sdk.style.Props
 
 /**
@@ -29,11 +30,15 @@ import com.orcagateway.sdk.style.Props
  * `onTap`, as in Flutter); `enabled: false` disables both. Style props as
  * the Flutter builder reads them: ElevatedButton `backgroundColor`,
  * `foregroundColor`, `borderRadius`, `elevation`, `padding`;
- * OutlinedButton `color` and `borderColor`; TextButton `color`.
+ * OutlinedButton `color` and `borderColor`; TextButton `color`. A button
+ * with none of its type's style props (`elevation` aside) takes the host's
+ * style for the type from [LocalOrcaTheme], if any.
  */
 @Composable
 internal fun ButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
     val enabled = node["enabled"]?.boolValue ?: true
+    // Null when the server styled the button: its props win.
+    val host = LocalOrcaTheme.current.buttonStyle(node)
     val onTap: () -> Unit = { model.fire("onTap", on = node) }
     val longPress = rememberUpdatedState<() -> Unit> { model.fire("onLongPress", on = node) }
     val outer = if (enabled && node.actions["onLongPress"] != null) modifier.longPress(model, longPress) else modifier
@@ -49,14 +54,16 @@ internal fun ButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
                 onClick = onTap,
                 modifier = outer,
                 enabled = enabled,
-                shape = radius?.let { RoundedCornerShape(it) } ?: ButtonDefaults.elevatedShape,
+                shape = radius?.let { RoundedCornerShape(it) } ?: host?.shape ?: ButtonDefaults.elevatedShape,
                 colors = ButtonDefaults.elevatedButtonColors(
-                    containerColor = Props.color(node["backgroundColor"]) ?: Color.Unspecified,
-                    contentColor = Props.color(node["foregroundColor"]) ?: Color.Unspecified,
+                    containerColor = Props.color(node["backgroundColor"]) ?: host?.containerColor ?: Color.Unspecified,
+                    contentColor = Props.color(node["foregroundColor"]) ?: host?.contentColor ?: Color.Unspecified,
                 ),
                 elevation = elevation?.let { ButtonDefaults.elevatedButtonElevation(defaultElevation = it) }
                     ?: ButtonDefaults.elevatedButtonElevation(),
-                contentPadding = Props.insets(node["padding"])?.paddingValues() ?: ButtonDefaults.ContentPadding,
+                border = host?.border,
+                contentPadding = Props.insets(node["padding"])?.paddingValues()
+                    ?: host?.contentPadding ?: ButtonDefaults.ContentPadding,
                 content = label,
             )
         }
@@ -65,9 +72,14 @@ internal fun ButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
             onClick = onTap,
             modifier = outer,
             enabled = enabled,
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Props.color(node["color"]) ?: Color.Unspecified),
+            shape = host?.shape ?: ButtonDefaults.outlinedShape,
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = host?.containerColor ?: Color.Unspecified,
+                contentColor = Props.color(node["color"]) ?: host?.contentColor ?: Color.Unspecified,
+            ),
             border = Props.color(node["borderColor"])?.let { BorderStroke(1.dp, it) }
-                ?: ButtonDefaults.outlinedButtonBorder(enabled),
+                ?: host?.border ?: ButtonDefaults.outlinedButtonBorder(enabled),
+            contentPadding = host?.contentPadding ?: ButtonDefaults.ContentPadding,
             content = label,
         )
 
@@ -75,7 +87,13 @@ internal fun ButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
             onClick = onTap,
             modifier = outer,
             enabled = enabled,
-            colors = ButtonDefaults.textButtonColors(contentColor = Props.color(node["color"]) ?: Color.Unspecified),
+            shape = host?.shape ?: ButtonDefaults.textShape,
+            colors = ButtonDefaults.textButtonColors(
+                containerColor = host?.containerColor ?: Color.Unspecified,
+                contentColor = Props.color(node["color"]) ?: host?.contentColor ?: Color.Unspecified,
+            ),
+            border = host?.border,
+            contentPadding = host?.contentPadding ?: ButtonDefaults.TextButtonContentPadding,
             content = label,
         )
     }

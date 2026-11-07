@@ -8,13 +8,23 @@ import com.orcagateway.sdk.widgets.AppBarWidget
 import com.orcagateway.sdk.widgets.ButtonWidget
 import com.orcagateway.sdk.widgets.CardWidget
 import com.orcagateway.sdk.widgets.CenterWidget
+import com.orcagateway.sdk.widgets.ClipRRectWidget
+import com.orcagateway.sdk.widgets.ContainerWidget
 import com.orcagateway.sdk.widgets.DividerWidget
+import com.orcagateway.sdk.widgets.ExpandedWidget
 import com.orcagateway.sdk.widgets.FallbackPromptWidget
 import com.orcagateway.sdk.widgets.FlexWidget
+import com.orcagateway.sdk.widgets.GestureDetectorWidget
+import com.orcagateway.sdk.widgets.IconWidget
+import com.orcagateway.sdk.widgets.ImageWidget
 import com.orcagateway.sdk.widgets.PaddingWidget
+import com.orcagateway.sdk.widgets.PositionedWidget
 import com.orcagateway.sdk.widgets.ScaffoldWidget
 import com.orcagateway.sdk.widgets.ScrollWidget
 import com.orcagateway.sdk.widgets.SizedBoxWidget
+import com.orcagateway.sdk.widgets.SpacerWidget
+import com.orcagateway.sdk.widgets.StackWidget
+import com.orcagateway.sdk.widgets.TextFieldWidget
 import com.orcagateway.sdk.widgets.TextWidget
 import java.util.concurrent.ConcurrentHashMap
 
@@ -65,8 +75,11 @@ internal class WidgetBuilders private constructor(initial: Map<String, WidgetBui
         val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 15 widgets of sdk-kotlin/capabilities.json.
-         * Keep the two lists in step: the caps vector advertises what this draws.
+         * A fresh registry with the 25 widgets of sdk-kotlin/capabilities.json:
+         * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
+         * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
+         * Positioned, Image, Icon). Keep the two lists in step: the caps vector
+         * advertises what this draws (WidgetBuildersTest checks it).
          */
         fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
             register("Scaffold") { node, model, modifier -> ScaffoldWidget(node, model, modifier) }
@@ -84,6 +97,16 @@ internal class WidgetBuilders private constructor(initial: Map<String, WidgetBui
             register("OutlinedButton") { node, model, modifier -> ButtonWidget(node, model, modifier) }
             register("TextButton") { node, model, modifier -> ButtonWidget(node, model, modifier) }
             register("FallbackPrompt") { node, model, modifier -> FallbackPromptWidget(node, model, modifier) }
+            register("Expanded") { node, model, modifier -> ExpandedWidget(node, model, modifier) }
+            register("Spacer") { node, model, modifier -> SpacerWidget(node, model, modifier) }
+            register("TextField") { node, model, modifier -> TextFieldWidget(node, model, modifier) }
+            register("GestureDetector") { node, model, modifier -> GestureDetectorWidget(node, model, modifier) }
+            register("Container") { node, model, modifier -> ContainerWidget(node, model, modifier) }
+            register("ClipRRect") { node, model, modifier -> ClipRRectWidget(node, model, modifier) }
+            register("Stack") { node, model, modifier -> StackWidget(node, model, modifier) }
+            register("Positioned") { node, model, modifier -> PositionedWidget(node, model, modifier) }
+            register("Image") { node, model, modifier -> ImageWidget(node, model, modifier) }
+            register("Icon") { node, model, modifier -> IconWidget(node, model, modifier) }
         }
     }
 }

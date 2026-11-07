@@ -47,15 +47,29 @@ The same app draws any app on the example server. Pass `APP` and `PAGE` to the r
 | Counter (default) | `counter` | `home` | state, a snackbar |
 | Basic actions | `basic-actions` | `home`, `about`, `product`, `ecommerce`, `checkout` | navigation, back, URL, clipboard, share, toasts |
 | Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
+| Capability demo | `capability-demo` | `degrade` | the three fallback policies, on a Checkbox this SDK does not draw: left out (`graceful`), a warning banner above the page (`warn`), or a blocking prompt instead of the page (`require`) |
+| Native widgets | `native-widgets` | `home` | the ten widgets of S9: Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector (the images come from picsum.photos) |
 
 ```bash
 task example:android:run APP=basic-actions PAGE=home
 task example:android:run APP=server-actions PAGE=shop
+task example:android:run APP=capability-demo PAGE=degrade
+task example:android:run APP=native-widgets PAGE=home
 ```
 
 Basic actions starts at `home`, which opens the four other pages; `PAGE` starts the app on one of
 them directly. The back gesture (or a page's back button) returns to the page before. Open URL
 and share hand off to the browser and the share sheet; copy puts the text on the clipboard.
+
+The `degrade` page shows the policy the server was started with, `graceful` by default. To try the
+others, restart the server with `ORCA_FALLBACK_POLICY`, then start the app again. With
+`ORCA_MIN_SDK_VERSION=99.0.0` every page of every app answers 426 instead, and the app draws the
+"Update required" page; restart the server without it to go back.
+
+```bash
+ORCA_FALLBACK_POLICY=warn task example:dev:server      # or =require
+ORCA_MIN_SDK_VERSION=99.0.0 task example:dev:server
+```
 
 ## DevTools
 

@@ -15,6 +15,7 @@ import androidx.compose.ui.test.getAlignmentLinePosition
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.LayoutDirection
@@ -22,7 +23,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.width
+import com.orcagateway.core.json.JsonValue
+import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.render.WidgetRegistry
+import com.orcagateway.sdk.NodeView
+import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.WidgetBuilders
 import com.orcagateway.sdk.style.Props
+import com.orcagateway.sdk.support.column
+import com.orcagateway.sdk.support.leaf
+import com.orcagateway.sdk.support.page
+import com.orcagateway.sdk.support.row
+import com.orcagateway.sdk.support.sizedBox
+import com.orcagateway.sdk.support.text
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -162,5 +175,82 @@ class FlexLayoutTest {
         val big = bounds("c1").top + compose.onNodeWithTag("c1").getAlignmentLinePosition(FirstBaseline)
         assertTrue(abs((small - big).value) <= 1f, "baselines $small and $big")
         assertTrue(bounds("c0").top > bounds("c1").top)
+    }
+
+    /**
+     * A page drawn from its root inside a loose box, with Expanded and
+     * Spacer known to the core and drawn by their composables.
+     */
+    private fun flexPage(width: Dp, height: Dp, vararg nodes: ComponentNode) {
+        val registry = WidgetRegistry(types = WidgetRegistry.shared.types + setOf("Expanded", "Spacer"))
+        val model = OrcaPageModel(page(*nodes), registry = registry).apply {
+            builders = WidgetBuilders.standard().apply {
+                register("Expanded") { node, model, modifier -> ExpandedWidget(node, model, modifier) }
+                register("Spacer") { node, model, modifier -> SpacerWidget(node, model, modifier) }
+            }
+        }
+        compose.setContent {
+            Box(Modifier.size(width, height)) { NodeView(nodes.first().id, model) }
+        }
+    }
+
+    /** A SizedBox around a Text, so the box is found by its text. */
+    private fun sizedText(id: String, child: String, width: Int? = null, height: Int? = null) =
+        sizedBox(id, width, height).copy(children = listOf(child))
+
+    private fun boundsOfText(data: String): DpRect = compose.onNodeWithText(data).getUnclippedBoundsInRoot()
+
+    @Test
+    fun w1_flexSharesTheSpaceLeftByFlex() {
+        flex(
+            policy(vertical = false),
+            listOf(Modifier.size(50.dp, 10.dp), Modifier.flex(1), Modifier.flex(2)),
+            width = 200.dp,
+        )
+        // 150 left after the fixed child, shared 1:2.
+        assertEquals(listOf(50.dp, 50.dp, 100.dp), (0..2).map { bounds("c$it").width })
+        assertEquals(listOf(0.dp, 50.dp, 100.dp), (0..2).map { bounds("c$it").left })
+        assertEquals(200.dp, bounds("flex").width)
+        // Centred on the cross axis: an empty flex child in a 10 high row.
+        assertEquals(10.dp, bounds("flex").height)
+        assertEquals(5.dp, bounds("c1").top)
+    }
+
+    @Test
+    fun w2_gapsAreTakenBeforeTheShareAndASpacerPushesToTheEnd() {
+        flexPage(
+            300.dp, 100.dp,
+            row(
+                "0", "1", "2", "3",
+                props = mapOf("gap" to JsonValue.Int(10L), "crossAxisAlignment" to JsonValue.String("start")),
+            ),
+            sizedText("1", "4", width = 40, height = 10),
+            leaf("2", "Spacer"),
+            sizedText("3", "5", width = 40, height = 10),
+            text("4", "a"),
+            text("5", "b"),
+        )
+        assertEquals(0.dp, boundsOfText("a").left)
+        // 300 less the two boxes and the two gaps leaves the Spacer 200.
+        assertEquals(260.dp, boundsOfText("b").left)
+        assertEquals(300.dp, boundsOfText("b").right)
+        assertEquals(0.dp, boundsOfText("b").top)
+    }
+
+    @Test
+    fun w3_aColumnSharesHeightAndStretchesAcross() {
+        flexPage(
+            200.dp, 400.dp,
+            column("0", "1", "2", props = mapOf("crossAxisAlignment" to JsonValue.String("stretch"))),
+            sizedText("1", "3", height = 100),
+            ComponentNode("2", "Expanded", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single, children = listOf("4")),
+            text("3", "top"),
+            text("4", "rest"),
+        )
+        assertEquals(100.dp, boundsOfText("top").height)
+        assertEquals(200.dp, boundsOfText("top").width)
+        assertEquals(100.dp, boundsOfText("rest").top)
+        assertEquals(300.dp, boundsOfText("rest").height)
+        assertEquals(200.dp, boundsOfText("rest").width)
     }
 }

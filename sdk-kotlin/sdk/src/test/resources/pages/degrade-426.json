@@ -1,0 +1,25 @@
+{
+  "error": "sdk_version_too_old",
+  "minSdkVersion": "99.0.0",
+  "clientSdkVersion": "0.1.0",
+  "page": {
+    "pageId": "degrade",
+    "title": "Update required",
+    "state": [],
+    "components": [
+      {
+        "id": "__min_sdk_block_root__",
+        "type": "FallbackPrompt",
+        "kind": "primitive",
+        "childMode": "none",
+        "props": {
+          "title": "Update required",
+          "body": "This app needs version 99.0.0 or later to continue. Please update from your app store.",
+          "severity": "blocking"
+        },
+        "children": [],
+        "watches": []
+      }
+    ]
+  }
+}

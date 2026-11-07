@@ -2,6 +2,9 @@ package com.orcagateway.sdk.style
 
 import android.graphics.Typeface
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAbsoluteAlignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -153,6 +156,71 @@ internal object Props {
         "visible" -> TextOverflow.Visible
         else -> TextOverflow.Clip
     }
+
+    /**
+     * Flutter `parseAlignment`: the nine `Alignment` names, anything else
+     * `center`. Flutter's `Alignment` is absolute (it is not
+     * `AlignmentDirectional`), so `topLeft` stays top left under a
+     * right-to-left layout (SwiftUI's port maps it to topLeading). For a
+     * Container's or Stack's child and an Image in its box.
+     */
+    fun alignment(value: JsonValue?): Alignment {
+        val bias = alignmentBias(value)
+        return BiasAbsoluteAlignment(bias.x, bias.y)
+    }
+
+    /**
+     * The same names as a point of the unit square, (0, 0) top left and
+     * (1, 1) bottom right (Swift's `unitPoint`): where a gradient starts and
+     * ends, as Flutter's `Alignment.withinRect` places it.
+     */
+    fun unitPoint(value: JsonValue?): Offset {
+        val bias = alignmentBias(value)
+        return Offset((bias.x + 1) / 2, (bias.y + 1) / 2)
+    }
+
+    /** Flutter's `Alignment(x, y)` for a name, -1 to 1 on each axis; center when unknown. */
+    private fun alignmentBias(value: JsonValue?): Offset =
+        value?.stringValue?.let(ALIGNMENTS::get) ?: Offset.Zero
+
+    private val ALIGNMENTS: Map<String, Offset> = mapOf(
+        "topLeft" to Offset(-1f, -1f),
+        "topCenter" to Offset(0f, -1f),
+        "topRight" to Offset(1f, -1f),
+        "centerLeft" to Offset(-1f, 0f),
+        "center" to Offset(0f, 0f),
+        "centerRight" to Offset(1f, 0f),
+        "bottomLeft" to Offset(-1f, 1f),
+        "bottomCenter" to Offset(0f, 1f),
+        "bottomRight" to Offset(1f, 1f),
+    )
+
+    /**
+     * Flutter `_parseBorderRadius`: a number rounds every corner, an object
+     * `{topLeft, topRight, bottomLeft, bottomRight}` rounds each (missing
+     * ones 0); anything else is null. For a decoration and a ClipRRect.
+     */
+    fun radii(value: JsonValue?): CornerRadii? {
+        value?.doubleValue?.let { return CornerRadii.all(it) }
+        val o = value?.objectValue ?: return null
+        fun corner(key: String): Double = o[key]?.doubleValue ?: 0.0
+        return CornerRadii(
+            topLeft = corner("topLeft"),
+            topRight = corner("topRight"),
+            bottomLeft = corner("bottomLeft"),
+            bottomRight = corner("bottomRight"),
+        )
+    }
+
+    /**
+     * Flutter `parseClip`: `hardEdge`, `antiAlias` and
+     * `antiAliasWithSaveLayer` clip; `none` (the default), no value and
+     * anything else do not. Compose clips anti-aliased in all three cases.
+     */
+    fun clips(value: JsonValue?): Boolean = when (value?.stringValue) {
+        "hardEdge", "antiAlias", "antiAliasWithSaveLayer" -> true
+        else -> false
+    }
 }
 
 /**
@@ -171,6 +239,25 @@ internal data class Insets(val top: Double, val left: Double, val bottom: Double
 
     companion object {
         val Zero: Insets = Insets(0.0, 0.0, 0.0, 0.0)
+    }
+}
+
+/**
+ * Flutter `BorderRadius`, in logical pixels as sent. The corners are
+ * absolute, as Flutter's `BorderRadius` is (not `BorderRadiusDirectional`):
+ * `topLeft` stays top left under a right-to-left layout. Drawn as a
+ * [CornersShape], which caps radii that do not fit and makes a negative one 0.
+ */
+internal data class CornerRadii(
+    val topLeft: Double = 0.0,
+    val topRight: Double = 0.0,
+    val bottomLeft: Double = 0.0,
+    val bottomRight: Double = 0.0,
+) {
+    companion object {
+        val Zero: CornerRadii = CornerRadii()
+
+        fun all(radius: Double): CornerRadii = CornerRadii(radius, radius, radius, radius)
     }
 }
 

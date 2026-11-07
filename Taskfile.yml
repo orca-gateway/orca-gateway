@@ -134,6 +134,11 @@ tasks:
     desc: Re-record the pages the Kotlin tests load, through the Kotlin caps handshake
     cmds:
       - bun run examples/server/record-page.ts counter home sdk-kotlin/sdk/src/test/resources/pages/counter-home.json --sdk kotlin
+      - bun run examples/server/record-page.ts capability-demo degrade sdk-kotlin/sdk/src/test/resources/pages/degrade-graceful.json --sdk kotlin --policy graceful
+      - bun run examples/server/record-page.ts capability-demo degrade sdk-kotlin/sdk/src/test/resources/pages/degrade-warn.json --sdk kotlin --policy warn
+      - bun run examples/server/record-page.ts capability-demo degrade sdk-kotlin/sdk/src/test/resources/pages/degrade-require.json --sdk kotlin --policy require
+      - bun run examples/server/record-page.ts capability-demo degrade sdk-kotlin/sdk/src/test/resources/pages/degrade-426.json --sdk kotlin --min-sdk 99.0.0 --sdk-version 0.1.0
+      - bun run examples/server/record-page.ts native-widgets home sdk-kotlin/sdk/src/test/resources/pages/native-widgets-home.json --sdk kotlin
 
   # === Example app ===
   example:dev:

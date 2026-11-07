@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import com.orcagateway.sdk.support.kotlinRoot
 import com.orcagateway.sdk.support.recordedPage
@@ -25,6 +26,7 @@ import kotlin.test.fail
 /**
  * T6.3.4: one golden of the counter page, 393x852 dp at 2x (xhdpi), light,
  * drawn by Robolectric's native graphics. Swift's T2.4 at the same size.
+ * S9.8 adds the warn and require policy pages, as Swift's T4.1 and T4.2.
  *
  * The picture depends on the runtime that draws it as well as on the page, so
  * the golden is compared only on the runtime that recorded it:
@@ -56,98 +58,138 @@ class GoldenTest {
     }
 
     /**
-     * The Compose view drawn into a bitmap on white, in software (Swift
-     * renders the layer tree the same way). `captureToImage` times out here:
-     * its forced redraw never sees a frame under Robolectric. A software
-     * canvas draws no elevation shadows, so the buttons' shadows are not in
-     * the picture.
+     * G1 (Swift's T4.1): the warn policy's page pins the orange warn
+     * FallbackPrompt banner `__caps_warn_banner__` stretched across the top
+     * of the root Column, then the page's Scaffold (the "Degrade" app bar and
+     * its padded Column) under it, with the Checkbox, which Kotlin does not
+     * draw, as its own warn prompt between the two texts.
      */
-    private fun draw(view: View): Bitmap {
-        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        bitmap.eraseColor(android.graphics.Color.WHITE)
-        view.draw(Canvas(bitmap))
-        return bitmap
+    @Test
+    fun g1_theWarnPolicyPageDrawsItsBannerOverThePage() {
+        compose.assertPageGolden(OrcaPageModel(recordedPage("degrade-warn")), "degrade-warn")
     }
 
-    private fun assertGolden(image: Bitmap, name: String) {
-        assertEquals(SIZE_PX, image.width to image.height, "capture size")
-        val goldens = File(kotlinRoot, "sdk/src/test/resources/goldens")
-        val png = File(goldens, "$name.png")
-        val marker = File(goldens, "$name.runtime")
-        val actual = pixels(image)
-
-        if (System.getProperty("orca.recordGoldens") == "true") {
-            goldens.mkdirs()
-            write(actual, image.width, image.height, png)
-            marker.writeText(runtime)
-            fail("Recorded ${png.path} on $runtimeLine; run the test again.")
-        }
-
-        assumeTrue("$name has no golden; record one with -Porca.recordGoldens=true", png.isFile && marker.isFile)
-        val recordedOn = marker.readText()
-        assumeTrue(
-            "$name was recorded on ${recordedOn.trim().replace('\n', ' ')}, this is $runtimeLine; not compared",
-            recordedOn == runtime,
-        )
-
-        val golden = ImageIO.read(png)
-        val share = if (golden.width != image.width || golden.height != image.height) {
-            1.0
-        } else {
-            differingShare(actual, golden.getRGB(0, 0, golden.width, golden.height, null, 0, golden.width))
-        }
-        if (share > MAX_DIFFERING_SHARE) {
-            val dir = File(kotlinRoot, "sdk/build/goldens").apply { mkdirs() }
-            val out = File(dir, "$name.actual.png")
-            write(actual, image.width, image.height, out)
-            fail(
-                "$name: ${"%.3f".format(share * 100)}% of pixels differ (limit ${MAX_DIFFERING_SHARE * 100}%). " +
-                    "Actual image: ${out.path}",
-            )
-        }
-    }
-
-    /** ARGB pixels, row by row. */
-    private fun pixels(bitmap: Bitmap): IntArray {
-        val out = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(out, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        return out
-    }
-
-    private fun write(argb: IntArray, width: Int, height: Int, file: File) {
-        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-        image.setRGB(0, 0, width, height, argb, 0, width)
-        check(ImageIO.write(image, "png", file)) { "no PNG writer" }
-    }
-
-    /** Share of pixels where any ARGB channel differs by more than the tolerance. */
-    private fun differingShare(a: IntArray, b: IntArray): Double {
-        var differing = 0
-        for (i in a.indices) {
-            for (shift in intArrayOf(24, 16, 8, 0)) {
-                if (abs((a[i] ushr shift and 0xFF) - (b[i] ushr shift and 0xFF)) > CHANNEL_TOLERANCE) {
-                    differing++
-                    break
-                }
-            }
-        }
-        return differing.toDouble() / maxOf(a.size, 1)
-    }
-
-    private companion object {
-        /** 393x852 dp at 2x. */
-        val SIZE_PX = 786 to 1704
-
-        /** A pixel differs when a channel moves by more than this (0...255), as in Swift. */
-        const val CHANNEL_TOLERANCE = 48
-
-        /** The test fails when more than this share of pixels differs: 0.01%, as in Swift. */
-        const val MAX_DIFFERING_SHARE = 0.0001
-
-        /** What draws the picture: the Android SDK Robolectric runs (its renderer and fonts). */
-        val runtime: String
-            get() = "robolectricSdk=${Build.VERSION.SDK_INT}\n"
-
-        val runtimeLine: String get() = runtime.trim().replace('\n', ' ')
+    /**
+     * G2 (Swift's T4.2): the require policy's page pins the one red blocking
+     * FallbackPrompt that replaces the whole page, in Flutter's colours.
+     */
+    @Test
+    fun g2_theRequirePolicyPageIsOneBlockingPrompt() {
+        compose.assertPageGolden(OrcaPageModel(recordedPage("degrade-require")), "degrade-require")
     }
 }
+
+/**
+ * Draws [model]'s page with this rule and compares it to the golden [name]
+ * (`goldens/<name>.png` and `.runtime`). The test class runs under
+ * Robolectric with `@GraphicsMode(GraphicsMode.Mode.NATIVE)` and
+ * `@Config(qualifiers = "w393dp-h852dp-xhdpi")`, as [GoldenTest] does.
+ */
+internal fun ComposeContentTestRule.assertPageGolden(model: OrcaPageModel, name: String) {
+    var view: View? = null
+    setContent {
+        view = LocalView.current
+        OrcaPageView(model)
+    }
+    waitForIdle()
+    assertGolden(draw(requireNotNull(view)), name)
+}
+
+/**
+ * The Compose view drawn into a bitmap on white, in software (Swift
+ * renders the layer tree the same way). `captureToImage` times out here:
+ * its forced redraw never sees a frame under Robolectric. A software
+ * canvas draws no elevation shadows, so the buttons' shadows are not in
+ * the picture.
+ */
+internal fun draw(view: View): Bitmap {
+    val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+    bitmap.eraseColor(android.graphics.Color.WHITE)
+    view.draw(Canvas(bitmap))
+    return bitmap
+}
+
+/**
+ * Compares [image] to the golden [name] on the runtime that recorded it and
+ * skips elsewhere; records it instead (and fails) under
+ * `-Porca.recordGoldens=true`.
+ */
+internal fun assertGolden(image: Bitmap, name: String) {
+    assertEquals(SIZE_PX, image.width to image.height, "capture size")
+    val goldens = File(kotlinRoot, "sdk/src/test/resources/goldens")
+    val png = File(goldens, "$name.png")
+    val marker = File(goldens, "$name.runtime")
+    val actual = pixels(image)
+
+    if (System.getProperty("orca.recordGoldens") == "true") {
+        goldens.mkdirs()
+        write(actual, image.width, image.height, png)
+        marker.writeText(runtime)
+        fail("Recorded ${png.path} on $runtimeLine; run the test again.")
+    }
+
+    assumeTrue("$name has no golden; record one with -Porca.recordGoldens=true", png.isFile && marker.isFile)
+    val recordedOn = marker.readText()
+    assumeTrue(
+        "$name was recorded on ${recordedOn.trim().replace('\n', ' ')}, this is $runtimeLine; not compared",
+        recordedOn == runtime,
+    )
+
+    val golden = ImageIO.read(png)
+    val share = if (golden.width != image.width || golden.height != image.height) {
+        1.0
+    } else {
+        differingShare(actual, golden.getRGB(0, 0, golden.width, golden.height, null, 0, golden.width))
+    }
+    if (share > MAX_DIFFERING_SHARE) {
+        val dir = File(kotlinRoot, "sdk/build/goldens").apply { mkdirs() }
+        val out = File(dir, "$name.actual.png")
+        write(actual, image.width, image.height, out)
+        fail(
+            "$name: ${"%.3f".format(share * 100)}% of pixels differ (limit ${MAX_DIFFERING_SHARE * 100}%). " +
+                "Actual image: ${out.path}",
+        )
+    }
+}
+
+/** ARGB pixels, row by row. */
+private fun pixels(bitmap: Bitmap): IntArray {
+    val out = IntArray(bitmap.width * bitmap.height)
+    bitmap.getPixels(out, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+    return out
+}
+
+private fun write(argb: IntArray, width: Int, height: Int, file: File) {
+    val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+    image.setRGB(0, 0, width, height, argb, 0, width)
+    check(ImageIO.write(image, "png", file)) { "no PNG writer" }
+}
+
+/** Share of pixels where any ARGB channel differs by more than the tolerance. */
+private fun differingShare(a: IntArray, b: IntArray): Double {
+    var differing = 0
+    for (i in a.indices) {
+        for (shift in intArrayOf(24, 16, 8, 0)) {
+            if (abs((a[i] ushr shift and 0xFF) - (b[i] ushr shift and 0xFF)) > CHANNEL_TOLERANCE) {
+                differing++
+                break
+            }
+        }
+    }
+    return differing.toDouble() / maxOf(a.size, 1)
+}
+
+/** 393x852 dp at 2x. */
+private val SIZE_PX = 786 to 1704
+
+/** A pixel differs when a channel moves by more than this (0...255), as in Swift. */
+private const val CHANNEL_TOLERANCE = 48
+
+/** The test fails when more than this share of pixels differs: 0.01%, as in Swift. */
+private const val MAX_DIFFERING_SHARE = 0.0001
+
+/** What draws the picture: the Android SDK Robolectric runs (its renderer and fonts). */
+private val runtime: String
+    get() = "robolectricSdk=${Build.VERSION.SDK_INT}\n"
+
+private val runtimeLine: String get() = runtime.trim().replace('\n', ' ')
