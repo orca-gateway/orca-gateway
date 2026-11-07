@@ -3,27 +3,26 @@
 ## Front page
 
 ### In one breath
-group 2 of 3 · tasks: 2 green, 0 blocked · cases: 12 of 14 green · core 113, sdk 127, lint 0
-S10.2 release.sh: sdk-kotlin is package 10; it checks JDK 17+ and an Android SDK before any bump.
-S10.4 CI: a scratch app takes com.orcagateway only from the staged publication, runs and builds.
-release.sh rehearsed in throwaway clones (local origin only): keep, next, a failed build, order.
-Gradle fetched 10 old androidx jars from Google's Maven for the scratch app (cache, no install).
-The scratch app found a gap in the SDK's compose dependencies (question 2). Nothing pushed.
+group 3 of 3 · tasks: 3 green, 0 blocked · cases: 15 of 15 green · core 113, sdk 127, lint 0
+S10.5 CI: "SDK Kotlin Publish" signs and releases both on the tag, then checks them on Central.
+S10.1b SDK: compose, OkHttp, coroutines are `api`; README apps get compose ui 1.11.2, not 1.0.1.
+S10.6 docs: User_Actions Maven steps plus a first-release Step 6, CLAUDE.md's row 10, a page.
+Signing rehearsed with a throwaway key: 10 of 10 signatures verified. Nothing published or pushed.
+S10.6 took two fixes after review (one past the one-rework rule; both one-line doc fixes).
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 needs you: compose as `api` in sdk (apps get it) vs `implementation` (apps add the BOM).
-6 auto-decided: one codegen run, AGP's SDK lookup, JDK 17 leg only, `bash` in CI (memory), 2 more.
+5 auto-decided: OkHttp and coroutines `api` (your rule), poll timing (memory), 3 small ones.
 
 ### Questions for you
-1. Next: group 3: S10.5 the Maven Central workflow on the tag, S10.6 the release docs (me)?
-   (default: go)
-2. OrcaApp's `modifier` and OrcaTheme's Shape, Color, BorderStroke, PaddingValues are compose
-   types, but sdk publishes compose as `implementation`: an app with only activity-compose compiles
-   against compose ui 1.0.1. Make compose ui and foundation `api` (BOM too) as S10.1b in group 3?
-   (default: yes)
+1. Last group: `A` approves stage 09; stage 10 then pushes feat/native-sdk-s10, opens the PR
+   (Auto-fix off) and reads its CI once. (default: yes)
+2. Copy the Android docs page into your checkout (I can't write there; command in the appendix).
+   (default: you copy it)
+3. Read the docs I changed outside the repo: User_Actions "Maven Central publishing" Steps 1-6,
+   CLAUDE.md's release section. (default: ok)
 
 ## Appendix
 
@@ -115,6 +114,66 @@ For the scratch app's compile classpath (decision above), Gradle fetched from Go
 runtime-saveable-android 1.7.0; annotation-experimental 1.4.0; lifecycle-runtime-ktx and
 lifecycle-viewmodel-ktx 2.6.2; savedstate-ktx 1.2.1. Libraries only; nothing installed or run.
 
+### Group 3
+Started on "A" at gate 09 group 2 (2026-11-07): question 1 "go", question 2 "yes" added S10.1b
+(the rule recorded with it: types in a library's public API are api dependencies). Commits, one per
+code task: S10.1b 830927a, S10.5 52097b2. S10.6 changes no repo file (three workspace files and a
+gitignored page). Nothing pushed.
+
+#### Task S10.5 · Tag-triggered Central Portal publish workflow
+Files: `.github/workflows/sdk-kotlin-publish.yml` (new)
+Cases: M11 → green (each run block rehearsed as bash) · red first: release.sh names the workflow,
+which did not exist · baseline unchanged (a clone's build: core 113, sdk 127, lint 0) · YAML parses.
+Changed: "SDK Kotlin Publish" on an `sdk-kotlin-v*` tag or by hand with a tag; job `publish`: tag
+format, checkout of the tag, VERSION == X, the four secrets (missing ones named), HEAD on repo1 for
+both POMs (both there: upload skipped; one: "a half release" error), JDK 17, only the PRIVATE KEY
+BLOCK of SIGNING_KEY exported inside the step, `publishAndReleaseToMavenCentral`; job `verify`: a
+fresh runner polls repo1 (60 s, up to 45 min), then `bash scripts/maven-verify.sh <repo1> X` (M12).
+Rehearsals: good, bad-format and mismatched tags; 0, 2 and 4 secrets set; okhttp as a stand-in for
+"already there"; a throwaway .asc (public block first): 10 artifacts, 10 .asc, "verified=10 bad=0";
+a public-only key → "SIGNING_KEY holds no PRIVATE KEY BLOCK"; no key text or password in any log.
+Decisions: verify checks out the tag, sparse; poll timing as step env (memory "mirror-script-shared").
+Review fit: pass
+Review quality: pass
+
+#### Task S10.1b · The SDK's public API dependencies as `api`
+Files: `sdk-kotlin/sdk/build.gradle.kts`
+Cases: M16 (new: an app on the README's path compiles against the SDK's compose) → green · red
+first: the staged POM had ui, foundation, okhttp, coroutines-android as `runtime`; the scratch app's
+compile classpath took `compose.ui:ui:1.0.1` through activity-compose 1.10.1 · baseline unchanged.
+Audit of the public API (javap, then Kotlin visibility): `api` = compose BOM, ui (`Modifier`,
+`Color`, `Shape`), foundation (`BorderStroke`, `PaddingValues`), okhttp (`OkHttpTransport(OkHttpClient)`),
+coroutines-android (`OrcaPageModel.fire` returns `Job?`); `implementation` = material3, icons,
+activity-compose, navigation-compose (only internal or private uses). Green: the POM imports the BOM
+and lists those in `compile`; the scratch app gets ui 1.11.2 by the BOM; maven-verify PASS; the
+example app assembles. Downloads: 2 kotlin-stdlib-common metadata files (~2.4 KB).
+Decisions: okhttp and coroutines by your rule (memory "sdk-compose-api-deps"); compose runtime comes
+through ui's api.
+Review fit: pass
+Review quality: pass
+
+#### Task S10.6 · Release docs (main session, outside the repo)
+Files: `/Users/amrebada/workspace/orca-gateway/docs/User_Actions.md`, `…/CLAUDE.md`,
+`…/.claude/plans/orcagateway-epics.md`, `docs-site/docs/guides/android-sdk.mdx` (new, gitignored)
+Cases: M14 → done. User_Actions "Maven Central publishing": both packages and the workflow named,
+"before the first Android SDK release (slice S10, task 23b.27e)"; any sign-in method, DNS verifies
+(F1); the .asc's two blocks, kept (F2); the secrets page link and a copy hint; Step 6: JAVA_HOME and
+ANDROID_HOME, `bash scripts/release.sh`, 10, Return, y, watch "SDK Kotlin Publish", what failure
+means. CLAUDE.md: row 10, "1-10", the pre-bump checks, the Gradle validation, the push order, a
+pre-req bullet (F10). Epic row 23b.27e: "S10: built, PR next" (stage 10 puts the PR link there).
+Page "Android SDK (alpha)" (sidebar 8), as the iOS page. Backups in the session scratchpad.
+Review fit: (1) Step 6 said Android Studio gives a Java release.sh finds (it doesn't), fixed: export
+JAVA_HOME to its `jbr` (checked here: Java 25.0.4); (2) `pbcopy < orca-release-key.asc` had no
+folder, fixed: Step 3 saves it in the home folder, Step 5 reads `~/orca-release-key.asc`. Two fixes
+by the main session (a docs task), the second past the one-rework rule; fit pass.
+Review quality: pass
+
+#### Copy the docs page (question 2)
+From your `open-source` folder:
+`cp .claude/worktrees/keen-leakey-4c4de7/docs-site/docs/guides/android-sdk.mdx docs-site/docs/guides/`
+Your `docs-site/sidebars.ts` lists neither ios-sdk nor android-sdk (08 F9); if it lists guides by
+hand, add both.
+
 ### Test run
 Group 1: `cd sdk-kotlin && ./gradlew build publishAllPublicationsToStagingRepository --console=plain
 --rerun-tasks`: BUILD SUCCESSFUL; core 113, sdk 127, 0 failures, 0 skipped; lint "No issues found";
@@ -124,13 +183,16 @@ Group 2: `cd sdk-kotlin && ./gradlew build --console=plain`: BUILD SUCCESSFUL (8
 date after the implementers' own builds; group 2 changed no build input but a settings comment);
 core 113, sdk 127, 0 failures; lint "No issues found". `git status`: release.sh (S10.2); maven-verify.sh,
 sdk-kotlin.yml, settings.gradle.kts, README.md (S10.4); nothing else.
+Group 3: `cd sdk-kotlin && ./gradlew build --console=plain`: BUILD SUCCESSFUL (after S10.1b's own
+build); core 113, sdk 127, 0 failures; lint "No issues found". `git status`: build.gradle.kts
+(S10.1b), sdk-kotlin-publish.yml (S10.5); nothing else in the repo.
 
 ### Blocked
 none
 
 ### Not done
-none. Group 1's two unowned lines (the settings header, the README Tests line) went to S10.4 on
-question 2's "yes".
+none. M12 (the verify job against Central on your real tag) stays unplanned, as 08 says: the job
+exists and its body was rehearsed. Group 1's two unowned lines went to S10.4 (question 2, "yes").
 
 ### For ship (stage 10) to know
 The build now applies com.vanniktech.maven.publish 0.33.0 (from the Gradle cache; CI downloads it
@@ -144,3 +206,7 @@ Its tag push names `.github/workflows/sdk-kotlin-publish.yml` (S10.5); until tha
 sdk-kotlin tag starts nothing. SDK Kotlin CI's JDK 17 leg now also stages the publication and runs
 `bash scripts/maven-verify.sh` (about a minute more). The workspace CLAUDE.md release section
 ("numbered 1-9", no sdk-kotlin row) is S10.6's.
+Group 3: the tag workflow runs only on an `sdk-kotlin-v*` tag (after the merge, from your release
+run); it needs the four secrets of User_Actions Step 5 and fails naming any missing one. The sdk
+POM now carries compose (BOM), okhttp and coroutines in compile scope: a change visible to apps,
+none yet (nothing is published). The epic row's PR link and the docs page copy wait for stage 10.
