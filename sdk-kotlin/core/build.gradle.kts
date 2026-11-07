@@ -1,8 +1,24 @@
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.KotlinJvm
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.maven.publish)
+}
+
+// com.orcagateway:sdk-core: the jar with a sources jar and an empty javadoc jar (no Dokka).
+mavenPublishing {
+    configure(KotlinJvm(javadocJar = JavadocJar.Empty(), sourcesJar = true))
+    coordinates(artifactId = "sdk-core")
+    pom {
+        name.set("Orca Gateway Kotlin SDK core")
+        description.set(
+            "The pure Kotlin/JVM core of the Orca Gateway Android SDK: wire models, " +
+                "value resolution, state store and action executor.",
+        )
+    }
 }
 
 // Java 17 bytecode, so the Android module (S7) and Android apps can use it.

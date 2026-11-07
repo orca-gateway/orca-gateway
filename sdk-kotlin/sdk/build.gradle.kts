@@ -1,3 +1,4 @@
+import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // The Android library: the OkHttp transport, the Compose renderer and OrcaApp
@@ -5,6 +6,29 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.maven.publish)
+}
+
+// com.orcagateway:sdk: the release aar with a sources jar. AGP's javadoc jar
+// would run Dokka, so the publication gets an empty one instead, as core does.
+mavenPublishing {
+    configure(AndroidSingleVariantLibrary(variant = "release", sourcesJar = true, publishJavadocJar = false))
+    coordinates(artifactId = "sdk")
+    pom {
+        name.set("Orca Gateway Android SDK")
+        description.set(
+            "The Orca Gateway Android SDK: renders server-driven Orca pages with " +
+                "Jetpack Compose over an OkHttp transport.",
+        )
+    }
+}
+
+val emptyJavadocJar = tasks.register<Jar>("emptyJavadocJar") {
+    archiveClassifier.set("javadoc")
+}
+
+publishing.publications.withType<MavenPublication>().configureEach {
+    artifact(emptyJavadocJar)
 }
 
 android {
