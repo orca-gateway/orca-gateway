@@ -4,9 +4,9 @@
   "idea": "Epic 23b slice S7: the Compose UI of the Android SDK (23b.27b) — sdk-kotlin module sdk (Android library, com.orcagateway:sdk), OkHttp OrcaClient with the 412 caps handshake, Compose renderer and the 15 core widgets, OrcaApp on NavHost, toast, examples/app-android counter on an emulator",
   "kind": "feature",
   "created_at": "2026-11-06T23:11:58Z",
-  "updated_at": "2026-11-06T23:15:19Z",
+  "updated_at": "2026-11-07T00:11:59Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "08",
+  "current": "09",
   "stages": {
     "01": {
       "status": "skipped",
@@ -37,12 +37,16 @@
       "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S7 started on your 'Start S7' after native-sdk-s6 closed"
     },
     "08": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/08-r1.md"
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-06T23:17:44Z",
+      "approved_with": "A"
     },
     "09": {
-      "status": "pending"
+      "status": "in_review",
+      "rounds": 1,
+      "card": "cards/09-r1.md"
     },
     "10": {
       "status": "pending"
@@ -67,6 +71,6 @@
     }
   },
   "gates": {
-    "code_unlocked": false
+    "code_unlocked": true
   }
 }
