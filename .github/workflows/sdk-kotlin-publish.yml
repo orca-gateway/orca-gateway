@@ -1,0 +1,199 @@
+name: SDK Kotlin Publish
+
+# Publishes the Android SDK to Maven Central (Epic 23b, slice S10). On each
+# sdk-kotlin-v<X> tag (pushed by scripts/release.sh) this signs
+# com.orcagateway:sdk-core and com.orcagateway:sdk <X> and releases both in one
+# Central Portal deployment: the Gradle plugin (com.vanniktech.maven.publish)
+# gathers both modules into one upload and, with
+# mavenCentralAutomaticPublishing, releases it once Central validates it. The
+# signing key is never on disk: Gradle takes it from the secrets in memory.
+#
+# A version on Central can never be uploaded again, so a run for a tag whose
+# two POMs are already there skips the upload and only verifies; a run that
+# finds one and not the other stops, for a human. The verify job (23b.27e's
+# acceptance) waits on a fresh runner until repo1.maven.org serves both, then
+# builds a scratch consumer against Central alone (scripts/maven-verify.sh).
+#
+# Needs four Actions secrets: MAVEN_CENTRAL_USERNAME and MAVEN_CENTRAL_PASSWORD
+# (a Central Portal user token for the com.orcagateway namespace), SIGNING_KEY
+# (the armored PGP key; a whole .asc export is fine) and SIGNING_PASSWORD. See
+# the Maven Central steps in User_Actions.
+on:
+  push:
+    tags:
+      - "sdk-kotlin-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish again (e.g. sdk-kotlin-v0.1.0-alpha.1); the run checks it out"
+        required: true
+
+permissions:
+  contents: read
+
+# One run per release at a time; a second run for the same tag waits, since a
+# half-finished upload must not be cancelled.
+concurrency:
+  group: sdk-kotlin-publish-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Sign and release to Maven Central
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - name: Resolve the tag
+        id: tag
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^sdk-kotlin-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::not an sdk-kotlin release tag: $TAG"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#sdk-kotlin-v}" >> "$GITHUB_OUTPUT"
+
+      # The release is the tag's tree, on a push and on a manual run alike.
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+
+      - name: Check the version
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          file_version="$(tr -d '[:space:]' < sdk-kotlin/VERSION)"
+          if [ "$file_version" != "$VERSION" ]; then
+            echo "::error::sdk-kotlin/VERSION at $TAG is '$file_version', not '$VERSION' (scripts/release.sh writes both)"
+            exit 1
+          fi
+          echo "Releasing com.orcagateway:sdk-core and com.orcagateway:sdk $VERSION"
+
+      # All four are checked, and every missing one named, before anything runs.
+      - name: Check the secrets
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          missing=""
+          for name in MAVEN_CENTRAL_USERNAME MAVEN_CENTRAL_PASSWORD SIGNING_KEY SIGNING_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              missing="${missing:+$missing, }$name"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Actions secrets not set: $missing (see the Maven Central steps in User_Actions)."
+            exit 1
+          fi
+
+      # Central never takes a version twice. Both POMs there: a re-run, the
+      # upload is skipped and the verify job still runs. One of the two: a
+      # half release, or one repo1 has not finished syncing; a human decides.
+      - name: Already on Maven Central?
+        id: central
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          base=https://repo1.maven.org/maven2/com/orcagateway
+          found="" absent=""
+          for artifact in sdk-core sdk; do
+            if curl -sfI "$base/$artifact/$VERSION/$artifact-$VERSION.pom" > /dev/null; then
+              found="${found:+$found, }$artifact"
+            else
+              absent="${absent:+$absent, }$artifact"
+            fi
+          done
+          if [ -z "$absent" ]; then
+            echo "::notice::com.orcagateway $VERSION is already on Maven Central, upload skipped"
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$found" ]; then
+            echo "upload=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::only $found $VERSION is on Maven Central, not $absent: a half release (or one still syncing to repo1); check central.sonatype.com before re-running"
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Caches ~/.gradle and checks the committed wrapper jar against Gradle's checksums.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Gradle signs only when signingInMemoryKey is set (sdk-kotlin/build.gradle.kts)
+      # and reads one armored block, so the step keeps only the PRIVATE KEY
+      # BLOCK of SIGNING_KEY, in its own shell: never in $GITHUB_ENV or a file.
+      # No configuration cache, as the plugin's documentation publishes: the
+      # key is never written into a cached configuration.
+      - name: Sign and upload both artifacts
+        if: steps.central.outputs.upload == 'true'
+        working-directory: sdk-kotlin
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          export ORG_GRADLE_PROJECT_signingInMemoryKey="$(printf '%s\n' "$SIGNING_KEY" | sed -n '/-----BEGIN PGP PRIVATE KEY BLOCK-----/,/-----END PGP PRIVATE KEY BLOCK-----/p')"
+          if [ -z "$ORG_GRADLE_PROJECT_signingInMemoryKey" ]; then
+            echo "::error::SIGNING_KEY holds no PRIVATE KEY BLOCK (export it with gpg --armor --export-secret-keys)"
+            exit 1
+          fi
+          ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache --console=plain
+
+  verify:
+    name: Resolve both artifacts from Maven Central
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      # The script, the Gradle wrapper and the version catalog it builds the
+      # scratch consumer with; the SDK itself comes from Central.
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.publish.outputs.tag }}
+          sparse-checkout: |
+            scripts
+            sdk-kotlin
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # A release reaches repo1.maven.org some minutes after Central publishes it.
+      - name: Wait for repo1.maven.org
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
+          WAIT_SECONDS: "2700"
+          POLL_SECONDS: "60"
+        run: |
+          base=https://repo1.maven.org/maven2/com/orcagateway
+          deadline=$(( $(date +%s) + WAIT_SECONDS ))
+          until curl -sfI "$base/sdk-core/$VERSION/sdk-core-$VERSION.pom" > /dev/null \
+            && curl -sfI "$base/sdk/$VERSION/sdk-$VERSION.pom" > /dev/null; do
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::com.orcagateway:sdk-core and com.orcagateway:sdk $VERSION are not both on repo1.maven.org after $(( WAIT_SECONDS / 60 )) minutes; check the deployment on central.sonatype.com, then re-run this job"
+              exit 1
+            fi
+            echo "waiting for com.orcagateway $VERSION on repo1.maven.org"
+            sleep "$POLL_SECONDS"
+          done
+          echo "com.orcagateway:sdk-core and com.orcagateway:sdk $VERSION are on repo1.maven.org"
+
+      # The runner's Android SDK (ANDROID_HOME) builds the scratch app.
+      - name: Verify a scratch consumer against Maven Central
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: bash scripts/maven-verify.sh https://repo1.maven.org/maven2/ "$VERSION"

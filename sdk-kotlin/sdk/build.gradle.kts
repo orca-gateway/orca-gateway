@@ -1,3 +1,4 @@
+import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // The Android library: the OkHttp transport, the Compose renderer and OrcaApp
@@ -5,6 +6,29 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.maven.publish)
+}
+
+// com.orcagateway:sdk: the release aar with a sources jar. AGP's javadoc jar
+// would run Dokka, so the publication gets an empty one instead, as core does.
+mavenPublishing {
+    configure(AndroidSingleVariantLibrary(variant = "release", sourcesJar = true, publishJavadocJar = false))
+    coordinates(artifactId = "sdk")
+    pom {
+        name.set("Orca Gateway Android SDK")
+        description.set(
+            "The Orca Gateway Android SDK: renders server-driven Orca pages with " +
+                "Jetpack Compose over an OkHttp transport.",
+        )
+    }
+}
+
+val emptyJavadocJar = tasks.register<Jar>("emptyJavadocJar") {
+    archiveClassifier.set("javadoc")
+}
+
+publishing.publications.withType<MavenPublication>().configureEach {
+    artifact(emptyJavadocJar)
 }
 
 android {
@@ -55,16 +79,21 @@ kotlin {
 dependencies {
     api(project(":core"))
 
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.ui)
-    implementation(libs.compose.foundation)
+    // In the public API (OrcaApp's Modifier, OrcaTheme's Shape, Color, BorderStroke,
+    // PaddingValues): apps compile against these, at the BOM's versions.
+    api(platform(libs.compose.bom))
+    api(libs.compose.ui)
+    api(libs.compose.foundation)
+    // In the public API: OkHttpTransport takes an OkHttpClient.
+    api(libs.okhttp)
+    // In the public API: OrcaPageModel.fire returns a coroutines Job.
+    api(libs.kotlinx.coroutines.android)
+    // Used inside only: no public declaration has their types.
     implementation(libs.compose.material3)
     // Flutter's Material icons by name (style/IconNames.kt); R8 drops the unused ones in apps.
     implementation(libs.compose.material.icons.extended)
     implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
-    implementation(libs.okhttp)
-    implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.junit4)

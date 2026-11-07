@@ -1,8 +1,11 @@
 # Android example: Orca Counter
 
-The counter example drawn by the **experimental** Kotlin SDK (`sdk-kotlin/`, Epic 23b) against the
-same Bun server as the Flutter and iOS examples. This Gradle build includes `../../sdk-kotlin`, so it
-builds the SDK from source and an SDK change shows up on the next build. Nothing is published yet.
+The counter example drawn by the **alpha** Kotlin SDK (`sdk-kotlin/`, Epic 23b) against the
+same Bun server as the Flutter and iOS examples. The SDK's alpha is on Maven Central as
+`com.orcagateway:sdk`, but this example does not use it: its Gradle build includes
+`../../sdk-kotlin` (`includeBuild` in `settings.gradle.kts`), so it builds the SDK from source and an
+SDK change shows up on the next build. Your own app installs the published artifact instead; see
+"Install" in [`sdk-kotlin/README.md`](../../sdk-kotlin/README.md#install).
 
 ## Run it
 

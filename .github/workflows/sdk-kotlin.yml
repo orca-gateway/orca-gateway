@@ -3,20 +3,24 @@ name: SDK Kotlin CI
 # The Android SDK on Linux, per PR (Epic 23b): the pure-Kotlin core
 # (sdk-kotlin/core, JVM) against the shared conformance fixtures in
 # schema/fixtures, the Android library (sdk-kotlin/sdk) with its Compose UI
-# tests under Robolectric, and the example app's debug build. No emulator: the
-# example runs on one by hand (examples/app-android/README.md).
+# tests under Robolectric, and the example app's debug build. Then the Maven
+# publication is staged to a local directory and a scratch consumer is built
+# against it alone (scripts/maven-verify.sh). No emulator: the example runs on
+# one by hand (examples/app-android/README.md).
 on:
   push:
     paths:
       - "sdk-kotlin/**"
       - "schema/**"
       - "examples/app-android/**"
+      - "scripts/maven-verify.sh"
       - ".github/workflows/sdk-kotlin.yml"
   pull_request:
     paths:
       - "sdk-kotlin/**"
       - "schema/**"
       - "examples/app-android/**"
+      - "scripts/maven-verify.sh"
       - ".github/workflows/sdk-kotlin.yml"
 
 jobs:
@@ -48,6 +52,18 @@ jobs:
       - name: Build the example app (debug)
         run: ./gradlew :app:assembleDebug --console=plain
         working-directory: examples/app-android
+
+      # The publication as Maven Central would get it, unsigned (no secrets
+      # here), and an app that takes com.orcagateway from it and nowhere else.
+      # One leg: the artifacts are Java 17 bytecode on both, and 17 is the floor.
+      - name: Stage the Maven publication
+        if: matrix.java == '17'
+        run: ./gradlew publishAllPublicationsToStagingRepository --console=plain
+        working-directory: sdk-kotlin
+
+      - name: Verify a scratch consumer against the staged publication
+        if: matrix.java == '17'
+        run: bash scripts/maven-verify.sh "file://$GITHUB_WORKSPACE/sdk-kotlin/build/staging-repo" "$(cat sdk-kotlin/VERSION)"
 
       - name: Upload test reports
         if: failure()

@@ -9,6 +9,7 @@ navigation-compose = "2.9.2"
 okhttp = "4.12.0"
 junit4 = "4.13.2"
 robolectric = "4.17"
+maven-publish = "0.33.0"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
@@ -34,3 +35,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 android-application = { id = "com.android.application", version.ref = "agp" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }

@@ -16,10 +16,13 @@ cd "$REPO_ROOT"
 
 # --- Package registry --------------------------------------------------------
 # Each line:  name|path|tag-prefix|publisher|version-file
-# publisher ∈ { npm, pub, github-release, mirror }
+# publisher ∈ { npm, pub, github-release, mirror, maven }
 #   mirror: the tag push starts .github/workflows/sdk-swift-mirror.yml, which
 #   splits the package into its own repository and tags it there (SwiftPM
 #   needs Package.swift at a repository root and bare X.Y.Z tags).
+#   maven: the tag push starts .github/workflows/sdk-kotlin-publish.yml, which
+#   signs and releases com.orcagateway:sdk-core and com.orcagateway:sdk to
+#   Maven Central (the signing key and Central token are GitHub secrets).
 # New packages go at the end, so the numbers people type stay the same.
 PACKAGES=(
   "engine|engine|engine-v|npm|engine/package.json"
@@ -31,6 +34,7 @@ PACKAGES=(
   "orca_video_player|plugins/orca_video_player|orca_video_player-v|pub|plugins/orca_video_player/pubspec.yaml"
   "orca_voice_recorder|plugins/orca_voice_recorder|orca_voice_recorder-v|pub|plugins/orca_voice_recorder/pubspec.yaml"
   "sdk-swift|sdk-swift|sdk-swift-v|mirror|sdk-swift/VERSION"
+  "sdk-kotlin|sdk-kotlin|sdk-kotlin-v|maven|sdk-kotlin/VERSION"
 )
 
 # The public repository the mirror workflow pushes to. The override exists
@@ -200,7 +204,8 @@ fi
 # that fails on auth leaves the bump on main and nothing on the registry. That
 # happened with engine 0.3.3 on 2026-11-06: an expired npm login makes
 # `npm publish` answer 404 for a scoped package. Check every login the
-# selected packages need here, while nothing has changed yet.
+# selected packages need here, and what their validation needs to run, while
+# nothing has changed yet.
 
 trim_slash() { local s=$1; printf "%s" "${s%/}"; }
 
@@ -271,6 +276,35 @@ check_swift_mirror() {
     "$(c_green ok)" "$SWIFT_MIRROR_URL"
 }
 
+# Step 5 builds sdk-kotlin with the Gradle wrapper, which runs on JAVA_HOME's
+# java (else the one on PATH); Gradle 9 and AGP need 17 or newer. AGP finds the
+# Android SDK in local.properties' sdk.dir, else ANDROID_HOME or
+# ANDROID_SDK_ROOT. The Central token and signing key are not checked here:
+# they are GitHub secrets, read by the publish workflow.
+check_maven_build() {
+  local name=$1 path=$2 java out ver="" major sdk_dir=""
+  local re='version "([0-9][^"]*)"'
+  if [[ -n "${JAVA_HOME:-}" ]]; then java="$JAVA_HOME/bin/java"
+  else java=$(command -v java || true)
+  fi
+  [[ -n "$java" && -x "$java" ]] \
+    || die "$name: no JDK found (JAVA_HOME, or java on PATH). Install a JDK 17 or newer."
+  out=$("$java" -version 2>&1 || true)
+  [[ "$out" =~ $re ]] && ver=${BASH_REMATCH[1]}
+  # 1.8.0_292 is Java 8; 11.0.29, 17 and 25 carry the major first.
+  major=${ver#1.}; major=${major%%[!0-9]*}
+  [[ -n "$major" && "$major" -ge 17 ]] \
+    || die "$name: Gradle needs a JDK 17 or newer, but $java is ${ver:-not a JDK}. Point JAVA_HOME at a JDK 17+."
+  if [[ -f "$path/local.properties" ]]; then
+    sdk_dir=$(awk '/^sdk\.dir=/ { sub(/^sdk\.dir=/, ""); print; exit }' "$path/local.properties")
+  fi
+  [[ -n "$sdk_dir" ]] || sdk_dir=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
+  [[ -n "$sdk_dir" && -d "$sdk_dir" ]] \
+    || die "$name: no Android SDK found${sdk_dir:+ at $sdk_dir}. Set ANDROID_HOME to it, or add sdk.dir=<path> to $path/local.properties."
+  printf "  %s JDK %s, Android SDK %s (the Central secrets are checked by CI)\n" \
+    "$(c_green ok)" "$ver" "$sdk_dir"
+}
+
 # Step 7 pushes the commit and every tag; a dry run checks the same auth.
 check_git_push() {
   git push --dry-run --quiet origin "$BRANCH" >/dev/null 2>&1 \
@@ -286,6 +320,7 @@ for idx in "${SELECTED[@]}"; do
     npm) check_npm_login "${PKG_NAMES[$idx]}" "${PKG_PATHS[$idx]}" ;;
     pub) NEED_PUB=1 ;;
     mirror) check_swift_mirror ;;
+    maven) check_maven_build "${PKG_NAMES[$idx]}" "${PKG_PATHS[$idx]}" ;;
   esac
 done
 if [[ $NEED_PUB -eq 1 ]]; then check_pub_login; fi
@@ -362,20 +397,30 @@ read -r CONFIRM
 
 # Each SDK's capability vector embeds its version and ships in the package,
 # so a bump must regenerate it; Schema CI fails on a stale copy.
-#   sdk:       kSdkSemver from sdk/pubspec.yaml
-#   sdk-swift: sdkSemver from sdk-swift/VERSION
+#   sdk:        kSdkSemver from sdk/pubspec.yaml
+#   sdk-swift:  sdkSemver from sdk-swift/VERSION
+#   sdk-kotlin: sdkSemver from sdk-kotlin/VERSION
+# One run of gen-native-capabilities.ts writes both native files, so it runs
+# once whichever of the two is selected and both are listed: a failure reverts
+# both, and the one whose VERSION did not move comes out unchanged.
 GENERATED_FILES=()
 GENERATORS=()
+NEED_NATIVE_GEN=0
 for idx in "${SELECTED[@]}"; do
   case "${PKG_NAMES[$idx]}" in
     sdk)
       GENERATED_FILES+=("sdk/lib/src/capabilities/generated.dart")
       GENERATORS+=("schema/gen-sdk-capabilities.ts") ;;
-    sdk-swift)
-      GENERATED_FILES+=("sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift")
-      GENERATORS+=("schema/gen-native-capabilities.ts") ;;
+    sdk-swift|sdk-kotlin) NEED_NATIVE_GEN=1 ;;
   esac
 done
+if [[ $NEED_NATIVE_GEN -eq 1 ]]; then
+  GENERATED_FILES+=(
+    "sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift"
+    "sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/capabilities/Generated.kt"
+  )
+  GENERATORS+=("schema/gen-native-capabilities.ts")
+fi
 if [[ ${#GENERATORS[@]} -gt 0 ]]; then
   command -v bun >/dev/null 2>&1 \
     || die "bun is required to regenerate ${GENERATED_FILES[*]}"
@@ -427,6 +472,12 @@ validate_pkg() {
       # What a consumer resolves: the manifest, then a build of every target.
       ( swift package --package-path "$path" describe >/dev/null \
         && swift build --package-path "$path" ) >"$LOG" 2>&1 || return 1
+      ;;
+    maven)
+      # Tests, lint and both artifacts with their POMs, published to the local
+      # build/staging-repo; Central itself is the workflow's, on the tag push.
+      ( cd "$path" && ./gradlew build publishAllPublicationsToStagingRepository \
+        --console=plain ) >"$LOG" 2>&1 || return 1
       ;;
   esac
 }
@@ -505,18 +556,22 @@ publish_pkg() {
       printf "  %s tag push triggers .github/workflows/sdk-swift-mirror.yml (split, push to %s, tag %s there)\n" \
         "$(c_yellow "[$name]")" "$SWIFT_MIRROR_URL" "$4"
       ;;
+    maven)
+      printf "  %s tag push triggers .github/workflows/sdk-kotlin-publish.yml (signs and releases com.orcagateway:sdk-core and com.orcagateway:sdk %s to Maven Central)\n" \
+        "$(c_yellow "[$name]")" "$4"
+      ;;
   esac
 }
 
 # Publish registry packages first, then push the tags CI picks up: the
-# mirror, and devtools last since its tag starts a long CI build.
+# mirror, Maven Central, and devtools last since its tag starts a long CI build.
 ORDER=()
-for pass in registry mirror github-release; do
+for pass in registry mirror maven github-release; do
   for k in "${!SELECTED[@]}"; do
     pub="${PKG_PUBS[${SELECTED[$k]}]}"
     case "$pass:$pub" in
-      registry:mirror|registry:github-release) ;;
-      registry:*|mirror:mirror|github-release:github-release) ORDER+=("$k") ;;
+      registry:mirror|registry:maven|registry:github-release) ;;
+      registry:*|mirror:mirror|maven:maven|github-release:github-release) ORDER+=("$k") ;;
     esac
   done
 done

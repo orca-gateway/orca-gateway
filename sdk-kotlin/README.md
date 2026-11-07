@@ -1,14 +1,86 @@
 # Orca Gateway Android SDK (`sdk-kotlin`)
 
 > [!WARNING]
-> **Experimental, not ready yet.** This is the in-progress native Android client for Orca Gateway
-> (Epic 23b). It draws 25 widgets so far and nothing is published. Use the Flutter SDK
-> ([`orca_gateway`](https://github.com/orca-gateway/orca-gateway/tree/main/sdk)) instead.
+> **Alpha (`0.1.0-alpha.1`).** The native Android client for Orca Gateway (Epic 23b) works for the
+> pages its 25 widgets and 15 action kinds cover, but its API may still change between alphas, so
+> use it with care. The Flutter SDK
+> ([`orca_gateway`](https://github.com/orca-gateway/orca-gateway/tree/main/sdk)) stays the stable
+> one; use it for production apps.
 
-The SDK will render the same server-driven pages as the Flutter and iOS SDKs, from the same Bun
-engine and the same wire format ([`schema/`](https://github.com/orca-gateway/orca-gateway/tree/main/schema)).
-Widget names on the wire stay Flutter's (`Column`, `Row`, `Text`); the Compose layer will map them
-to Material 3.
+The SDK renders the same server-driven pages as the Flutter and iOS SDKs, from the same Bun engine
+and the same wire format ([`schema/`](https://github.com/orca-gateway/orca-gateway/tree/main/schema)).
+Widget names on the wire stay Flutter's (`Column`, `Row`, `Text`); the Compose layer maps them to
+Material 3.
+
+## Install
+
+The SDK is on Maven Central. Your build needs Google's repository and Maven Central, for example in
+`settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+```
+
+Then add the SDK to your app module's `build.gradle.kts`:
+
+```kotlin
+dependencies {
+    implementation("com.orcagateway:sdk:0.1.0-alpha.1")
+}
+```
+
+The app needs `minSdk = 24` or higher and Compose turned on (the Kotlin Compose compiler plugin,
+`buildFeatures { compose = true }`, and `androidx.activity:activity-compose` for `setContent`). The
+[example's build file](https://github.com/orca-gateway/orca-gateway/blob/main/examples/app-android/app/build.gradle.kts)
+is a working setup. The SDK's manifest adds the `INTERNET` permission for you.
+
+Then make `OrcaApp` the activity's content. It loads the page at `path` from your Orca server and
+follows the page's navigation, the system back gesture included:
+
+```kotlin
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import com.orcagateway.core.client.OrcaClient
+import com.orcagateway.sdk.OrcaApp
+import com.orcagateway.sdk.client.OkHttpTransport
+import java.net.URI
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val client = OrcaClient(
+            baseUrl = URI("https://orca.example.com"),
+            appId = "counter",
+            apiKey = "demo-key",
+            transport = OkHttpTransport(),
+        )
+        setContent { OrcaApp(client, path = "home") }
+    }
+}
+```
+
+`OrcaClient` lives in `sdk-core`, which `sdk` brings along. An app on the emulator reaches a server
+on your computer at `http://10.0.2.2:<port>`. Plain `http` works only where the app allows
+cleartext traffic; the [Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android)
+allows it in debug builds only, and runs every app of the example server.
+
+For the core alone on the JVM (wire models, `ValueResolver`, `ElmStore`, `OrcaClient`), without
+Android or Compose, Maven Central is enough:
+
+```kotlin
+dependencies {
+    implementation("com.orcagateway:sdk-core:0.1.0-alpha.1")
+}
+```
+
+It needs JDK 17 or later and brings no HTTP library: `OrcaClient` sends through any
+`HttpTransport` you give it (`OkHttpTransport` in `sdk` is one).
 
 ## Layout
 
@@ -27,8 +99,8 @@ Android SDK with platform 36 (`ANDROID_HOME` or `local.properties`).
 | S6 | Pure core: models, resolver, store, executor, caps vector, Linux CI | done |
 | S7 | `OrcaClient` with the 412 caps handshake, the `sdk` module: Compose renderer, 15 core widgets, `OrcaApp`; the counter app in [`examples/app-android`](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android) | done |
 | S8 | Navigation with `OrcaRouter` on a `NavHost` and the system back gesture; system actions through `SystemActions.android(context)` (open URL, clipboard, share); DevTools events, sent by `OrcaDebug.start(OrcaDebugConfig(...))`; the example app runs `basic-actions`, `server-actions` and DevTools | done |
-| S9 | Degrade policies and the drawn 426 page, ten more widgets (Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector), `OrcaTheme` button styles | this package |
-| S10 | `0.1.0-alpha.1` on Maven Central | planned |
+| S9 | Degrade policies and the drawn 426 page, ten more widgets (Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector), `OrcaTheme` button styles | done |
+| S10 | `0.1.0-alpha.1` on Maven Central as `com.orcagateway:sdk-core` and `com.orcagateway:sdk`; `sdk-kotlin` in `scripts/release.sh`; the tag-triggered "SDK Kotlin Publish" workflow | this package |
 
 ## Styling buttons
 
@@ -100,7 +172,8 @@ fixtures, their `resolved` maps, action fixtures), the same files the engine, th
 the Swift SDK run, so they only run inside the monorepo. The `sdk` tests run the Compose UI on the
 JVM under Robolectric, no emulator, against pages recorded from the example server
 (`task sdk-kotlin:record`). CI runs both, plus the example app's build, on Linux for every PR
-touching `sdk-kotlin/`, `schema/` or `examples/app-android/`.
+touching `sdk-kotlin/`, `schema/` or `examples/app-android/`. It also stages the Maven publication
+and builds a scratch consumer against it with `scripts/maven-verify.sh`.
 
 ## Capabilities
 
@@ -116,8 +189,15 @@ bun run schema/gen-native-capabilities.ts
 
 ## Versioning
 
-`VERSION` holds the SDK version and feeds `sdkSemver` in the capability vector. It is bumped only by
-`scripts/release.sh` (from slice S10), never by hand.
+`VERSION` holds the SDK version, which both artifacts carry, and feeds `sdkSemver` in the capability
+vector, which the client sends as `x-orca-sdk-version`. It is bumped only by
+[`scripts/release.sh`](https://github.com/orca-gateway/orca-gateway/blob/main/scripts/release.sh),
+never by hand. `0.1.0-alpha.1` is the first published version.
+
+The script pushes a `sdk-kotlin-v<X>` tag, and that tag starts the "SDK Kotlin Publish" workflow. It
+checks that `VERSION` reads `<X>`, signs both artifacts and releases them to Maven Central in one
+deployment, then builds a scratch app against `<X>` from Central. A version on Central cannot be
+replaced, so a fix goes out as the next version.
 
 ## License
 

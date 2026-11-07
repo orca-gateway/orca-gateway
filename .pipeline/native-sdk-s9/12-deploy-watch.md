@@ -57,3 +57,10 @@ checks reported yet.
 On A after your merge: stages 13-16 skipped with the reason "S9 has no deployed surface; skipped
 by the default accepted at gate 12 (A)", S9 closed, row 23b.27d ticked in the epic plan and the
 failed-Image item added to 23b.33. S10 starts from main on your go.
+
+### Closed (gate 12, "A", 2026-11-07)
+PR #16 merged at 19:26:55Z as 738b78f (head c90d3e0). Its checks at c90d3e0, 6 of 6 success: SDK
+Kotlin CI on JDK 17 and 21, SDK Swift CI core tests (swift 5.10-jammy, 6.2-noble), SDK Swift UI
+CI (iOS simulator), Schema CI codegen drift. Stages 13-16 skipped ("S9 has no deployed surface;
+skipped by the default accepted at gate 12 (A)"). Epic plan: 23b.27d ✅ Done; 23b.33 gains
+Kotlin's failed-Image "!". These closing notes ride on feat/native-sdk-s10, cut from main.
