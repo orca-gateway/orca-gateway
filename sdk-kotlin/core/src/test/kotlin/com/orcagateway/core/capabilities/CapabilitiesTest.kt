@@ -48,6 +48,27 @@ class CapabilitiesTest {
         assertEquals(92, android.size)
     }
 
+    /**
+     * S9.13: Android draws the iOS set, the 15 core widgets plus the ten S9
+     * added, and the generated vector is the regenerated list (sorted as the
+     * generator sorts, hashed as the engine hashes), not a hand edit.
+     */
+    @Test
+    fun c1_kotlinAdvertisesTheSame25WidgetsAsSwift() {
+        val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
+        val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
+        assertEquals(25, kotlin.size)
+        assertEquals(swift, kotlin.toSet())
+        assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
+        val added = setOf(
+            "Icon", "Image", "Container", "Expanded", "Spacer", "TextField",
+            "Stack", "Positioned", "ClipRRect", "GestureDetector",
+        )
+        assertTrue(kotlin.containsAll(added), "missing: ${added - kotlin.toSet()}")
+        assertEquals(kotlin, GeneratedCapabilities.widgets)
+        assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
+    }
+
     @Test
     fun actionKindsMatchTheImplementedList() {
         val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["actionKinds"])
