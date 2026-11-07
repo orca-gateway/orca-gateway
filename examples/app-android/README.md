@@ -38,14 +38,55 @@ task example:android:run URL=http://10.0.2.2:8097
 (`ORCA_SERVER_URL`, `ORCA_APP_ID`, `ORCA_PATH`); you can send the same extras with
 `adb shell am start`.
 
+## Other example apps
+
+The same app draws any app on the example server. Pass `APP` and `PAGE` to the run task:
+
+| App | `APP` | `PAGE` | Shows |
+|---|---|---|---|
+| Counter (default) | `counter` | `home` | state, a snackbar |
+| Basic actions | `basic-actions` | `home`, `about`, `product`, `ecommerce`, `checkout` | navigation, back, URL, clipboard, share, toasts |
+| Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
+
+```bash
+task example:android:run APP=basic-actions PAGE=home
+task example:android:run APP=server-actions PAGE=shop
+```
+
+Basic actions starts at `home`, which opens the four other pages; `PAGE` starts the app on one of
+them directly. The back gesture (or a page's back button) returns to the page before. Open URL
+and share hand off to the browser and the share sheet; copy puts the text on the clipboard.
+
+## DevTools
+
+Debug builds connect to Orca DevTools on port 6363 of the Mac (start it with `task devtools:dev`)
+and show up as "Orca Counter": network requests, page timing, state changes, actions, rebuilds and
+errors. The emulator reaches the Mac at `10.0.2.2`, so nothing else is needed. Two intent extras
+change that:
+
+| Extra | Type | Default | What |
+|---|---|---|---|
+| `ORCA_DEVTOOLS` | boolean | on in debug builds, off in release builds | connect to DevTools or not |
+| `ORCA_DEVTOOLS_HOST` | string | `10.0.2.2` | the Mac's address; on a device, its address on your network |
+
+To turn DevTools off, restart the app with the extra. `-S` stops the running app first: the app
+connects once per process, so a running app keeps its connection (a rotation does not open a
+second one).
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --ez ORCA_DEVTOOLS false
+```
+
+Add `--es ORCA_APP_ID server-actions --es ORCA_PATH shop` (or another app) as the run task does.
+On a device, pass the Mac's address the same way (`--es ORCA_DEVTOOLS_HOST 192.168.1.20`), or run
+`adb reverse tcp:6363 tcp:6363` and pass `localhost`.
+
 ## What it shows
 
 `+` and `-` change the count; `Reset` sets it to 0 and shows a snackbar. The page, the state and the
-actions all come from `examples/server/counter.ts`; the app holds no logic beyond the server URL.
-On the first request the SDK goes through the capability handshake (a 412, then one retry with its
-capability vector), as the Flutter and Swift SDKs do.
+actions all come from `examples/server/counter.ts`; the app holds no logic beyond the server URL
+and the DevTools settings. On the first request the SDK goes through the capability handshake (a
+412, then one retry with its capability vector), as the Flutter and Swift SDKs do.
 
-Debug builds allow plain HTTP for the example server; release builds keep Android's HTTPS-only
-default. Navigation, URL, clipboard and share actions, server actions and DevTools arrive in the
-next slice (S8), so the other example apps (`basic-actions`, `server-actions`) draw but those
-actions do nothing yet.
+Debug builds allow plain HTTP for the example server and DevTools; release builds keep Android's
+HTTPS-only default.
