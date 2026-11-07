@@ -172,7 +172,8 @@ fixtures, their `resolved` maps, action fixtures), the same files the engine, th
 the Swift SDK run, so they only run inside the monorepo. The `sdk` tests run the Compose UI on the
 JVM under Robolectric, no emulator, against pages recorded from the example server
 (`task sdk-kotlin:record`). CI runs both, plus the example app's build, on Linux for every PR
-touching `sdk-kotlin/`, `schema/` or `examples/app-android/`.
+touching `sdk-kotlin/`, `schema/` or `examples/app-android/`. It also stages the Maven publication
+and builds a scratch consumer against it with `scripts/maven-verify.sh`.
 
 ## Capabilities
 

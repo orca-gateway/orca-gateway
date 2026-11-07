@@ -1,9 +1,9 @@
-// Orca Gateway Android SDK (experimental, Epic 23b). Modules:
+// Orca Gateway Android SDK, an alpha published on Maven Central. Modules:
 //   core  pure Kotlin/JVM: wire models, ValueResolver, ElmStore, the action
 //         executor with effects as data, the generated capability vector.
-//         Published as com.orcagateway:sdk-core (slice S10).
+//         Published as com.orcagateway:sdk-core.
 //   sdk   the Android library: OkHttp transport, Compose renderer, OrcaApp.
-//         Published as com.orcagateway:sdk (slice S10).
+//         Published as com.orcagateway:sdk.
 pluginManagement {
     repositories {
         gradlePluginPortal()
