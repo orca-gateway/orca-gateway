@@ -6,6 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.ChildView
 import com.orcagateway.sdk.OrcaPageModel
@@ -19,6 +22,10 @@ import com.orcagateway.sdk.OrcaPageModel
  * (Flutter's `kDoubleTapTimeout`); without one it fires at once. With no
  * actions it adds no pointer input and only draws its child, so a parent's
  * gestures still get the touches.
+ *
+ * Accessibility sees what Flutter's GestureDetector exposes: `onTap` as a
+ * click action and `onLongPress` as a long-click action, so TalkBack can
+ * activate them; `onDoubleTap` has no accessibility action.
  */
 @Composable
 internal fun GestureDetectorWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -38,6 +45,9 @@ internal fun GestureDetectorWidget(node: ResolvedNode, model: OrcaPageModel, mod
             onDoubleTap = if (doubleTap) ({ fire.value("onDoubleTap") }) else null,
             onLongPress = if (longPress) ({ fire.value("onLongPress") }) else null,
         )
+    }.semantics {
+        if (tap) onClick { fire.value("onTap"); true }
+        if (longPress) onLongClick { fire.value("onLongPress"); true }
     }
     Box(gestures, propagateMinConstraints = true) { ChildView(node, model) }
 }

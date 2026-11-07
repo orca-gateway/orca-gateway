@@ -1,12 +1,16 @@
 package com.orcagateway.sdk.widgets
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
@@ -30,8 +34,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * K6: GestureDetector as Flutter's `_buildGestureDetector` builds it. Each
- * trigger counts its fires in a page state key of the same name.
+ * K6: GestureDetector as Flutter's `_buildGestureDetector` builds it. K7:
+ * TalkBack can activate it, as Flutter's GestureDetector exposes tap and long
+ * press to accessibility. Each trigger counts its fires in a page state key of
+ * the same name.
  */
 @RunWith(RobolectricTestRunner::class)
 class GestureDetectorTest {
@@ -69,6 +75,9 @@ class GestureDetectorTest {
         compose.setContent { OrcaPageView(model) }
         return model
     }
+
+    private val clickAction = SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick)
+    private val longClickAction = SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick)
 
     /** How many times each trigger fired. */
     private fun OrcaPageModel.fired(): Map<String, JsonValue> = triggers.associateWith { store.value(it) }
@@ -148,5 +157,54 @@ class GestureDetectorTest {
         glyph.performTouchInput { click(Offset(dx.toPx(), dy.toPx())) }
         compose.waitForIdle()
         assertEquals(fired(tap = 1), model.fired())
+    }
+
+    @Test
+    fun k7_onTapExposesAClickActionThatFiresOnTapAndNoLongClick() {
+        val model = show(gesture("0", "1", "onTap"), text("1", "Tap"))
+
+        compose.onAllNodes(longClickAction).assertCountEquals(0)
+        compose.onNode(clickAction).performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        assertEquals(fired(tap = 1), model.fired())
+    }
+
+    @Test
+    fun k7_onLongPressExposesALongClickActionThatFiresOnLongPressAndNoClick() {
+        val model = show(gesture("0", "1", "onLongPress"), text("1", "Hold"))
+
+        compose.onAllNodes(clickAction).assertCountEquals(0)
+        compose.onNode(longClickAction).performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.waitForIdle()
+        assertEquals(fired(longPress = 1), model.fired())
+    }
+
+    @Test
+    fun k7_withOnTapAndOnLongPressEachActionFiresItsOwnTrigger() {
+        val model = show(gesture("0", "1", "onTap", "onLongPress"), text("1", "Both"))
+
+        val detector = compose.onNode(clickAction and longClickAction)
+        detector.performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        assertEquals(fired(tap = 1), model.fired())
+        detector.performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.waitForIdle()
+        assertEquals(fired(tap = 1, longPress = 1), model.fired())
+    }
+
+    @Test
+    fun k7_aNodeWithNoActionsAddsNoSemanticsActions() {
+        show(gesture("0", "1"), text("1", "Plain"))
+
+        compose.onAllNodes(clickAction).assertCountEquals(0)
+        compose.onAllNodes(longClickAction).assertCountEquals(0)
+    }
+
+    @Test
+    fun k7_onDoubleTapAloneAddsNoClickAction() {
+        show(gesture("0", "1", "onDoubleTap"), text("1", "Twice"))
+
+        compose.onAllNodes(clickAction).assertCountEquals(0)
+        compose.onAllNodes(longClickAction).assertCountEquals(0)
     }
 }
