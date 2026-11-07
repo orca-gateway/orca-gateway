@@ -371,7 +371,11 @@ const productPage = PageDefinition.create({
                               OutlinedButton.new({
                                 child: Text.new({ data: "-" }),
                                 actions: {
-                                  onTap: SetState("quantity", V.transform(V.pageState("quantity"), [{ type: "subtract", by: V.static(1) }])),
+                                  // Never below 1.
+                                  onTap: When([{
+                                    when: Expr.gt(V.pageState("quantity"), V.static(1)),
+                                    then: SetState("quantity", V.transform(V.pageState("quantity"), [{ type: "subtract", by: V.static(1) }])),
+                                  }]),
                                 },
                               }),
                               SizedBox.new({ width: 16 }),
@@ -510,7 +514,13 @@ const ecommercePage = PageDefinition.create({
                         children: [
                           OutlinedButton.new({
                             child: Text.new({ data: "Sell 1" }),
-                            actions: { onTap: SetState("stock", V.transform(V.pageState("stock"), [{ type: "subtract", by: V.static(1) }])) },
+                            // Never below 0.
+                            actions: {
+                              onTap: When([{
+                                when: Expr.gt(V.pageState("stock"), V.static(0)),
+                                then: SetState("stock", V.transform(V.pageState("stock"), [{ type: "subtract", by: V.static(1) }])),
+                              }], ShowSnackbar("Out of stock")),
+                            },
                           }),
                           SizedBox.new({ width: 8 }),
                           OutlinedButton.new({
@@ -544,7 +554,16 @@ const ecommercePage = PageDefinition.create({
                           Text.new({ data: "Quantity", style: { fontSize: 16 } }),
                           Row.new({
                             children: [
-                              OutlinedButton.new({ child: Text.new({ data: "-" }), actions: { onTap: SetState("quantity", V.transform(V.pageState("quantity"), [{ type: "subtract", by: V.static(1) }])) } }),
+                              // Never below 1.
+                              OutlinedButton.new({
+                                child: Text.new({ data: "-" }),
+                                actions: {
+                                  onTap: When([{
+                                    when: Expr.gt(V.pageState("quantity"), V.static(1)),
+                                    then: SetState("quantity", V.transform(V.pageState("quantity"), [{ type: "subtract", by: V.static(1) }])),
+                                  }]),
+                                },
+                              }),
                               SizedBox.new({ width: 16 }),
                               Text.new({ data: V.transform(V.pageState("quantity"), [{ type: "toString" }]), style: { fontSize: 20, fontWeight: "bold" } }),
                               SizedBox.new({ width: 16 }),
@@ -586,11 +605,15 @@ const ecommercePage = PageDefinition.create({
                     V.transform(V.info("product.price"), [{ type: "multiply", by: V.pageState("quantity") }, { type: "toFixed", decimals: 2 }, { type: "template", template: "Buy Now — ${{value}}" }])),
                 }),
                 actions: {
-                  onTap: Sequential(
-                    SetState("stock", V.transform(V.pageState("stock"), [{ type: "subtract", by: V.pageState("quantity") }])),
-                    ShowSnackbar("Purchase complete!"),
-                    SetState("quantity", V.static(1)),
-                  ),
+                  // Only when the stock covers the quantity; else no state change.
+                  onTap: When([{
+                    when: Expr.gte(V.pageState("stock"), V.pageState("quantity")),
+                    then: Sequential(
+                      SetState("stock", V.transform(V.pageState("stock"), [{ type: "subtract", by: V.pageState("quantity") }])),
+                      ShowSnackbar("Purchase complete!"),
+                      SetState("quantity", V.static(1)),
+                    ),
+                  }], ShowSnackbar("Not enough stock")),
                 },
               }),
               SizedBox.new({ height: 16 }),
