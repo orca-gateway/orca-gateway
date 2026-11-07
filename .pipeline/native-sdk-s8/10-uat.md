@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-PR #14 is open: feat/native-sdk-s8 → main. On the Pixel 3a emulator basic-actions and
-server-actions work: pages push and pop (back too), URL, clipboard, share, server actions.
-U1 found two bugs in the DevTools client, both fixed in 7878ecb and reviewed twice: it never
-stayed in your DevTools, and its reconnect test failed on Linux CI. It now stays connected.
+Your negative stock: the demo page's buttons had no guard (every SDK, not Android's). Fixed in
+edca923: Sell 1 stops at 0 ("Out of stock"), "-" stops at 1, Buy Now refuses more than the stock.
+Checked on the emulator; fit and quality reviews passed (one rework). Pushed to PR #14.
+Earlier: the DevTools client fix (7878ecb) is green on Linux CI; the app stays in your DevTools.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 auto-decided: the client stops offering compression, rather than a DevTools server change.
+1 auto-decided: the demo is fixed in this PR, not a separate one; no SDK or wire change.
 1 noted: dart:io's DevTools reply breaks RFC 7692; a DevTools-side fix is a follow-up, not S8.
 
 ### Questions for you
-1. UAT: the emulator and the server on :8097 are up; does it look right to you? (default: ok)
+1. UAT: try the e-commerce page again on the emulator (server on :8097). (default: ok)
 2. Your DevTools window should list "Orca Counter" on sdk_gphone64_arm64. (default: it does)
 3. After A: 11 skipped by default, 12 records PR #14's CI and the merge. (default: yes)
 
@@ -66,6 +66,21 @@ quality both pass): the client's own OkHttpClient strips the offer with an appli
 (a stub answering like dart:io); C2 now plays the restart on one server, no second bind. core 106,
 sdk 71, lint 0; the DevTools client tests passed 5 runs in a row. The MockWebServer stubs of 09
 never negotiated compression, which is why the tests missed it.
+
+### Your report at gate 10: "in ecommerce demo i can sell under 0 stock with minus"
+Reproduced: 11 × "Sell 1" from 10 showed "⚠️ Low Stock — only -1 left!" and still offered "Buy
+Now — $79.99". Cause: `examples/server/basic-actions.ts`, page `ecommerce`: "Sell 1"
+(`stock - 1`), both quantity "-" buttons (ecommerce and product, `quantity - 1`) and "Buy Now"
+(`stock - quantity`) changed state with no guard; every SDK's `subtract` is plain subtraction
+(Flutter `value_resolver.dart:444`), so Flutter and iOS went negative too. Fix, commit edca923
+(a fresh implementer; fit pass; quality found a redundant `gt(stock, 0)` in Buy Now, reworked,
+pass): `When([{ when: Expr.gt(stock, 0), then: … }], ShowSnackbar("Out of stock"))` for Sell 1,
+`Expr.gt(quantity, 1)` for "-", `Expr.gte(stock, quantity)` for Buy Now with "Not enough stock".
+No SDK, engine or wire change (`conditionalAction` exists in all SDKs). Emulator, final page:
+buy 7 of 10 → "Purchase complete!", stock 3; 10 more sells stop at "❌ Out of Stock" with the
+snackbar; Buy Now at 0 and 6 of 5 → "Not enough stock", nothing changes; "-" stays at 1.
+`cd engine && bun test`: 693 pass (with PORT=8096; 8080 is Docker's).
+CI at 7878ecb (the DevTools fix): SDK Kotlin on JDK 17 and 21, push and PR: 4 of 4 pass on ubuntu.
 
 ### Findings
 - F1 dart:io's reply breaks RFC 7692 §7.1.2.2 (no `client_max_window_bits` unless offered). Other
