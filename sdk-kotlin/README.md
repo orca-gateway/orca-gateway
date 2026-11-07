@@ -2,7 +2,7 @@
 
 > [!WARNING]
 > **Experimental, not ready yet.** This is the in-progress native Android client for Orca Gateway
-> (Epic 23b). It draws 15 widgets so far and nothing is published. Use the Flutter SDK
+> (Epic 23b). It draws 25 widgets so far and nothing is published. Use the Flutter SDK
 > ([`orca_gateway`](https://github.com/orca-gateway/orca-gateway/tree/main/sdk)) instead.
 
 The SDK will render the same server-driven pages as the Flutter and iOS SDKs, from the same Bun
@@ -15,7 +15,7 @@ to Material 3.
 | Module | What | Platforms |
 |---|---|---|
 | `core` | Wire models (`ComponentNode`, `Value`, `Action`, `PageResponse`), `ValueResolver` (9 Value kinds, 31 transforms, 13 BoolExpr ops), `ElmStore` with page and app scopes, the action executor with effects as data, the render tree, `OrcaClient` with the 412 caps handshake behind an `HttpTransport` interface, the generated capability vector, DevTools events (`DevToolsEvent`, `OrcaDebug`). kotlinx.serialization only. Artifact `com.orcagateway:sdk-core`. | JVM 17+, Android |
-| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with the 15 core widgets, `OrcaApp` on `OrcaRouter` (a `NavHost`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
+| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with 25 widgets (the 15 core ones plus Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector) and the degrade policies (an unknown widget becomes a FallbackPrompt; the server's `warn` banner, its `require` blocking prompt and the 426 upgrade page are drawn like any page), `OrcaTheme` button styles, `OrcaApp` on `OrcaRouter` (a `NavHost`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
 
 Build: Gradle 9 through the committed wrapper, Kotlin 2.4, AGP 9, any JDK 17 or later, and an
 Android SDK with platform 36 (`ANDROID_HOME` or `local.properties`).
@@ -26,9 +26,42 @@ Android SDK with platform 36 (`ANDROID_HOME` or `local.properties`).
 |---|---|---|
 | S6 | Pure core: models, resolver, store, executor, caps vector, Linux CI | done |
 | S7 | `OrcaClient` with the 412 caps handshake, the `sdk` module: Compose renderer, 15 core widgets, `OrcaApp`; the counter app in [`examples/app-android`](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android) | done |
-| S8 | Navigation with `OrcaRouter` on a `NavHost` and the system back gesture; system actions through `SystemActions.android(context)` (open URL, clipboard, share); DevTools events, sent by `OrcaDebug.start(OrcaDebugConfig(...))`; the example app runs `basic-actions`, `server-actions` and DevTools | this package |
-| S9 | Degrade policies and the drawn 426 page, ten more widgets, theme hooks | planned |
+| S8 | Navigation with `OrcaRouter` on a `NavHost` and the system back gesture; system actions through `SystemActions.android(context)` (open URL, clipboard, share); DevTools events, sent by `OrcaDebug.start(OrcaDebugConfig(...))`; the example app runs `basic-actions`, `server-actions` and DevTools | done |
+| S9 | Degrade policies and the drawn 426 page, ten more widgets (Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector), `OrcaTheme` button styles | this package |
 | S10 | `0.1.0-alpha.1` on Maven Central | planned |
+
+## Styling buttons
+
+A Flutter host styles an Orca page's buttons through its `ThemeData`. An Android host does it with
+`OrcaTheme`, one `OrcaButtonStyle` per button type, provided once above `OrcaApp` through
+`LocalOrcaTheme`; it reaches every page, pushed ones too:
+
+```kotlin
+import com.orcagateway.sdk.style.LocalOrcaTheme
+import com.orcagateway.sdk.style.OrcaButtonStyle
+import com.orcagateway.sdk.style.OrcaTheme
+
+CompositionLocalProvider(
+    LocalOrcaTheme provides OrcaTheme(
+        elevatedButton = OrcaButtonStyle(
+            shape = CircleShape,
+            containerColor = Color(0xFFFF9800),
+            contentColor = Color.White,
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        ),
+    ),
+) {
+    OrcaApp(client)
+}
+```
+
+An `OrcaButtonStyle` sets any of `shape`, `containerColor`, `contentColor`, `border` and
+`contentPadding`; what it leaves out keeps the Material 3 default. A button type without a style is
+drawn as before.
+
+The server wins: a button whose node carries its own style props (ElevatedButton
+`backgroundColor`, `foregroundColor`, `borderRadius`, `padding`; OutlinedButton `color`,
+`borderColor`; TextButton `color`) is drawn with those, not with the host style.
 
 ## DevTools
 
