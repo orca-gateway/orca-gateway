@@ -4,7 +4,7 @@
   "idea": "Epic 23b slice S9: Android degrade and widgets (23b.27d) — FallbackPrompt looks, the three fallback policies and the drawn 426 page; Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector; host theme hooks for buttons; capability-demo and native-widgets on the emulator",
   "kind": "feature",
   "created_at": "2026-11-07T12:57:02Z",
-  "updated_at": "2026-11-07T19:01:14Z",
+  "updated_at": "2026-11-07T19:02:55Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
   "current": "12",
   "stages": {
@@ -62,7 +62,9 @@
       "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "in_review",
+      "rounds": 1,
+      "card": "cards/12-r1.md"
     },
     "13": {
       "status": "pending"
