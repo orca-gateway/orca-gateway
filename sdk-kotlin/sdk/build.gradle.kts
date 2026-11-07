@@ -59,6 +59,8 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
+    // Flutter's Material icons by name (style/IconNames.kt); R8 drops the unused ones in apps.
+    implementation(libs.compose.material.icons.extended)
     implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
     implementation(libs.okhttp)
