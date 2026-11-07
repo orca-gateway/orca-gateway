@@ -3,27 +3,21 @@
 ## Front page
 
 ### In one breath
-group 2 of 4 · tasks: 6 green, 0 blocked · cases: 32 of 39 green · build: core 112, sdk 117
-S9.8 Goldens: the warn page (banner over the page) and the require page are pinned.
-S9.9 Container and ClipRRect: Flutter's sizing, decoration, padding, clipped corners.
-S9.10 Stack and Positioned: Flutter's RenderStack sizing, edges and expand.
-S9.11 Image: network image, cover by default, alt for TalkBack, empty box on failure.
-S9.12 Icon: Flutter's 156 names as Material icons, unknown ones a filled circle (rework: names).
-S9.6b GestureDetector: TalkBack can tap and long-press it (your yes at gate 09).
+group 3 of 4 · tasks: 2 green, 0 blocked · cases: 35 of 40 green · build: core 113, sdk 121
+S9.13 Registered: pages draw the ten now; Kotlin advertises Swift's 25 (same caps hash).
+S9.11b Image sizing: Flutter's rule, image pixels as dp, one side keeps the aspect ratio.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 needs you: Image sizing, Stack defaults, right-to-left icons (questions 2-4).
-21 auto-decided: implementation choices with the same output (decisions log, stage 09).
+1 needs you: an Image's intrinsic size, only asked by a few layouts, stays Compose's (question 2).
+3 auto-decided: test style and rounding, same output (decisions log, stage 09).
 
 ### Questions for you
-1. Next: group 3, S9.13, registers and advertises the ten widgets? (default: go)
-2. An Image with no width or height: size it as Flutter (aspect ratio kept) in S9.11b,
-   beside S9.13? The demo's food images set only a height. (default: yes)
-3. Stack keeps Flutter's builder defaults (centred, no clip; top -8 hangs over)? (default: yes)
-4. 9 icons mirror unlike Flutter in right-to-left apps; leave as Swift does? (default: yes)
+1. Next: group 4: S9.14 native-widgets page (recording, heart, golden), S9.15 OrcaTheme
+   and the READMEs? (default: go)
+2. Leave the Image's intrinsic size as Compose's? No widget we draw asks for it. (default: yes)
 
 ## Appendix
 
@@ -184,11 +178,39 @@ Decisions: no merged descendants (keeps K6's bounds); no button role (Flutter ad
 Review fit: pass
 Review quality: pass
 
+### Group 3
+Commits, one per task: S9.13 b5526a9, S9.11b df9d352. Nothing pushed. S9.11b was added at gate 09
+(group 2, question 2, "A").
+
+#### Task S9.13 · Register and advertise the ten widgets
+Files: `sdk/…/WidgetBuilders.kt`, `capabilities.json`, `core/…/capabilities/Generated.kt`,
+`core/…/CapabilitiesTest.kt`, `sdk/…/WidgetBuildersTest.kt` (new)
+Cases: C1, C2 → green · red first: C1 "expected 25 but was 15"; C2 passed at baseline and went red
+after the regenerate (ten advertised without a builder), then green · baseline unchanged.
+Changed: capabilities.json lists 25 widgets; Generated.kt regenerated (capsHash 277cc2e0…1254,
+now equal to Swift's; Generated.swift byte-identical); `standard()` registers the ten.
+Decisions: plain JUnit for C2; C2 also checks the ten reach the core's WidgetRegistry.shared.
+Review fit: pass
+Review quality: pass
+
+#### Task S9.11b · Image sized as Flutter
+Files: `sdk/…/widgets/Image.kt`, `sdk/…/widgets/ImageTest.kt`
+Cases: I3 (3 tests, xhdpi) → green · red first on S9.11's code: no size 20x10 dp for 40x20, only a
+height 20x5 for 10x5, a 16 dp parent 16x10 for 16x8 · S9.11's i2 tests unchanged and green.
+Changed: once loaded, width and height fold into the parent's constraints and the bitmap, one dp
+per image pixel, is fitted keeping its aspect ratio (`Constraints.preservingAspectRatio`).
+Decisions: test values that fail first at xhdpi; sizes rounded to whole device pixels; needs
+you (question 2): intrinsic sizes stay Compose's.
+Review fit: pass
+Review quality: pass
+
 ### Test run
 Group 1: `cd sdk-kotlin && ./gradlew build --console=plain --rerun-tasks`: BUILD SUCCESSFUL; core
 112 (106 + 6), sdk 98 (71 + 27), 0 failures; lint "No issues found".
 Group 2, the same command after all six returned: BUILD SUCCESSFUL; core 112, sdk 117 (98 + 19),
-0 failures; lint "No issues found". Every changed file sits in its task's `Files`; no stray file.
+0 failures; lint "No issues found".
+Group 3, the same command: BUILD SUCCESSFUL; core 113, sdk 121, 0 failures; lint "No issues
+found"; `git diff --stat -- sdk-swift` empty. Every changed file sits in its task's `Files`.
 
 ### Blocked
 none
@@ -197,6 +219,6 @@ none
 none
 
 ### For ship (stage 10) to know
-nothing yet. material-icons-extended is a new runtime dependency of the sdk (BOM-pinned, R8
-drops unused icons in an app). Nothing is registered or advertised until S9.13, so no page can
-use the new widgets before group 3; the record lines join Taskfile.yml in S9.14.
+The Kotlin caps vector now advertises 25 widgets (hash equal to Swift's), so the engine stops
+stripping the ten for Android; Schema CI's drift check covers Generated.kt. material-icons-extended
+is a new runtime dependency of the sdk (BOM-pinned). The record lines join Taskfile.yml in S9.14.
