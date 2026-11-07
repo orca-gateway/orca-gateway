@@ -79,16 +79,21 @@ kotlin {
 dependencies {
     api(project(":core"))
 
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.ui)
-    implementation(libs.compose.foundation)
+    // In the public API (OrcaApp's Modifier, OrcaTheme's Shape, Color, BorderStroke,
+    // PaddingValues): apps compile against these, at the BOM's versions.
+    api(platform(libs.compose.bom))
+    api(libs.compose.ui)
+    api(libs.compose.foundation)
+    // In the public API: OkHttpTransport takes an OkHttpClient.
+    api(libs.okhttp)
+    // In the public API: OrcaPageModel.fire returns a coroutines Job.
+    api(libs.kotlinx.coroutines.android)
+    // Used inside only: no public declaration has their types.
     implementation(libs.compose.material3)
     // Flutter's Material icons by name (style/IconNames.kt); R8 drops the unused ones in apps.
     implementation(libs.compose.material.icons.extended)
     implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
-    implementation(libs.okhttp)
-    implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.junit4)
