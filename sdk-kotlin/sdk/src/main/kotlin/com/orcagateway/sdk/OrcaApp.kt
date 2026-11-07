@@ -33,6 +33,7 @@ import androidx.navigation.compose.rememberNavController
 import com.orcagateway.core.client.DeviceInfo
 import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.client.OrcaClientException
+import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.StoreState
 import com.orcagateway.sdk.client.current
@@ -48,6 +49,7 @@ import kotlinx.coroutines.launch
  * this device when the client was built with the default [DeviceInfo].
  * Under a [router] the fetch carries the shared app state, and the page
  * joins the router. Use it from the main thread; [phase] is Compose state.
+ * With DevTools on, a loaded page sends its `timing` once, on its first frame.
  *
  * A load cancelled mid-fetch (its page left the screen) leaves [phase] at
  * `Loading` and runs again on the next [loadIfNeeded]. After [close] it
@@ -86,11 +88,16 @@ public class OrcaPageLoader(
         val client = if (client.device == DeviceInfo()) client.copy(device = DeviceInfo.current(context)) else client
         val app = router?.appState ?: emptyMap()
         phase = try {
-            val page = client.fetchPage(path, app)
+            val (page, timing) = client.fetchPageTimed(path, app)
             if (closed) return
-            // DevTools reporting arrives with the adapters slice (S8).
+            val renderStart = timing.elapsed()
             val model = OrcaPageModel(page, store = ElmStore(StoreState(app = app)), client = client)
             router?.attach(model)
+            val renderComplete = timing.elapsed()
+            // The DevTools `timing` event waits for the first frame.
+            model.onFirstAppear = {
+                OrcaDebug.report { timing.event(page.pageId, path, renderStart, renderComplete, firstFrameMs = timing.elapsed()) }
+            }
             Phase.Loaded(model)
         } catch (e: CancellationException) {
             started = false
