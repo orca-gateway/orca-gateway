@@ -14,8 +14,8 @@ to Material 3.
 
 | Module | What | Platforms |
 |---|---|---|
-| `core` | Wire models (`ComponentNode`, `Value`, `Action`, `PageResponse`), `ValueResolver` (9 Value kinds, 31 transforms, 13 BoolExpr ops), `ElmStore` with page and app scopes, the action executor with effects as data, the render tree, `OrcaClient` with the 412 caps handshake behind an `HttpTransport` interface, the generated capability vector. kotlinx.serialization only. Artifact `com.orcagateway:sdk-core`. | JVM 17+, Android |
-| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with the 15 core widgets, `OrcaApp`. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
+| `core` | Wire models (`ComponentNode`, `Value`, `Action`, `PageResponse`), `ValueResolver` (9 Value kinds, 31 transforms, 13 BoolExpr ops), `ElmStore` with page and app scopes, the action executor with effects as data, the render tree, `OrcaClient` with the 412 caps handshake behind an `HttpTransport` interface, the generated capability vector, DevTools events (`DevToolsEvent`, `OrcaDebug`). kotlinx.serialization only. Artifact `com.orcagateway:sdk-core`. | JVM 17+, Android |
+| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with the 15 core widgets, `OrcaApp` on `OrcaRouter` (a `NavHost`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
 
 Build: Gradle 9 through the committed wrapper, Kotlin 2.4, AGP 9, any JDK 17 or later, and an
 Android SDK with platform 36 (`ANDROID_HOME` or `local.properties`).
@@ -25,10 +25,36 @@ Android SDK with platform 36 (`ANDROID_HOME` or `local.properties`).
 | Slice | Content | State |
 |---|---|---|
 | S6 | Pure core: models, resolver, store, executor, caps vector, Linux CI | done |
-| S7 | `OrcaClient` with the 412 caps handshake, the `sdk` module: Compose renderer, 15 core widgets, `OrcaApp`; the counter app in [`examples/app-android`](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android) | this package |
-| S8 | Navigation, system and server adapters, DevTools | planned |
-| S9 | Degrade policies and the 426 page, ten more widgets, theme hooks | planned |
+| S7 | `OrcaClient` with the 412 caps handshake, the `sdk` module: Compose renderer, 15 core widgets, `OrcaApp`; the counter app in [`examples/app-android`](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android) | done |
+| S8 | Navigation with `OrcaRouter` on a `NavHost` and the system back gesture; system actions through `SystemActions.android(context)` (open URL, clipboard, share); DevTools events, sent by `OrcaDebug.start(OrcaDebugConfig(...))`; the example app runs `basic-actions`, `server-actions` and DevTools | this package |
+| S9 | Degrade policies and the drawn 426 page, ten more widgets, theme hooks | planned |
 | S10 | `0.1.0-alpha.1` on Maven Central | planned |
+
+## DevTools
+
+Off until you start it. Start it once per process, for example in `Application.onCreate`:
+
+```kotlin
+import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.sdk.debug.OrcaDebugConfig
+import com.orcagateway.sdk.debug.start
+
+OrcaDebug.start(
+    OrcaDebugConfig(
+        enabled = true,        // debug builds only
+        host = "10.0.2.2",     // the Mac running DevTools, as the emulator sees it
+        appName = "My Shop",
+        appVersion = "1.4.0",  // your versionName; the SDK takes no Context for it
+    ),
+)
+```
+
+The SDK then sends DevTools (port 6363) its network requests, page timing, state changes, actions,
+rebuilds and errors, and reconnects when DevTools restarts. A second `start` replaces the
+connection; `OrcaDebug.stop()` ends it. On a device, set `host` to the Mac's address, or run
+`adb reverse tcp:6363 tcp:6363` and use `localhost`. The connection is plain `ws://`, so the
+build must allow cleartext traffic (debug builds only). The example app reads both settings from
+intent extras; see [`examples/app-android`](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android).
 
 ## Tests
 

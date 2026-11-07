@@ -4,9 +4,9 @@
   "idea": "Epic 23b slice S7: the Compose UI of the Android SDK (23b.27b) — sdk-kotlin module sdk (Android library, com.orcagateway:sdk), OkHttp OrcaClient with the 412 caps handshake, Compose renderer and the 15 core widgets, OrcaApp on NavHost, toast, examples/app-android counter on an emulator",
   "kind": "feature",
   "created_at": "2026-11-06T23:11:58Z",
-  "updated_at": "2026-11-07T00:11:59Z",
+  "updated_at": "2026-11-07T09:20:45Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "09",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -44,30 +44,45 @@
       "approved_with": "A"
     },
     "09": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/09-r1.md"
+      "card": "cards/09-r1.md",
+      "approved_at": "2026-11-07T09:05:47Z",
+      "approved_with": "A"
     },
     "10": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/10-r1.md",
+      "approved_at": "2026-11-07T09:18:09Z",
+      "approved_with": "A , but the button is native material, what if i want consistent look between android native and ios native"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-07T09:20:44Z",
+      "approved_with": "A"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S7 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S7 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S7 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S7 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     }
   },
   "gates": {

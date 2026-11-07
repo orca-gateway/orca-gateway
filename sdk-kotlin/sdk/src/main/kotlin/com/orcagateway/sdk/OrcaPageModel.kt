@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.orcagateway.core.client.ActionClient
+import com.orcagateway.core.debug.DevToolsEvent
+import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.PageResponse
@@ -114,14 +116,17 @@ public class OrcaPageModel(
         return scope.launch { run(action, eventData) }
     }
 
-    /** Run one action to the end; a failure goes to [onError], never up. */
+    /**
+     * Run one action to the end; a failure goes to DevTools as an `error`
+     * event and to [onError], never up. A cancelled run is not a failure.
+     */
     public suspend fun run(action: Action, eventData: Map<String, JsonValue>? = null) {
         try {
             executor.execute(action, eventData)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // DevTools reporting arrives with the adapters slice (S8).
+            OrcaDebug.report { DevToolsEvent.error(message = "$e", context = "action ${action.kind} on ${page.pageId}") }
             onError?.invoke(e)
         }
     }
@@ -225,10 +230,12 @@ internal class NodeObserver(private val model: OrcaPageModel, private val id: St
         subscription = if (next.isEmpty()) null else model.store.subscribe(next) { watchedChanged() }
     }
 
-    /** A watched key changed: redraw. */
+    /** A watched key changed: redraw, and tell DevTools. */
     private fun watchedChanged() {
         revision += 1
-        // DevTools reporting arrives with the adapters slice (S8).
+        if (!OrcaDebug.isEnabled) return
+        val node = model.renderer.node(id) ?: return
+        OrcaDebug.report { DevToolsEvent.widgetRebuild(widgetId = id, widgetType = node.type, watches = watches) }
     }
 
     private fun structureChanged() {

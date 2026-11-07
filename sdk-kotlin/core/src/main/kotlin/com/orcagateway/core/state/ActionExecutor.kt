@@ -2,6 +2,8 @@ package com.orcagateway.core.state
 
 import com.orcagateway.core.client.ActionClient
 import com.orcagateway.core.client.OrcaActionException
+import com.orcagateway.core.debug.DevToolsEvent
+import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ActionList
@@ -75,10 +77,29 @@ public class ActionExecutor(
 
     private val resolver: ValueResolver get() = store.state.resolver(eventData)
 
+    /**
+     * Every action run, nested ones too, is a DevTools `action` event, sent
+     * when it finishes (so children before their group) or throws. A
+     * cancelled run is not a failure and did not finish: no event.
+     */
     private suspend fun run(action: Action) {
         if (action.kind !in kinds) return
-        // DevTools reporting arrives with the adapters slice (S8).
+        if (!OrcaDebug.isEnabled) return handle(action)
+        val start = OrcaDebug.now()
+        var cancelled = false
+        try {
+            handle(action)
+        } catch (e: CancellationException) {
+            cancelled = true
+            throw e
+        } finally {
+            if (!cancelled) {
+                OrcaDebug.report { DevToolsEvent.action(action, pageId = store.pageId ?: "", durationMs = OrcaDebug.now() - start) }
+            }
+        }
+    }
 
+    private suspend fun handle(action: Action) {
         when (action) {
             is Action.SetState, is Action.ShowSnackbar, is Action.ShowToast -> {
                 val (next, effects) = reducer.reduce(store.state, action, eventData)

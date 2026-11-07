@@ -1,6 +1,8 @@
 package com.orcagateway.core.client
 
 import com.orcagateway.core.capabilities.CapabilityVector
+import com.orcagateway.core.debug.DevToolsEvent
+import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.PageResponse
@@ -8,6 +10,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.net.URI
 import java.net.URISyntaxException
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * A failed page request: a status other than 200, or a URL that cannot be
@@ -96,16 +99,32 @@ public class OrcaClient(
      * that page; anything else throws [OrcaClientException.Http] with the
      * status and the body as text.
      */
-    public suspend fun fetchPage(path: String, appState: Map<String, JsonValue>? = null): PageResponse {
-        // DevTools reporting arrives with the adapters slice (S8).
+    public suspend fun fetchPage(path: String, appState: Map<String, JsonValue>? = null): PageResponse =
+        fetchPageTimed(path, appState).first
+
+    /** [fetchPage], plus what it measured for the DevTools `timing` event. */
+    public suspend fun fetchPageTimed(
+        path: String,
+        appState: Map<String, JsonValue>? = null,
+    ): Pair<PageResponse, PageLoadTiming> {
+        val start = OrcaDebug.now()
         val url = pageUrl(path)
         val response = sendWithCapsRetry(url, appState)
-        // DevTools reporting arrives with the adapters slice (S8).
-        if (response.status == 200) {
-            return Json.decodeFromString(PageResponse.serializer(), response.body.decodeToString())
+        val received = OrcaDebug.now() - start
+        val page = if (response.status == 200) {
+            Json.decodeFromString(PageResponse.serializer(), response.body.decodeToString())
+        } else {
+            upgradeRequiredPage(response)
+                ?: throw OrcaClientException.Http(response.status, response.body.decodeToString())
         }
-        return upgradeRequiredPage(response)
-            ?: throw OrcaClientException.Http(response.status, response.body.decodeToString())
+        val server = response.headers["x-orca-timing"]?.let {
+            try {
+                JsonValue.parse(it)
+            } catch (_: SerializationException) {
+                null
+            }
+        }
+        return page to PageLoadTiming(start, server, received, OrcaDebug.now() - start)
     }
 
     /**
@@ -141,10 +160,56 @@ public class OrcaClient(
         return (json["actions"].arrayValue ?: emptyList()).map { it.decode(Action.serializer()) }
     }
 
-    /** The transport; the one place every request of this client goes through. */
-    internal suspend fun send(request: HttpRequest): HttpResponse {
-        // DevTools reporting arrives with the adapters slice (S8).
-        return transport.send(request)
+    /**
+     * The transport, the one place every request of this client goes
+     * through, plus a DevTools `network` event per request and an `error`
+     * event for one that failed or was refused (Dart `_reportFailedRequest`
+     * and `_reportHttpErrorResponse`). With [handshake] a 412
+     * caps_vector_unknown is the expected first step of the handshake, so no
+     * error; the refused retry is one, as in Dart (Swift skips it). A
+     * cancelled request is not a failure: it goes up with no event at all.
+     */
+    internal suspend fun send(request: HttpRequest, handshake: Boolean = false): HttpResponse {
+        if (!OrcaDebug.isEnabled) return transport.send(request)
+        val start = OrcaDebug.now()
+        val url = request.url.toString()
+        val context = "${request.method} $url"
+        val requestHeaders = DevToolsEvent.sanitize(request.headers)
+        val response = try {
+            transport.send(request)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val ms = OrcaDebug.now() - start
+            OrcaDebug.report {
+                DevToolsEvent.network(
+                    request.method, url, statusCode = 0, durationMs = ms, requestSizeBytes = request.body?.size,
+                    requestHeaders = requestHeaders, phases = listOf(DevToolsEvent.NetworkPhase("wait", ms)),
+                )
+            }
+            OrcaDebug.report { DevToolsEvent.error(message = "Network request failed: $e", context = context) }
+            throw e
+        }
+        val ms = OrcaDebug.now() - start
+        OrcaDebug.report {
+            DevToolsEvent.network(
+                request.method, url, response.status, ms, requestSizeBytes = request.body?.size,
+                responseSizeBytes = response.body.size, requestHeaders = requestHeaders,
+                responseHeaders = DevToolsEvent.sanitize(response.headers),
+                phases = listOf(DevToolsEvent.NetworkPhase("wait", ms)),
+            )
+        }
+        val expected = handshake && response.status == 412 && response.errorField == "caps_vector_unknown"
+        if (response.status >= 400 && !expected) {
+            OrcaDebug.report {
+                DevToolsEvent.error(
+                    message = "HTTP ${response.status} ${request.url.path}",
+                    stackTrace = response.body.decodeToString(),
+                    context = context,
+                )
+            }
+        }
+        return response
     }
 
     internal fun pageUrl(path: String): URI = endpointUrl("page/${path.removePrefix("/")}")
@@ -180,7 +245,7 @@ public class OrcaClient(
         } else {
             HttpRequest("GET", url, base)
         }
-        val response = send(first)
+        val response = send(first, handshake = true)
         if (response.status != 412 || response.errorField != "caps_vector_unknown") return response
 
         // The retry is always a POST: the vector has to travel in the body.
@@ -212,4 +277,35 @@ public class OrcaClient(
             }
         }
     }
+}
+
+/**
+ * What a page fetch measured, for the DevTools `timing` event: the engine's
+ * `x-orca-timing` header and the client's marks, in milliseconds from the
+ * request start. The page view adds the render marks.
+ */
+public data class PageLoadTiming(
+    /** When the request started, on [OrcaDebug.now]'s clock. */
+    public val startMs: Double,
+    /** The `x-orca-timing` header as parsed, or null when absent or not JSON. */
+    public val server: JsonValue?,
+    public val responseReceivedMs: Double,
+    public val parseCompleteMs: Double,
+) {
+    /** Milliseconds since the request started. */
+    public fun elapsed(): Double = OrcaDebug.now() - startMs
+
+    public fun event(
+        pageId: String,
+        path: String,
+        renderStartMs: Double,
+        renderCompleteMs: Double,
+        firstFrameMs: Double,
+    ): DevToolsEvent = DevToolsEvent.timing(
+        pageId, path, server,
+        DevToolsEvent.ClientTiming(
+            responseReceivedMs = responseReceivedMs, parseCompleteMs = parseCompleteMs,
+            renderStartMs = renderStartMs, renderCompleteMs = renderCompleteMs, firstFrameMs = firstFrameMs,
+        ),
+    )
 }
