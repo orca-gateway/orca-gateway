@@ -26,10 +26,13 @@ import kotlin.test.fail
  * T6.3.4: one golden of the counter page, 393x852 dp at 2x (xhdpi), light,
  * drawn by Robolectric's native graphics. Swift's T2.4 at the same size.
  *
- * The picture depends on the runtime that draws it (Robolectric's Skia and
- * fonts, per host OS) as well as on the page, so the golden is compared only
- * on the runtime that recorded it: `counter-home.runtime` next to the PNG
- * names that runtime, and the test skips elsewhere. Record with
+ * The picture depends on the runtime that draws it as well as on the page, so
+ * the golden is compared only on the runtime that recorded it:
+ * `counter-home.runtime` next to the PNG names that runtime, and the test
+ * skips elsewhere. Robolectric draws with its own Skia and the fonts of the
+ * Android SDK it runs, so the host OS does not count: the golden recorded on
+ * macOS passes unchanged on Linux x86_64 (checked at S7), and CI compares it.
+ * Record with
  * `./gradlew :sdk:testDebugUnitTest --tests '*GoldenTest*' -Porca.recordGoldens=true`;
  * the recording run fails on purpose (as Swift's does), the next one compares.
  */
@@ -141,9 +144,9 @@ class GoldenTest {
         /** The test fails when more than this share of pixels differs: 0.01%, as in Swift. */
         const val MAX_DIFFERING_SHARE = 0.0001
 
-        /** What draws the picture: the host OS and the Android SDK Robolectric runs. */
+        /** What draws the picture: the Android SDK Robolectric runs (its renderer and fonts). */
         val runtime: String
-            get() = "os=${System.getProperty("os.name")}\nrobolectricSdk=${Build.VERSION.SDK_INT}\n"
+            get() = "robolectricSdk=${Build.VERSION.SDK_INT}\n"
 
         val runtimeLine: String get() = runtime.trim().replace('\n', ' ')
     }
