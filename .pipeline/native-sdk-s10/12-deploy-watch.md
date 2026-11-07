@@ -64,3 +64,13 @@ cleared. Not touched: Docker on 8080, the bun on 8091, your DevTools app on 6363
 - On a green publish run and your A: stages 13-16 skipped ("S10 has no deployed service; skipped by
   the default accepted at gate 12 (A)"), S10 closed, 23b.27e ✅ Done in the epic plan.
 - Then the next slice, 23b.33, on your go.
+
+### Closed (gate 12, "A https://github.com/orca-gateway/orca-gateway/actions/runs/42420597668", 2026-11-08)
+The linked run is "SDK Kotlin CI" on the push to main (07d5279, created 22:26:10Z), not "SDK Kotlin
+Publish": both legs success, the JDK 17 leg's "Stage the Maven publication" and "Verify a scratch
+consumer" success. Read at closing: no `sdk-kotlin-v*` tag, 0 runs of sdk-kotlin-publish.yml, and
+`repo1.maven.org/…/sdk/0.1.0-alpha.1/sdk-0.1.0-alpha.1.pom` answers 404. So the gate is approved on
+your "A" and stages 13-16 skipped ("S10 has no deployed service; skipped by the default accepted at
+gate 12 (A)"), but 23b.27e's acceptance (the artifact resolves from Central) is not met yet: its row
+reads "S10 merged (PR #17); the Maven Central release is the deployer's (User_Actions Step 6)", not
+✅. After your release, the "SDK Kotlin Publish" run's verify job is the proof; then the row is ✅.
