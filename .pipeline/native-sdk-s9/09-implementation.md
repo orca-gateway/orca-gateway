@@ -3,27 +3,27 @@
 ## Front page
 
 ### In one breath
-group 1 of 4 · tasks: 7 green, 0 blocked · cases: 21 of 38 green · build: core 112, sdk 98
-S9.1 FallbackPrompt links: P3, P4 tests (no router; under the router); no production change.
-S9.2 Degrade: 4 Kotlin recordings (same bytes as Swift's); graceful, warn, require, 426 tested.
-S9.3 Style readers: Flutter alignment, radii, clip; BoxDecoration with shadows and gradient.
-S9.4 Expanded and Spacer: flex children share the space left (rework: its red run recorded).
-S9.5 TextField: local text, stateKey, then onChange per keystroke; Material 3 decoration.
-S9.6 GestureDetector: tap, double tap, long press; only the gestures that have actions.
-S9.7 Image loader: OkHttp, memory cache, one request per URL; failures give no image.
+group 2 of 4 · tasks: 6 green, 0 blocked · cases: 32 of 39 green · build: core 112, sdk 117
+S9.8 Goldens: the warn page (banner over the page) and the require page are pinned.
+S9.9 Container and ClipRRect: Flutter's sizing, decoration, padding, clipped corners.
+S9.10 Stack and Positioned: Flutter's RenderStack sizing, edges and expand.
+S9.11 Image: network image, cover by default, alt for TalkBack, empty box on failure.
+S9.12 Icon: Flutter's 156 names as Material icons, unknown ones a filled circle (rework: names).
+S9.6b GestureDetector: TalkBack can tap and long-press it (your yes at gate 09).
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 needs you: GestureDetector has no TalkBack actions; Flutter and Swift expose tap and long press.
-1 auto-decided: oversized uneven corners shrink together, as Flutter paints (Swift caps each).
-16 auto-decided: implementation choices with the same output (decisions log, stage 09).
+3 needs you: Image sizing, Stack defaults, right-to-left icons (questions 2-4).
+21 auto-decided: implementation choices with the same output (decisions log, stage 09).
 
 ### Questions for you
-1. Next: group 2 (warn/require goldens, Container and ClipRRect, Stack, Image, Icon)? (default: go)
-2. TalkBack: add tap and long-press actions as task S9.6b in group 2 (Gesture.kt and its test,
-   case K7)? (default: yes)
+1. Next: group 3, S9.13, registers and advertises the ten widgets? (default: go)
+2. An Image with no width or height: size it as Flutter (aspect ratio kept) in S9.11b,
+   beside S9.13? Compose's sizing shows the demo's food images wrong. (default: yes)
+3. Stack keeps Flutter's builder defaults (centred, no clip; top -8 hangs over)? (default: yes)
+4. 9 icons mirror unlike Flutter in right-to-left apps; leave as Swift does? (default: yes)
 
 ## Appendix
 
@@ -112,10 +112,83 @@ cancel; cache 1/8 of the heap. Not done: no downsampling (not asked).
 Review fit: pass
 Review quality: pass
 
+### Group 2
+Commits, one per task: S9.8 b8f704c, S9.9 4b52cf2, S9.10 8c12df9, S9.11 58c6caf, S9.12 54aebbf,
+S9.6b 088baaf. Nothing pushed. S9.6b was added at gate 09 (question 2, "A").
+
+#### Task S9.8 · Goldens of the warn and require pages
+Files: `sdk/…/GoldenTest.kt`, `sdk/src/test/resources/goldens/degrade-{warn,require}.{png,runtime}`
+Cases: G1, G2 → green · red first: both skipped by "no golden; record one", the recording run
+failed on purpose, the compare run passed · baseline unchanged (counter-home.png byte-identical).
+Changed: `g1_theWarnPolicyPageDrawsItsBannerOverThePage`, `g2_theRequirePolicyPageIsOneBlocking
+Prompt`; draw and compare moved to internal top-level functions, `assertPageGolden` for S9.14.
+Warn: orange banner on top, then the page with its Checkbox as an "Unsupported content" prompt;
+require: one red "Update required" prompt. The Scaffold inside the warn Column drew fine.
+Decisions: counterPage's body unchanged; default registry; recorded with a --tests filter.
+Review fit: pass
+Review quality: pass
+
+#### Task S9.9 · Container and ClipRRect on Flutter's decoration
+Files: `sdk/…/widgets/Box.kt` (new), `sdk/…/widgets/BoxTest.kt` (new)
+Cases: W4 (two tests) → green · red first: "expected 51.0.dp but was 35.0.dp" (no padding yet),
+"(30, 30) is #ffffffff, expected red" (nothing clipped) · baseline unchanged.
+Changed: `ContainerWidget`: margin, size, decoration or `color`, clip to the decoration's shape,
+padding plus the border width; no child or an alignment fills the space, else it wraps the child.
+`ClipRRectWidget` clips to one radius or four corners.
+Decisions: ClipRRect always clips (the builder never reads clipBehavior); a clipping Container
+with no decoration clips to a rectangle, as Swift; the clip sits inside the decoration.
+Review fit: pass
+Review quality: pass
+
+#### Task S9.10 · Stack and Positioned following RenderStack
+Files: `sdk/…/widgets/Stack.kt` (new), `sdk/…/widgets/StackTest.kt` (new)
+Cases: K1, K2, K3, K5 → green · red first: all four against compiling stubs · baseline unchanged.
+Changed: `StackWidget` (custom layout, size from the largest ordinary child, clip only when
+asked), `PositionedWidget`, `StackFit`, `PositionedSpec` (Flutter's edge rules), `Modifier.positioned`.
+Decisions: needs you (question 3): no alignment or clip sent → centred, no clip, as Flutter's
+builder and Swift (my brief said topLeft and hardEdge, the widget defaults the builder
+overrides); edges keep their sign, so top -8 hangs over; an unbounded axis as Swift.
+Review fit: pass
+Review quality: pass
+
+#### Task S9.11 · Image widget: fit, alignment, alt
+Files: `sdk/…/widgets/Image.kt` (new), `sdk/…/widgets/ImageTest.kt` (new)
+Cases: I2 (3 tests) → green · red first: "Failed to retrieve bounds of the node" (no alt node),
+every fit name FixedScale(1.0) · baseline unchanged.
+Changed: `ImageWidget` loads `src` through `ImageLoader.shared`, a new src empties the box until
+it loads; seven fit names, cover by default; alignment; `color` tints; `alt` on the box.
+Decisions: alt with Role.Image on the box (described while loading too, as Flutter); a failed
+load is an empty box; needs you (question 2): with no width or height Compose sizes the bitmap
+in device pixels and keeps no aspect ratio from one side, unlike Flutter.
+Review fit: pass
+Review quality: pass
+
+#### Task S9.12 · Icon on Flutter's names
+Files: `sdk/…/widgets/Icon.kt`, `sdk/…/style/IconNames.kt`, `sdk/…/style/IconNamesTest.kt` (new),
+`sdk/build.gradle.kts`, `gradle/libs.versions.toml`
+Cases: W10, W11 → green · red first: W10 listed every Dart name as missing, W11
+NotImplementedError, the widget 0 dp for 24 · baseline unchanged.
+Changed: material-icons-extended (BOM 1.7.8, no download; build time unchanged within noise);
+a table of Dart's 156 names, unknown → filled circle; `IconWidget` (size 24, colour, `src` wins).
+Decisions: needs you (question 4): 17 deprecated icons use their AutoMirrored copies, so 9
+names mirror unlike Flutter in right-to-left; `src` fits the box; `copy` is ContentCopy.
+Review fit: pass
+Review quality: test names lacked the `w10_` underscore, fixed (renamed by a fresh implementer)
+
+#### Task S9.6b · GestureDetector actions for TalkBack
+Files: `sdk/…/widgets/Gesture.kt`, `sdk/…/widgets/GestureDetectorTest.kt`
+Cases: K7 (5 tests) → green · red first: the 3 positive tests "could not find any node that
+satisfies (OnClick is defined)"; the 2 absence tests passed before · K6 unchanged and green.
+Changed: semantics with a click action only for onTap and a long-click only for onLongPress.
+Decisions: no merged descendants (keeps K6's bounds); no button role (Flutter adds actions only).
+Review fit: pass
+Review quality: pass
+
 ### Test run
-`cd sdk-kotlin && ./gradlew build --console=plain --rerun-tasks` (after all seven returned):
-BUILD SUCCESSFUL; core 112 tests (106 + 6), sdk 98 tests (71 + 27), 0 failures; lint "No issues
-found". Every changed file sits in its task's `Files`; no stray file.
+Group 1: `cd sdk-kotlin && ./gradlew build --console=plain --rerun-tasks`: BUILD SUCCESSFUL; core
+112 (106 + 6), sdk 98 (71 + 27), 0 failures; lint "No issues found".
+Group 2, the same command after all six returned: BUILD SUCCESSFUL; core 112, sdk 117 (98 + 19),
+0 failures; lint "No issues found". Every changed file sits in its task's `Files`; no stray file.
 
 ### Blocked
 none
@@ -124,6 +197,6 @@ none
 none
 
 ### For ship (stage 10) to know
-nothing yet. The degrade recordings are committed; their `sdk-kotlin:record` lines join
-Taskfile.yml in S9.14. Nothing is registered or advertised until S9.13, so a page cannot use the
-new widgets before group 3.
+nothing yet. material-icons-extended is a new runtime dependency of the sdk (BOM-pinned, R8
+drops unused icons in an app). Nothing is registered or advertised until S9.13, so no page can
+use the new widgets before group 3; the record lines join Taskfile.yml in S9.14.
