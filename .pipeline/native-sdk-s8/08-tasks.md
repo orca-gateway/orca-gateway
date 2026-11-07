@@ -83,3 +83,27 @@ F4 From S7 F1: a new activity fetches its page again. S8 keeps the router in `re
 ### Not in S8
 FallbackPrompt looks, the three policies, the drawn 426 page, the ten extra widgets, theme hooks
 (S9). Maven Central (S10).
+
+### Groups (derived at the start of 09)
+This 08 predates the pipeline-build module, so its tasks had no groups. At 09 entry they are split
+so that no two tasks of a group share a file and no task has more than five files; S8.1 and S8.4
+split in two, S8.6 joins S8.5. Case ids are Swift's S3 tests: E (DevToolsEventTests), Y (system
+cases of RouterTests), R (RouterTests), C (DevToolsClientTests).
+| Group | Task | Files | Cases | Size | Depends on |
+|---|---|---|---|---|---|
+| 1 | S8.1a DevTools events and OrcaDebug | core `debug/DevToolsEvent.kt`, `debug/OrcaDebug.kt`, test `debug/DevToolsEventTest.kt` | E1 every fixture rebuilt, E2 action families as Dart, E3 headers redacted, E4 state changes diff both scopes, E5 nothing built without a reporter | M | none |
+| 1 | S8.3 System actions | sdk `system/SystemActions.kt`, test `system/SystemActionsTest.kt` | Y1 openUrl follows the policy, Y2 clipboard and share | S | none |
+| 2 | S8.1b Reporting from the core | core `state/ElmStore.kt`, `state/ActionExecutor.kt`, `client/OrcaClient.kt`, `render/PageRenderer.kt`, test `debug/DevToolsReportingTest.kt` | E6 the store reports its page's changed keys, E7 the executor reports every action, E8 a FallbackPrompt once per type, E9 the client reports requests and failures (the refused vector too), E10 a timed fetch reads the server timing | M | S8.1a |
+| 2 | S8.2 OrcaRouter on NavHost | sdk `navigation/OrcaRouter.kt`, `OrcaApp.kt`, test `navigation/RouterTest.kt` | R1 navigate pushes, replace resets, goBack pops; R2 the same path twice is two pages; R3 a popped route loses its page; R4 page actions drive the router; R5 app state shared across pages | M | S8.3 |
+| 2 | S8.4a DevTools client | sdk `debug/DevToolsClient.kt`, test `debug/DevToolsClientTest.kt`, `gradle/libs.versions.toml`, `sdk/build.gradle.kts` | C1 device_info first, then events; C2 reconnects after DevTools restarts; C3 a refused client gives up after ten tries; C4 delays follow Flutter; C5 opt-in | M | S8.1a |
+| 3 | S8.4b Reporting from the views | sdk `OrcaPageModel.kt`, `OrcaApp.kt`, test `debug/DevToolsUiReportingTest.kt` | C6 a watching node reports its rebuild, C7 a loaded page reports its timing once, C8 a thrown action is reported as an error | S | S8.2, S8.4a |
+| 3 | S8.5 Example and READMEs | `examples/app-android/.../MainActivity.kt`, `examples/app-android/README.md`, `sdk-kotlin/README.md` | (prepares U1) | S | S8.2, S8.4a |
+Not planned for an implementer: U1, basic-actions and server-actions on the Pixel 3a and the app in
+DevTools, is the stage 10 run by hand.
+
+### Done when
+test: `cd sdk-kotlin && ./gradlew build --console=plain` (compile with warnings as errors, core and
+sdk tests, lint) · lint: inside that build (`:sdk:lintDebug`) · typecheck: none (the Kotlin compile
+is in the build) · baseline: core 93 and sdk 48 tests green, lint 0 warnings, 2026-11-07 ·
+commits: per task (the approved commit list above) · gate: per group (the default; not asked at 08,
+answered at gate 08 with "A", 2026-11-07).
