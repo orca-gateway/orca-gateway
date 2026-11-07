@@ -139,6 +139,8 @@ test: `cd sdk-kotlin && ./gradlew build --console=plain` (compile with warnings 
 and sdk tests, lint) · lint: inside that build (`:sdk:lintDebug`) · typecheck: none (the Kotlin
 compile is in the build) · baseline: BUILD SUCCESSFUL, core 106 and sdk 71 tests green, lint 0
 issues, 2026-11-07 (run with `--rerun-tasks`).
+commits: per task · gate: per group (answered at gate 08 with "A", 2026-11-07; question 4
+material-icons-extended yes, question 5 the built-in OkHttp image loader yes).
 
 ### Not planned
 - P1, P2: green since S7 (`theCallToActionIsAnOpenUrlEffect`, `aUrlThePolicyRefusesDoesNothing`).
