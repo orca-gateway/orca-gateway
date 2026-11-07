@@ -1,27 +1,29 @@
 #!/usr/bin/env bun
 /**
- * Records a page exactly as the Swift SDK receives it, for the Swift tests
- * (Epic 23b, T2.3). Starts the example apps on a free port, then requests the
- * page the way OrcaClient does: caps headers first, then on 412
- * caps_vector_unknown one POST retry with `_orcaCapsVector`. A recording
- * therefore also proves the Swift caps hash is accepted by a real engine.
+ * Records a page exactly as a native SDK receives it, for the Swift and Kotlin
+ * tests (Epic 23b, T2.3 and T6.3). Starts the example apps on a free port,
+ * then requests the page the way OrcaClient does: caps headers first, then on
+ * 412 caps_vector_unknown one POST retry with `_orcaCapsVector`. A recording
+ * therefore also proves the SDK's caps hash is accepted by a real engine.
  *
  *   bun run examples/server/record-page.ts <appId> <path> <out.json>
  *       [--policy graceful|warn|require] [--min-sdk <version>] [--sdk-version <version>]
+ *       [--sdk swift|kotlin]
  *
- * `--policy` sets the default fallback policy (graceful when left out), and
- * `--min-sdk` the app's minimum SDK version. Below it the engine answers 426;
- * the recording is then the whole 426 body, `{error, minSdkVersion,
- * clientSdkVersion, page}`. `--sdk-version` replaces the `x-orca-sdk-version`
- * header: the engine skips the gate for a version that is not plain X.Y.Z,
- * and the Swift SDK's own version is `0.1.0-alpha.1`.
+ * `--sdk` picks the caps vector and `x-orca-platform` (swift and iOS when left
+ * out; kotlin sends Android). `--policy` sets the default fallback policy
+ * (graceful when left out), and `--min-sdk` the app's minimum SDK version.
+ * Below it the engine answers 426; the recording is then the whole 426 body,
+ * `{error, minSdkVersion, clientSdkVersion, page}`. `--sdk-version` replaces
+ * the `x-orca-sdk-version` header (the SDK's own version when left out).
  *
- * Used by `t sdk-swift:record`. Writes the page JSON with a 2-space indent
- * (to a file, because the engine logs its start line to stdout).
+ * Used by `t sdk-swift:record` and `t sdk-kotlin:record`. Writes the page JSON
+ * with a 2-space indent (to a file, because the engine logs its start line to
+ * stdout).
  */
 import { writeFileSync } from "fs";
 import { Engine } from "../../engine/src/core";
-import { swiftCapabilityVector } from "../../schema/gen-native-capabilities";
+import { kotlinCapabilityVector, swiftCapabilityVector } from "../../schema/gen-native-capabilities";
 import { counterApp } from "./counter";
 import { basicActionsApp } from "./basic-actions";
 import { serverActionsApp } from "./server-actions";
@@ -39,11 +41,12 @@ function option(name: string): string | undefined {
 const policy = option("--policy") ?? "graceful";
 const minSdk = option("--min-sdk");
 const sdkVersion = option("--sdk-version");
+const sdk = option("--sdk") ?? "swift";
 const [appId, path, out] = args;
-if (!appId || !path || !out || !["graceful", "warn", "require"].includes(policy)) {
+if (!appId || !path || !out || !["graceful", "warn", "require"].includes(policy) || !["swift", "kotlin"].includes(sdk)) {
   console.error(
     "usage: bun run examples/server/record-page.ts <appId> <path> <out.json> " +
-      "[--policy graceful|warn|require] [--min-sdk <version>] [--sdk-version <version>]",
+      "[--policy graceful|warn|require] [--min-sdk <version>] [--sdk-version <version>] [--sdk swift|kotlin]",
   );
   process.exit(2);
 }
@@ -61,10 +64,11 @@ if (minSdk) engine.setMinSdkVersion({ appDefault: minSdk });
 const server = await engine.start({ port: 0, cache: false });
 
 try {
-  const { vector, capsHash } = swiftCapabilityVector();
+  // The caps vector and platform of the SDK whose tests load the page.
+  const { vector, capsHash } = sdk === "kotlin" ? kotlinCapabilityVector() : swiftCapabilityVector();
   const url = `http://localhost:${server.port}/api/v1/app/${appId}/page/${path}`;
   const headers = {
-    "x-orca-platform": "iOS",
+    "x-orca-platform": sdk === "kotlin" ? "Android" : "iOS",
     "x-orca-sdk-version": sdkVersion ?? vector.sdkSemver,
     "x-orca-caps-hash": capsHash,
   };

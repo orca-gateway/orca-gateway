@@ -2,7 +2,8 @@
 //   core  pure Kotlin/JVM: wire models, ValueResolver, ElmStore, the action
 //         executor with effects as data, the generated capability vector.
 //         Published as com.orcagateway:sdk-core (slice S10).
-//   sdk   the Android library with the Compose renderer (slice S7 onward).
+//   sdk   the Android library: OkHttp transport, Compose renderer, OrcaApp.
+//         Published as com.orcagateway:sdk (slice S10).
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -21,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "orca-gateway-kotlin"
 include(":core")
+include(":sdk")

@@ -33,7 +33,7 @@ class ActionFixtureTest {
             assertTrue(actions.all { ActionExecutor.implements(it) }, "$name: every kind implemented")
 
             val store = ElmStore(fx["state"].decode(StoreState.serializer()))
-            val client = fx["serverResponses"].objectValue?.let { ActionStub(it) }
+            val client = fx["serverResponses"].objectValue?.let { ActionStub.client(ActionStub(it)) }
             val executor = ActionExecutor(store, client)
             val effects = ArrayList<ActionEffect>()
             executor.onEffect = { effects.add(it) }

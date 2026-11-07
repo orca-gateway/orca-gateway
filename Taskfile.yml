@@ -114,21 +114,26 @@ tasks:
 
   # === SDK (Kotlin, experimental: Epic 23b) ===
   sdk-kotlin:test:
-    desc: Run the Android SDK core tests (Kotlin/JVM through the Gradle wrapper; any JDK 17 or later)
+    desc: Run the Android SDK tests, core on the JVM and sdk under Robolectric (any JDK 17 or later)
     dir: sdk-kotlin
     cmds:
-      - ./gradlew :core:test --console=plain
+      - ./gradlew :core:test :sdk:testDebugUnitTest --console=plain
 
   sdk-kotlin:build:
-    desc: Build the Android SDK core and run its tests, warnings as errors (what CI runs)
+    desc: Build both Android SDK modules with tests and lint, warnings as errors (what CI runs)
     dir: sdk-kotlin
     cmds:
-      - ./gradlew :core:build --console=plain
+      - ./gradlew build --console=plain
 
   sdk-kotlin:gen:
     desc: Regenerate the Kotlin and Swift capability vectors (run after schema/gen-widget-registry.ts)
     cmds:
       - bun run schema/gen-native-capabilities.ts
+
+  sdk-kotlin:record:
+    desc: Re-record the pages the Kotlin tests load, through the Kotlin caps handshake
+    cmds:
+      - bun run examples/server/record-page.ts counter home sdk-kotlin/sdk/src/test/resources/pages/counter-home.json --sdk kotlin
 
   # === Example app ===
   example:dev:
@@ -155,6 +160,19 @@ tasks:
     dir: examples/app-ios
     cmds:
       - xcodebuild build -project OrcaCounter.xcodeproj -scheme OrcaCounter -destination 'generic/platform=iOS Simulator'
+
+  example:android:build:
+    desc: Build the Android counter example (debug APK; builds sdk-kotlin from source)
+    dir: examples/app-android
+    cmds:
+      - ./gradlew :app:assembleDebug --console=plain
+
+  example:android:run:
+    desc: Install the Android counter example on the running emulator or device and start it (URL=http://10.0.2.2:8080 by default)
+    dir: examples/app-android
+    cmds:
+      - ./gradlew :app:installDebug --console=plain
+      - adb shell am start -n com.orcagateway.examples.counter/.MainActivity --es ORCA_SERVER_URL {{.URL | default "http://10.0.2.2:8080"}} --es ORCA_APP_ID {{.APP | default "counter"}} --es ORCA_PATH {{.PAGE | default "home"}}
 
   # === Docs ===
   docs:dev:

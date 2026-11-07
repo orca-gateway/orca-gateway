@@ -4,9 +4,9 @@
   "idea": "Epic 23b slice S6: the pure-Kotlin core of the Android SDK (first part of 23b.27) — sdk-kotlin/ Gradle build, kotlinx.serialization models, ValueResolver with all transforms and BoolExpr ops, ElmStore, the action executor with effects as data, the Kotlin capability vector from gen-native-capabilities.ts, Taskfile task and ubuntu CI; the rest of 23b.27 proposed as S7-S10",
   "kind": "feature",
   "created_at": "2026-11-06T21:51:46Z",
-  "updated_at": "2026-11-06T22:57:56Z",
+  "updated_at": "2026-11-06T23:06:10Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "10",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -51,27 +51,38 @@
       "approved_with": "A"
     },
     "10": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/10-r1.md"
+      "card": "cards/10-r1.md",
+      "approved_at": "2026-11-06T23:01:02Z",
+      "approved_with": "A"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-06T23:06:10Z",
+      "approved_with": "A"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S6 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S6 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S6 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S6 has no deployed surface; skipped by the default accepted at gate 12 (A)"
     }
   },
   "gates": {
