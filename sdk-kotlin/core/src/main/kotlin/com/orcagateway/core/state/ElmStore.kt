@@ -1,5 +1,7 @@
 package com.orcagateway.core.state
 
+import com.orcagateway.core.debug.DevToolsEvent
+import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.Fields
@@ -155,8 +157,12 @@ public class ElmStore(initial: StoreState = StoreState()) {
      * changed. Subscribers are notified in subscription order.
      */
     public fun commit(next: StoreState) {
+        val previous = state
         state = next
-        // DevTools reporting arrives with the adapters slice (S8).
+        val pageId = pageId
+        if (pageId != null && OrcaDebug.isEnabled) {
+            for (event in DevToolsEvent.stateChanges(previous, next, pageId)) OrcaDebug.report { event }
+        }
         onCommit?.invoke(next)
         val merged = next.merged
         for (id in subscribers.keys.toList()) {

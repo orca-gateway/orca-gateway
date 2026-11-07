@@ -1,6 +1,8 @@
 package com.orcagateway.core.render
 
 import com.orcagateway.core.capabilities.GeneratedCapabilities
+import com.orcagateway.core.debug.DevToolsEvent
+import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.json.SwiftText
 import com.orcagateway.core.models.Action
@@ -44,11 +46,12 @@ public class WidgetRegistry(
 
     /** What the renderer draws instead of a node of an unknown type. */
     internal fun degraded(node: ComponentNode): ComponentNode {
-        reportUnknown(node.type)
+        val first = reportUnknown(node.type)
         if (!supports("FallbackPrompt")) {
             return ComponentNode(node.id, emptyType, ComponentNode.Kind.Primitive, ComponentNode.ChildMode.None)
         }
-        // DevTools reporting arrives with the adapters slice (S8).
+        // DevTools hears about each type once per session, like telemetry.
+        if (first) OrcaDebug.report { DevToolsEvent.fallbackPrompt(node.type) }
         val body = "This screen includes a \"${node.type}\" component that this app version " +
             "cannot display. Please update to the latest version for the full experience."
         return ComponentNode(
