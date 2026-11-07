@@ -139,6 +139,9 @@ sdk tests, lint) · lint: inside that build (`:sdk:lintDebug`) · typecheck: non
 SUCCESSFUL, core 113 and sdk 127 tests green, lint 0 issues, 2026-11-07 (main 738b78f, run with
 `--rerun-tasks`). Plus the scripts' own rehearsals (M1-M5 in a throwaway clone, M9 on a staging
 repo), whose output goes into the digests.
+commits: per task · gate: per group (answered at gate 08 with "A", 2026-11-07; question 4
+vanniktech 0.33.0 yes, ask before switching; question 5 automatic release; question 6 the
+docs-site page in this worktree; question 7 the Sonatype steps are yours before the release).
 
 ### Not planned
 - M12: the Central verify runs only on your real tag, after the PR merges (as T5.1 did); S10.5

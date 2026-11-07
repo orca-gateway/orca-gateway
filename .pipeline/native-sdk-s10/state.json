@@ -4,9 +4,9 @@
   "idea": "Epic 23b slice S10: Maven Central (23b.27e) — release.sh maven publisher for sdk-kotlin, tag-triggered Central Portal workflow with signing, POMs for com.orcagateway:sdk-core and com.orcagateway:sdk, install docs and README alpha banner, Sonatype steps in User_Actions.md; com.orcagateway:sdk:0.1.0-alpha.1 resolves from a clean Gradle project",
   "kind": "feature",
   "created_at": "2026-11-07T19:29:13Z",
-  "updated_at": "2026-11-07T19:36:15Z",
+  "updated_at": "2026-11-07T20:09:02Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "08",
+  "current": "09",
   "stages": {
     "01": {
       "status": "skipped",
@@ -37,12 +37,15 @@
       "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S10 started on the default 'go' accepted at native-sdk-s9 gate 12 (A)"
     },
     "08": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/08-r1.md"
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-07T20:09:02Z",
+      "approved_with": "A"
     },
     "09": {
-      "status": "pending"
+      "status": "draft",
+      "rounds": 1
     },
     "10": {
       "status": "pending"
@@ -67,6 +70,6 @@
     }
   },
   "gates": {
-    "code_unlocked": false
+    "code_unlocked": true
   }
 }
