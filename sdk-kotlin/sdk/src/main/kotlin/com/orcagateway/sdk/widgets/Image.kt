@@ -15,15 +15,20 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.constrain
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.client.ImageLoader
 import com.orcagateway.sdk.style.Props
+import kotlin.math.roundToInt
 
 /**
  * Flutter `Image.network` as the Flutter builder makes it: `src` loaded
@@ -37,9 +42,15 @@ import com.orcagateway.sdk.style.Props
  * an http or https URL (asset names are not in S9), the image is an empty
  * box of that size; Flutter's error builder draws "!" there. A new `src`
  * empties the box until it loads, as Flutter's default `gaplessPlayback:
- * false`. `repeat` is not drawn (Swift's F7). Without `width` or
- * `height` the loaded image takes Compose's size for the bitmap, one
- * device pixel per image pixel; Flutter gives it one logical pixel each.
+ * false`. `repeat` is not drawn (Swift's F7).
+ *
+ * Loaded, it is sized as Flutter's `RenderImage._sizeForConstraints`:
+ * `width` and `height` folded into the parent's constraints, then the
+ * bitmap's size at one dp per image pixel (a network image's scale 1)
+ * fitted in them keeping its aspect ratio ([preservingAspectRatio]). With
+ * neither, it is its pixel size in dp, scaled down to what the parent
+ * allows; with one, the other side follows the aspect ratio; with both, it
+ * is that box. `fit` then draws the image inside it.
  */
 @Composable
 internal fun ImageWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -64,11 +75,45 @@ internal fun ImageWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mod
     Image(
         bitmap = image,
         contentDescription = null,
-        modifier = box,
+        modifier = box.layout { measurable, constraints ->
+            val size = constraints.preservingAspectRatio(image.width * density, image.height * density)
+            val placeable = measurable.measure(Constraints.fixed(size.width, size.height))
+            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+        },
         alignment = Props.alignment(node["alignment"]),
         contentScale = imageFit(node["fit"]),
         colorFilter = Props.color(node["color"])?.let { ColorFilter.tint(it, BlendMode.SrcIn) },
     )
+}
+
+/**
+ * Flutter's `BoxConstraints.constrainSizeAndAttemptToPreserveAspectRatio`
+ * in pixels: tight constraints give their size; otherwise [width] by
+ * [height] is brought within the maximum, then the minimum, one side at a
+ * time with the other following the aspect ratio, and finally constrained.
+ */
+internal fun Constraints.preservingAspectRatio(width: Float, height: Float): IntSize {
+    if (hasFixedWidth && hasFixedHeight) return IntSize(minWidth, minHeight)
+    val ratio = width / height
+    var w = width
+    var h = height
+    if (w > maxWidth) {
+        w = maxWidth.toFloat()
+        h = w / ratio
+    }
+    if (h > maxHeight) {
+        h = maxHeight.toFloat()
+        w = h * ratio
+    }
+    if (w < minWidth) {
+        w = minWidth.toFloat()
+        h = w / ratio
+    }
+    if (h < minHeight) {
+        h = minHeight.toFloat()
+        w = h * ratio
+    }
+    return constrain(IntSize(w.roundToInt(), h.roundToInt()))
 }
 
 /** Flutter `BoxFit` by name as a [ContentScale]; cover when unknown, as the Flutter builder. */

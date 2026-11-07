@@ -53,6 +53,11 @@ import kotlin.test.assertTrue
  * green, red, blue, green. Native graphics decode and draw it, at 1 dp per
  * pixel. Each test has its own server port, so the shared loader's cache
  * never answers one test with another's image.
+ *
+ * I3: the Image sized as Flutter's RenderImage, on an xhdpi screen (2
+ * pixels per dp), where the 40x20-pixel image at one dp per image pixel,
+ * as Flutter lays it out, is 40x20 dp, and at one device pixel per image
+ * pixel, as Compose would, 20x10.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -98,6 +103,12 @@ class ImageTest {
 
     private fun image(id: String, vararg props: Pair<String, Any?>): ComponentNode =
         leaf(id, "Image", props.associate { (key, value) -> key to JsonValue.of(value) })
+
+    /** A SizedBox [width] dp wide around the node [child]. */
+    private fun sizedBox(id: String, width: Int, child: String): ComponentNode = ComponentNode(
+        id, "SizedBox", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single,
+        mapOf("width" to JsonValue.of(width)), listOf(child),
+    )
 
     /** The page on screen, with Image known to the core and drawn by [ImageWidget]. */
     private fun show(vararg nodes: ComponentNode) {
@@ -223,5 +234,64 @@ class ImageTest {
                 for (y in 0 until 20) assertColor(Color.WHITE, picture.at(box, x, y), "$alt ($x, $y)")
             }
         }
+    }
+
+    /**
+     * With neither `width` nor `height` the loaded image is its size in
+     * logical pixels, one dp per image pixel as a network image at scale 1:
+     * 40x20 dp, 80x40 device pixels here.
+     */
+    @Test
+    @Config(qualifiers = "xhdpi")
+    fun i3_withNoSizeTheImageIsItsPixelSizeInDp() {
+        show(image("0", "src" to url("/stripes.png"), "alt" to "Natural"))
+
+        compose.waitUntil(5_000) { box("Natural").width > 0.dp }
+        val box = box("Natural")
+        assertEquals(40.dp to 20.dp, box.width to box.height)
+    }
+
+    /**
+     * With only a `height` the width follows the image's 2:1, and with only
+     * a `width` the height does, whatever the `fit`: 5 dp high is 10 wide
+     * (cover), 60 dp wide is 30 high (contain).
+     */
+    @Test
+    @Config(qualifiers = "xhdpi")
+    fun i3_withOnlyAHeightOrOnlyAWidthTheOtherSideKeepsTheAspectRatio() {
+        show(
+            column("0", "1", "2"),
+            image("1", "src" to url("/stripes.png"), "alt" to "Height", "height" to 5),
+            image("2", "src" to url("/stripes.png"), "alt" to "Width", "width" to 60, "fit" to "contain"),
+        )
+
+        compose.waitUntil(5_000) { box("Height").width > 0.dp && box("Width").height > 0.dp }
+        val height = box("Height")
+        assertEquals(10.dp to 5.dp, height.width to height.height, "only a height")
+        val width = box("Width")
+        assertEquals(60.dp to 30.dp, width.width to width.height, "only a width")
+    }
+
+    /**
+     * A parent narrower than the image's 40 dp scales it down to its width
+     * keeping 2:1, as `constrainSizeAndAttemptToPreserveAspectRatio`: 16x8
+     * in a 16 dp SizedBox (cover), 30x15 in a 30 dp one (contain).
+     */
+    @Test
+    @Config(qualifiers = "xhdpi")
+    fun i3_inANarrowerParentItIsScaledDownKeepingTheAspectRatio() {
+        show(
+            column("0", "1", "2"),
+            sizedBox("1", width = 16, child = "3"),
+            sizedBox("2", width = 30, child = "4"),
+            image("3", "src" to url("/stripes.png"), "alt" to "Narrow"),
+            image("4", "src" to url("/stripes.png"), "alt" to "Contained", "fit" to "contain"),
+        )
+
+        compose.waitUntil(5_000) { box("Narrow").height > 0.dp && box("Contained").height > 0.dp }
+        val narrow = box("Narrow")
+        assertEquals(16.dp to 8.dp, narrow.width to narrow.height, "cover in 16 dp")
+        val contained = box("Contained")
+        assertEquals(30.dp to 15.dp, contained.width to contained.height, "contain in 30 dp")
     }
 }
