@@ -2,7 +2,7 @@
 topic: regex-case-folding
 status: new
 first_seen: native-sdk-s12/08 2026-11-08
-seen: native-sdk-s12/08
+seen: native-sdk-s12/08, native-sdk-s12/09
 ---
 # Regex case folding
 

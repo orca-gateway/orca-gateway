@@ -3,25 +3,26 @@
 ## Front page
 
 ### In one breath
-group 1 of 2 · tasks: 5 green, 0 blocked · cases: 2 of 4 green (A1, C1) · R1, R2 half done
-T1 fixtures 31-32: `\b` edges, `[\b]`, the `i` flag's four letters; green on engine and Flutter.
-T2 Flutter: a failed Image reads as its alt with the image role; "!" is drawn but hidden.
-T3 Kotlin: the same; "!" is no longer its own screen-reader node. No screenshot changed.
-T4 Swift: a live 4.0 stays a double in pages and actions; also passed on Linux (Swift 5.10, 6.2).
-T5 Kotlin: three tests pin that its client already keeps a live 4.0.
-Tests: engine 699 + 1 fail (port 8080), Flutter 239, analyze 0, iOS UI 54, Kotlin sdk 128.
-Red by design until group 2: Swift and Kotlin resolvers on fixtures 31-32 (14 sub-cases).
+group 2 of 2 · tasks: 1 green (T7), 1 blocked (T6) · cases: 2 of 4 green (A1, C1)
+T7 Kotlin: `\b` `\B` are ASCII edges, `[\b]` a backspace; under `i` letters fold as in Dart.
+T6 Swift: the same rule, tests green (129), but blocked at its second fit review: F4 untold.
+T6's rework found a T7 bug: under `i`, `(?-i:s)` broke Java's regex. Fixed; both reviews pass.
+R1, R2: green on the engine, Flutter and Kotlin; Swift's half waits on T6.
+Tests: Swift 129, iOS UI 54, Kotlin core 130, sdk 128, lint 0; Flutter 239, analyze 0.
 
 ### New for you
-nothing new
+1. Why only four letters need rewriting (regex case folding) → learning/regex-case-folding.md
 
 ### Trade-offs
-1 review finding, fixed: T4 copied two test helpers into two files; they are shared now.
-3 auto-decided: where Kotlin clears "!", Flutter's semantics shape, an internal Swift decoder.
+1 needs you: inside `(?-i:…)` letters follow the global `i` (Dart "#S", ours "##"): fix or note
+3 auto-decided: the ten-letter rule, modifier headers copied as is, `\p{…}` copied as is.
 
 ### Questions for you
-1. Next: group 2, T6 Swift regex and T7 Kotlin regex, turning fixtures 31-32 green.
-   (default: go; `A` starts it)
+1. T6 blocked: after its rework the digest drops F4 (ICU folds `ss` to "ß"); no row pins it.
+   Retry once: an F4 line (Dart vs Swift, gi and giu), a row with Dart's value. (default: retry)
+2. Modifier scope: fix it in both SDKs now, or note it for later with F4 in epic row 23b.36.
+   (default: note it)
+3. Then T6's two reviews and this card again; `A` there approves stage 09. (default: yes)
 
 ## Appendix
 
@@ -92,7 +93,7 @@ Decisions: 1. ActionStub's `raw` entry keeps the body raw · 2. update and add p
 Review fit: pass
 Review quality: pass
 
-### Test run
+#### Group 1 test run
 Once, after the group (before T4's helper rework, which T4's own runs then covered; logs in the
 session scratchpad, `s12/g1-*.log`):
 - `cd engine && bun test` · 699 pass, 1 fail · `test/server.test.ts`: EADDRINUSE on 8080, your
@@ -106,15 +107,79 @@ session scratchpad, `s12/g1-*.log`):
   `31_regex_ascii_word_boundary.json b.data` (actual "|café| |x|") · sdk 128, 0 failures · lint
   "No issues found".
 - T4's rework: `swift test` 122 with the same 14; xcodebuild UI 54, core 122 with the same 14.
-Every changed file sits in a task's Files; no stray file. Your Docker services kept running.
+Every changed file sat in a task's Files; no stray file. Your Docker services kept running.
+
+### Group 2
+Commits in the order they passed review: T7 42d9636, T7's rework 3c919bc. T6 is blocked and stays
+uncommitted in the tree. Nothing pushed. T6 and T7 ran in parallel, each blind to the other's SDK;
+their reworks read the other's code for parity.
+
+#### Task T7 · Kotlin regex: ASCII edges, Dart folding
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/resolver/Transforms.kt` · `TransformTest.kt`
+Cases: R1, R2 (Kotlin) → green (core 130, ResolverFixtureTest over all 32; sdk 128; lint 0) · red
+first: 6 of 7 tests (the é guard passed before, as a guard should); the rework's 18 of 20 rows.
+Changed: `compile` reads `u`; `\b \B \w \W` are case-sensitive ASCII sets (ſ and K added under `iu`);
+`[\b]` is `\x08`, a `[` inside a class a literal. Under `i` ten letters (s, k, i in either case; ſ,
+K, ı, İ) skip the engine's folding: a literal becomes Dart's case set `(?-i:[..])`, a class C becomes
+`(?:(?!T)C|(?-i:[M]))`, M the letters C matches in Dart, found by testing C case-sensitively. The
+rework copies a modifier header (`(?-i:`, `(?s:`) unchanged. Tests: R1 ×4, R2 ×3, 20 modifier rows,
+38 of Swift's 39 class rows (`\p{Lowercase_Letter}` left out: Java does not know the long name).
+Decisions: 1. the ten-letter rule over the plan's lookahead guard (the guard misses `[^ſ]` on s; the
+JVM does not match K to `[A-Z]`); 228 of 232 Dart cases alike · 2. headers read as Swift reads them ·
+3. limits in the KDoc: escaped letters (`\x73`), backreferences, letters inside a modifier group.
+Review fit: pass; then a finding from T6's rework (confirmed here: under `i`, `(?-i:s)`, `(?i:k)`,
+`(?s:a.b)` compiled to null where Dart answers "#S", "##", "#"), fixed (one rework)
+Review quality: pass (again after the rework: pass)
+
+#### Task T6 · Swift regex: ASCII edges, Dart folding
+Files: `sdk-swift/Sources/OrcaGatewayCore/Resolver/Transforms.swift` · `TransformTests.swift`
+Cases: R1, R2 (Swift) → tests green (`swift test` 129; iOS UI 54 + core 129; Linux swift 5.10 and
+6.2: 129) but the task is blocked at review · red first: 6 tests; the rework's 22 + 10 assertions.
+Changed: `asciiClasses(_:ignoreCase:unicode:)` tracks class context; `\b \B \w \W` as in Kotlin;
+`[\b]` is U+0008. The rework takes Kotlin's ten-letter rule (literal → Dart's case set; class C →
+`(?:(?!T)C|(?-i:[M]))`, M by compiling C case-sensitively, no range parsing), under `u` too, and
+copies `\p{…}` and modifier headers unchanged. Tests: 6 + `testR2_aClassNamingOneOfTheFourFollows…`
+(39 rows); every expected value printed by the Dart VM.
+Decisions: 1. ten letters with i and I: ICU's full folding made `[İ]` match "i̇" (i + U+0307) ·
+2. `\p{…}` copied under `u` · 3. headers copied; inside one, letters follow the global `i` (question 2).
+F4 (first pass, before the rework): held — under giu `ss`, `fi`, `ff`, `st` matched "ß", "ﬁ", "ﬀ",
+"ﬆ", and `ß` matched "ss"; under gi only `ss`, `SS`, `st` stopped. Dart matches none. Not re-told.
+Review fit: `[ſ]` folded the ICU way under gi (`[^ſ]` missed s), fixed (one rework); then the digest
+drops F4 though the rework rewrites s and i, and no row pins it, blocked
+Review quality: pass
+
+### Test run
+Once after the group (logs in the session scratchpad, `s12/g2-*.log`), Swift and Kotlin again after
+the reworks (`s12/g2b-*.log`):
+- `cd engine && bun test` · 699 pass, 1 fail · `test/server.test.ts`: EADDRINUSE on 8080, your
+  Docker; the baseline's environmental failure.
+- `cd sdk && flutter test` · +239: All tests passed! · `flutter analyze` · No issues found.
+- `cd sdk-swift && swift test` · Executed 129 tests, with 0 failures.
+- `xcodebuild test … id=FDE5D612…` · OrcaGatewayTests 54, OrcaGatewayCoreTests 129, 0 failures,
+  TEST SUCCEEDED.
+- `cd sdk-kotlin && ./gradlew build` (core and sdk tests forced to rerun) · core 130, sdk 128,
+  0 failures · lint "No issues found".
+Engine and Flutter files did not change after their run. Every changed file sits in T6's or T7's
+Files; no stray file. Your Docker services kept running.
 
 ### Blocked
-none
+T6 · fit, after one rework: the digest drops F4 (ICU's full folding of `ss`, `fi`) although the rework
+now rewrites s, S, i, I under gi and giu, and no TransformTests row pins it · tried: one rework (the
+`[ſ]` finding, fixed). Its code is green and passed quality; it stays uncommitted until it clears.
 
 ### Not done
 none
 
+### Found for later (epic row 23b.36 on question 2's default)
+- Modifier scope: letters inside `(?-i:…)` or `(?i:…)` follow the global `i`, in both SDKs
+  (`(?-i:s)` gi on "sS": Dart "#S", ours "##"; `(?i:s)` g on "ſsS": Dart "ſ##", Kotlin "###").
+- F4: ICU folds strings fully (`ss` ≡ "ß", `fi` ≡ "ﬁ"): Swift, and Kotlin on Android; T6's retry
+  says which the rework now closes.
+- Kotlin: java.util.regex knows no long property names (`\p{Lowercase_Letter}` under giu: null;
+  Dart "##1").
+- Patterns Dart rejects (`(?i)a`, `(?-:a)`, `(?u:a)`) still run in Kotlin (Swift not checked).
+
 ### For ship (stage 10) to know
 Nothing deploys and nothing is published. The Flutter SDK changes (T2), so its next release's
-`sdk/CHANGELOG.md` gets an entry then. Between the groups the branch is red on Swift and Kotlin by
-design; nothing is pushed before group 2.
+`sdk/CHANGELOG.md` gets an entry then. The Swift and Kotlin fixes reach apps with their next
+releases through release.sh. Nothing is pushed until stage 09 is approved.
