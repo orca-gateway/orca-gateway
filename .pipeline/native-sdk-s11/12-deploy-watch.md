@@ -61,3 +61,9 @@ feat/native-sdk-s11 is merged; the session can be archived when you like.
 - On your A: stages 13-16 skipped ("S11 has no deployed service; skipped by the default accepted at
   gate 12 (A)"), S11 closed, row 23b.33 ✅ Done (PR #18).
 - Then row 23b.34 on your go.
+
+### Closed (gate 12, "A", 2026-11-08)
+PR #18 merged as c394c5b with its 8 checks green (read at this card). Gate 12 approved on your "A";
+stages 13-16 skipped ("S11 has no deployed service; skipped by the default accepted at gate 12
+(A)"); S11 closed. Epic row 23b.33 reads ✅ Done; row 23b.34 holds what S11 left, "After S11".
+The next slice starts on your "Start S12".
