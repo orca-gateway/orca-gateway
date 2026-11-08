@@ -399,37 +399,154 @@ enum Regex {
     }
 
     static func compile(_ pattern: String, flags: String?) -> NSRegularExpression? {
+        let flags = flags ?? ""
         var options: NSRegularExpression.Options = []
-        if let flags {
-            if flags.contains("i") { options.insert(.caseInsensitive) }
-            if flags.contains("m") { options.insert(.anchorsMatchLines) }
-            if flags.contains("s") { options.insert(.dotMatchesLineSeparators) }
-        }
+        if flags.contains("i") { options.insert(.caseInsensitive) }
+        if flags.contains("m") { options.insert(.anchorsMatchLines) }
+        if flags.contains("s") { options.insert(.dotMatchesLineSeparators) }
         // ICU refuses "", which Dart accepts (it matches "" everywhere).
-        let source = pattern.isEmpty ? "(?:)" : asciiClasses(pattern)
+        let source = pattern.isEmpty
+            ? "(?:)" : asciiClasses(pattern, ignoreCase: flags.contains("i"), unicode: flags.contains("u"))
         return try? NSRegularExpression(pattern: source, options: options)
     }
 
-    /// Dart's `\d \w \D \W` are ASCII only (ECMAScript); ICU's are Unicode
-    /// and have no ASCII switch, so they are spelled out as ICU sets before
-    /// compiling. Inside a class (`[\w.]`) the set nests, and ICU unions it
-    /// with the rest of the class. Every other escape, `\\` included, is
-    /// copied as is; `\s` stays Unicode, as Dart's is.
-    static func asciiClasses(_ pattern: String) -> String {
-        let sets = ["d": "[0-9]", "w": "[A-Za-z0-9_]", "D": "[^0-9]", "W": "[^A-Za-z0-9_]"]
+    /// Rewrites Dart's (ECMAScript) pattern where ICU reads the same text
+    /// another way. Every other escape, `\\` included, is copied as is, as are
+    /// group names, modifier flags (`(?-i:`) and what follows `\c`, `\k<` and
+    /// `\p{`; `\s` stays Unicode, as Dart's is.
+    ///
+    /// - `\d \w \D \W` are ASCII in Dart and Unicode in ICU, which has no
+    ///   ASCII switch, so they are spelled out as sets. Inside a class
+    ///   (`[\w.]`) the set nests, and ICU unions it with the rest.
+    /// - `\b` and `\B` are ASCII word edges in Dart, so they become
+    ///   lookarounds on the word set. Inside a class `[\b]` is a backspace,
+    ///   which ICU would read as the letter b.
+    /// - The word set is `[A-Za-z0-9_]`, with ſ (U+017F) and K (U+212A) added
+    ///   when `i` and `u` are both on (Unicode folding sends them to s and k).
+    ///   Outside a class it sits in `(?-i:…)`: ICU's `i` would add those two.
+    /// - Under `i`, Dart folds none of ſ, K, ı (U+0131) and İ (U+0130) into
+    ///   ASCII, or with `u` only ſ and K; ICU folds ſ and K, and İ into "i̇"
+    ///   (i and U+0307). So the ten letters involved, s, k and i in either
+    ///   case and those four (`foldLetters`), never go to ICU's folding.
+    ///   Outside a class each is the case-sensitive set Dart folds it to
+    ///   (`dartFold`): `s` is `(?-i:[sS])`, with `u` `(?-i:[sSſ])`. A class C
+    ///   becomes `(?:(?!T)C|(?-i:[M]))`, T the ten letters and M those C
+    ///   matches in Dart, found once by compiling C case-sensitively. Every
+    ///   other letter keeps ICU's folding (é with É). Left as ICU has them:
+    ///   letters written as escapes outside a class (`\x73`) and backreferences,
+    ///   and ICU's full folding of the other letters: `ß` matches "ss", `ff` "ﬀ"
+    ///   and `ﬁ` "fi", which Dart never does.
+    static func asciiClasses(_ pattern: String, ignoreCase: Bool, unicode: Bool) -> String {
+        let word = ignoreCase && unicode ? "A-Za-z0-9_\\u017F\\u212A" : "A-Za-z0-9_"
+        let w = "[\(word)]"
+        let sets: [Unicode.Scalar: String] = ["d": "[0-9]", "D": "[^0-9]", "w": w, "W": "[^\(word)]"]
+        let edges: [Unicode.Scalar: String] = [
+            "b": "(?-i:(?<=\(w))(?!\(w))|(?<!\(w))(?=\(w)))",
+            "B": "(?-i:(?<=\(w))(?=\(w))|(?<!\(w))(?!\(w)))",
+        ]
+
+        let p = Array(pattern.unicodeScalars)
+        var i = 0
         var out = ""
-        var scalars = pattern.unicodeScalars.makeIterator()
-        while let c = scalars.next() {
-            out.unicodeScalars.append(c)
-            guard c == "\\", let next = scalars.next() else { continue }
-            if let set = sets[String(next)] {
-                out.unicodeScalars.removeLast()
-                out += set
+        func next(_ k: Int) -> Unicode.Scalar? { i + k < p.count ? p[i + k] : nil }
+        func take(_ n: Int) {
+            for _ in 0..<n where i < p.count {
+                out.unicodeScalars.append(p[i])
+                i += 1
+            }
+        }
+        func take(through close: Unicode.Scalar) {
+            while let c = next(0) {
+                take(1)
+                if c == close { return }
+            }
+        }
+        // At `(?`: flags and a colon follow, a modifier group (`(?ms-i:`).
+        func modifiers() -> Bool {
+            var k = 2
+            while let f = next(k), "ims-".unicodeScalars.contains(f) { k += 1 }
+            return k > 2 && next(k) == ":"
+        }
+        // A class up to its first unescaped `]`, as ECMAScript reads it: its
+        // body, whether it is negated, and whether it closes.
+        func classSet() -> (body: String, negated: Bool, closed: Bool) {
+            var body = ""
+            i += 1
+            let negated = next(0) == "^"
+            if negated { i += 1 }
+            while let c = next(0) {
+                i += 1
+                if c == "]" { return (body, negated, true) }
+                guard c == "\\", let n = next(0) else {
+                    body.unicodeScalars.append(c)
+                    continue
+                }
+                i += 1
+                body += n == "b" ? "\\u0008" : sets[n] ?? "\\\(n)"
+            }
+            return (body, negated, false)
+        }
+
+        while let c = next(0) {
+            if c == "[" {
+                let (body, negated, closed) = classSet()
+                let set = "[" + (negated ? "^" : "") + body + (closed ? "]" : "")
+                out += ignoreCase && closed ? dartFolded(set, body: body, negated: negated, unicode: unicode) : set
+            } else if c == "\\", let n = next(1) {
+                if let set = sets[n] {
+                    out += "(?-i:\(set))"
+                    i += 2
+                } else if let edge = edges[n] {
+                    out += edge
+                    i += 2
+                } else if n == "k", next(2) == "<" {
+                    take(through: ">")  // `\k<name>` keeps its letters
+                } else if n == "p" || n == "P", next(2) == "{" {
+                    take(through: "}")  // and so does `\p{Script=Latin}`
+                } else {
+                    take(n == "c" ? 3 : 2)  // and `\cK`
+                }
+            } else if c == "(", next(1) == "?", next(2) == "<", next(3) != "=", next(3) != "!" {
+                take(through: ">")  // a group name
+            } else if c == "(", next(1) == "?", modifiers() {
+                take(through: ":")  // `(?-i:`, whose flags ICU reads as Dart does
+            } else if ignoreCase, foldLetters.contains(c) {
+                out += "(?-i:[\(spelled(dartFold(c, unicode: unicode)))])"
+                i += 1
             } else {
-                out.unicodeScalars.append(next)
+                take(1)
             }
         }
         return out
+    }
+
+    /// s, k and i in either case, and the four letters Unicode folds into them.
+    static let foldLetters: [Unicode.Scalar] = ["s", "S", "k", "K", "i", "I", "\u{17F}", "\u{212A}", "\u{131}", "\u{130}"]
+
+    /// The letters Dart's `i` matches `c` to, for `c` in `foldLetters`: its
+    /// ASCII case pair without `u`, its simple case folding class with `u`.
+    static func dartFold(_ c: Unicode.Scalar, unicode: Bool) -> [Unicode.Scalar] {
+        let classes: [[Unicode.Scalar]] = unicode
+            ? [["s", "S", "\u{17F}"], ["k", "K", "\u{212A}"], ["i", "I"]]
+            : [["s", "S"], ["k", "K"], ["i", "I"]]
+        return classes.first { $0.contains(c) } ?? [c]
+    }
+
+    /// The class `set` (`[body]`, or `[^body]` when `negated`) under `i`, with
+    /// `foldLetters` matching as in Dart. An empty class, or one ICU refuses,
+    /// stays as it is.
+    private static func dartFolded(_ set: String, body: String, negated: Bool, unicode: Bool) -> String {
+        guard !body.isEmpty, let held = try? NSRegularExpression(pattern: "[\(body)]") else { return set }
+        let matched = foldLetters.filter { c in
+            dartFold(c, unicode: unicode).contains { firstMatch(held, in: String(Character($0))) != nil } != negated
+        }
+        let exact = matched.isEmpty ? "" : "|(?-i:[\(spelled(matched))])"
+        return "(?:(?!(?-i:[\(spelled(foldLetters))]))\(set)\(exact))"
+    }
+
+    /// Letters as ICU set members, the non-ASCII ones as `\uXXXX`.
+    private static func spelled(_ letters: [Unicode.Scalar]) -> String {
+        letters.map { $0.isASCII ? String(Character($0)) : String(format: "\\u%04X", $0.value) }.joined()
     }
 
     static func clip(_ s: String) -> String {
