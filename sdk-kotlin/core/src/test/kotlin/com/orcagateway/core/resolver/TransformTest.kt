@@ -367,4 +367,105 @@ class TransformTest {
             assertEquals(expected, DartFormat.double(d), "$d")
         }
     }
+
+    // MARK: Dart's ASCII word edges and case folding (R1, R2; render fixtures 31-32)
+    // Expected values from the Dart VM. The four letters Unicode folds into
+    // ASCII: ſ U+017F, K U+212A, ı U+0131, İ U+0130.
+
+    private val four = "\u017F\u212A\u0131\u0130"
+
+    private fun rep(pattern: String, flags: String, with: String): JsonValue =
+        obj("type" to "regex", "pattern" to pattern, "flags" to flags, "replacement" to with)
+
+    @Test
+    fun r1_wordEdgesAreAsciiUnderEveryFlag() {
+        for (flags in listOf("g", "gi", "gu", "gm", "gs", "giu")) {
+            assertEquals(j("|caf|é |x|"), run("café x", rep("\\b", flags, "|")), flags)
+            assertEquals(j("c|a|fé|"), run("café", rep("\\B", flags, "|")), flags)
+        }
+    }
+
+    @Test
+    fun r1_withIAndUTheLongSAndKelvinAreWordCharacters() {
+        val sk = "\u017F\u212A"
+        assertEquals(j("|$sk|"), run(sk, rep("\\b", "giu", "|")))
+        assertEquals(j("\u017F|\u212A"), run(sk, rep("\\B", "giu", "|")))
+        for (flags in listOf("g", "gi", "gu")) {
+            assertEquals(j(sk), run(sk, rep("\\b", flags, "|")), flags)
+            assertEquals(j("|\u017F|\u212A|"), run(sk, rep("\\B", flags, "|")), flags)
+        }
+        // ı and İ have no simple case folding: never word characters.
+        assertEquals(j("\u0131\u0130"), run("\u0131\u0130", rep("\\b", "giu", "|")))
+    }
+
+    @Test
+    fun r1_insideAClassBackslashBIsABackspace() {
+        assertEquals(j("a-b"), run("a\u0008b", rep("[\\b]", "g", "-")))
+        assertEquals(j("--b"), run("a\u0008b", rep("[a\\b]", "g", "-")))
+        assertEquals(j("a\u0008-"), run("a\u0008b", rep("[^a\\b]", "g", "-")))
+        assertEquals(j("a-b"), run("a\u0008b", rep("[\\b]", "gi", "-")))
+    }
+
+    @Test
+    fun r1_theMatchesOpHasAsciiWordEdgesToo() {
+        // No flags: a word edge falls between f and é.
+        assertTrue(holds(obj("op" to "matches", "str" to s("café"), "regex" to "\\bcaf\\b")))
+        assertFalse(holds(obj("op" to "matches", "str" to s("café"), "regex" to "caf\\B")))
+        assertFalse(holds(obj("op" to "matches", "str" to s("\u017F\u212A"), "regex" to "\\b")))
+    }
+
+    @Test
+    fun r2_withIAloneTheFourLettersMatchNoAsciiLetter() {
+        assertEquals(j("$four##"), run("${four}sk", rep("[a-z]", "gi", "#")))
+        assertEquals(j("$four##"), run("${four}SK", rep("[A-Z]", "gi", "#")))
+        assertEquals(j("\u017F#"), run("\u017FS", rep("s", "gi", "#")))
+        assertEquals(j("\u212A#"), run("\u212Ak", rep("k", "gi", "#")))
+        assertEquals(j("\u0131\u0130##"), run("\u0131\u0130iI", rep("i", "gi", "#")))
+        assertEquals(j("\u0131\u0130##"), run("\u0131\u0130iI", rep("I", "gi", "#")))
+        assertEquals(j("$four#"), run("${four}x", rep("\\w", "gi", "#")))
+        assertEquals(j("$four#"), run("${four}x", rep("[\\w]", "gi", "#")))
+        assertEquals(j("####x"), run("${four}x", rep("\\W", "gi", "#")))
+        assertEquals(j("####a"), run("${four}a", rep("[^a-z]", "gi", "#")))
+        // Named in the pattern, each matches only itself.
+        assertEquals(j("#sS"), run("\u017FsS", rep("\u017F", "gi", "#")))
+        assertEquals(j("#kK"), run("\u212AkK", rep("\u212A", "gi", "#")))
+        assertEquals(j("#iI\u0130"), run("\u0131iI\u0130", rep("\u0131", "gi", "#")))
+        assertEquals(j("#iI"), run("\u0131iI", rep("[\u0131]", "gi", "#")))
+        assertEquals(j("\u017F##"), run("\u017FsS", rep("[^\u017F]", "gi", "#")))
+    }
+
+    @Test
+    fun r2_withIAndUOnlyTheLongSAndKelvinFoldIntoAscii() {
+        assertEquals(j("##\u0131\u0130##"), run("${four}sk", rep("[a-z]", "giu", "#")))
+        assertEquals(j("##\u0131\u0130##"), run("${four}SK", rep("[A-Z]", "giu", "#")))
+        assertEquals(j("##"), run("\u017FS", rep("s", "giu", "#")))
+        assertEquals(j("##"), run("\u212Ak", rep("k", "giu", "#")))
+        assertEquals(j("\u0131\u0130##"), run("\u0131\u0130iI", rep("i", "giu", "#")))
+        assertEquals(j("\u0131\u0130##"), run("\u0131\u0130iI", rep("I", "giu", "#")))
+        assertEquals(j("##\u0131\u0130#"), run("${four}x", rep("\\w", "giu", "#")))
+        assertEquals(j("##\u0131\u0130#"), run("${four}x", rep("[\\w]", "giu", "#")))
+        assertEquals(j("\u017F\u212A##x"), run("${four}x", rep("\\W", "giu", "#")))
+        assertEquals(j("\u017F\u212A##a"), run("${four}a", rep("[^a-z]", "giu", "#")))
+        assertEquals(j("###"), run("\u017FsS", rep("\u017F", "giu", "#")))
+        assertEquals(j("#iI\u0130"), run("\u0131iI\u0130", rep("\u0131", "giu", "#")))
+        assertEquals(j("#iI"), run("\u0131iI", rep("[\u0131]", "giu", "#")))
+        assertEquals(j("\u0131##"), run("\u0131iI", rep("[^\u0131]", "giu", "#")))
+    }
+
+    @Test
+    fun r2_guard_otherLettersKeepFoldingUnderI() {
+        for (flags in listOf("gi", "giu")) {
+            assertEquals(j("##"), run("Éé", rep("é", flags, "#")), flags)
+            assertEquals(j("##"), run("Éé", rep("[é]", flags, "#")), flags)
+            assertEquals(j("###"), run("Σςσ", rep("σ", flags, "#")), flags)
+            assertEquals(j("##"), run("Дд", rep("д", flags, "#")), flags)
+            // A class that holds ı and İ itself still matches them; its negation does not.
+            assertEquals(j("##"), run("\u0131\u0130", rep("[a-zà-ž]", flags, "#")), flags)
+            assertEquals(j("\u0131\u0130a"), run("\u0131\u0130a", rep("[^a-zà-ž]", flags, "#")), flags)
+            // Group names and the letters after \k and \c are not folded letters.
+            assertEquals(j("x#"), run("x12", rep("(?<min>\\d+)", flags, "#")), flags)
+            assertEquals(j("#x"), run("sSx", rep("(?<sik>s)\\k<sik>", flags, "#")), flags)
+            assertEquals(j("a#b"), run("a\tb", rep("\\cI", flags, "#")), flags)
+        }
+    }
 }
