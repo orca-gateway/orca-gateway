@@ -1,0 +1,375 @@
+{
+  "name": "regex-ascii-classes",
+  "description": "Regex character classes are ASCII only, as in Dart's RegExp (ECMAScript, no `u` flag): `\\d`/`\\D` see only 0-9 and `\\w`/`\\W` only A-Z, a-z, 0-9 and `_`. Arabic-Indic digits (U+0663-U+0665) are not `\\d` and the accented e (U+00E9) is not `\\w`, also inside a character class (`[\\w]`) and in the `matches` BoolExpr op. Each replace-mode regex wraps every match (`{{value}}`) in brackets. Every input reads page state, so the engine keeps the Values unresolved with `watches` and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "children": [
+      {
+        "type": "Text",
+        "key": "d",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "digits"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\d+",
+                "flags": "g",
+                "replacement": "[{{value}}]"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "nd",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "digits"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\D+",
+                "flags": "g",
+                "replacement": "[{{value}}]"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "w",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "word"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\w+",
+                "flags": "g",
+                "replacement": "[{{value}}]"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "nw",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "word"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\W+",
+                "flags": "g",
+                "replacement": "[{{value}}]"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "cls",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "word"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\w]+",
+                "flags": "g",
+                "replacement": "[{{value}}]"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "m",
+        "props": {
+          "data": {
+            "type": "conditional",
+            "branches": [
+              {
+                "when": {
+                  "op": "matches",
+                  "str": {
+                    "type": "state",
+                    "scope": "page",
+                    "key": "arabic"
+                  },
+                  "regex": "^\\d+$"
+                },
+                "then": {
+                  "type": "static",
+                  "value": "digits"
+                }
+              }
+            ],
+            "else": {
+              "type": "static",
+              "value": "not digits"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "digits": "\u0663 4",
+      "word": "caf\u00e9_1",
+      "arabic": "\u0663\u0664\u0665"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "d",
+        "nd",
+        "w",
+        "nw",
+        "cls",
+        "m"
+      ],
+      "watches": []
+    },
+    {
+      "id": "m",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "matches",
+                "str": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "arabic"
+                },
+                "regex": "^\\d+$"
+              },
+              "then": {
+                "type": "static",
+                "value": "digits"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "not digits"
+          }
+        }
+      },
+      "children": [],
+      "watches": [
+        "arabic"
+      ]
+    },
+    {
+      "id": "cls",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "word"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\w]+",
+              "flags": "g",
+              "replacement": "[{{value}}]"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "word"
+      ]
+    },
+    {
+      "id": "nw",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "word"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\W+",
+              "flags": "g",
+              "replacement": "[{{value}}]"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "word"
+      ]
+    },
+    {
+      "id": "w",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "word"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\w+",
+              "flags": "g",
+              "replacement": "[{{value}}]"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "word"
+      ]
+    },
+    {
+      "id": "nd",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "digits"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\D+",
+              "flags": "g",
+              "replacement": "[{{value}}]"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "digits"
+      ]
+    },
+    {
+      "id": "d",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "digits"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\d+",
+              "flags": "g",
+              "replacement": "[{{value}}]"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "digits"
+      ]
+    }
+  ],
+  "resolved": {
+    "d": {
+      "data": "\u0663 [4]"
+    },
+    "nd": {
+      "data": "[\u0663 ]4"
+    },
+    "w": {
+      "data": "[caf]\u00e9[_1]"
+    },
+    "nw": {
+      "data": "caf[\u00e9]_1"
+    },
+    "cls": {
+      "data": "[caf]\u00e9[_1]"
+    },
+    "m": {
+      "data": "not digits"
+    }
+  }
+}

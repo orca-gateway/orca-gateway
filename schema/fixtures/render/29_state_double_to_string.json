@@ -1,0 +1,130 @@
+{
+  "name": "state-double-to-string",
+  "description": "A JSON `4.0` in page state stays a double: `toString` gives \"4.0\" (Dart VM), while the int `4` gives \"4\". The 4.0 lives only in context.pageState; the engine keeps the state-rooted transforms unresolved with `watches`.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "children": [
+      {
+        "type": "Text",
+        "key": "dbl",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "d"
+            },
+            "by": [
+              {
+                "type": "toString"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "int",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "i"
+            },
+            "by": [
+              {
+                "type": "toString"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "d": 4.0,
+      "i": 4
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "dbl",
+        "int"
+      ],
+      "watches": []
+    },
+    {
+      "id": "int",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "i"
+          },
+          "by": [
+            {
+              "type": "toString"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "i"
+      ]
+    },
+    {
+      "id": "dbl",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "d"
+          },
+          "by": [
+            {
+              "type": "toString"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "d"
+      ]
+    }
+  ],
+  "resolved": {
+    "dbl": {
+      "data": "4.0"
+    },
+    "int": {
+      "data": "4"
+    }
+  }
+}
