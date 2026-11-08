@@ -68,10 +68,18 @@ Widget _buildImage(OrcaComponentContext ctx) {
     alignment: alignment,
     repeat: repeat,
     color: color,
-    errorBuilder: (_, _, _) => SizedBox(
-      width: width,
-      height: height,
-      child: const Center(child: Text('!')),
+    // Flutter returns the error widget before wrapping it in the image
+    // semantics a loaded Image gets, so wrap it the same way here: read as
+    // the alt with the image role, the drawn "!" hidden from screen readers.
+    errorBuilder: (_, _, _) => Semantics(
+      container: alt != null,
+      image: true,
+      label: alt ?? '',
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: const Center(child: ExcludeSemantics(child: Text('!'))),
+      ),
     ),
   );
 
