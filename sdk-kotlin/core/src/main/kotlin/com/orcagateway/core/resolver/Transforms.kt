@@ -415,8 +415,11 @@ internal object RegexSupport {
      *   case-sensitively. Every other letter keeps the engine's folding.
      *
      * An escaped character stays as it is (`\\d` is a backslash and a d), as do
-     * group names and what follows `\c`, `\k<` and `\p{`. Letters written as
-     * escapes (`\x73`) and backreferences keep the engine's folding.
+     * group names, a modifier group's flags (`(?ms-i:`) and what follows `\c`,
+     * `\k<` and `\p{`. Letters written as escapes (`\x73`) and backreferences
+     * keep the engine's folding, and a letter inside a modifier group is
+     * rewritten by the pattern's flags, not the group's: under `i`, `(?-i:s)`
+     * still matches S, and without it `(?i:s)` matches ſ, where Dart's do not.
      */
     fun asciiClasses(pattern: String, ignoreCase: Boolean = false, unicode: Boolean = false): String {
         if (!ignoreCase && !pattern.contains('\\') && !pattern.contains('[')) return pattern
@@ -447,6 +450,11 @@ internal object RegexSupport {
                     out.append(pattern, i, end) // a group name
                     i = end
                 }
+                pattern.startsWith("(?", i) && isModifiers(pattern, i + 2) -> {
+                    val end = pattern.indexOf(':', i) + 1
+                    out.append(pattern, i, end) // `(?ms-i:`, whose flags the engine reads as Dart does
+                    i = end
+                }
                 ignoreCase && c in FOLD_LETTERS -> {
                     out.append("(?-i:[").append(dartFold(c, unicode)).append("])")
                     i += 1
@@ -458,6 +466,13 @@ internal object RegexSupport {
             }
         }
         return out.toString()
+    }
+
+    /** Whether flags (`i`, `m`, `s`, `-`) and then a colon start at [k], after a `(?`: a modifier group. */
+    private fun isModifiers(pattern: String, k: Int): Boolean {
+        var e = k
+        while (e < pattern.length && pattern[e] in "ims-") e += 1
+        return e > k && pattern.getOrNull(e) == ':'
     }
 
     /** s, k, i in either case and the four letters Unicode folds into them. */

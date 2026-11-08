@@ -468,4 +468,107 @@ class TransformTest {
             assertEquals(j("a#b"), run("a\tb", rep("\\cI", flags, "#")), flags)
         }
     }
+
+    /** A pattern under flags on an input, each match replaced by `#`, and Dart's output (null where Dart throws). */
+    private class Rx(val pattern: String, val flags: String, val input: String, val expected: String?)
+
+    private fun assertDart(rows: List<Rx>) {
+        fun shown(s: String?): String =
+            s?.map { if (it in ' '..'~') "$it" else "\\u%04X".format(it.code) }?.joinToString("") ?: "null"
+        val failures = rows.mapNotNull { r ->
+            val got = run(r.input, rep(r.pattern, r.flags, "#"))
+            if (got == j(r.expected)) {
+                null
+            } else {
+                "${shown(r.pattern)} /${r.flags} on ${shown(r.input)}: got ${shown(got.stringValue)}, expected ${shown(r.expected)}"
+            }
+        }
+        if (failures.isNotEmpty()) fail(failures.joinToString("\n"))
+    }
+
+    @Test
+    fun r2_aModifierGroupKeepsItsFlagLettersUnderI() {
+        // The i, m and s of `(?ms-i:` are flags, not letters to fold. Each body
+        // below matches the same whatever flags the group's letters follow.
+        assertDart(
+            listOf(
+                Rx("(?i:a)", "gi", "aA", "##"),
+                Rx("(?-i:a)", "gi", "aA", "#A"),
+                Rx("(?-i:a)", "giu", "aA", "#A"),
+                Rx("(?-i:a)(b)", "gi", "abAB", "#AB"),
+                Rx("(?-i:\u00E9)", "gi", "\u00E9\u00C9", "#\u00C9"),
+                Rx("(?-i:\u00E9)", "giu", "\u00E9\u00C9", "#\u00C9"),
+                Rx("(?-i:[a-z])", "gi", "aZ", "#Z"),
+                Rx("(?i:[a-z])", "gi", "aZ\u017F", "##\u017F"),
+                Rx("(?i:[a-z])", "giu", "aZ\u017F", "###"),
+                Rx("(?i:k)", "gi", "kK\u212A", "##\u212A"),
+                Rx("(?i:k)", "giu", "kK\u212A", "###"),
+                Rx("(?s:a.b)", "gi", "a\nb", "#"),
+                Rx("(?s:.)", "giu", "\n", "#"),
+                Rx("(?-s:a.)", "gis", "a\nab", "a\n#"),
+                Rx("(?-s:a.)", "gisu", "a\nab", "a\n#"),
+                Rx("(?i-s:a.)", "gis", "a\nAb", "a\n#"),
+                Rx("(?ims:x)", "giu", "xX", "##"),
+                Rx("(?ms-i:^a.)", "gi", "aA\nA\n", "#\nA\n"),
+                Rx("(?i)s", "gi", "sS", null), // bare inline flags are not Dart syntax
+                Rx("(?i:s)", "g", "sS", "##"), // without i nothing is rewritten
+            ),
+        )
+    }
+
+    @Test
+    fun r2_aClassNamingOneOfTheFourFollowsDartUnderI() {
+        // Swift's T6 rows of the same name, run through Kotlin, but for `\p{Lowercase_Letter}`:
+        // java.util.regex has no such name and refuses the pattern (null), where Dart gives "##1" on "aB1".
+        val (longS, kelvin, dotless, dotted) = listOf("\u017F", "\u212A", "\u0131", "\u0130")
+        val iDot = "i\u0307" // what Unicode's full folding turns the dotted I into
+        // Without `u` a class naming one of the four holds that letter alone, and its negation all else.
+        val gi = listOf(
+            Rx("[$longS]", "gi", "${longS}sS", "#sS"),
+            Rx("[^$longS]", "gi", "${longS}sS", "$longS##"),
+            Rx("[$kelvin]", "gi", "${kelvin}kK", "#kK"),
+            Rx("[^$kelvin]", "gi", "${kelvin}kK", "$kelvin##"),
+            Rx("[\\u017F]", "gi", "${longS}sS", "#sS"),
+            Rx("[^\\u017F]", "gi", "${longS}sS", "$longS##"),
+            Rx("[s$longS]", "gi", "${longS}sS", "###"),
+            Rx("[^s$longS]", "gi", "${longS}sSx", "${longS}sS#"),
+            Rx("[^s]", "gi", "${longS}sSx", "#sS#"),
+            Rx("[$longS$kelvin]", "gi", "$longS${kelvin}sSkK", "##sSkK"),
+            Rx("[$longS-\u0180]", "gi", "${longS}sS", "#sS"),
+            Rx("[$dotless]", "gi", "${dotless}iI", "#iI"),
+            Rx("[^$dotless]", "gi", "${dotless}iI", "$dotless##"),
+            Rx("[i]", "gi", "$dotless${dotted}iI", "$dotless$dotted##"),
+            Rx("[^i]", "gi", "$dotless${dotted}iI", "##iI"),
+            Rx("[$dotted]", "gi", "$iDot$dotted", "$iDot#"),
+            Rx("[^$dotted]", "gi", "${dotted}iI", "$dotted##"),
+            Rx("[${dotted}a]", "gi", "$iDot${dotted}A", "$iDot##"),
+        )
+        // With `u` the class holds the letter's simple case folding: long s with s, Kelvin with k, the i's alone.
+        val giu = listOf(
+            Rx("[$longS]", "giu", "${longS}sS", "###"),
+            Rx("[^$longS]", "giu", "${longS}sSx", "${longS}sS#"),
+            Rx("[$kelvin]", "giu", "${kelvin}kK", "###"),
+            Rx("[^$kelvin]", "giu", "${kelvin}kKx", "${kelvin}kK#"),
+            Rx("[\u0100-$longS]", "giu", "${longS}sS", "###"),
+            Rx("[$dotless]", "giu", "${dotless}iI", "#iI"),
+            Rx("[$dotted]", "giu", "$iDot${dotted}iI", "$iDot#iI"),
+            Rx("[^$dotted]", "giu", "${dotted}iI", "$dotted##"),
+            Rx(dotted, "giu", "$iDot${dotted}iI", "$iDot#iI"),
+            Rx(dotless, "giu", "${dotless}iI", "#iI"),
+            Rx("i", "giu", "$dotted${dotless}iI", "$dotted$dotless##"),
+            Rx("[i]", "giu", "$dotted${dotless}iI", "$dotted$dotless##"),
+            Rx("[^i]", "giu", "$dotted${dotless}iI", "##iI"),
+            Rx("\\p{Script=Latin}", "giu", "a\u0391B", "#\u0391#"),
+            Rx("[\\p{Script=Latin}]", "giu", "a\u0391B", "#\u0391#"),
+        )
+        // Guard: the flag letters of a modifier group are not letters to fold.
+        val modifiers = listOf(
+            Rx("(?i:a)", "gi", "aA", "##"),
+            Rx("(?-i:a)", "gi", "aA", "#A"),
+            Rx("(?-i:a)", "giu", "aA", "#A"),
+            Rx("(?s:.)", "giu", "\n", "#"),
+            Rx("(?ms-i:^a.)", "gi", "aA\nA\n", "#\nA\n"),
+        )
+        assertDart(gi + giu + modifiers)
+    }
 }
