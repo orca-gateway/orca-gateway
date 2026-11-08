@@ -4,8 +4,9 @@ import Foundation
 ///
 /// Numbers keep the int/double split the Dart SDK has: `decode(_:)` reads the
 /// number's text, so an integer literal is `.int` and one with a fraction or
-/// exponent (`4.0`, `1e2`) or past `Int` is `.double`, as Dart's `jsonDecode`.
-/// (A Codable model decoded with JSONDecoder still reads `4.0` as `.int`.)
+/// exponent (`4.0`, `1e2`) or past `Int` is `.double`, as Dart's `jsonDecode`,
+/// and `decode(_:)` of a model keeps that split in every JSONValue inside it
+/// (a model decoded with JSONDecoder still reads `4.0` as `.int`).
 /// Equality follows Dart's `==`: numbers by value (`3 == 3.0`), strings by
 /// UTF-16 code units (no Unicode normalization), and deep value equality for
 /// arrays and objects.
@@ -116,6 +117,11 @@ extension JSONValue: Equatable {
 
 extension JSONValue: Codable {
     public init(from decoder: Decoder) throws {
+        // From a tree already read: the node as it is, `.double(4.0)` included.
+        if let tree = decoder as? JSONValueDecoder {
+            self = tree.value
+            return
+        }
         let container = try decoder.singleValueContainer()
         if container.decodeNil() {
             self = .null
@@ -194,9 +200,10 @@ extension JSONValue {
         self = try JSONValue.decode(data)
     }
 
-    /// Decode a Codable model from this tree.
+    /// Decode a Codable model from this tree, as JSONDecoder would from its
+    /// text, except that a `.double` stays one in the model's JSONValues.
     public func decode<T: Decodable>(_ type: T.Type) throws -> T {
-        try JSONDecoder().decode(type, from: try encoded())
+        try JSONValueDecoder(self).decode(type)
     }
 }
 

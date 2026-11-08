@@ -86,7 +86,7 @@ public struct OrcaClient: @unchecked Sendable {
         let received = OrcaDebug.now() - start
         let page: PageResponse
         if response.status == 200 {
-            page = try JSONDecoder().decode(PageResponse.self, from: response.body)
+            page = try JSONValue.decode(response.body).decode(PageResponse.self)
         } else if let upgrade = Self.upgradeRequiredPage(response) {
             page = upgrade
         } else {

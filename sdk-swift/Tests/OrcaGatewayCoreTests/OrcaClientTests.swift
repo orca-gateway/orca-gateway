@@ -54,6 +54,20 @@ final class StubEngine: HTTPTransport, @unchecked Sendable {
     }
 }
 
+/// A JSON value is this double, not an int that equals it (C1: a live 4.0).
+func assertDouble(_ v: JSONValue?, _ expected: Double, file: StaticString = #filePath, line: UInt = #line) {
+    guard case .double(let d)? = v, d == expected else {
+        return XCTFail("\(String(describing: v)) is not .double(\(expected))", file: file, line: line)
+    }
+}
+
+/// A JSON value is this int, not a double that equals it.
+func assertInt(_ v: JSONValue?, _ expected: Int, file: StaticString = #filePath, line: UInt = #line) {
+    guard case .int(let i)? = v, i == expected else {
+        return XCTFail("\(String(describing: v)) is not .int(\(expected))", file: file, line: line)
+    }
+}
+
 final class OrcaClientTests: XCTestCase {
     let base = URL(string: "http://localhost:8080")!
 
@@ -201,5 +215,77 @@ final class OrcaClientTests: XCTestCase {
         c.deviceId = ""
         XCTAssertNil(c.headers["x-orca-device-id"])
         XCTAssertNil(c.headers["Authorization"])
+    }
+
+    // MARK: C1 a live 4.0 stays a double, as Dart's jsonDecode keeps it
+
+    /// Served as raw text, so `4.0` reaches the client as the engine wrote it
+    /// (`encoded()` would write `4`).
+    static let doublePage = #"""
+        {"pageId": "p", "title": "T",
+         "state": [{"key": "d", "scope": "page", "initial": 4.0}, {"key": "i", "scope": "page", "initial": 4}],
+         "components": [{"id": "t", "type": "Text", "kind": "primitive", "childMode": "none",
+           "props": {"data": {"type": "transform", "input": {"type": "state", "key": "d"}, "by": [{"type": "toString"}]},
+                     "size": 4.0, "count": 4, "style": {"fontSize": 4.0}},
+           "children": [], "watches": ["d"]}]}
+        """#
+
+    static func toString(_ key: String) -> JSONValue {
+        ["type": "transform", "input": ["type": "state", "key": .string(key)], "by": [["type": "toString"]]]
+    }
+
+    func initialState(_ page: PageResponse) -> [String: JSONValue] {
+        Dictionary(page.state.map { ($0.key, $0.initial) }, uniquingKeysWith: { _, last in last })
+    }
+
+    func testC1_AFetchedPageKeepsADoubleInitialValue() async throws {
+        let page = try await client(StubEngine(page: Data(Self.doublePage.utf8))).fetchPage("p")
+        XCTAssertEqual(page.state.map(\.key), ["d", "i"])
+        assertDouble(page.state.first?.initial, 4.0)
+        assertInt(page.state.last?.initial, 4)
+        let r = ValueResolver(state: initialState(page))
+        XCTAssertEqual(r.resolve(Self.toString("d")).stringValue, "4.0")
+        XCTAssertEqual(r.resolve(Self.toString("i")).stringValue, "4")
+    }
+
+    func testC1_AFetchedPageKeepsADoubleProp() async throws {
+        let page = try await client(StubEngine(page: Data(Self.doublePage.utf8))).fetchPage("p")
+        let props = try XCTUnwrap(page.components.first?.props)
+        assertDouble(props["size"], 4.0)
+        assertDouble(props["style"]?["fontSize"], 4.0)
+        assertInt(props["count"], 4)
+        XCTAssertEqual(ValueResolver(state: initialState(page)).resolveToString(props["data"] ?? .null), "4.0")
+    }
+
+    func testC1_The426PageKeepsADouble() async throws {
+        let stub = StubEngine(page: Data())
+        stub.forced = HTTPResponse(status: 426, body: Data(#"""
+            {"error": "sdk_version_too_old", "minSdkVersion": "99.0.0", "clientSdkVersion": "0.1.0",
+             "page": \#(Self.doublePage)}
+            """#.utf8))
+        let page = try await client(stub).fetchPage("p")
+        assertDouble(page.state.first?.initial, 4.0)
+        assertInt(page.state.last?.initial, 4)
+        assertDouble(page.components.first?.props["size"], 4.0)
+        XCTAssertEqual(ValueResolver(state: initialState(page)).resolve(Self.toString("d")).stringValue, "4.0")
+    }
+
+    func testC1_AServerActionResponseKeepsADoubleSetStateValue() async throws {
+        let body = #"""
+            {"actions": [{"type": "setState", "key": "d", "value": 4.0},
+                         {"type": "setState", "key": "i", "value": 4},
+                         {"type": "updateComponent", "id": "t", "props": {"size": 4.0}}]}
+            """#
+        let stub = ActionStub([:], raw: ["save": HTTPResponse(status: 200, body: Data(body.utf8))])
+        let actions = try await ActionStub.client(stub).executeAction("save")
+        guard actions.count == 3, case .setState(let d) = actions[0], case .setState(let i) = actions[1],
+            case .updateComponent(let u) = actions[2]
+        else { return XCTFail("setState, setState, updateComponent expected, got \(actions)") }
+        assertDouble(d.value, 4.0)
+        assertInt(i.value, 4)
+        assertDouble(u.props?["size"], 4.0)
+        let r = ValueResolver(state: ["d": d.value, "i": i.value])
+        XCTAssertEqual(r.resolve(Self.toString("d")).stringValue, "4.0")
+        XCTAssertEqual(r.resolve(Self.toString("i")).stringValue, "4")
     }
 }

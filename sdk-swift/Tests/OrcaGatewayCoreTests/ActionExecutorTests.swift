@@ -181,4 +181,46 @@ final class ActionExecutorTests: XCTestCase {
         XCTAssertEqual(replacement.map(\.type), ["Text"])
         XCTAssertEqual(box.effects, [], "mutations emit no effects, as in Dart")
     }
+
+    // MARK: C1 a live 4.0 stays a double in the components an action adds
+
+    @MainActor func testC1_AddedAndReplacedComponentsKeepADoubleProp() async throws {
+        let node: JSONValue = [
+            "id": "c-1", "type": "Text", "kind": "primitive", "childMode": "none",
+            "props": ["size": 4.0, "count": 4, "style": ["fontSize": 4.0]], "children": [], "watches": [],
+        ]
+        let (executor, _, box) = executor()
+        try await executor.execute(.addComponent(.init(parentId: "list", components: [node], position: 0)))
+        try await executor.execute(.unknown([
+            "type": "replaceComponent", "targetId": "list", "components": [node],
+        ]))
+        guard box.mutations.count == 2, case .add(_, let added, _) = box.mutations[0],
+            case .replace(_, let replaced) = box.mutations[1]
+        else { return XCTFail("add and replace expected, got \(box.mutations)") }
+        for nodes in [added, replaced] {
+            assertDouble(nodes.first?.props["size"], 4.0)
+            assertDouble(nodes.first?.props["style"]?["fontSize"], 4.0)
+            assertInt(nodes.first?.props["count"], 4)
+        }
+    }
+
+    @MainActor func testC1_AServerActionAddsAComponentWithADoubleProp() async throws {
+        let body = #"""
+            {"actions": [
+              {"type": "addComponent", "parentId": "list", "components": [{"id": "c-1", "type": "Text",
+                "kind": "primitive", "childMode": "none", "props": {"size": 4.0, "count": 4},
+                "children": [], "watches": []}]},
+              {"type": "setState", "key": "d", "value": 4.0}]}
+            """#
+        let stub = ActionStub([:], raw: ["add": HTTPResponse(status: 200, body: Data(body.utf8))])
+        let (executor, store, box) = executor(stub: stub)
+        try await executor.execute(.serverAction(.init(id: "add")))
+        assertDouble(store.state.page["d"], 4.0)
+        guard case .add(let parent, let nodes, _)? = box.mutations.first else {
+            return XCTFail("add expected, got \(box.mutations)")
+        }
+        XCTAssertEqual(parent, "list")
+        assertDouble(nodes.first?.props["size"], 4.0)
+        assertInt(nodes.first?.props["count"], 4)
+    }
 }
