@@ -9,6 +9,7 @@ import com.orcagateway.core.support.obj
 import com.orcagateway.core.support.props
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -248,6 +249,109 @@ class TransformTest {
             ValueResolver(state = emptyMap(), animationProgress = Double.NaN)
                 .resolve(obj("type" to "tween", "begin" to "#000000", "end" to "#FFFFFF")),
         )
+    }
+
+    // MARK: Dart's corners (row 23b.33; render fixtures 25-29)
+
+    private fun run(input: Any?, step: JsonValue, state: Map<String, JsonValue> = emptyMap()): JsonValue =
+        ValueResolver(state = state).resolve(obj("type" to "transform", "input" to s(input), "by" to arr(step)))
+
+    private fun holds(expr: JsonValue, state: Map<String, JsonValue> = emptyMap()): Boolean =
+        ValueResolver(state = state).evaluate(expr.objectValue ?: emptyMap())
+
+    private fun wrap(pattern: String, flags: String = "g"): JsonValue =
+        obj("type" to "regex", "pattern" to pattern, "flags" to flags, "replacement" to "[{{value}}]")
+
+    @Test
+    fun p1_containsAnEmptyNeedleIsTrue() {
+        // Dart: 'abc'.contains('') and ''.contains('') are true.
+        assertEquals(j(true), run("abc", obj("type" to "contains", "value" to s(""))))
+        assertEquals(j(true), run("", obj("type" to "contains", "value" to s(""))))
+        assertTrue(holds(obj("op" to "contains", "haystack" to s("abc"), "needle" to s(""))))
+        assertTrue(holds(obj("op" to "contains", "haystack" to s(""), "needle" to s(""))))
+    }
+
+    @Test
+    fun p2_stringsCompareByUtf16CodeUnits() {
+        val composed = "é"
+        val decomposed = "é"
+        assertFalse(JsonValue.String(composed) == JsonValue.String(decomposed))
+        assertTrue(holds(obj("op" to "neq", "left" to s(composed), "right" to s(decomposed))))
+        assertFalse(holds(obj("op" to "eq", "left" to s(composed), "right" to s(decomposed))))
+        assertFalse(holds(obj("op" to "contains", "haystack" to s(composed), "needle" to s(decomposed))))
+        assertFalse(holds(obj("op" to "contains", "haystack" to s(arr(composed)), "needle" to s(decomposed))))
+        assertFalse(holds(obj("op" to "startsWith", "str" to s(composed), "prefix" to s(decomposed))))
+        assertEquals(j(false), run(composed, obj("type" to "contains", "value" to s(decomposed))))
+        // A prefix that cuts a Character in two still starts the string, as in Dart.
+        assertTrue(holds(obj("op" to "startsWith", "str" to s(decomposed), "prefix" to s("e"))))
+        assertTrue(holds(obj("op" to "contains", "haystack" to s(decomposed), "needle" to s("́"))))
+        // split(""): one string per UTF-16 code unit, a surrogate pair cut in two.
+        assertEquals(arr("e", "́"), run(decomposed, obj("type" to "split", "separator" to "")))
+        assertEquals(arr("\uD83D", "\uDE42"), run("🙂", obj("type" to "split", "separator" to "")))
+        assertEquals(arr("a", "\r", "\n"), run("a\r\n", obj("type" to "split", "separator" to "")))
+        assertEquals(arr(), run("", obj("type" to "split", "separator" to "")))
+    }
+
+    @Test
+    fun p3_anEmptyRegexPatternMatchesEverywhere() {
+        val global = obj("type" to "regex", "pattern" to "", "flags" to "g", "replacement" to "-")
+        val first = obj("type" to "regex", "pattern" to "", "replacement" to "-")
+        assertEquals(j("-a-b-"), run("ab", global))
+        assertEquals(j("-ab"), run("ab", first))
+        assertEquals(j("-"), run("", global))
+        assertEquals(j(""), run("ab", obj("type" to "regex", "pattern" to ""))) // match-only: group 0
+        // Dart: RegExp('').hasMatch(x) is true, for an empty x too.
+        assertTrue(holds(obj("op" to "matches", "str" to s("abc"), "regex" to "")))
+        assertTrue(holds(obj("op" to "matches", "str" to s(""), "regex" to "")))
+    }
+
+    @Test
+    fun p4_regexDigitAndWordClassesAreAscii() {
+        val digits = "٣ 4" // ARABIC-INDIC DIGIT THREE, space, 4
+        val word = "café_1"
+        assertEquals(j("٣ [4]"), run(digits, wrap("\\d+")))
+        assertEquals(j("[٣ ]4"), run(digits, wrap("\\D+")))
+        assertEquals(j("[caf]é[_1]"), run(word, wrap("\\w+")))
+        assertEquals(j("caf[é]_1"), run(word, wrap("\\W+")))
+        // Inside a character class, negated or not.
+        assertEquals(j("[caf]é[_1]"), run(word, wrap("[\\w]+")))
+        assertEquals(j("caf[é]_1"), run(word, wrap("[^\\w]+")))
+        assertEquals(j("[٣ ]4"), run(digits, wrap("[^\\d]+")))
+        assertEquals(j("٣[ 4]"), run(digits, wrap("[ \\d]+")))
+        assertEquals(j("[٣ ]4"), run(digits, wrap("[x\\D]+")))
+        assertEquals(j("[caf]é[_1]"), run(word, wrap("[^\\W]+")))
+        // Case-insensitive: still ASCII.
+        assertEquals(j("[CAF]É[_1]"), run("CAFÉ_1", wrap("\\w+", "gi")))
+        // An escaped backslash before d is a backslash and a d.
+        assertEquals(j("\\d"), run("x\\d1", obj("type" to "regex", "pattern" to "\\\\d")))
+        assertEquals(j("[\\\\d]1"), run("\\\\d1", wrap("\\\\\\\\d")))
+        // \s stays Unicode, as Dart's: a no-break space and an em space are whitespace.
+        assertEquals(j("a[  ]b"), run("a  b", wrap("\\s+")))
+        // The matches op too.
+        assertFalse(holds(obj("op" to "matches", "str" to s("٣٤٥"), "regex" to "^\\d+$")))
+        assertTrue(holds(obj("op" to "matches", "str" to s("345"), "regex" to "^\\d+$")))
+        assertFalse(holds(obj("op" to "matches", "str" to s("é"), "regex" to "\\w")))
+        assertTrue(holds(obj("op" to "matches", "str" to s("é"), "regex" to "\\W")))
+    }
+
+    @Test
+    fun p5_aJsonDoubleInStateStaysADouble() {
+        val state = JsonValue.parse("""{"d": 4.0, "i": 4, "e": 1e2, "big": 12345678901234567890}""").objectValue!!
+        assertTrue(state.getValue("d") is JsonValue.Double, "4.0 is a double in Dart's jsonDecode")
+        assertTrue(state.getValue("i") is JsonValue.Int)
+        assertTrue(state.getValue("e") is JsonValue.Double, "1e2 is a double in Dart's jsonDecode")
+        assertTrue(state.getValue("big") is JsonValue.Double, "an integer past Int64 is a double in Dart")
+        assertTrue(JsonValue.parse("-0") is JsonValue.Int)
+        fun toStringOf(key: String): JsonValue = ValueResolver(state = state).resolve(
+            obj("type" to "transform", "input" to obj("type" to "state", "key" to key), "by" to arr(obj("type" to "toString"))),
+        )
+        assertEquals(j("4.0"), toStringOf("d"))
+        assertEquals(j("4"), toStringOf("i"))
+        assertEquals(j("100.0"), run(state.getValue("e"), obj("type" to "toString")))
+        // 4 == 4.0 still, with equal hash codes.
+        assertEquals(state.getValue("i"), state.getValue("d"))
+        assertEquals(state.getValue("i").hashCode(), state.getValue("d").hashCode())
+        assertTrue(holds(obj("op" to "eq", "left" to obj("type" to "state", "key" to "d"), "right" to s(4)), state))
     }
 
     @Test

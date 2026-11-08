@@ -2,11 +2,13 @@ import Foundation
 
 /// A JSON value as it travels on the wire: props, state, Value payloads.
 ///
-/// Numbers keep the int/double split the Dart SDK has: a JSON integer decodes
-/// to `.int`, anything with a fraction or exponent that does not fit an `Int`
-/// to `.double`. The engine (JavaScript) never emits `3.0`, so for real traffic
-/// this matches Dart's `jsonDecode` exactly. Equality follows Dart's `==` for
-/// numbers (`3 == 3.0`) and deep value equality for arrays and objects.
+/// Numbers keep the int/double split the Dart SDK has: `decode(_:)` reads the
+/// number's text, so an integer literal is `.int` and one with a fraction or
+/// exponent (`4.0`, `1e2`) or past `Int` is `.double`, as Dart's `jsonDecode`.
+/// (A Codable model decoded with JSONDecoder still reads `4.0` as `.int`.)
+/// Equality follows Dart's `==`: numbers by value (`3 == 3.0`), strings by
+/// UTF-16 code units (no Unicode normalization), and deep value equality for
+/// arrays and objects.
 public enum JSONValue: Sendable {
     case null
     case bool(Bool)
@@ -100,7 +102,9 @@ extension JSONValue: Equatable {
         case (.double(let a), .double(let b)): return a == b
         case (.int(let a), .double(let b)): return Double(a) == b
         case (.double(let a), .int(let b)): return a == Double(b)
-        case (.string(let a), .string(let b)): return a == b
+        // Same scalars, same UTF-16 units: "\u{e9}" is not "e\u{301}" here,
+        // where Swift's String `==` would call them equal.
+        case (.string(let a), .string(let b)): return a.utf8.elementsEqual(b.utf8)
         case (.array(let a), .array(let b)): return a == b
         case (.object(let a), .object(let b)): return a == b
         default: return false
@@ -169,9 +173,11 @@ extension JSONValue: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral,
 // MARK: - Data helpers
 
 extension JSONValue {
-    /// Decode any JSON document (object, array or scalar).
+    /// Decode any JSON document (object, array or scalar), as Dart's
+    /// `jsonDecode` reads it (see `JSONParser`).
     public static func decode(_ data: Data) throws -> JSONValue {
-        try JSONDecoder().decode(JSONValue.self, from: data)
+        var parser = JSONParser(data)
+        return try parser.document()
     }
 
     /// Encode with sorted keys, so the output is stable across runs.
@@ -191,5 +197,212 @@ extension JSONValue {
     /// Decode a Codable model from this tree.
     public func decode<T: Decodable>(_ type: T.Type) throws -> T {
         try JSONDecoder().decode(type, from: try encoded())
+    }
+}
+
+
+// MARK: - Parser
+
+/// RFC 8259 JSON over UTF-8 bytes, read the way Dart's `jsonDecode` reads it:
+/// unlike JSONDecoder it sees a number's text, so `4.0` stays a double. A
+/// trailing comma is an error and a repeated key keeps its last value, as in
+/// Dart; a number a Double cannot hold (`1e400`), a lone surrogate escape and
+/// invalid UTF-8 throw, as JSONDecoder did (Swift strings cannot hold them).
+/// Pure Swift, so it reads the same on Linux. Nesting stops at 512 levels, as
+/// JSONDecoder's does, rather than overflowing the stack.
+struct JSONParser {
+    static let maxDepth = 512
+
+    private let bytes: [UInt8]
+    private var i = 0
+    private var depth = 0
+
+    init(_ data: Data) {
+        bytes = [UInt8](data)
+        if bytes.starts(with: [0xEF, 0xBB, 0xBF]) { i = 3 }  // a UTF-8 BOM
+    }
+
+    mutating func document() throws -> JSONValue {
+        let value = try value()
+        skipWhitespace()
+        guard i == bytes.count else { throw fail("Unexpected text after the value") }
+        return value
+    }
+
+    private func fail(_ message: String) -> DecodingError {
+        .dataCorrupted(.init(codingPath: [], debugDescription: "\(message) at byte \(i)."))
+    }
+
+    private var peek: UInt8? { i < bytes.count ? bytes[i] : nil }
+
+    private mutating func skipWhitespace() {
+        while let b = peek, b == 0x20 || b == 0x0A || b == 0x0D || b == 0x09 { i += 1 }
+    }
+
+    private mutating func value() throws -> JSONValue {
+        skipWhitespace()
+        switch peek {
+        case UInt8(ascii: "{"): return try object()
+        case UInt8(ascii: "["): return try array()
+        case UInt8(ascii: "\""): return .string(try string())
+        case UInt8(ascii: "t"): try literal("true"); return .bool(true)
+        case UInt8(ascii: "f"): try literal("false"); return .bool(false)
+        case UInt8(ascii: "n"): try literal("null"); return .null
+        default: return try number()
+        }
+    }
+
+    private mutating func literal(_ word: String) throws {
+        let expected = Array(word.utf8)
+        guard bytes[i...].starts(with: expected) else { throw fail("Expected \(word)") }
+        i += expected.count
+    }
+
+    private mutating func enter() throws {
+        depth += 1
+        guard depth <= Self.maxDepth else { throw fail("Nested deeper than \(Self.maxDepth)") }
+    }
+
+    private mutating func array() throws -> JSONValue {
+        try enter()
+        defer { depth -= 1 }
+        i += 1
+        var items: [JSONValue] = []
+        skipWhitespace()
+        if peek == UInt8(ascii: "]") {
+            i += 1
+            return .array(items)
+        }
+        while true {
+            items.append(try value())
+            skipWhitespace()
+            switch peek {
+            case UInt8(ascii: ","): i += 1
+            case UInt8(ascii: "]"): i += 1; return .array(items)
+            default: throw fail("Expected , or ]")
+            }
+        }
+    }
+
+    private mutating func object() throws -> JSONValue {
+        try enter()
+        defer { depth -= 1 }
+        i += 1
+        var members: [String: JSONValue] = [:]
+        skipWhitespace()
+        if peek == UInt8(ascii: "}") {
+            i += 1
+            return .object(members)
+        }
+        while true {
+            skipWhitespace()
+            guard peek == UInt8(ascii: "\"") else { throw fail("Expected a key") }
+            let key = try string()
+            skipWhitespace()
+            guard peek == UInt8(ascii: ":") else { throw fail("Expected :") }
+            i += 1
+            members[key] = try value()
+            skipWhitespace()
+            switch peek {
+            case UInt8(ascii: ","): i += 1
+            case UInt8(ascii: "}"): i += 1; return .object(members)
+            default: throw fail("Expected , or }")
+            }
+        }
+    }
+
+    /// `-?(0|[1-9][0-9]*)(.[0-9]+)?([eE][+-]?[0-9]+)?`: an integer literal is
+    /// `.int` when it fits, anything else `.double`.
+    private mutating func number() throws -> JSONValue {
+        let start = i
+        if peek == UInt8(ascii: "-") { i += 1 }
+        if peek == UInt8(ascii: "0") { i += 1 } else { try digits() }
+        var integer = true
+        if peek == UInt8(ascii: ".") {
+            integer = false
+            i += 1
+            try digits()
+        }
+        if peek == UInt8(ascii: "e") || peek == UInt8(ascii: "E") {
+            integer = false
+            i += 1
+            if peek == UInt8(ascii: "+") || peek == UInt8(ascii: "-") { i += 1 }
+            try digits()
+        }
+        let text = String(decoding: bytes[start..<i], as: UTF8.self)
+        if integer, let n = Int(text) { return .int(n) }
+        guard let d = Double(text), d.isFinite else { throw fail("Number \(text) is not representable") }
+        return .double(d)
+    }
+
+    private mutating func digits() throws {
+        let start = i
+        while let b = peek, b >= UInt8(ascii: "0"), b <= UInt8(ascii: "9") { i += 1 }
+        guard i > start else { throw fail("Expected a digit") }
+    }
+
+    private mutating func string() throws -> String {
+        i += 1  // the opening quote
+        var buffer: [UInt8] = []
+        while let b = peek {
+            i += 1
+            switch b {
+            case UInt8(ascii: "\""):
+                let s = String(decoding: buffer, as: UTF8.self)
+                guard s.utf8.elementsEqual(buffer) else { throw fail("Invalid UTF-8") }
+                return s
+            case UInt8(ascii: "\\"):
+                try escape(into: &buffer)
+            case 0..<0x20:
+                throw fail("Unescaped control character")
+            default:
+                buffer.append(b)
+            }
+        }
+        throw fail("Unterminated string")
+    }
+
+    private mutating func escape(into buffer: inout [UInt8]) throws {
+        guard let b = peek else { throw fail("Unterminated string") }
+        i += 1
+        switch b {
+        case UInt8(ascii: "\""), UInt8(ascii: "\\"), UInt8(ascii: "/"): buffer.append(b)
+        case UInt8(ascii: "b"): buffer.append(0x08)
+        case UInt8(ascii: "f"): buffer.append(0x0C)
+        case UInt8(ascii: "n"): buffer.append(0x0A)
+        case UInt8(ascii: "r"): buffer.append(0x0D)
+        case UInt8(ascii: "t"): buffer.append(0x09)
+        case UInt8(ascii: "u"):
+            let unit = try hex4()
+            var scalar = Unicode.Scalar(unit)
+            if UTF16.isLeadSurrogate(unit), bytes[i...].starts(with: [UInt8(ascii: "\\"), UInt8(ascii: "u")]) {
+                i += 2
+                let trail = try hex4()
+                if UTF16.isTrailSurrogate(trail) {
+                    scalar = Unicode.Scalar(0x10000 + (UInt32(unit - 0xD800) << 10) + UInt32(trail - 0xDC00))
+                }
+            }
+            guard let scalar else { throw fail("Lone surrogate escape") }
+            buffer.append(contentsOf: scalar.utf8)
+        default:
+            throw fail("Invalid escape")
+        }
+    }
+
+    private mutating func hex4() throws -> UInt16 {
+        var unit: UInt16 = 0
+        for _ in 0..<4 {
+            guard let b = peek else { throw fail("Expected four hex digits") }
+            let digit: UInt8
+            switch b {
+            case UInt8(ascii: "0")...UInt8(ascii: "9"): digit = b - UInt8(ascii: "0")
+            case UInt8(ascii: "a")...UInt8(ascii: "f"): digit = b - UInt8(ascii: "a") + 10
+            case UInt8(ascii: "A")...UInt8(ascii: "F"): digit = b - UInt8(ascii: "A") + 10
+            default: throw fail("Expected four hex digits")
+            }
+            unit = unit << 4 | UInt16(digit)
+            i += 1
+        }
+        return unit
     }
 }

@@ -17,19 +17,16 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.serializer
-import java.math.BigDecimal
-import kotlin.math.floor
 
 /**
  * A JSON value as it travels on the wire: props, state, Value payloads.
  *
- * Numbers keep the int/double split the Dart SDK has: a JSON integer decodes
- * to [Int], anything with a fraction or exponent that does not fit a 64-bit
- * integer to [Double] (`3.0` and `1e2` read as ints, as Swift's JSONDecoder
- * reads them). The engine (JavaScript) never emits `3.0`, so for real traffic
- * this matches Dart's `jsonDecode` exactly. Equality follows Dart's `==` for
- * numbers (`3 == 3.0`, IEEE comparison for doubles) and deep value equality
- * for arrays and objects.
+ * Numbers keep the int/double split Dart's `jsonDecode` makes: an integer
+ * literal that fits 64 bits decodes to [Int], anything else (a fraction, an
+ * exponent, a bigger integer) to [Double], so `3.0` and `1e2` stay doubles
+ * and print as "3.0" and "100.0". Equality follows Dart's `==`: numbers
+ * by value (`3 == 3.0`, IEEE comparison for doubles), strings by UTF-16 code
+ * units, arrays and objects deeply.
  *
  * The cases are named after Swift's `JSONValue` (`.int`, `.double`, ...), so
  * inside this class `Int`, `Double` and `String` mean the nested cases.
@@ -62,18 +59,11 @@ public sealed class JsonValue {
     }
 
     /**
-     * Equal to another string when the two are canonically equivalent, as
-     * Swift's `String ==` is ("é" precomposed equals "e" + U+0301); Dart
-     * compares code units.
+     * Equal to another string with the same UTF-16 code units, as Dart's
+     * `String ==` ("é" precomposed differs from "e" + U+0301; Swift's
+     * `String ==` would call them equal).
      */
-    public data class String(public val value: kotlin.String) : JsonValue() {
-        private val canonical: kotlin.String by lazy(LazyThreadSafetyMode.PUBLICATION) { SwiftText.canonical(value) }
-
-        override fun equals(other: Any?): Boolean =
-            other is String && (value == other.value || canonical == other.canonical)
-
-        override fun hashCode(): kotlin.Int = canonical.hashCode()
-    }
+    public data class String(public val value: kotlin.String) : JsonValue()
 
     public data class Array(public val items: List<JsonValue>) : JsonValue()
 
@@ -139,8 +129,7 @@ public sealed class JsonValue {
 
     /**
      * Decode a model from this tree, as Swift's `json.decode(T.self)`: the
-     * tree is written out and read back first, so an integral double reads as
-     * an int and a non-finite number fails.
+     * tree is written out and read back first, so a non-finite number fails.
      */
     public fun <T> decode(deserializer: DeserializationStrategy<T>): T =
         Json.decodeFromJsonElement(deserializer, toJsonElement())
@@ -186,7 +175,7 @@ public sealed class JsonValue {
 
         /**
          * Re-read a model as a JsonValue tree (Swift `JSONValue(encoding:)`),
-         * through its JSON form: an integral double reads back as an int.
+         * through its JSON form; a Double field stays a double.
          */
         public fun <T> encoding(serializer: SerializationStrategy<T>, value: T): JsonValue =
             fromJsonElement(Json.encodeToJsonElement(serializer, value))
@@ -224,38 +213,22 @@ public sealed class JsonValue {
         /** An array of items, each converted with [of]. */
         public fun arr(vararg items: Any?): JsonValue = Array(items.map { of(it) })
 
-        private const val TWO_63: kotlin.Double = 9.223372036854775808e18
-
         /**
-         * Swift JSONDecoder's reading of a number into `JSONValue`: an integer
-         * literal that fits Int64 is an int; otherwise, when the number's
-         * double value is integral and inside the Int64 range, an int (the
-         * exact decimal value when that is a whole number, else the double's);
-         * everything else a double. A number beyond the Double range fails.
+         * Dart `jsonDecode`'s reading of a number: an integer literal that
+         * fits Int64 is an int (`-0` too); everything else, `4.0`, `1e2` and
+         * an integer past Int64 included, a double. A number beyond the Double
+         * range fails.
          */
         internal fun parseNumber(text: kotlin.String): JsonValue {
             if (isIntegerLiteral(text)) text.toLongOrNull()?.let { return Int(it) }
             val d = text.toDoubleOrNull() ?: throw SerializationException("Not a JSON number: $text")
             if (d.isInfinite()) throw SerializationException("Number $text does not fit in a Double")
-            if (d >= -TWO_63 && d < TWO_63 && d == floor(d)) {
-                exactWhole(text)?.let { return Int(it) }
-                return Int(d.toLong())
-            }
             return Double(d)
         }
 
         private fun isIntegerLiteral(text: kotlin.String): Boolean {
             val digits = if (text.startsWith("-")) text.substring(1) else text
             return digits.isNotEmpty() && digits.all { it in '0'..'9' }
-        }
-
-        private fun exactWhole(text: kotlin.String): Long? = try {
-            val exact = BigDecimal(text)
-            if (exact.signum() == 0 || exact.stripTrailingZeros().scale() <= 0) exact.longValueExact() else null
-        } catch (_: NumberFormatException) {
-            null
-        } catch (_: ArithmeticException) {
-            null
         }
 
         /** Equal numbers hash alike, whichever case holds them (0.0 and -0.0 too). */

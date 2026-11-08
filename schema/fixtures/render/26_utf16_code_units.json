@@ -1,0 +1,316 @@
+{
+  "name": "utf16-code-units",
+  "description": "Strings compare by UTF-16 code units, with no Unicode normalization: the precomposed \"\\u00e9\" and the decomposed \"e\\u0301\" are different strings for `eq`, `contains` and `startsWith`, and `split` with an empty separator cuts \"e\\u0301\" into its two code units. BMP text only. The inputs read page state, so the engine leaves every Value unresolved and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "props": {},
+    "children": [
+      {
+        "type": "Text",
+        "key": "eq",
+        "props": {
+          "data": {
+            "type": "conditional",
+            "branches": [
+              {
+                "when": {
+                  "op": "eq",
+                  "left": {
+                    "type": "state",
+                    "scope": "page",
+                    "key": "composed"
+                  },
+                  "right": {
+                    "type": "static",
+                    "value": "e\u0301"
+                  }
+                },
+                "then": {
+                  "type": "static",
+                  "value": "yes"
+                }
+              }
+            ],
+            "else": {
+              "type": "static",
+              "value": "no"
+            }
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "contains",
+        "props": {
+          "data": {
+            "type": "conditional",
+            "branches": [
+              {
+                "when": {
+                  "op": "contains",
+                  "haystack": {
+                    "type": "state",
+                    "scope": "page",
+                    "key": "composed"
+                  },
+                  "needle": {
+                    "type": "static",
+                    "value": "e\u0301"
+                  }
+                },
+                "then": {
+                  "type": "static",
+                  "value": "yes"
+                }
+              }
+            ],
+            "else": {
+              "type": "static",
+              "value": "no"
+            }
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "startsWith",
+        "props": {
+          "data": {
+            "type": "conditional",
+            "branches": [
+              {
+                "when": {
+                  "op": "startsWith",
+                  "str": {
+                    "type": "state",
+                    "scope": "page",
+                    "key": "composed"
+                  },
+                  "prefix": {
+                    "type": "static",
+                    "value": "e\u0301"
+                  }
+                },
+                "then": {
+                  "type": "static",
+                  "value": "yes"
+                }
+              }
+            ],
+            "else": {
+              "type": "static",
+              "value": "no"
+            }
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "split",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "decomposed"
+            },
+            "by": [
+              {
+                "type": "split",
+                "separator": ""
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "composed": "\u00e9",
+      "decomposed": "e\u0301"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "eq",
+        "contains",
+        "startsWith",
+        "split"
+      ],
+      "watches": []
+    },
+    {
+      "id": "split",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "decomposed"
+          },
+          "by": [
+            {
+              "type": "split",
+              "separator": ""
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "decomposed"
+      ]
+    },
+    {
+      "id": "startsWith",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "startsWith",
+                "str": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "composed"
+                },
+                "prefix": {
+                  "type": "static",
+                  "value": "e\u0301"
+                }
+              },
+              "then": {
+                "type": "static",
+                "value": "yes"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "no"
+          }
+        }
+      },
+      "children": [],
+      "watches": [
+        "composed"
+      ]
+    },
+    {
+      "id": "contains",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "contains",
+                "haystack": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "composed"
+                },
+                "needle": {
+                  "type": "static",
+                  "value": "e\u0301"
+                }
+              },
+              "then": {
+                "type": "static",
+                "value": "yes"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "no"
+          }
+        }
+      },
+      "children": [],
+      "watches": [
+        "composed"
+      ]
+    },
+    {
+      "id": "eq",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "eq",
+                "left": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "composed"
+                },
+                "right": {
+                  "type": "static",
+                  "value": "e\u0301"
+                }
+              },
+              "then": {
+                "type": "static",
+                "value": "yes"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "no"
+          }
+        }
+      },
+      "children": [],
+      "watches": [
+        "composed"
+      ]
+    }
+  ],
+  "resolved": {
+    "eq": {
+      "data": "no"
+    },
+    "contains": {
+      "data": "no"
+    },
+    "startsWith": {
+      "data": "no"
+    },
+    "split": {
+      "data": [
+        "e",
+        "\u0301"
+      ]
+    }
+  }
+}

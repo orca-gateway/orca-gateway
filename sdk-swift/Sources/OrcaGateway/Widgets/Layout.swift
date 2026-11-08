@@ -3,7 +3,9 @@ import SwiftUI
 
 /// Column and Row (Flutter `Flex`): no implicit spacing, `gap` between
 /// children only, main-axis alignment with spacers, `mainAxisSize: max` (the
-/// default) fills the main axis. `spaceAround` is drawn like `spaceEvenly`.
+/// default) fills the main axis. As in the Flutter SDK, a gap is a box that
+/// `spaceAround` and `spaceEvenly` space like a child; `spaceAround` puts
+/// half a space at each end. A Column's cross-axis `baseline` is `start`.
 ///
 /// A Row or Column with an Expanded or Spacer child is drawn by FlexLayout,
 /// which shares the space by `flex`; every other one keeps the stack below,
@@ -51,14 +53,25 @@ struct FlexView: View {
         let lead = fill && [.end, .center, .spaceAround, .spaceEvenly].contains(main)
         let trail = fill && [.start, .center, .spaceAround, .spaceEvenly].contains(main)
         let between = fill && [.spaceBetween, .spaceAround, .spaceEvenly].contains(main)
-        let gap = Props.number(node["gap"]) ?? 0
+        // spaceAround spaces each item on both sides, so two spacers meet
+        // between items.
+        let around = fill && main == .spaceAround
+        let gap = Props.number(node["gap"])
+        // The Flutter SDK's gap box (`_addGaps`, any gap, even 0) is an item
+        // spaceAround and spaceEvenly space like a child.
+        let boxed = gap != nil && fill && [.spaceAround, .spaceEvenly].contains(main)
 
         stack {
             if lead { Spacer(minLength: 0) }
             ForEach(Array(ids.enumerated()), id: \.element) { index, id in
                 if index > 0 {
-                    if gap > 0 { gapView(gap) }
+                    if boxed {
+                        Spacer(minLength: 0)
+                        if around { Spacer(minLength: 0) }
+                    }
+                    if let gap, gap > 0 || boxed { gapView(gap) }
                     if between { Spacer(minLength: 0) }
+                    if around { Spacer(minLength: 0) }
                 }
                 child(id)
             }
@@ -71,7 +84,9 @@ struct FlexView: View {
     private func stack<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         let cross = Props.crossAxis(node["crossAxisAlignment"])
         if axis == .vertical {
-            let alignment: HorizontalAlignment = cross == .start ? .leading : cross == .end ? .trailing : .center
+            // Flutter has no baselines across a Column: `baseline` is `start`.
+            let alignment: HorizontalAlignment =
+                cross == .start || cross == .baseline ? .leading : cross == .end ? .trailing : .center
             VStack(alignment: alignment, spacing: 0, content: content)
         } else {
             let alignment: VerticalAlignment =

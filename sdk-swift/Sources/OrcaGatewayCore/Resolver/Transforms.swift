@@ -93,11 +93,7 @@ enum Transforms {
         }
         r.register("split") { def, current, _ in
             let separator = def["separator"]?.stringValue ?? ""
-            let s = DartFormat.string(current)
-            if separator.isEmpty {
-                return .array(s.map { .string(String($0)) })
-            }
-            return .array(s.components(separatedBy: separator).map { .string($0) })
+            return .array(DartString.split(DartFormat.string(current), separator).map { .string($0) })
         }
         r.register("join") { def, current, _ in
             let separator = def["separator"]?.stringValue ?? ""
@@ -159,7 +155,7 @@ enum Transforms {
             let value = resolver.resolve(def["value"] ?? .null)
             switch current {
             case .array(let a): return .bool(a.contains(value))
-            case .string(let s): return .bool(s.contains(DartFormat.string(value)))
+            case .string(let s): return .bool(DartString.contains(s, DartFormat.string(value)))
             default: return .bool(false)
             }
         }
@@ -303,6 +299,50 @@ enum DartNum {
     }
 }
 
+// MARK: - Dart string semantics
+
+/// Dart compares strings by UTF-16 code units, with no Unicode normalization;
+/// Swift's `contains`, `hasPrefix` and `components(separatedBy:)` compare
+/// Characters with canonical equivalence ("e\u{301}" would match "\u{e9}").
+/// A String always holds whole scalars, so a code-unit match always starts and
+/// ends on a scalar boundary.
+enum DartString {
+    /// `haystack.contains(needle)`; true for an empty needle.
+    static func contains(_ haystack: String, _ needle: String) -> Bool {
+        firstIndex(Array(haystack.utf16), of: Array(needle.utf16), from: 0) != nil
+    }
+
+    /// `s.startsWith(prefix)`.
+    static func hasPrefix(_ s: String, _ prefix: String) -> Bool {
+        s.utf16.starts(with: prefix.utf16)
+    }
+
+    /// `s.split(separator)`. An empty separator cuts every code unit, but a
+    /// surrogate pair stays whole: Dart's lone surrogates cannot live in a
+    /// Swift String (gate 08), and this keeps split/join a round trip.
+    static func split(_ s: String, _ separator: String) -> [String] {
+        if separator.isEmpty { return s.unicodeScalars.map { String($0) } }
+        let units = Array(s.utf16)
+        let sep = Array(separator.utf16)
+        var parts: [String] = []
+        var start = 0
+        while let found = firstIndex(units, of: sep, from: start) {
+            parts.append(String(decoding: units[start..<found], as: UTF16.self))
+            start = found + sep.count
+        }
+        parts.append(String(decoding: units[start...], as: UTF16.self))
+        return parts
+    }
+
+    private static func firstIndex(_ units: [UInt16], of needle: [UInt16], from start: Int) -> Int? {
+        guard needle.count <= units.count - start else { return nil }
+        for i in start...(units.count - needle.count) where units[i..<(i + needle.count)].elementsEqual(needle) {
+            return i
+        }
+        return nil
+    }
+}
+
 // MARK: - Placeholders
 
 enum Placeholders {
@@ -365,7 +405,31 @@ enum Regex {
             if flags.contains("m") { options.insert(.anchorsMatchLines) }
             if flags.contains("s") { options.insert(.dotMatchesLineSeparators) }
         }
-        return try? NSRegularExpression(pattern: pattern, options: options)
+        // ICU refuses "", which Dart accepts (it matches "" everywhere).
+        let source = pattern.isEmpty ? "(?:)" : asciiClasses(pattern)
+        return try? NSRegularExpression(pattern: source, options: options)
+    }
+
+    /// Dart's `\d \w \D \W` are ASCII only (ECMAScript); ICU's are Unicode
+    /// and have no ASCII switch, so they are spelled out as ICU sets before
+    /// compiling. Inside a class (`[\w.]`) the set nests, and ICU unions it
+    /// with the rest of the class. Every other escape, `\\` included, is
+    /// copied as is; `\s` stays Unicode, as Dart's is.
+    static func asciiClasses(_ pattern: String) -> String {
+        let sets = ["d": "[0-9]", "w": "[A-Za-z0-9_]", "D": "[^0-9]", "W": "[^A-Za-z0-9_]"]
+        var out = ""
+        var scalars = pattern.unicodeScalars.makeIterator()
+        while let c = scalars.next() {
+            out.unicodeScalars.append(c)
+            guard c == "\\", let next = scalars.next() else { continue }
+            if let set = sets[String(next)] {
+                out.unicodeScalars.removeLast()
+                out += set
+            } else {
+                out.unicodeScalars.append(next)
+            }
+        }
+        return out
     }
 
     static func clip(_ s: String) -> String {

@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "slug": "native-sdk-s11",
+  "idea": "Epic 23b slice S11: native parity with Dart (23b.33) — six resolver corners in sdk-swift and sdk-kotlin (contains(\"\") true; contains, startsWith, eq and split(\"\") by UTF-16 code units; an empty regex accepted; \\d and \\w ASCII; a JSON 4.0 stays a double; lowercase final sigma), Swift's flex layout (spaceAround, gap with spaceEvenly and spaceAround, a Column's baseline as start), Kotlin's failed or empty Image draws Flutter's \"!\"; one render fixture per corner green on the engine, Flutter, Swift and Kotlin, a Swift layout test per flex case",
+  "kind": "feature",
+  "created_at": "2026-11-07T22:45:19Z",
+  "updated_at": "2026-11-08T07:34:13Z",
+  "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
+  "current": "10",
+  "stages": {
+    "01": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S11 started on your 'Start S11' after native-sdk-s10 gate 12 (A)"
+    },
+    "02": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S11 started on your 'Start S11' after native-sdk-s10 gate 12 (A)"
+    },
+    "03": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S11 started on your 'Start S11' after native-sdk-s10 gate 12 (A)"
+    },
+    "04": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S11 started on your 'Start S11' after native-sdk-s10 gate 12 (A)"
+    },
+    "05": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S11 started on your 'Start S11' after native-sdk-s10 gate 12 (A)"
+    },
+    "06": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S11 started on your 'Start S11' after native-sdk-s10 gate 12 (A)"
+    },
+    "07": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S11 started on your 'Start S11' after native-sdk-s10 gate 12 (A)"
+    },
+    "08": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-08T06:50:30Z",
+      "approved_with": "A"
+    },
+    "09": {
+      "status": "approved",
+      "rounds": 2,
+      "card": "cards/09-r2.md",
+      "approved_at": "2026-11-08T07:32:48Z",
+      "approved_with": "A"
+    },
+    "10": {
+      "status": "in_review",
+      "rounds": 1,
+      "card": "cards/10-r1.md"
+    },
+    "11": {
+      "status": "pending"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": true
+  }
+}
