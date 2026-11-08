@@ -232,12 +232,12 @@ public struct ValueResolver {
             let haystack = operand("haystack")
             let needle = operand("needle")
             switch haystack {
-            case .string(let s): return s.contains(DartFormat.string(needle))
+            case .string(let s): return DartString.contains(s, DartFormat.string(needle))
             case .array(let items): return items.contains(needle)
             default: return false
             }
         case "startsWith":
-            return DartFormat.string(operand("str")).hasPrefix(DartFormat.string(operand("prefix")))
+            return DartString.hasPrefix(DartFormat.string(operand("str")), DartFormat.string(operand("prefix")))
         case "matches":
             let pattern = expr["regex"]?.stringValue ?? ""
             guard pattern.utf16.count <= Regex.maxPatternLength,

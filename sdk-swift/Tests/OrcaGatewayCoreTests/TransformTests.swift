@@ -233,6 +233,143 @@ final class TransformTests: XCTestCase {
             "#00000000")
     }
 
+    // MARK: S11 Dart's corners (render fixtures 25-29)
+
+    private func run(_ input: JSONValue, _ step: JSONValue) -> JSONValue {
+        ValueResolver(state: [:]).resolve(["type": "transform", "input": Self.s(input), "by": [step]])
+    }
+
+    private func holds(_ expr: JSONValue) -> Bool {
+        ValueResolver(state: [:]).evaluate(expr.objectValue ?? [:])
+    }
+
+    /// UTF-16 units of every string in a value, so a check cannot pass by
+    /// canonical equivalence ("\u{e9}" against "e\u{301}").
+    private func units(_ v: JSONValue) -> [[UInt16]] {
+        switch v {
+        case .string(let s): return [Array(s.utf16)]
+        case .array(let items): return items.flatMap(units)
+        default: return []
+        }
+    }
+
+    private func assertSame(_ got: JSONValue, _ expected: JSONValue, line: UInt = #line) {
+        XCTAssertEqual(got, expected, line: line)
+        XCTAssertEqual(units(got), units(expected), line: line)
+    }
+
+    func testP1_containsWithAnEmptyNeedleIsTrue() {
+        // Dart: 'abc'.contains('') and ''.contains('') are true.
+        XCTAssertEqual(run("abc", ["type": "contains", "value": Self.s("")]), true)
+        XCTAssertEqual(run("", ["type": "contains", "value": Self.s("")]), true)
+        XCTAssertTrue(holds(["op": "contains", "haystack": Self.s("abc"), "needle": Self.s("")]))
+        XCTAssertTrue(holds(["op": "contains", "haystack": Self.s(""), "needle": Self.s("")]))
+    }
+
+    func testP2_stringsCompareByUTF16CodeUnits() {
+        let composed: JSONValue = "\u{e9}"
+        let decomposed: JSONValue = "e\u{301}"
+        XCTAssertNotEqual(composed, decomposed)
+        XCTAssertEqual(composed, "\u{e9}")
+        XCTAssertFalse(holds(["op": "eq", "left": Self.s(composed), "right": Self.s(decomposed)]))
+        XCTAssertTrue(holds(["op": "neq", "left": Self.s(composed), "right": Self.s(decomposed)]))
+        XCTAssertFalse(holds(["op": "contains", "haystack": Self.s(composed), "needle": Self.s(decomposed)]))
+        XCTAssertFalse(holds(["op": "contains", "haystack": Self.s([composed]), "needle": Self.s(decomposed)]))
+        XCTAssertTrue(holds(["op": "contains", "haystack": Self.s(decomposed), "needle": Self.s("e")]))
+        XCTAssertFalse(holds(["op": "startsWith", "str": Self.s(composed), "prefix": Self.s(decomposed)]))
+        XCTAssertTrue(holds(["op": "startsWith", "str": Self.s(decomposed), "prefix": Self.s("e")]))
+        XCTAssertEqual(run(composed, ["type": "contains", "value": Self.s(decomposed)]), false)
+        XCTAssertEqual(run(decomposed, ["type": "contains", "value": Self.s("e")]), true)
+        XCTAssertEqual(run([composed], ["type": "contains", "value": Self.s(decomposed)]), false)
+        // split "" cuts code units, a surrogate pair kept whole (gate 08).
+        assertSame(run(decomposed, ["type": "split", "separator": ""]), ["e", "\u{301}"])
+        assertSame(run("a🙂b", ["type": "split", "separator": ""]), ["a", "🙂", "b"])
+        assertSame(run("", ["type": "split", "separator": ""]), [])
+        assertSame(run("e\u{301}x", ["type": "split", "separator": composed]), ["e\u{301}x"])
+        assertSame(run("e\u{301}x", ["type": "split", "separator": "e"]), ["", "\u{301}x"])
+        assertSame(run("a🙂b🙂", ["type": "split", "separator": "🙂"]), ["a", "b", ""])
+    }
+
+    func testP3_anEmptyRegexPatternMatchesEverywhere() {
+        assertSame(run("ab", ["type": "regex", "pattern": "", "flags": "g", "replacement": "-"]), "-a-b-")
+        assertSame(run("ab", ["type": "regex", "pattern": "", "replacement": "-"]), "-ab")
+        assertSame(run("ab", ["type": "regex", "pattern": ""]), "")  // match 0 is ""
+        XCTAssertTrue(holds(["op": "matches", "str": Self.s("abc"), "regex": ""]))
+        XCTAssertTrue(holds(["op": "matches", "str": Self.s(""), "regex": ""]))
+    }
+
+    func testP4_regexDigitAndWordClassesAreASCII() {
+        func replace(_ pattern: String, _ input: JSONValue) -> JSONValue {
+            run(input, ["type": "regex", "pattern": .string(pattern), "flags": "g", "replacement": "[{{value}}]"])
+        }
+        let digits: JSONValue = "\u{663} 4"  // ARABIC-INDIC DIGIT THREE
+        let word: JSONValue = "caf\u{e9}_1"
+        assertSame(replace("\\d+", digits), "\u{663} [4]")
+        assertSame(replace("\\D+", digits), "[\u{663} ]4")
+        assertSame(replace("\\w+", word), "[caf]\u{e9}[_1]")
+        assertSame(replace("\\W+", word), "caf[\u{e9}]_1")
+        // Inside a character class, negated or not.
+        assertSame(replace("[\\w]+", word), "[caf]\u{e9}[_1]")
+        assertSame(replace("[\\W]+", word), "caf[\u{e9}]_1")
+        assertSame(replace("[^\\w]+", word), "caf[\u{e9}]_1")
+        assertSame(replace("[^\\W]+", word), "[caf]\u{e9}[_1]")
+        assertSame(replace("[\\d.]+", "\u{663}.5"), "\u{663}[.5]")
+        assertSame(replace("[\\D]+", digits), "[\u{663} ]4")
+        // An escaped backslash stays a backslash: `\\d` is "\" then "d".
+        assertSame(run("a\\d1", ["type": "regex", "pattern": "\\\\d"]), "\\d")
+        // `\s` stays Unicode, as Dart's: NO-BREAK SPACE is whitespace.
+        assertSame(run("a\u{a0}b", ["type": "regex", "pattern": "\\s"]), "\u{a0}")
+        XCTAssertFalse(holds(["op": "matches", "str": Self.s("\u{663}\u{664}\u{665}"), "regex": "^\\d+$"]))
+        XCTAssertTrue(holds(["op": "matches", "str": Self.s("345"), "regex": "^\\d+$"]))
+        XCTAssertFalse(holds(["op": "matches", "str": Self.s("\u{e9}"), "regex": "[\\w]"]))
+    }
+
+    func testP5_aJSONNumberKeepsItsIntOrDoubleText() throws {
+        func decode(_ text: String) throws -> JSONValue { try JSONValue.decode(Data(text.utf8)) }
+        func isDouble(_ v: JSONValue) -> Bool { if case .double = v { return true } else { return false } }
+
+        // Dart's jsonDecode: a fraction or an exponent makes a double.
+        XCTAssertTrue(isDouble(try decode("4.0")))
+        XCTAssertEqual(try decode("4").intValue, 4)
+        XCTAssertTrue(isDouble(try decode("1e2")))
+        XCTAssertEqual(try decode("-1.5E-3"), -0.0015)
+        XCTAssertEqual(try decode("-0").intValue, 0)  // Dart: int 0
+        XCTAssertTrue(isDouble(try decode("12345678901234567890")))  // past Int
+        XCTAssertEqual(try decode("-9223372036854775808").intValue, Int.min)
+        XCTAssertEqual(JSONValue.int(4), .double(4.0))  // Dart's num ==
+
+        let state = try decode(#" {"d": 4.0, "i": 4, "a": [1.0, 2], "o": {"x": 2.50}} "#)
+        XCTAssertTrue(isDouble(state["d"]))
+        XCTAssertEqual(state["i"].intValue, 4)
+        XCTAssertTrue(isDouble(state["a"].arrayValue?[0] ?? .null))
+        XCTAssertEqual(state["a"].arrayValue?[1].intValue, 2)
+        let r = ValueResolver(state: state.objectValue ?? [:])
+        func text(_ key: String) -> JSONValue {
+            r.resolve(["type": "transform", "input": ["type": "state", "key": .string(key)], "by": [["type": "toString"]]])
+        }
+        XCTAssertEqual(text("d"), "4.0")
+        XCTAssertEqual(text("i"), "4")
+        XCTAssertEqual(text("o.x"), "2.5")
+
+        // The rest of the grammar reads as JSONDecoder read it.
+        let doc = try decode(
+            #"{"s": "a\"b\\c\/\b\f\n\r\t\u00e9\ud83d\ude42", "t": true, "f": false, "n": null, "e": [], "o": {}, "k": 1, "k": 2}"#)
+        assertSame(doc["s"], .string("a\"b\\c/\u{8}\u{c}\n\r\t\u{e9}🙂"))
+        XCTAssertEqual(doc, ["s": doc["s"], "t": true, "f": false, "n": nil, "e": [], "o": [:], "k": 2])
+        assertSame(try decode(#""e\u0301""#), "e\u{301}")  // no normalization
+        assertSame(try decode("\"caf\u{e9} 🙂\""), "caf\u{e9} 🙂")
+        XCTAssertEqual(try JSONValue.decode(Data([0xEF, 0xBB, 0xBF] + Array("[1]".utf8))), [1])  // BOM
+        XCTAssertEqual(try decode(" \t\r\n\"x\" "), "x")
+        for bad in [
+            "", " ", "nul", "[1,]", "{\"a\" 1}", "{\"a\":1,}", "01", "1.", ".5", "+1", "1e", "-", "[1] x",
+            "\"\\ud800\"", "\"\\x\"", "\"a\nb\"", "\"open", "[", "1e400", "{1: 2}",
+        ] {
+            XCTAssertThrowsError(try decode(bad), "accepted \(bad.debugDescription)")
+        }
+        XCTAssertThrowsError(try JSONValue.decode(Data([0x22, 0xFF, 0x22])), "invalid UTF-8")
+        XCTAssertThrowsError(try decode(String(repeating: "[", count: 100_000)), "nesting")
+    }
+
     func testDoubleToStringMatchesDart() {
         let cases: [(Double, String)] = [
             (0, "0.0"), (-0.0, "-0.0"), (1, "1.0"), (-2.5, "-2.5"), (0.1, "0.1"), (100, "100.0"),
