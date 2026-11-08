@@ -7,6 +7,9 @@ import android.view.View
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasParent
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.unit.DpRect
@@ -53,6 +56,9 @@ import kotlin.test.assertTrue
  * green, red, blue, green. Native graphics decode and draw it, at 1 dp per
  * pixel. Each test has its own server port, so the shared loader's cache
  * never answers one test with another's image.
+ *
+ * I1: an Image that cannot be had draws "!" centred in its box, as
+ * Flutter's error builder.
  *
  * I3: the Image sized as Flutter's RenderImage, on an xhdpi screen (2
  * pixels per dp), where the 40x20-pixel image at one dp per image pixel,
@@ -203,17 +209,40 @@ class ImageTest {
     }
 
     /**
-     * A load still running, a 404 and a name that is not an http URL (no
-     * assets in S9) each leave an empty box of the given size, described
+     * A load still running leaves an empty box of the given size, described
      * by `alt`, drawn as nothing.
      */
     @Test
-    fun i2_whileLoadingAfterAFailedLoadOrWithNoNetworkSrcItIsAnEmptyBoxOfItsSize() {
-        val alts = listOf("Loading", "Missing", "Asset")
+    fun i2_whileLoadingItIsAnEmptyBoxOfItsSize() {
+        val alt = "Loading"
+        show(image("0", "src" to url("/slow.png"), "alt" to alt, "width" to 30, "height" to 20))
+
+        val before = box(alt)
+        assertEquals(30.dp to 20.dp, before.width to before.height, alt)
+        compose.waitUntil(5_000) { server.requestCount >= 1 }
+        compose.waitForIdle()
+
+        val picture = draw()
+        val box = box(alt)
+        assertEquals(30.dp to 20.dp, box.width to box.height, alt)
+        for (x in 0 until 30) {
+            for (y in 0 until 20) assertColor(Color.WHITE, picture.at(box, x, y), "$alt ($x, $y)")
+        }
+    }
+
+    /**
+     * I1: a 404, an empty `src` and a name that is not an http URL (no
+     * assets in S9) each draw "!" centred in a box of the given size,
+     * described by `alt`, as Flutter's error builder:
+     * `SizedBox(width, height, child: Center(child: Text('!')))`.
+     */
+    @Test
+    fun i1_aFailedLoadAnEmptySrcOrANonHttpSrcDrawsAnExclamationMarkCentredInItsBox() {
+        val alts = listOf("Missing", "Empty", "Asset")
         show(
             column("0", "1", "2", "3"),
-            image("1", "src" to url("/slow.png"), "alt" to "Loading", "width" to 30, "height" to 20),
-            image("2", "src" to url("/missing.png"), "alt" to "Missing", "width" to 30, "height" to 20),
+            image("1", "src" to url("/missing.png"), "alt" to "Missing", "width" to 30, "height" to 20),
+            image("2", "src" to "", "alt" to "Empty", "width" to 30, "height" to 20),
             image("3", "src" to "logo.png", "alt" to "Asset", "width" to 30, "height" to 20),
         )
 
@@ -221,18 +250,19 @@ class ImageTest {
             val box = box(alt)
             assertEquals(30.dp to 20.dp, box.width to box.height, alt)
         }
-        compose.waitUntil(5_000) { server.requestCount >= 2 }
+        compose.waitUntil(5_000) { server.requestCount >= 1 }
         // A load of the missing URL joins the widget's, or fails the same way after it.
         runBlocking { assertNull(ImageLoader.shared.load(url("/missing.png"))) }
         compose.waitForIdle()
 
-        val picture = draw()
         for (alt in alts) {
             val box = box(alt)
             assertEquals(30.dp to 20.dp, box.width to box.height, alt)
-            for (x in 0 until 30) {
-                for (y in 0 until 20) assertColor(Color.WHITE, picture.at(box, x, y), "$alt ($x, $y)")
-            }
+            val mark = compose.onNode(hasText("!") and hasParent(hasContentDescription(alt))).getUnclippedBoundsInRoot()
+            // Centred to the pixel: an odd space left over puts it half a pixel off.
+            val (x, y) = (box.left + box.width / 2).value to (box.top + box.height / 2).value
+            assertEquals(x, (mark.left + mark.width / 2).value, 1f, "$alt: \"!\" centre x")
+            assertEquals(y, (mark.top + mark.height / 2).value, 1f, "$alt: \"!\" centre y")
         }
     }
 
