@@ -1,0 +1,166 @@
+{
+  "name": "contains-empty-needle",
+  "description": "A string contains the empty string: both the `contains` transform and the `contains` BoolExpr op return true for an empty needle (Dart: 'abc'.contains('') is true). The haystack reads page state, so the engine leaves both Values unresolved and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "props": {},
+    "children": [
+      {
+        "type": "Text",
+        "key": "transform",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "text"
+            },
+            "by": [
+              {
+                "type": "contains",
+                "value": {
+                  "type": "static",
+                  "value": ""
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "op",
+        "props": {
+          "data": {
+            "type": "conditional",
+            "branches": [
+              {
+                "when": {
+                  "op": "contains",
+                  "haystack": {
+                    "type": "state",
+                    "scope": "page",
+                    "key": "text"
+                  },
+                  "needle": {
+                    "type": "static",
+                    "value": ""
+                  }
+                },
+                "then": {
+                  "type": "static",
+                  "value": "yes"
+                }
+              }
+            ],
+            "else": {
+              "type": "static",
+              "value": "no"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "text": "abc"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "transform",
+        "op"
+      ],
+      "watches": []
+    },
+    {
+      "id": "op",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "contains",
+                "haystack": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "text"
+                },
+                "needle": {
+                  "type": "static",
+                  "value": ""
+                }
+              },
+              "then": {
+                "type": "static",
+                "value": "yes"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "no"
+          }
+        }
+      },
+      "children": [],
+      "watches": [
+        "text"
+      ]
+    },
+    {
+      "id": "transform",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "text"
+          },
+          "by": [
+            {
+              "type": "contains",
+              "value": {
+                "type": "static",
+                "value": ""
+              }
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "text"
+      ]
+    }
+  ],
+  "resolved": {
+    "transform": {
+      "data": true
+    },
+    "op": {
+      "data": "yes"
+    }
+  }
+}

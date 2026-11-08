@@ -1,0 +1,140 @@
+{
+  "name": "regex-empty-pattern",
+  "description": "An empty regex pattern is valid and matches the empty string at every position: with the `g` flag the replacement goes before each character and at the end (\"ab\" -> \"-a-b-\"), without it only at the start (\"ab\" -> \"-ab\"). The input reads page state, so the engine leaves both Values unresolved and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "props": {},
+    "children": [
+      {
+        "type": "Text",
+        "key": "global",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "text"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "",
+                "flags": "g",
+                "replacement": "-"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "first",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "text"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "",
+                "replacement": "-"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "text": "ab"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "global",
+        "first"
+      ],
+      "watches": []
+    },
+    {
+      "id": "first",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "text"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "",
+              "replacement": "-"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "text"
+      ]
+    },
+    {
+      "id": "global",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "text"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "",
+              "flags": "g",
+              "replacement": "-"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "text"
+      ]
+    }
+  ],
+  "resolved": {
+    "global": {
+      "data": "-a-b-"
+    },
+    "first": {
+      "data": "-ab"
+    }
+  }
+}
