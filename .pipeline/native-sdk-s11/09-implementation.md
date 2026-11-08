@@ -3,27 +3,26 @@
 ## Front page
 
 ### In one breath
-group 1 of 2 · tasks: 4 green, 0 blocked · cases: 5 of 10 green · P1-P5 on engine, Flutter only
-T1 fixtures 25-27: contains "" is true, UTF-16 compares, empty regex; green on engine, Flutter.
-T2 fixtures 28-30: ASCII `\d` `\w`, 4.0 stays "4.0", "ΟΔΟΣ" → "οδοσ"; 30 green on all 4.
-T3 Swift flex: spaceAround's half ends, a gap spaced like a child, Column baseline as start.
-T4 Kotlin Image: a 404, empty or non-http src draws "!" centred in its box; golden re-recorded.
-Tests: engine 697 + 1 fail (port 8080, as baseline), Flutter 235, iOS UI 54, Kotlin sdk 128.
-Red by design until group 2: Swift and Kotlin resolvers on fixtures 25-29 (15 sub-cases).
-Commits: c9cab82, 4b2dfdb, 882fce6, 8b219b5 on feat/native-sdk-s11. Nothing pushed.
+group 2 of 2 · tasks: 6 of 6 green, 0 blocked · cases: 10 of 10 green · all suites green
+T5 Swift resolver: Dart's contains "", UTF-16 compares, empty regex, ASCII classes, 4.0 as "4.0".
+T6 Kotlin resolver: the same five, with split("") per UTF-16 unit exactly as Dart.
+Fixtures 25-30 now pass on all four runners: engine, Flutter, Swift, Kotlin.
+Tests: engine 697 + 1 fail (port 8080, as baseline), Flutter 235, Swift 116, iOS UI 54,
+Kotlin core 118, sdk 128, lint 0. Linux Swift runs in the PR's CI (not here).
+Commits: f30a150 (T5), 847e7ec (T6), after group 1's four. Nothing pushed.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 needs you: Kotlin's "!" is its own screen-reader node; Flutter merges it into the alt label.
-3 auto-decided: a gap of 0 is boxed, as Flutter; Swift keeps its spacer stack; fixture shape.
+3 auto-decided: Swift reads JSON numbers by their text (your "resolver only" call); nested
+regex sets; Kotlin keeps Swift's rules outside P1-P5.
 
 ### Questions for you
-1. Next: group 2, T5 Swift resolver and T6 Kotlin resolver, turning fixtures 25-29 green.
-   (default: go; `A` starts it)
-2. Kotlin's "!" after a failed load: keep it a separate accessibility node, or merge it into the
-   Image's label as Flutter does? (default: keep it, note it for later)
+1. Last group: `A` approves stage 09; stage 10 pushes feat/native-sdk-s11, opens the PR
+   (Auto-fix off) and reads its CI once. (default: yes)
+2. Left for later, both SDKs: `\b` word edges and the `i` flag's ſ/K still differ from Dart;
+   plus Kotlin's "!" label. Add them as a follow-up row in the epic plan? (default: yes)
 
 ## Appendix
 
@@ -84,7 +83,7 @@ defaults · 3. needs you: "!" a separate accessibility node; Flutter merges it i
 Review fit: pass
 Review quality: pass
 
-### Test run
+#### Group 1 test run
 Once, after the group, on the tree with all four tasks (logs in the session scratchpad, `s11/g1-*.log`):
 - `cd engine && bun test` · 697 pass, 1 fail · `test/server.test.ts` (unnamed): EADDRINUSE on 8080,
   your Docker; the baseline's environmental failure.
@@ -99,14 +98,70 @@ Once, after the group, on the tree with all four tasks (logs in the session scra
   testDebugUnitTest 128, 0 failures, 0 skipped · lint "No issues found".
 Every changed file sits in a task's Files; no stray file.
 
+### Group 2
+Commits, one per task, in the order they passed review: T6 847e7ec, T5 f30a150. Nothing pushed.
+At group 2's start you answered group 1's card with "A": the Kotlin "!" stays its own
+accessibility node, noted for later (question 2's default).
+
+#### Task T5 · Swift resolver: Dart's corners
+Files: `sdk-swift/Sources/OrcaGatewayCore/JSON/JSONValue.swift` · `Resolver/Transforms.swift` ·
+`Resolver/ValueResolver.swift` · `sdk-swift/Tests/OrcaGatewayCoreTests/TransformTests.swift`
+Cases: P1-P5 (Swift) → green (`swift test` 116 = 111 + 5, ResolverFixtureTests over all 30, PropertyTests
+green; iOS core 116) · red first: each new test, and fixtures 25-29's 15 sub-cases.
+Changed: `JSONValue.decode(Data)` runs a small pure-Swift parser that reads each number's text (4.0
+`.double`, 4 `.int`; Codable models still go through JSONDecoder); string `==` by code units ·
+`DartString` (contains, hasPrefix, split by UTF-16 units; `split("")` keeps a pair whole) · `Regex.compile`
+accepts "" as `(?:)` and rewrites `\d \w \D \W` to ASCII sets, `\\` and `\s` left alone.
+Decisions: 1. the parser reads JSON as `jsonDecode` does: a trailing comma throws, a repeated key keeps
+its last value (memory "swift-client-double-decoding": resolver JSON only) · 2. a non-empty separator
+splits by code units too ("éx" on "é" was ["", "x"]; Dart ["éx"]) · 3. nested ICU sets inside a class.
+Review fit: pass
+Review quality: pass
+
+#### Task T6 · Kotlin resolver: Dart's corners
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/json/JsonValue.kt` · `json/SwiftText.kt` ·
+`resolver/Transforms.kt` · `resolver/ValueResolver.kt` · test `resolver/TransformTest.kt`
+Cases: P1-P5 (Kotlin) → green (core 118 = 113 + 5, 0 failures; ResolverFixtureTest over all 30;
+sdk 128; lint 0) · red first: the 5 new tests and ResolverFixtureTest at fixture 25.
+Changed: strings equal by UTF-16 code units; `parseNumber` as `jsonDecode` (an integer literal in Int64
+is an int; a fraction, exponent or bigger integer a double) · `split("")` per code unit, `contains` by
+code units, empty pattern accepted, `RegexSupport.asciiClasses` in `compile` (UNICODE_CHARACTER_CLASS
+kept, so `\s` stays Unicode and Android matches the JVM) · SwiftText's unused `canonical` removed; KDocs
+and port notes say what still follows Swift and what follows Dart.
+Decisions: 1. nested classes inside a class; the rewrite only for page patterns · 2. outside P1-P5 Swift's
+Characters stay (tween colour `#`, lerpColor, `$n`, Action and DevTools prefixes) · 3. `-0` an int and
+an integer past Int64 a double, checked with `dart run`.
+Review fit: pass
+Review quality: pass
+
+### Test run
+Once, after group 2, on the tree with all six tasks (logs in the session scratchpad, `s11/g2-*.log`):
+- `cd engine && bun test` · 697 pass, 1 fail · `test/server.test.ts`: EADDRINUSE on 8080, your Docker;
+  the baseline's environmental failure.
+- `cd sdk && flutter test` · +235: All tests passed!
+- `cd sdk-swift && swift test` · Executed 116 tests, with 0 failures.
+- `xcodebuild test … id=FDE5D612…` · OrcaGatewayTests 54, 0 failures; OrcaGatewayCoreTests 116,
+  0 failures · ** TEST SUCCEEDED **
+- `cd sdk-kotlin && ./gradlew build --continue` · BUILD SUCCESSFUL · core 118, 0 failures · sdk
+  testDebugUnitTest 128, 0 failures, 0 skipped · lint "No issues found".
+Against the 08 baseline: Flutter +6, Swift core +5, iOS UI +4, Kotlin core +5, sdk +1; nothing that
+passed fails. Every changed file sits in a task's Files; no stray file.
+
 ### Blocked
 none
 
 ### Not done
-none
+none. Left outside S11, found while building (question 2):
+- `\b` and `\B` follow Unicode word characters in both SDKs; Dart's are ASCII ("café": Dart finds
+  edges at 0 and 3, Swift and Kotlin at 0 and 4).
+- With the `i` flag, `[A-Za-z]` also matches ſ, K (Kelvin sign), ı and İ in Kotlin (ICU and the JVM
+  fold them; Dart does not). Swift's ICU likely does the same; not checked.
+- Kotlin's "!" after a failed Image load is its own accessibility node; Flutter merges it into the
+  alt label (your group 1 answer: keep, note for later).
+- Swift's `OrcaClient` still decodes Codable models through JSONDecoder, so a live 4.0 inside a
+  model reads as 4 (your gate 08 answer). Kotlin's live client now reads it as Dart does.
 
 ### For ship (stage 10) to know
-Nothing deploys and nothing is published. Between the groups the branch is red on Swift and
-Kotlin by design, so nothing is pushed before group 2. On the PR: Engine (conformance), SDK
-(Flutter), Schema, SDK Swift and SDK Swift UI, and SDK Kotlin should all run (the PR touches
-`schema/fixtures/render/`, both SDKs).
+Nothing deploys and nothing is published. Push feat/native-sdk-s11 and open the PR (Auto-fix off).
+CI to expect: Engine (conformance over 30 fixtures), SDK (Flutter), Schema, SDK Swift on ubuntu
+(5.10 and 6.2: the first Linux run of T5's parser), SDK Swift UI, SDK Kotlin (JDK 17 and 21).
