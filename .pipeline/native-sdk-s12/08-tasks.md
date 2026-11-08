@@ -139,6 +139,10 @@ run): engine 697 pass, 1 fail (`test/server.test.ts` wants port 8080, held by yo
 environmental); Flutter 235 passed; Swift core 116, 0 failures; iOS UI 54 + core 116, TEST SUCCEEDED;
 Kotlin core 118, sdk 128, lint 0. Green at 09: a task's cases pass and nothing that passed here fails
 (fixtures 31-32 on Swift and Kotlin are red between the groups by design).
+commits: per task · gate: per group (answered at gate 08, 2026-11-08, "A": every default)
+Also on that "A": commands as found; A1's target is the alt with the image role and "!" hidden in
+every SDK, so the Flutter SDK's Image builder changes (question 4); Swift's write path is noted as
+epic row 23b.35, not fixed in S12 (question 5).
 
 ### Not planned
 - A1 on Swift: Swift already reads the alt as an image and hides "!" (`Media.swift` 59-61). No Swift
