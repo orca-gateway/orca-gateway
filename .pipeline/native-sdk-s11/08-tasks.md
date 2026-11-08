@@ -151,6 +151,10 @@ wants port 8080, held by your Docker; environmental, untouched); Flutter 229 pas
 tests, 0 failures; iOS: UI 50 + core 111, TEST SUCCEEDED; Kotlin core 113, sdk 127, lint 0.
 Green at 09: a task's cases pass and nothing that passed here fails (fixtures 25-29 on Swift and
 Kotlin are red between the groups by design).
+commits: per task · gate: per group (answered at gate 08, 2026-11-08, "A": every default)
+Also on that "A": commands as found; Swift's split("") keeps surrogate pairs whole (question 4);
+S11 fixes the resolver only, OrcaClient's live 4.0 stays a note (question 5); row 23b.33's
+final-sigma wording corrected in the epic plan (question 6).
 
 ### Not planned
 none: all 10 cases are placed. Out of S11: Swift's `OrcaClient` number decoding (F4), engine-dart's
