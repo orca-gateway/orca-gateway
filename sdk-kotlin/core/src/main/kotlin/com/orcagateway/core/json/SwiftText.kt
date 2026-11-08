@@ -5,13 +5,17 @@ import java.util.Locale
 
 /**
  * The places where the Swift SDK's behaviour comes from Swift's String model
- * rather than from its code, reproduced on JVM strings: canonical
- * equivalence (string equality), Characters (extended grapheme clusters) in
- * `hasPrefix`, `contains` and `split("")`, sort order, Foundation's
- * whitespace set, per-scalar lowercasing and ASCII-only integer parsing.
+ * rather than from its code, reproduced on JVM strings: sort order,
+ * Foundation's whitespace set, per-scalar lowercasing, ASCII-only integer
+ * parsing, and Characters (extended grapheme clusters, canonical
+ * equivalence) in [hasPrefix], [contains] and [graphemes].
  *
- * Map keys and splitting by a separator stay UTF-16 code-unit based, as in
- * Dart (see the port notes in ValueResolver).
+ * The resolver's string comparisons follow Dart instead (row 23b.33):
+ * `JsonValue.String` equality, the `contains` and `startsWith` ops, the
+ * `contains` transform and `split("")` work on UTF-16 code units, and a
+ * string contains the empty string (see the port notes in ValueResolver).
+ * [hasPrefix], [contains] and [graphemes] remain for the action and DevTools
+ * classifiers, the tween colour test and `$n` backrefs.
  */
 internal object SwiftText {
     private val grapheme = Regex("\\X")
@@ -25,10 +29,6 @@ internal object SwiftText {
         }
 
     private fun isPlain(s: String): Boolean = s.all { it.code < 0x80 && it != '\r' }
-
-    /** The NFC form: equal for canonically equivalent strings (Swift's `String ==`). */
-    fun canonical(s: String): String =
-        if (s.all { it.code < 0x80 } || Normalizer.isNormalized(s, Normalizer.Form.NFC)) s else Normalizer.normalize(s, Normalizer.Form.NFC)
 
     /** Characters compared by canonical equivalence (their NFC forms), as Swift's `Character ==`. */
     private fun characters(s: String): List<String> =

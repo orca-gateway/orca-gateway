@@ -25,10 +25,12 @@ import kotlin.math.min
  * Everything else, including the null semantics of the BoolExpr ops, follows
  * Dart line by line.
  *
- * Text follows Swift's String: `eq`, `neq`, `contains` and `startsWith`
- * compare by canonical equivalence and whole Characters (Dart compares UTF-16
- * code units). State keys and `split` by a separator stay code-unit based;
- * Swift differs there only for non-NFC keys, combining marks and CRLF.
+ * Text follows Dart (row 23b.33): `eq`, `neq`, `contains`, `startsWith`
+ * and `split` compare and cut UTF-16 code units with no normalization, a
+ * string contains the empty string, an empty regex matches everywhere and
+ * regex `\d`/`\w` are ASCII. Still Swift's: sort order, the whitespace set
+ * of `trim`, per-scalar lowercasing, ASCII-only integer parsing, and the
+ * Characters of the tween colour test and of `$n` backrefs (SwiftText).
  */
 public class ValueResolver(
     /** Merged state, app first and page on top, as the Dart SDK builds it. */
@@ -195,12 +197,12 @@ public class ValueResolver(
                 val haystack = operand("haystack")
                 val needle = operand("needle")
                 when (haystack) {
-                    is JsonValue.String -> SwiftText.contains(haystack.value, DartFormat.string(needle))
+                    is JsonValue.String -> haystack.value.contains(DartFormat.string(needle))
                     is JsonValue.Array -> haystack.items.contains(needle)
                     else -> false
                 }
             }
-            "startsWith" -> SwiftText.hasPrefix(DartFormat.string(operand("str")), DartFormat.string(operand("prefix")))
+            "startsWith" -> DartFormat.string(operand("str")).startsWith(DartFormat.string(operand("prefix")))
             "matches" -> {
                 val pattern = expr["regex"]?.stringValue ?: ""
                 if (pattern.length > RegexSupport.MAX_PATTERN_LENGTH) return false

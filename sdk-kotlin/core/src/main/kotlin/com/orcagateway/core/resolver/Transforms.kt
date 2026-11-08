@@ -88,7 +88,8 @@ internal object Transforms {
         register("split") { def, current, _ ->
             val separator = def["separator"]?.stringValue ?: ""
             val s = DartFormat.string(current)
-            val parts = if (separator.isEmpty()) SwiftText.graphemes(s) else s.split(separator)
+            // "" cuts every UTF-16 code unit apart, as Dart's split('').
+            val parts = if (separator.isEmpty()) s.map { it.toString() } else s.split(separator)
             JsonValue.Array(parts.map { JsonValue.String(it) })
         }
         register("join") { def, current, _ ->
@@ -153,7 +154,7 @@ internal object Transforms {
             val value = resolver.resolve(def["value"] ?: JsonValue.Null)
             when (current) {
                 is JsonValue.Array -> JsonValue.Bool(current.items.contains(value))
-                is JsonValue.String -> JsonValue.Bool(SwiftText.contains(current.value, DartFormat.string(value)))
+                is JsonValue.String -> JsonValue.Bool(current.value.contains(DartFormat.string(value)))
                 else -> JsonValue.Bool(false)
             }
         }
@@ -364,11 +365,14 @@ internal object Placeholders {
 // MARK: - Regex
 
 /**
- * java.util.regex standing in for Swift's NSRegularExpression (ICU), itself
- * standing in for Dart's ECMAScript `RegExp`, with the same guard rails:
- * patterns over 200 UTF-16 units are refused and the input is clipped to
- * 10 000 units. Compiled with UNICODE_CHARACTER_CLASS where the runtime has
- * it, so `\d`, `\w`, `\s` and `\b` are Unicode-aware as in ICU.
+ * java.util.regex standing in for Dart's ECMAScript `RegExp`, with the same
+ * guard rails: patterns over 200 UTF-16 units are refused and the input is
+ * clipped to 10 000 units. The empty pattern is valid and matches everywhere.
+ * `\d`, `\w`, `\D` and `\W` are rewritten to ASCII classes ([asciiClasses]),
+ * as Dart's are ASCII; the pattern is then compiled with UNICODE_CHARACTER_CLASS
+ * where the runtime has it (Android's ICU regex is Unicode-aware already), so
+ * `\s` is Unicode as Dart's is, and `\b`/`\B` are Unicode where Dart's are
+ * ASCII.
  */
 internal object RegexSupport {
     const val MAX_PATTERN_LENGTH: Int = 200
@@ -389,14 +393,40 @@ internal object RegexSupport {
             if (flags.contains('m')) options = options or Pattern.MULTILINE
             if (flags.contains('s')) options = options or Pattern.DOTALL
         }
-        return compileIcuLike(pattern, options)
+        return compileIcuLike(asciiClasses(pattern), options)
     }
 
     /**
-     * Null for an invalid pattern, and for the empty pattern, which
-     * NSRegularExpression refuses (Dart's `RegExp('')` matches everywhere).
+     * Dart's (ECMAScript, no `u` flag) `\d`, `\w`, `\D`, `\W` spelled out
+     * as ASCII classes. Inside a character class the class nests, which
+     * java.util.regex and ICU read as a union (`[a\D]` becomes `[a[^0-9]]`).
+     * An escaped backslash stays as it is (`\\d` is a backslash and a d).
      */
-    fun compileIcuLike(pattern: String, options: Int): Pattern? = if (pattern.isEmpty()) null else try {
+    fun asciiClasses(pattern: String): String {
+        if (!pattern.contains('\\')) return pattern
+        val out = StringBuilder(pattern.length + 16)
+        var i = 0
+        while (i < pattern.length) {
+            val c = pattern[i]
+            if (c != '\\' || i + 1 == pattern.length) {
+                out.append(c)
+                i += 1
+                continue
+            }
+            when (val next = pattern[i + 1]) {
+                'd' -> out.append("[0-9]")
+                'D' -> out.append("[^0-9]")
+                'w' -> out.append("[A-Za-z0-9_]")
+                'W' -> out.append("[^A-Za-z0-9_]")
+                else -> out.append(c).append(next)
+            }
+            i += 2
+        }
+        return out.toString()
+    }
+
+    /** Null for an invalid pattern. */
+    fun compileIcuLike(pattern: String, options: Int): Pattern? = try {
         Pattern.compile(pattern, options or Pattern.UNICODE_CHARACTER_CLASS)
     } catch (_: PatternSyntaxException) {
         null
