@@ -1,0 +1,686 @@
+{
+  "name": "regex-ignore-case-ascii-fold",
+  "description": "Case-insensitive matching (`i`) follows Dart's RegExp (ECMAScript) for the four letters that Unicode folds into ASCII: the long s (U+017F), the Kelvin sign (U+212A), the dotless i (U+0131) and the dotted capital I (U+0130). With `gi` (no `u`) none of them matches an ASCII letter, because the non-Unicode canonicalization never maps a non-ASCII character to an ASCII one: `[a-z]` on \"\u017f\u212a\u0131\u0130sk\" gives \"\u017f\u212a\u0131\u0130##\", `s` on \"\u017fS\" gives \"\u017f#\", `k` on \"\u212ak\" gives \"\u212a#\", `\\w` on \"\u017f\u212ax\" gives \"\u017f\u212a#\" and `[^a-z]` on \"\u017f\u212a\u0131\u0130a\" gives \"####a\". With `giu` simple case folding applies: U+017F is s and U+212A is k (\"##\u0131\u0130##\", \"##\", \"##\", \"###\", \"\u017f\u212a##a\"), while U+0131 and U+0130 have no simple folding and still match no ASCII letter. Guard, both modes: non-ASCII letters still fold among themselves, `\u00e9` on \"\u00c9\" gives \"#\". Every replace-mode regex puts \"#\" for each match. Every input reads page state, so the engine keeps the Values unresolved with `watches` and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "children": [
+      {
+        "type": "Text",
+        "key": "range_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[a-z]",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "s_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "longS"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "s",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "k_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "kelvin"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "k",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "w_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "word"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\w",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "neg_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "neg"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[^a-z]",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "e_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "accent"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\u00e9",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "range_iu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[a-z]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "s_iu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "longS"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "s",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "k_iu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "kelvin"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "k",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "w_iu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "word"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\w",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "neg_iu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "neg"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[^a-z]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "e_iu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "accent"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\u00e9",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "mix": "\u017f\u212a\u0131\u0130sk",
+      "longS": "\u017fS",
+      "kelvin": "\u212ak",
+      "word": "\u017f\u212ax",
+      "neg": "\u017f\u212a\u0131\u0130a",
+      "accent": "\u00c9"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "range_i",
+        "s_i",
+        "k_i",
+        "w_i",
+        "neg_i",
+        "e_i",
+        "range_iu",
+        "s_iu",
+        "k_iu",
+        "w_iu",
+        "neg_iu",
+        "e_iu"
+      ],
+      "watches": []
+    },
+    {
+      "id": "e_iu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "accent"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\u00e9",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "accent"
+      ]
+    },
+    {
+      "id": "neg_iu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "neg"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[^a-z]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "neg"
+      ]
+    },
+    {
+      "id": "w_iu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "word"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\w",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "word"
+      ]
+    },
+    {
+      "id": "k_iu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "kelvin"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "k",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "kelvin"
+      ]
+    },
+    {
+      "id": "s_iu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "longS"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "s",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "longS"
+      ]
+    },
+    {
+      "id": "range_iu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[a-z]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "e_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "accent"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\u00e9",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "accent"
+      ]
+    },
+    {
+      "id": "neg_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "neg"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[^a-z]",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "neg"
+      ]
+    },
+    {
+      "id": "w_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "word"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\w",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "word"
+      ]
+    },
+    {
+      "id": "k_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "kelvin"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "k",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "kelvin"
+      ]
+    },
+    {
+      "id": "s_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "longS"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "s",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "longS"
+      ]
+    },
+    {
+      "id": "range_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[a-z]",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    }
+  ],
+  "resolved": {
+    "range_i": {
+      "data": "\u017f\u212a\u0131\u0130##"
+    },
+    "s_i": {
+      "data": "\u017f#"
+    },
+    "k_i": {
+      "data": "\u212a#"
+    },
+    "w_i": {
+      "data": "\u017f\u212a#"
+    },
+    "neg_i": {
+      "data": "####a"
+    },
+    "e_i": {
+      "data": "#"
+    },
+    "range_iu": {
+      "data": "##\u0131\u0130##"
+    },
+    "s_iu": {
+      "data": "##"
+    },
+    "k_iu": {
+      "data": "##"
+    },
+    "w_iu": {
+      "data": "###"
+    },
+    "neg_iu": {
+      "data": "\u017f\u212a##a"
+    },
+    "e_iu": {
+      "data": "#"
+    }
+  }
+}

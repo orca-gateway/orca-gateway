@@ -6,6 +6,10 @@ import android.graphics.Color
 import android.view.View
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasParent
@@ -235,6 +239,8 @@ class ImageTest {
      * assets in S9) each draw "!" centred in a box of the given size,
      * described by `alt`, as Flutter's error builder:
      * `SizedBox(width, height, child: Center(child: Text('!')))`.
+     * A1: the box is read as `alt` with the image role, as while loading and
+     * once loaded; the "!" is drawn but no semantics node carries it.
      */
     @Test
     fun i1_aFailedLoadAnEmptySrcOrANonHttpSrcDrawsAnExclamationMarkCentredInItsBox() {
@@ -255,14 +261,22 @@ class ImageTest {
         runBlocking { assertNull(ImageLoader.shared.load(url("/missing.png"))) }
         compose.waitForIdle()
 
+        // A1: read as its alt with the image role, as loading and loaded; "!" is never exposed.
+        compose.onAllNodes(hasText("!")).assertCountEquals(0)
+        compose.onAllNodes(hasText("!"), useUnmergedTree = true).assertCountEquals(0)
+        val picture = draw()
         for (alt in alts) {
+            compose.onNode(hasContentDescription(alt) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Image))
+                .assertExists()
             val box = box(alt)
             assertEquals(30.dp to 20.dp, box.width to box.height, alt)
-            val mark = compose.onNode(hasText("!") and hasParent(hasContentDescription(alt))).getUnclippedBoundsInRoot()
+            val mark = compose.onNode(hasParent(hasContentDescription(alt)), useUnmergedTree = true).getUnclippedBoundsInRoot()
             // Centred to the pixel: an odd space left over puts it half a pixel off.
             val (x, y) = (box.left + box.width / 2).value to (box.top + box.height / 2).value
             assertEquals(x, (mark.left + mark.width / 2).value, 1f, "$alt: \"!\" centre x")
             assertEquals(y, (mark.top + mark.height / 2).value, 1f, "$alt: \"!\" centre y")
+            val inked = (0 until 30).any { px -> (0 until 20).any { py -> picture.at(box, px, py) != Color.WHITE } }
+            assertTrue(inked, "$alt: \"!\" is drawn")
         }
     }
 

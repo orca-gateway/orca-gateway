@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -46,7 +47,9 @@ import kotlin.math.roundToInt
  * in S9, and Flutter's `Image.network` fails on them) draw "!" centred in
  * it, as the Flutter builder's error builder `SizedBox(width, height, child:
  * Center(child: Text('!')))`: a side with no size fills what the parent
- * offers when that is bounded, as `Center` does. A new `src` empties the box
+ * offers when that is bounded, as `Center` does. The box is still read as
+ * `alt` with the image role; the "!" is drawn but hidden from semantics, as
+ * Swift's `.accessibilityElement()`. A new `src` empties the box
  * until it loads, as Flutter's default `gaplessPlayback: false`. `repeat` is
  * not drawn (Swift's F7).
  *
@@ -79,7 +82,7 @@ internal fun ImageWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mod
 
     val image = bitmap
     if (failed) {
-        Box(box.fillMaxSize(), contentAlignment = Alignment.Center) { Text("!") }
+        Box(box.fillMaxSize(), contentAlignment = Alignment.Center) { Text("!", Modifier.clearAndSetSemantics {}) }
         return
     }
     if (image == null) {

@@ -4,8 +4,14 @@ import com.orcagateway.core.capabilities.CapabilityVector
 import com.orcagateway.core.capabilities.GeneratedCapabilities
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.json.encoding
+import com.orcagateway.core.models.Action
+import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.models.PageResponse
+import com.orcagateway.core.resolver.ValueResolver
+import com.orcagateway.core.support.ActionStub
 import com.orcagateway.core.support.Fixtures
 import com.orcagateway.core.support.StubEngine
+import com.orcagateway.core.support.arr
 import com.orcagateway.core.support.assertJsonEqual
 import com.orcagateway.core.support.obj
 import com.orcagateway.core.support.props
@@ -15,10 +21,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** T2.1 (the capability handshake) and T2.2 (headers) on the Kotlin client. */
+/** T2.1 (the capability handshake), T2.2 (headers) and C1 (a live 4.0) on the Kotlin client. */
 class OrcaClientTest {
     private val base = URI("http://localhost:8080")
 
@@ -170,5 +177,100 @@ class OrcaClientTest {
         val c = client(StubEngine(ByteArray(0))).copy(deviceId = "")
         assertNull(c.headers["x-orca-device-id"])
         assertNull(c.headers["Authorization"])
+    }
+
+    // MARK: C1 a live 4.0 stays a double, as Dart's jsonDecode keeps it
+
+    /**
+     * A page as the engine sends it, written as raw text so `4.0` reaches the
+     * client as typed: a double and an int state, a double and an int prop,
+     * a static Value holding 4.0, and a Text whose `data` prints the double.
+     */
+    private val numbersPage = """
+        {"pageId":"numbers","title":"Numbers",
+         "state":[{"key":"ratio","scope":"page","initial":4.0},{"key":"count","scope":"page","initial":4}],
+         "components":[{"id":"t","type":"Text","kind":"primitive","childMode":"none",
+           "props":{"data":{"type":"transform","input":{"type":"state","key":"ratio"},"by":[{"type":"toString"}]},
+                    "fontSize":4.0,"maxLines":4,"opacity":{"type":"static","value":4.0}},
+           "children":[],"watches":["ratio"]}]}
+    """.trimIndent()
+
+    /** [value] through a `toString` transform, as a Text's `data` would print it. */
+    private fun printed(value: JsonValue): String? = ValueResolver(state = mapOf("v" to value)).resolve(
+        obj(
+            "type" to "transform",
+            "input" to obj("type" to "state", "key" to "v"),
+            "by" to arr(obj("type" to "toString")),
+        ),
+    ).stringValue
+
+    /** [value] is the double 4.0: printed "4.0" by `toString` and written "4.0" by `encoded()`. */
+    private fun assertLiveDouble(value: JsonValue?, what: String) {
+        assertEquals(4.0, assertIs<JsonValue.Double>(value, "$what stays a double").value)
+        assertEquals("4.0", printed(value), "$what through toString")
+        assertEquals("4.0", value.encoded(), "$what encoded")
+    }
+
+    /** [value] is the int 4: printed "4" and written "4". */
+    private fun assertLiveInt(value: JsonValue?, what: String) {
+        assertEquals(4L, assertIs<JsonValue.Int>(value, "$what stays an int").value)
+        assertEquals("4", printed(value), "$what through toString")
+        assertEquals("4", value.encoded(), "$what encoded")
+    }
+
+    /** The doubles and ints of [numbersPage], wherever the page came from. */
+    private fun assertNumbersKept(page: PageResponse) {
+        val initial = page.state.associate { it.key to it.initial }
+        assertLiveDouble(initial["ratio"], "state initial 4.0")
+        assertLiveInt(initial["count"], "state initial 4")
+        val props = page.components.single().props
+        assertLiveDouble(props["fontSize"], "prop 4.0")
+        assertLiveInt(props["maxLines"], "prop 4")
+        val resolver = ValueResolver(state = initial)
+        assertLiveDouble(resolver.resolve(props.getValue("opacity")), "static Value 4.0")
+        assertEquals(JsonValue.String("4.0"), resolver.resolveDeep(props.getValue("data")), "Text data of state 4.0")
+        assertTrue(JsonValue.encoding(page).encoded().contains("\"initial\":4.0"), "page written back keeps 4.0")
+    }
+
+    @Test
+    fun c1_aFetchedPageKeepsALive4_0ADouble() = runSuspend {
+        val page = client(StubEngine(numbersPage.encodeToByteArray())).fetchPage("numbers")
+        assertNumbersKept(page)
+    }
+
+    @Test
+    fun c1_theUpgradePageOfA426KeepsALive4_0ADouble() = runSuspend {
+        val stub = StubEngine(ByteArray(0))
+        val body = """
+            {"error":"sdk_version_too_old","minSdkVersion":"99.0.0","clientSdkVersion":"0.1.0",
+             "page":$numbersPage}
+        """.trimIndent()
+        stub.forced = HttpResponse(426, body = body.encodeToByteArray())
+        val page = client(stub).fetchPage("numbers")
+        assertNumbersKept(page)
+    }
+
+    @Test
+    fun c1_aServerActionResponseKeepsALive4_0ADouble() = runSuspend {
+        val body = """
+            {"actions":[
+              {"type":"setState","key":"ratio","value":4.0},
+              {"type":"setState","key":"count","value":4},
+              {"type":"updateComponent","id":"t","props":{"fontSize":4.0}},
+              {"type":"addComponent","parentId":"root","components":[{"id":"n","type":"Text","kind":"primitive",
+                "childMode":"none","props":{"fontSize":4.0,"maxLines":4},"children":[],"watches":[]}]}
+            ]}
+        """.trimIndent()
+        val stub = ActionStub(emptyMap(), raw = mapOf("bump" to HttpResponse(200, body = body.encodeToByteArray())))
+        val actions = ActionStub.client(stub).executeAction("bump")
+
+        assertLiveDouble(assertIs<Action.SetState>(actions[0]).value, "setState value 4.0")
+        assertLiveInt(assertIs<Action.SetState>(actions[1]).value, "setState value 4")
+        val updated = assertIs<Action.UpdateComponent>(actions[2]).props
+        assertLiveDouble(updated?.get("fontSize"), "updateComponent prop 4.0")
+        val added = assertIs<Action.AddComponent>(actions[3]).components?.arrayValue.orEmpty()
+            .map { it.decode(ComponentNode.serializer()) }
+        assertLiveDouble(added.single().props["fontSize"], "added component prop 4.0")
+        assertLiveInt(added.single().props["maxLines"], "added component prop 4")
     }
 }

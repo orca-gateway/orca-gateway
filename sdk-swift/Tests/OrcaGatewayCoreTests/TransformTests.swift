@@ -370,6 +370,186 @@ final class TransformTests: XCTestCase {
         XCTAssertThrowsError(try decode(String(repeating: "[", count: 100_000)), "nesting")
     }
 
+    // MARK: S12 regex word edges and case folding (render fixtures 31-32)
+
+    // Every expected value below was printed by Dart's RegExp on the Dart VM.
+
+    private func assertRegex(
+        _ pattern: String, _ flags: String, _ input: String, _ expected: String, by: String = "#",
+        line: UInt = #line
+    ) {
+        let step: JSONValue = [
+            "type": "regex", "pattern": .string(pattern), "flags": .string(flags), "replacement": .string(by),
+        ]
+        let got = run(.string(input), step)
+        let label = "\(pattern.debugDescription) /\(flags) on \(input.debugDescription)"
+        XCTAssertEqual(got, .string(expected), label, line: line)
+        XCTAssertEqual(units(got), [Array(expected.utf16)], label, line: line)
+    }
+
+    func testR1_wordEdgesAreASCIIUnderEveryFlag() {
+        for flags in ["g", "gi", "gu", "gm", "gs", "gims"] {
+            assertRegex("\\b", flags, "caf\u{e9} x", "|caf|\u{e9} |x|", by: "|")
+            assertRegex("\\B", flags, "caf\u{e9}", "c|a|f\u{e9}|", by: "|")
+            assertRegex("\\b", flags, "\u{17F}\u{212A}", "\u{17F}\u{212A}", by: "|")
+            assertRegex("\\b", flags, "a_1-b", "|a_1|-|b|", by: "|")
+            assertRegex("\\w", flags, "\u{17F}\u{212A}\u{e9}_", "\u{17F}\u{212A}\u{e9}#")
+            assertRegex("\\W", flags, "\u{17F}\u{212A}\u{e9}_", "###_")
+        }
+    }
+
+    func testR1_uWithIMakesLongSAndKelvinWordCharacters() {
+        for flags in ["giu", "gimsu"] {
+            assertRegex("\\b", flags, "\u{17F}\u{212A}", "|\u{17F}\u{212A}|", by: "|")
+            assertRegex("\\B", flags, "\u{17F}\u{212A}", "\u{17F}|\u{212A}", by: "|")
+            assertRegex("\\b", flags, "caf\u{e9} x", "|caf|\u{e9} |x|", by: "|")
+            assertRegex("\\w", flags, "\u{17F}\u{212A}\u{e9}_", "##\u{e9}#")
+            assertRegex("\\W", flags, "\u{17F}\u{212A}\u{e9}_", "\u{17F}\u{212A}#_")
+            assertRegex("[\\w]", flags, "\u{17F}\u{212A}\u{e9}", "##\u{e9}")
+            assertRegex("[\\W]", flags, "s\u{17F}\u{e9}", "s\u{17F}#")
+        }
+    }
+
+    func testR1_backspaceInsideAClass() {
+        for flags in ["g", "gi", "giu"] {
+            assertRegex("[\\b]", flags, "a\u{8}b", "a-b", by: "-")
+            assertRegex("[a\\b]", flags, "a\u{8}b", "--b", by: "-")
+            assertRegex("[^\\b]", flags, "a\u{8}", "-\u{8}", by: "-")
+        }
+    }
+
+    func testR1_theMatchesOpHasTheSameASCIIWordEdges() {
+        func matches(_ regex: String, _ str: String) -> Bool {
+            holds(["op": "matches", "str": Self.s(.string(str)), "regex": .string(regex)])
+        }
+        XCTAssertTrue(matches("\\bcaf\\b", "caf\u{e9}"))
+        XCTAssertFalse(matches("\\bcaf\u{e9}\\b", "caf\u{e9}"))
+        XCTAssertFalse(matches("\\B\u{e9}", "caf\u{e9}"))
+        XCTAssertTrue(matches("^[\\b]$", "\u{8}"))
+    }
+
+    func testR2_theFourLettersThatFoldIntoASCIIFollowDartUnderI() {
+        let (longS, kelvin, dotless, dotted) = ("\u{17F}", "\u{212A}", "\u{131}", "\u{130}")
+        let four = longS + kelvin + dotless + dotted
+        // Without `u` none of the four matches an ASCII letter, and no ASCII letter matches them.
+        let gi: [(String, String, String, UInt)] = [
+            ("[a-z]", four + "sk", four + "##", #line),
+            ("[A-Z]", four + "SK", four + "##", #line),
+            ("s", longS + "sS", longS + "##", #line),
+            ("S", longS + "sS", longS + "##", #line),
+            ("k", kelvin + "kK", kelvin + "##", #line),
+            ("K", kelvin + "kK", kelvin + "##", #line),
+            ("i", dotless + dotted + "iI", dotless + dotted + "##", #line),
+            ("I", dotless + dotted + "iI", dotless + dotted + "##", #line),
+            ("\\w", longS + kelvin + "x", longS + kelvin + "#", #line),
+            ("\\W", longS + kelvin + "x", "##x", #line),
+            ("[\\w]", longS + kelvin + "x", longS + kelvin + "#", #line),
+            ("[\\W]", longS + kelvin + "s", "##s", #line),
+            ("[^a-z]", four + "a", "####a", #line),
+            ("[^\\W]", longS + kelvin + "s", longS + kelvin + "#", #line),
+            ("s+", longS + "sS", longS + "#", #line),
+            ("(?<=s)x", longS + "xsx", longS + "xs#", #line),
+            ("(?<=[a-z])x", longS + "xsx", longS + "xs#", #line),
+            ("(?<n>k)\\k<n>", "kK", "#", #line),
+            (longS, "sS" + longS, "sS#", #line),
+            (kelvin, "kK" + kelvin, "kK#", #line),
+            ("[" + longS + "a-z]", longS + kelvin + "s", "#" + kelvin + "#", #line),
+            (dotted, "i\u{307}" + dotted, "i\u{307}#", #line),
+        ]
+        for (pattern, input, expected, line) in gi { assertRegex(pattern, "gi", input, expected, line: line) }
+        // With `u` simple case folding applies: long s is s, Kelvin is k; the dotless and dotted i stay apart.
+        let giu: [(String, String, String, UInt)] = [
+            ("[a-z]", four + "sk", "##" + dotless + dotted + "##", #line),
+            ("[A-Z]", four + "SK", "##" + dotless + dotted + "##", #line),
+            ("s", longS + "sS", "###", #line),
+            ("k", kelvin + "kK", "###", #line),
+            ("i", dotless + dotted + "iI", dotless + dotted + "##", #line),
+            ("\\w", longS + kelvin + "x", "###", #line),
+            ("\\W", longS + kelvin + "x", longS + kelvin + "x", #line),
+            ("[^a-z]", four + "a", longS + kelvin + "##a", #line),
+            (longS, "sS" + longS, "###", #line),
+            ("[\\W]", longS + kelvin + "s", longS + kelvin + "s", #line),
+            ("(?<=[a-z])x", longS + "xsx", longS + "#s#", #line),
+        ]
+        for (pattern, input, expected, line) in giu { assertRegex(pattern, "giu", input, expected, line: line) }
+    }
+
+    func testR2_guard_nonASCIILettersStillFoldAmongThemselves() {
+        for flags in ["gi", "giu"] {
+            assertRegex("\u{e9}", flags, "\u{c9}", "#")
+            assertRegex("[\u{e9}]", flags, "\u{c9}", "#")
+            assertRegex("\u{c9}", flags, "\u{e9}", "#")
+            assertRegex("[^\u{e9}]", flags, "\u{c9}x", "\u{c9}#")
+            assertRegex("\u{3c3}", flags, "\u{3a3}\u{3c2}", "##")  // σ: Σ ς
+            assertRegex("[\u{430}-\u{44f}]", flags, "\u{416}\u{42f}\u{436}", "###")  // [а-я]: Ж Я ж
+            assertRegex("[a-z\u{e9}]", flags, "\u{c9}\u{17F}S", flags == "gi" ? "#\u{17F}#" : "###")
+        }
+    }
+
+    func testR2_aClassNamingOneOfTheFourFollowsDartUnderI() {
+        let (longS, kelvin, dotless, dotted) = ("\u{17F}", "\u{212A}", "\u{131}", "\u{130}")
+        let iDot = "i\u{307}"  // what Unicode's full folding turns the dotted I into
+        // Without `u` a class naming one of the four holds that letter alone, and its negation all else.
+        let gi: [(String, String, String, UInt)] = [
+            ("[" + longS + "]", longS + "sS", "#sS", #line),
+            ("[^" + longS + "]", longS + "sS", longS + "##", #line),
+            ("[" + kelvin + "]", kelvin + "kK", "#kK", #line),
+            ("[^" + kelvin + "]", kelvin + "kK", kelvin + "##", #line),
+            ("[\\u017F]", longS + "sS", "#sS", #line),
+            ("[^\\u017F]", longS + "sS", longS + "##", #line),
+            ("[s" + longS + "]", longS + "sS", "###", #line),
+            ("[^s" + longS + "]", longS + "sSx", longS + "sS#", #line),
+            ("[^s]", longS + "sSx", "#sS#", #line),
+            ("[" + longS + kelvin + "]", longS + kelvin + "sSkK", "##sSkK", #line),
+            ("[" + longS + "-\u{180}]", longS + "sS", "#sS", #line),
+            ("[" + dotless + "]", dotless + "iI", "#iI", #line),
+            ("[^" + dotless + "]", dotless + "iI", dotless + "##", #line),
+            ("[i]", dotless + dotted + "iI", dotless + dotted + "##", #line),
+            ("[^i]", dotless + dotted + "iI", "##iI", #line),
+            ("[" + dotted + "]", iDot + dotted, iDot + "#", #line),
+            ("[^" + dotted + "]", dotted + "iI", dotted + "##", #line),
+            ("[" + dotted + "a]", iDot + dotted + "A", iDot + "##", #line),
+        ]
+        for (pattern, input, expected, line) in gi { assertRegex(pattern, "gi", input, expected, line: line) }
+        // With `u` the class holds the letter's simple case folding: long s with s, Kelvin with k, the i's alone.
+        let giu: [(String, String, String, UInt)] = [
+            ("[" + longS + "]", longS + "sS", "###", #line),
+            ("[^" + longS + "]", longS + "sSx", longS + "sS#", #line),
+            ("[" + kelvin + "]", kelvin + "kK", "###", #line),
+            ("[^" + kelvin + "]", kelvin + "kKx", kelvin + "kK#", #line),
+            ("[\u{100}-" + longS + "]", longS + "sS", "###", #line),
+            ("[" + dotless + "]", dotless + "iI", "#iI", #line),
+            ("[" + dotted + "]", iDot + dotted + "iI", iDot + "#iI", #line),
+            ("[^" + dotted + "]", dotted + "iI", dotted + "##", #line),
+            (dotted, iDot + dotted + "iI", iDot + "#iI", #line),
+            (dotless, dotless + "iI", "#iI", #line),
+            ("i", dotted + dotless + "iI", dotted + dotless + "##", #line),
+            ("[i]", dotted + dotless + "iI", dotted + dotless + "##", #line),
+            ("[^i]", dotted + dotless + "iI", "##iI", #line),
+            ("\\p{Script=Latin}", "a\u{391}B", "#\u{391}#", #line),
+            ("\\p{Lowercase_Letter}", "aB1", "##1", #line),
+            ("[\\p{Script=Latin}]", "a\u{391}B", "#\u{391}#", #line),
+        ]
+        for (pattern, input, expected, line) in giu { assertRegex(pattern, "giu", input, expected, line: line) }
+        // Guard: the flag letters of a modifier group are not letters to fold.
+        assertRegex("(?i:a)", "gi", "aA", "##")
+        assertRegex("(?-i:a)", "gi", "aA", "#A")
+        assertRegex("(?-i:a)", "giu", "aA", "#A")
+        assertRegex("(?s:.)", "giu", "\n", "#")
+        assertRegex("(?ms-i:^a.)", "gi", "aA\nA\n", "#\nA\n")
+    }
+
+    func testR2_F4_sharpSAndLigaturesDoNotMatchAPatternSpelledWithSOrI() {
+        // F4: Dart never folds ß into ss or a ligature into its letters; ICU does, except
+        // where s and i stay out of its folding (`Regex.foldLetters`).
+        for flags in ["gi", "giu"] {
+            assertRegex("ss", flags, "\u{df}", "\u{df}")
+            assertRegex("SS", flags, "\u{df}", "\u{df}")
+            assertRegex("fi", flags, "\u{fb01}", "\u{fb01}")  // ﬁ
+            assertRegex("st", flags, "\u{fb06}", "\u{fb06}")  // ﬆ
+        }
+    }
+
     func testDoubleToStringMatchesDart() {
         let cases: [(Double, String)] = [
             (0, "0.0"), (-0.0, "-0.0"), (1, "1.0"), (-2.5, "-2.5"), (0.1, "0.1"), (100, "100.0"),

@@ -1,0 +1,592 @@
+{
+  "name": "regex-ascii-word-boundary",
+  "description": "Word edges are ASCII, as in Dart's RegExp (ECMAScript): `\\b` and `\\B` count only A-Z, a-z, 0-9 and `_` as word characters, so the accented e (U+00E9) is not one. With \"|\" as the replacement, `\\b` on \"caf\u00e9 x\" gives \"|caf|\u00e9 |x|\" and `\\B` on \"caf\u00e9\" gives \"c|a|f\u00e9|\", identical under the flags `g`, `gi` and `gu` (neither `i` nor `u` alone changes the word characters). Only `i` and `u` together widen them, through Unicode case folding: the long s (U+017F) folds to s and the Kelvin sign (U+212A) to k, so `\\b` on \"\u017f\u212a\" gives \"|\u017f\u212a|\" with `giu` and finds no edge with `g`. Inside a character class `[\\b]` is the backspace U+0008, not a word edge: \"a\u0008b\" gives \"a-b\". The `matches` BoolExpr op compiles its regex with no flags: `\\bcaf\\b` matches \"caf\u00e9\" because a word edge falls between f and U+00E9. Every input reads page state, so the engine keeps the Values unresolved with `watches` and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "children": [
+      {
+        "type": "Text",
+        "key": "b",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "phrase"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\b",
+                "flags": "g",
+                "replacement": "|"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "nb",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "word"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\B",
+                "flags": "g",
+                "replacement": "|"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "b_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "phrase"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\b",
+                "flags": "gi",
+                "replacement": "|"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "nb_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "word"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\B",
+                "flags": "gi",
+                "replacement": "|"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "b_u",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "phrase"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\b",
+                "flags": "gu",
+                "replacement": "|"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "nb_u",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "word"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\B",
+                "flags": "gu",
+                "replacement": "|"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "fold_iu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "fold"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\b",
+                "flags": "giu",
+                "replacement": "|"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "fold",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "fold"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\b",
+                "flags": "g",
+                "replacement": "|"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "bs",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "ctl"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\b]",
+                "flags": "g",
+                "replacement": "-"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "m",
+        "props": {
+          "data": {
+            "type": "conditional",
+            "branches": [
+              {
+                "when": {
+                  "op": "matches",
+                  "str": {
+                    "type": "state",
+                    "scope": "page",
+                    "key": "word"
+                  },
+                  "regex": "\\bcaf\\b"
+                },
+                "then": {
+                  "type": "static",
+                  "value": "yes"
+                }
+              }
+            ],
+            "else": {
+              "type": "static",
+              "value": "no"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "phrase": "caf\u00e9 x",
+      "word": "caf\u00e9",
+      "fold": "\u017f\u212a",
+      "ctl": "a\u0008b"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "b",
+        "nb",
+        "b_i",
+        "nb_i",
+        "b_u",
+        "nb_u",
+        "fold_iu",
+        "fold",
+        "bs",
+        "m"
+      ],
+      "watches": []
+    },
+    {
+      "id": "m",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "matches",
+                "str": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "word"
+                },
+                "regex": "\\bcaf\\b"
+              },
+              "then": {
+                "type": "static",
+                "value": "yes"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "no"
+          }
+        }
+      },
+      "children": [],
+      "watches": [
+        "word"
+      ]
+    },
+    {
+      "id": "bs",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "ctl"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\b]",
+              "flags": "g",
+              "replacement": "-"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "ctl"
+      ]
+    },
+    {
+      "id": "fold",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "fold"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\b",
+              "flags": "g",
+              "replacement": "|"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "fold"
+      ]
+    },
+    {
+      "id": "fold_iu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "fold"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\b",
+              "flags": "giu",
+              "replacement": "|"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "fold"
+      ]
+    },
+    {
+      "id": "nb_u",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "word"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\B",
+              "flags": "gu",
+              "replacement": "|"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "word"
+      ]
+    },
+    {
+      "id": "b_u",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "phrase"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\b",
+              "flags": "gu",
+              "replacement": "|"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "phrase"
+      ]
+    },
+    {
+      "id": "nb_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "word"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\B",
+              "flags": "gi",
+              "replacement": "|"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "word"
+      ]
+    },
+    {
+      "id": "b_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "phrase"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\b",
+              "flags": "gi",
+              "replacement": "|"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "phrase"
+      ]
+    },
+    {
+      "id": "nb",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "word"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\B",
+              "flags": "g",
+              "replacement": "|"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "word"
+      ]
+    },
+    {
+      "id": "b",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "phrase"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\b",
+              "flags": "g",
+              "replacement": "|"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "phrase"
+      ]
+    }
+  ],
+  "resolved": {
+    "b": {
+      "data": "|caf|\u00e9 |x|"
+    },
+    "nb": {
+      "data": "c|a|f\u00e9|"
+    },
+    "b_i": {
+      "data": "|caf|\u00e9 |x|"
+    },
+    "nb_i": {
+      "data": "c|a|f\u00e9|"
+    },
+    "b_u": {
+      "data": "|caf|\u00e9 |x|"
+    },
+    "nb_u": {
+      "data": "c|a|f\u00e9|"
+    },
+    "fold_iu": {
+      "data": "|\u017f\u212a|"
+    },
+    "fold": {
+      "data": "\u017f\u212a"
+    },
+    "bs": {
+      "data": "a-b"
+    },
+    "m": {
+      "data": "yes"
+    }
+  }
+}
