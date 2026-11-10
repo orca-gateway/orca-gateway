@@ -4,9 +4,9 @@
   "idea": "Epic 23b row 23b.34: the native SDKs match Dart in the corners S11 left — regex \\b and \\B use ASCII word characters; with the i flag, ASCII classes match none of ſ, K (Kelvin), ı, İ; Kotlin's failed-Image \"!\" is part of the Image's accessibility label as Flutter merges it; Swift's OrcaClient keeps a live JSON 4.0 a double inside Codable models",
   "kind": "feature",
   "created_at": "2026-11-08T08:22:20Z",
-  "updated_at": "2026-11-08T10:39:41Z",
+  "updated_at": "2026-11-10T09:35:20Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "10",
+  "current": "12",
   "stages": {
     "01": {
       "status": "skipped",
@@ -51,15 +51,20 @@
       "approved_with": "A"
     },
     "10": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/10-r1.md"
+      "card": "cards/10-r1.md",
+      "approved_at": "2026-11-10T09:34:45Z",
+      "approved_with": "A"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "in_review",
+      "rounds": 1,
+      "card": "cards/12-r1.md"
     },
     "13": {
       "status": "pending"
