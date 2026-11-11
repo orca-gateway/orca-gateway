@@ -367,12 +367,12 @@ internal object Placeholders {
  * java.util.regex standing in for Dart's ECMAScript `RegExp`, with the same
  * guard rails: patterns over 200 UTF-16 units are refused and the input is
  * clipped to 10 000 units. The empty pattern is valid and matches everywhere.
- * `\d`, `\w`, `\b` and their negations, the case folding of the letters
- * of [DartFoldTable] and, with `u`, the `\p{…}` names are rewritten to
- * Dart's ([asciiClasses]); the pattern is then compiled with
+ * `\d`, `\w`, `\s`, `\b` and their negations, `\v`, the case folding of the
+ * letters of [DartFoldTable] and, with `u`, the `\p{…}` names are rewritten
+ * to Dart's ([asciiClasses]); the pattern is then compiled with
  * UNICODE_CHARACTER_CLASS where the runtime has it (learned once: the JVM
- * does, Android's ICU regex is Unicode-aware already), so `\s` is Unicode as
- * Dart's is.
+ * does, Android's ICU regex is Unicode-aware already), so the engine's own
+ * case folding and property names are Unicode as Dart's are.
  */
 internal object RegexSupport {
     const val MAX_PATTERN_LENGTH: Int = 200
@@ -400,8 +400,11 @@ internal object RegexSupport {
      * Dart's (ECMAScript) classes, word edges and case folding, spelled out
      * so that neither java.util.regex nor Android's ICU applies its own:
      *
-     * - `\d`, `\w`, `\D`, `\W` are ASCII classes. Inside a character class
-     *   they nest, which both engines read as a union (`[a\D]` is `[a[^0-9]]`).
+     * - `\d`, `\w`, `\D`, `\W` are ASCII classes, `\s` and `\S` ECMAScript's
+     *   WhiteSpace and LineTerminator ([SPACE]: not U+0085, but U+FEFF), and
+     *   `\v` is U+000B alone, where both engines read every vertical space.
+     *   Inside a character class the classes nest, which both engines read as
+     *   a union (`[a\D]` is `[a[^0-9]]`).
      * - `\b` and `\B` are lookarounds on the same word set. Inside a class
      *   `\b` is the backspace U+0008, and `[` is a literal.
      * - The word set is `[A-Za-z0-9_]`, with `i` and `u` together also ſ U+017F
@@ -457,11 +460,26 @@ internal object RegexSupport {
      * - A `{` that starts no brace quantifier, a lone `}` and a lone `]` are
      *   literal (`x{,3}`, `a{1`).
      *
+     * With `u` Dart reads ECMAScript's strict grammar and refuses, so null:
+     *
+     * - An identity escape of anything but a syntax character `^ $ \ . * + ?
+     *   ( ) [ ] { } |` or `/`, and `-` in a class (`\A`, `\-`, `\_`, `[\a]`,
+     *   `[\B]`, `[\k]`); `\c` without an ASCII letter, `\x` without two hex
+     *   digits, `\u` without four or `{…}`.
+     * - `\0` before a digit; a decimal escape past the group count, and in a
+     *   class any but `\0` (`\8`, `(a)\2`, `[\1]`).
+     * - `\k` but for `\k<name>` of a named group the pattern has.
+     * - A lone `{`, `}` or `]` (`a{1`, `[]a]`).
+     *
      * A class ends at its first unescaped `]`, one right after `[` or `[^`
-     * too, with `u` and without: `[]` matches nothing, `[^]` any unit. Its
-     * members are ECMAScript's, not the engine's set syntax (`[a&&b]` is a, &
-     * and b), and without `u` a `-` next to a class escape is a member (`[a-\d]`
-     * is a, - and a digit), an escaped letter or digit the character as above.
+     * too, with `u` and without: `[]` matches nothing and is written
+     * `(?:(?!))`, which takes a quantifier on ICU too (`[]*`), `[^]` any unit.
+     * Its members are ECMAScript's, not the engine's set syntax (`[a&&b]` is a,
+     * & and b). A range with a class escape at either end (with `u` a property
+     * too) is, without `u`, its two ends and the `-` as members (`[a-\d]` is a,
+     * - and a digit), and with `u` null; a `-` at either end of the class is a
+     * member in both modes (`[\d-]`). Without `u` an escaped letter or digit is
+     * the character as above.
      *
      * With `u`, `\p{name}` and `\P{name}` take only the names Dart takes
      * ([RegexPropertyNames]): any other name, or `\p` or `\P` without `{…}`,
@@ -476,8 +494,9 @@ internal object RegexSupport {
      * without: at the start, after a group opening or `|`, after an assertion
      * (`^`, `$`, `\b`, `\B`, a lookbehind), and after another quantifier but
      * for one `?` that makes it lazy (`a+?` stays, `a++`, `a{1}{2}`, `a+??`
-     * give null). A quantified lookahead is left to the engine, which reads it
-     * as Annex B does.
+     * give null). With `u` a lookahead is an assertion too; without, Annex B
+     * lets it take a quantifier and it is written as a group that does, which
+     * ICU needs (`(?=a)*` is `(?:(?=a))*`).
      */
     fun asciiClasses(pattern: String, ignoreCase: Boolean = false, unicode: Boolean = false): String? {
         val captures = captures(pattern)
@@ -510,13 +529,15 @@ internal object RegexSupport {
                     val piece = when (pattern.getOrNull(i + 1)) {
                         'd' -> "[0-9]"
                         'D' -> "[^0-9]"
+                        's' -> "[$SPACE]"
+                        'S' -> "[^$SPACE]"
                         'w' -> w
                         'W' -> "(?-i:[^$word])"
                         'b' -> "(?:(?<=$w)(?!$w)|(?<!$w)(?=$w))"
                         'B' -> "(?:(?<=$w)(?=$w)|(?<!$w)(?!$w))"
                         else -> null
                     }
-                    val reference = if (piece != null || unicode) -1 else backreference(pattern, i, captures.count)
+                    val reference = if (piece != null) -1 else backreference(pattern, i, captures.count)
                     when {
                         piece != null -> {
                             out.append(piece)
@@ -527,14 +548,15 @@ internal object RegexSupport {
                             i = reference
                         }
                         else -> {
-                            val escape = spelled(pattern, i, unicode, inClass = false, named) ?: escape(pattern, i, unicode) ?: return null
+                            val escape = spelled(pattern, i, unicode, inClass = false, named) ?: escape(pattern, i, unicode, inClass = false, captures.names) ?: return null
                             val letter = escape.codePoint?.takeIf { fold && it <= 0xFFFF }?.let { DartFoldTable.set(it.toChar(), unicode) }
                             if (letter != null) out.append("(?-i:[").append(letter).append("])") else out.append(escape.text)
                             i = escape.end
                         }
                     }
                 }
-                !unicode && (c == '{' || c == '}' || c == ']') -> {
+                c == '{' || c == '}' || c == ']' -> {
+                    if (unicode) return null
                     out.append('\\').append(c)
                     i += 1
                 }
@@ -547,9 +569,14 @@ internal object RegexSupport {
                     last = Last.None
                 }
                 c == ')' -> {
-                    if (open.removeLastOrNull()?.kind == GroupKind.Lookbehind) last = Last.Assertion
+                    val group = open.removeLastOrNull()
                     out.append(c)
                     i += 1
+                    if (group?.kind == GroupKind.Lookbehind || group?.kind == GroupKind.Lookahead && unicode) {
+                        last = Last.Assertion
+                    } else if (group != null && group.kind == GroupKind.Lookahead && i < pattern.length && quantifierEnd(pattern, i) > i) {
+                        out.insert(group.start, "(?:").append(')') // ICU quantifies a group, not a lookahead
+                    }
                 }
                 c == '^' || c == '$' || c == '|' -> {
                     last = if (c == '|') Last.None else Last.Assertion
@@ -620,8 +647,11 @@ internal object RegexSupport {
     }
 
     /**
-     * Without `u`, the end of the backreference at [i]: `\` and a run of
-     * digits, not from 0, whose number is at most [count]; -1 for none.
+     * The end of the backreference at [i], with `u` and without: `\` and a
+     * run of digits, not from 0, whose number is at most [count]; -1 for
+     * none. A decimal escape from 1 past [count] the caller then reads,
+     * without `u`, as [spelled]'s legacy octal escape or digit, and with `u`
+     * refuses, so null.
      */
     private fun backreference(pattern: String, i: Int, count: Int): Int {
         if (pattern.getOrNull(i + 1)?.let { it in '1'..'9' } != true) return -1
@@ -636,16 +666,17 @@ internal object RegexSupport {
 
     /**
      * The character the escape at [i] stands for, as an [Escape] of its code
-     * point written [plain], where Dart reads one the engine does not: in both modes `\0`
-     * before no digit is NUL and `\c` and an ASCII letter its control
-     * character. Without [unicode], as Annex B: any other `\c` is a backslash,
-     * the `c` read next, but [inClass] `\c` and a digit or `_` is a control
-     * character too; a decimal escape is legacy octal, at most three octal
-     * digits up to 0o377, or from 8 or 9 that digit; `\x` without two hex
-     * digits, `\u` without four, `\p`, `\P`, `\k` when the pattern has no
-     * [named] group, and every letter ECMAScript gives no meaning are that
-     * letter. Null for any other escape; `\b`, `\B`, `\d`, `\D`, `\w`, `\W`
-     * and a backreference are the caller's.
+     * point written [plain], where Dart reads one the engine does not: in both
+     * modes `\0` before no digit is NUL, `\c` and an ASCII letter its control
+     * character, and `\v` U+000B alone. Without [unicode], as Annex B: any
+     * other `\c` is a backslash, the `c` read next, but [inClass] `\c` and a
+     * digit or `_` is a control character too; a decimal escape is legacy
+     * octal, at most three octal digits up to 0o377, or from 8 or 9 that
+     * digit; `\x` without two hex digits, `\u` without four, `\p`, `\P`, `\k`
+     * when the pattern has no [named] group, and every letter ECMAScript gives
+     * no meaning are that letter. Null for any other escape; `\b`, `\B`
+     * outside a class, `\d`, `\D`, `\w`, `\W`, `\s`, `\S` and a backreference
+     * are the caller's.
      */
     private fun spelled(pattern: String, i: Int, unicode: Boolean, inClass: Boolean, named: Boolean): Escape? {
         val next = pattern.getOrNull(i + 1) ?: return null
@@ -654,13 +685,14 @@ internal object RegexSupport {
         val (end, codePoint) = when {
             next == '0' && after?.let { it in '0'..'9' } != true -> i + 2 to 0
             next == 'c' && after != null && (after in 'a'..'z' || after in 'A'..'Z') -> i + 3 to after.code % 32
+            next == 'v' -> i + 2 to 0x0B
             unicode -> null
             next == 'c' -> if (inClass && after != null && (after in '0'..'9' || after == '_')) i + 3 to after.code % 32 else i + 1 to '\\'.code
             next in '0'..'9' -> octal(pattern, i)
             next == 'x' -> if (hex(2)) null else i + 2 to 'x'.code
             next == 'u' -> if (hex(4)) null else i + 2 to 'u'.code
             next == 'k' -> if (named) null else i + 2 to 'k'.code
-            next in 'a'..'z' || next in 'A'..'Z' -> if (next in "sSfnrtv") null else i + 2 to next.code
+            next in 'a'..'z' || next in 'A'..'Z' -> if (next in "fnrt") null else i + 2 to next.code
             else -> null
         } ?: return null
         return Escape(end, plain(codePoint), codePoint)
@@ -744,24 +776,27 @@ internal object RegexSupport {
 
     /**
      * The class opening at [start], up to its first unescaped `]` as in
-     * ECMAScript, appended to [out]; returns the index after it, or null for a
-     * `\u{…}` Dart rejects or a class Dart leaves unclosed. [fold] is the
+     * ECMAScript, appended to [out]; returns the index after it, or null for an
+     * escape Dart rejects or a class Dart leaves unclosed. [fold] is the
      * group's `i`, [unicode] the `u` flag, [named] whether the pattern has a
      * named group. A `]` right after `[` or `[^` ends the class: `[]` matches
-     * nothing and is written `(?!)`, `[^]` any unit and is written `[\s\S]`.
-     * The engine's set syntax (nested classes, `&&`) means nothing here, so
-     * ASCII punctuation is written escaped, and without `u` a `-` between two
-     * members is a range only when neither is a class escape (`[a-\d]` is a,
-     * - and a digit); a range out of order fails to compile, as in Dart.
+     * nothing and is written `(?:(?!))` (ICU quantifies no `(?!)`), `[^]` any
+     * unit and is written `[\s\S]`. The engine's set syntax (nested classes,
+     * `&&`) means nothing here, so ASCII punctuation is written escaped, and a
+     * `-` between two members is a range only when neither is a class escape:
+     * without `u` it is then a member (`[a-\d]` is a, - and a digit), with `u`
+     * null, a property on either side too; a range out of order fails to
+     * compile, as in Dart.
      */
     private fun characterClass(pattern: String, start: Int, word: String, fold: Boolean, unicode: Boolean, named: Boolean, out: StringBuilder): Int? {
         val negated = pattern.getOrNull(start + 1) == '^'
         var j = if (negated) start + 2 else start + 1
         if (pattern.getOrNull(j) == ']') {
-            out.append(if (negated) "[\\s\\S]" else "(?!)")
+            out.append(if (negated) "[\\s\\S]" else "(?:(?!))")
             return j + 1
         }
-        fun classEscape(at: Int) = pattern[at] == '\\' && pattern.getOrNull(at + 1)?.let { it in "dDwWsS" } == true
+        val sets = if (unicode) "dDwWsSpP" else "dDwWsS"
+        fun classEscape(at: Int) = pattern[at] == '\\' && pattern.getOrNull(at + 1)?.let { it in sets } == true
         val body = StringBuilder()
         while (j < pattern.length && pattern[j] != ']') {
             val from = j
@@ -772,7 +807,8 @@ internal object RegexSupport {
                 continue
             }
             val second = classAtom(pattern, j + 1, word, unicode, named) ?: return null
-            val union = !unicode && (classEscape(from) || classEscape(j + 1))
+            val union = classEscape(from) || classEscape(j + 1)
+            if (union && unicode) return null
             body.append(first.text).append(if (union) "\\-" else "-").append(second.text)
             j = second.end
         }
@@ -796,7 +832,7 @@ internal object RegexSupport {
     /**
      * The class member at [j] as the engine's text: a character (ASCII
      * punctuation escaped), a class escape, or an escape for one character,
-     * without `u` read as [spelled] reads it. Null for an escape Dart rejects.
+     * read as [spelled], then [escape], reads it. Null for an escape Dart rejects.
      */
     private fun classAtom(pattern: String, j: Int, word: String, unicode: Boolean, named: Boolean): Escape? {
         val c = pattern[j]
@@ -809,21 +845,22 @@ internal object RegexSupport {
             'b' -> "\\x08"
             'd' -> "[0-9]"
             'D' -> "[^0-9]"
+            's' -> "[$SPACE]"
+            'S' -> "[^$SPACE]"
             'w' -> "[$word]"
             'W' -> "[^$word]"
             else -> null
         }
         if (piece != null) return Escape(j + 2, piece, null)
-        return spelled(pattern, j, unicode, inClass = true, named) ?: escape(pattern, j, unicode)
+        return spelled(pattern, j, unicode, inClass = true, named) ?: escape(pattern, j, unicode, inClass = true)
     }
 
     /**
-     * The end of the escape at [i]: two characters, or with `\cX`, `\xHH`,
-     * `\uHHHH`, `\k<…>` the argument too.
+     * The end of the escape at [i]: two characters, or with `\xHH`, `\uHHHH`,
+     * `\k<…>` the argument too.
      */
     private fun escapeEnd(pattern: String, i: Int): Int {
         val close = when (pattern.getOrNull(i + 1)) {
-            'c' -> return minOf(i + 3, pattern.length)
             'x', 'u' -> {
                 val end = i + if (pattern[i + 1] == 'x') 4 else 6
                 return if (end <= pattern.length && (i + 2 until end).all { pattern[it] in HEX_DIGITS }) end else i + 2
@@ -844,9 +881,11 @@ internal object RegexSupport {
      * `\x{H…}` without leading zeros (both engines refuse `\u{`, ICU reads at
      * most six digits). Null for a `\u{…}` Dart rejects under `u`: no digit, a
      * non-hex one, no `}`, or past 10FFFF; with [unicode], `\p` and `\P`
-     * are [property]'s.
+     * are [property]'s. With [unicode] the rest is null but for `\f`, `\n`,
+     * `\r`, `\t`, `\xHH`, `\uHHHH`, a syntax character `^ $ \ . * + ? ( ) [ ]
+     * { } | /`, [inClass] a `-` and outside one `\k<name>` of a group in [names].
      */
-    private fun escape(pattern: String, i: Int, unicode: Boolean): Escape? {
+    private fun escape(pattern: String, i: Int, unicode: Boolean, inClass: Boolean, names: List<Pair<String, Int>> = emptyList()): Escape? {
         if (unicode && pattern.startsWith("u{", i + 1)) {
             val close = pattern.indexOf('}', i + 3)
             if (close < 0) return null
@@ -865,6 +904,18 @@ internal object RegexSupport {
             else -> null
         }
         val spelled = digits != null && end - i == digits + 2
+        if (unicode) {
+            val next = pattern.getOrNull(i + 1)
+            val strict = when (next) {
+                null -> false
+                'x', 'u' -> spelled
+                'f', 'n', 'r', 't' -> true
+                '-' -> inClass
+                'k' -> !inClass && pattern[end - 1] == '>' && names.any { it.first == pattern.substring(i + 3, end - 1) }
+                else -> next in "^$\\.*+?()[]{}|/"
+            }
+            if (!strict) return null
+        }
         return Escape(end, pattern.substring(i, end), if (spelled) pattern.substring(i + 2, end).toInt(16) else null)
     }
 
@@ -884,6 +935,12 @@ internal object RegexSupport {
     }
 
     private const val HEX_DIGITS = "0123456789abcdefABCDEF"
+
+    /**
+     * `\s` as Dart reads it, ECMAScript's WhiteSpace and LineTerminator, under
+     * every flag: the JVM's and ICU's take U+0085 and leave U+FEFF out.
+     */
+    private const val SPACE = "\\t-\\r\\x{20}\\x{a0}\\x{1680}\\x{2000}-\\x{200a}\\x{2028}\\x{2029}\\x{202f}\\x{205f}\\x{3000}\\x{feff}"
 
     /**
      * Whether the runtime has UNICODE_CHARACTER_CLASS: the JVM does, Android,

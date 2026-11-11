@@ -1337,4 +1337,260 @@ class TransformTest {
             ),
         )
     }
+
+    // MARK: S15 — strict u (row 23b.37)
+    // Expected values from Dart 3.12.2. With `u` Dart reads ECMAScript's strict
+    // grammar and refuses what Annex B lets through: an identity escape of
+    // anything but a syntax character, a lone brace or bracket, a decimal
+    // escape past the group count, `\c`, `\x` or `\u` without their argument,
+    // a class range on a class escape, a quantified lookahead, `\k` naming no
+    // group. In both modes `\v` is U+000B alone and `\s` ECMAScript's set.
+
+    /** The A2 rows' input. */
+    private val strictInput = "a-%_{}]"
+
+    /** Each pattern under [flags] on [strictInput], where Dart throws. */
+    private fun refusedWithU(flags: String, vararg patterns: String): List<Rx> = patterns.map { Rx(it, flags, strictInput, null) }
+
+    @Test
+    fun a2_anIdentityEscapeOfAnythingButASyntaxCharacterIsInvalidWithU() {
+        assertDart(
+            refusedWithU(
+                "gu", "\\A", "\\z", "\\-", "\\%", "\\_", "\\a", "\\V", "\\h", "\\H", "\\R", "\\G", "\\Z", "\\Q", "\\X",
+                "\\e", "\\N", "\\ ", "\\,", "\\é", "a\\", "[\\_]", "[\\a]", "[\\B]", "[\\k]", "[\\ ]", "[\\é]",
+            ) + refusedWithU("giu", "\\A", "\\-", "\\a", "[\\_]", "[\\B]"),
+        )
+    }
+
+    @Test
+    fun a2_aLoneBraceOrBracketIsInvalidWithU() {
+        assertDart(
+            refusedWithU("gu", "{", "}", "]", "a{1", "a{1,", "x{,3}", "[]a]", "[[a]]") +
+                refusedWithU("giu", "{", "}", "]", "a{1"),
+        )
+    }
+
+    @Test
+    fun a2_aDecimalEscapePastTheGroupCountIsInvalidWithU() {
+        assertDart(
+            refusedWithU(
+                "gu", "\\00", "\\01", "\\1", "\\8", "\\9", "\\10", "(a)\\2", "(a)\\8", "(a)\\10", "(a)\\01",
+                "[\\00]", "[\\01]", "[\\1]", "[\\8]", "[\\9]",
+            ) + refusedWithU("giu", "\\8", "\\00"),
+        )
+    }
+
+    @Test
+    fun a2_controlHexAndUnicodeEscapesWithoutTheirArgumentAreInvalidWithU() {
+        assertDart(
+            refusedWithU("gu", "\\c", "\\c1", "\\c!", "[\\c_]", "[\\c1]", "[\\c]", "\\x", "\\x6", "\\x{73}", "\\u", "\\u61", "\\u{", "\\u{}") +
+                refusedWithU("giu", "\\c1", "[\\c_]") +
+                listOf(Rx("[\\c_]", "gu", "\u001F", null)),
+        )
+    }
+
+    @Test
+    fun a2_aClassRangeOnAClassEscapeOrAPropertyIsInvalidWithU() {
+        assertDart(
+            refusedWithU(
+                "gu", "[a-\\d]", "[\\d-z]", "[\\w-a]", "[\\p{L}-z]", "[a-\\p{L}]", "[\\s-a]", "[\\w-\\d]", "[a-\\s]",
+                "[\\D-z]", "[a-\\P{L}]", "[\\S-z]", "[\\W-a]",
+            ) + refusedWithU("giu", "[a-\\d]"),
+        )
+    }
+
+    @Test
+    fun a2_aQuantifiedLookaheadIsInvalidWithU() {
+        assertDart(refusedWithU("gu", "(?=a)*", "(?!a)?", "(?=a){2}", "(?!a)+", "(?=a)?") + refusedWithU("giu", "(?=a)*"))
+    }
+
+    @Test
+    fun a2_backslashKNamingNoGroupIsInvalidWithU() {
+        assertDart(
+            refusedWithU("gu", "\\k", "\\k<a>", "\\ka", "(?<a>x)\\k<b>", "(?<a>x)\\k", "(?<a>x)\\k<a", "(?<a>x)[\\k]") +
+                refusedWithU("giu", "\\k"),
+        )
+    }
+
+    @Test
+    fun a2_theRewriterItselfRefusesWhatDartRefusesWithU() {
+        // Not the engine: the desktop JVM reads `\A`, `\x{73}` or `[\c_]`, and which of the rest it refuses is its own business.
+        val refused = listOf(
+            "\\A", "\\z", "\\-", "\\%", "\\_", "\\a", "\\V", "\\h", "\\H", "\\R", "{", "}", "]", "a{1", "x{,3}", "[]a]",
+            "\\00", "\\01", "\\8", "(a)\\2", "(a)\\10", "\\c1", "\\c", "[\\c_]", "\\x6", "\\x{73}", "\\u61", "\\u{}",
+            "[a-\\d]", "[\\d-z]", "[\\p{L}-z]", "[a-\\p{L}]", "[\\w-a]", "(?=a)*", "(?!a)?", "\\k", "\\k<a>", "(?<a>x)\\k<b>",
+            "[\\k]", "[\\B]", "[\\a]", "[\\_]", "\\p", "\\pL", "[\\8]", "[\\1]", "[\\00]",
+        )
+        assertEquals(emptyList(), refused.filter { RegexSupport.asciiClasses(it, unicode = true) != null })
+    }
+
+    @Test
+    fun a2_guard_syntaxAndCharacterEscapesStayValidWithU() {
+        val syntax = ".*+?()[]{}|\\/^$-"
+        assertDart(
+            listOf(
+                Rx("\\/", "gu", "a/", "a#"),
+                Rx("\\^", "gu", "^", "#"),
+                Rx("[\\-]", "gu", "-a", "#a"),
+                Rx("\\$", "gu", "$", "#"),
+                Rx("[\\^]", "gu", "^", "#"),
+                Rx("[\\/]", "gu", "/", "#"),
+                Rx("\\0", "gu", "a\u0000", "a#"),
+                Rx("[\\0]", "gu", "a\u0000", "a#"),
+                Rx("[\\b]", "gu", "\bb", "#b"),
+                Rx("\\cA", "gu", "\u0001", "#"),
+                Rx("\\cA", "giu", "\u0001", "#"),
+                Rx("\\0a", "gu", "\u0000a", "#"),
+                Rx("\\ca", "gu", "\u0001a", "#a"),
+                Rx("\\cZ", "gu", "\u001AZ", "#Z"),
+                Rx("[\\cZ]", "gu", "\u001AZ", "#Z"),
+                Rx("\\f\\n\\r\\t", "gu", "a\u000C\n\r\tb", "a#b"),
+                Rx("\\x41", "gu", "aA", "a#"),
+                Rx("\\u0041", "gu", "aA", "a#"),
+                Rx("[\\x41-\\x43]", "gu", "ABCD", "###D"),
+                Rx("[\\-a]", "gu", "-ab", "##b"),
+                Rx("[a\\-z]", "gu", "a-mz", "##m#"),
+                Rx("\\.", "gu", syntax, "#*+?()[]{}|\\/^$-"),
+                Rx("\\*", "gu", syntax, ".#+?()[]{}|\\/^$-"),
+                Rx("\\+", "gu", syntax, ".*#?()[]{}|\\/^$-"),
+                Rx("\\?", "gu", syntax, ".*+#()[]{}|\\/^$-"),
+                Rx("\\(", "gu", syntax, ".*+?#)[]{}|\\/^$-"),
+                Rx("\\)", "gu", syntax, ".*+?(#[]{}|\\/^$-"),
+                Rx("\\[", "gu", syntax, ".*+?()#]{}|\\/^$-"),
+                Rx("\\]", "gu", syntax, ".*+?()[#{}|\\/^$-"),
+                Rx("\\{", "gu", syntax, ".*+?()[]#}|\\/^$-"),
+                Rx("\\}", "gu", syntax, ".*+?()[]{#|\\/^$-"),
+                Rx("\\|", "gu", syntax, ".*+?()[]{}#\\/^$-"),
+                Rx("\\\\", "gu", syntax, ".*+?()[]{}|#/^$-"),
+                Rx("[\\]]", "gu", syntax, ".*+?()[#{}|\\/^$-"),
+                Rx("[\\[]", "gu", syntax, ".*+?()#]{}|\\/^$-"),
+                Rx("[\\{]", "gu", syntax, ".*+?()[]#}|\\/^$-"),
+                Rx("[\\}]", "gu", syntax, ".*+?()[]{#|\\/^$-"),
+                Rx("[\\.]", "gu", syntax, "#*+?()[]{}|\\/^$-"),
+                Rx("[\\$]", "gu", syntax, ".*+?()[]{}|\\/^#-"),
+                Rx("[\\|]", "gu", syntax, ".*+?()[]{}#\\/^$-"),
+                Rx("[\\\\]", "gu", syntax, ".*+?()[]{}|#/^$-"),
+                // A backreference to a group that exists, by number or by name.
+                Rx("(a)\\1", "gu", "aa a", "# a"),
+                Rx("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)\\10", "gu", "abcdefghijj abcdefghija0", "# abcdefghija0"),
+                Rx("(?<a>x)\\k<a>", "gu", "xx x", "# x"),
+                // Without `u` the same escapes are Annex B's characters.
+                Rx("\\-", "g", "a-b", "a#b"),
+                Rx("\\%", "g", "a%b", "a#b"),
+                Rx("\\8", "g", "8", "#"),
+            ),
+        )
+    }
+
+    /** ECMAScript's WhiteSpace and LineTerminator, after the five controls U+0009-000D. */
+    private val spaces = "                  　﻿"
+
+    /** The whole set, 25 characters. */
+    private val white = "\t\n\u000B\u000C\r$spaces"
+
+    /** NEL, the Mongolian vowel separator and the zero-width space are not in it. */
+    private val notWhite = "\u0085᠎​a"
+
+    @Test
+    fun a2_backslashVIsTheLineTabulationAloneInBothModes() {
+        val ctl = "a\u000B\n\u000C\r\t\u0085   b"
+        assertDart(
+            listOf("g", "gu", "gi", "giu").flatMap { f ->
+                listOf(
+                    Rx("\\v", f, white + notWhite, "\t\n#\u000C\r$spaces$notWhite"),
+                    Rx("[\\v]", f, white + notWhite, "\t\n#\u000C\r$spaces$notWhite"),
+                    Rx("[^\\v]", f, white + notWhite, "##\u000B##########################"),
+                    Rx("[\\v-\\r]", f, white + notWhite, "\t\n###$spaces$notWhite"),
+                )
+            } + listOf("g", "gu").flatMap { f ->
+                listOf(
+                    Rx("\\v", f, ctl, "a#\n\u000C\r\t\u0085   b"),
+                    Rx("[\\v]", f, ctl, "a#\n\u000C\r\t\u0085   b"),
+                    Rx("[^\\v]", f, ctl, "#\u000B#########"),
+                )
+            } + Rx("\\V", "g", white + notWhite, white + notWhite),
+        )
+    }
+
+    @Test
+    fun a2_backslashSIsEcmaScriptsWhiteSpaceInBothModes() {
+        val all = white + notWhite
+        assertDart(
+            listOf("g", "gu", "gi", "giu").flatMap { f ->
+                listOf(
+                    Rx("\\s", f, all, "#########################$notWhite"),
+                    Rx("[\\s]", f, all, "#########################$notWhite"),
+                    Rx("[^\\S]", f, all, "#########################$notWhite"),
+                    Rx("[\\s\\d]", f, all, "#########################$notWhite"),
+                    Rx("\\s+", f, all, "#$notWhite"),
+                    Rx("\\S", f, all, "$white####"),
+                    Rx("[\\S]", f, all, "$white####"),
+                    Rx("[^\\s]", f, all, "$white####"),
+                    Rx("[^\\s\\d]", f, all, "$white####"),
+                    Rx("[a\\S]", f, all, "$white####"),
+                )
+            } + listOf("g", "gu").flatMap { f ->
+                listOf(
+                    Rx("\\s", f, "a﻿b᠎​c d", "a#b᠎​c#d"),
+                    Rx("[\\S]", f, "a﻿\u0085", "#﻿#"),
+                    Rx("\\S", f, "﻿\u0085", "﻿#"),
+                    Rx("\\s", f, "a\u000B\n\u000C\r\t\u0085   b", "a#####\u0085###b"),
+                    Rx("[\\s]", f, "a\u000B\n\u000C\r\t\u0085   b", "a#####\u0085###b"),
+                )
+            },
+        )
+    }
+
+    @Test
+    fun a2_anEmptyClassTakesAQuantifierInBothModes() {
+        assertDart(
+            listOf("g", "gu").flatMap { f ->
+                listOf(
+                    Rx("[]*", f, "ab", "#a#b#"),
+                    Rx("[]+", f, "ab", "ab"),
+                    Rx("[]?", f, "ab", "#a#b#"),
+                    Rx("[]{2}", f, "ab", "ab"),
+                    Rx("[]{0}", f, "ab", "#a#b#"),
+                    Rx("[]*?", f, "ab", "#a#b#"),
+                    Rx("(?:[])*", f, "ab", "#a#b#"),
+                    Rx("a[]?b", f, "ab", "#"),
+                    Rx("a[]*b", f, "ab", "#"),
+                    Rx("[^]*", f, "ab", "##"),
+                    Rx("[]|a", f, "ab", "#b"),
+                )
+            },
+        )
+    }
+
+    @Test
+    fun a2_guard_aQuantifiedLookaheadWithoutUKeepsAnnexBsMatches() {
+        assertDart(
+            listOf(
+                Rx("(?=a)*", "g", "xab", "#x#a#b#"),
+                Rx("(?=a)+", "g", "xab", "x#ab"),
+                Rx("(?!a)*", "g", "xab", "#x#a#b#"),
+                Rx("(?=a){0}", "g", "xab", "#x#a#b#"),
+                Rx("(?=a)*?", "g", "xab", "#x#a#b#"),
+                Rx("x(?=a)*", "g", "xab", "#ab"),
+                Rx("(?=a)?b", "g", "xab", "xa#"),
+                Rx("(?=a)*a", "g", "xab", "x#b"),
+                Rx("((?=a))*", "g", "xab", "#x#a#b#"),
+                Rx("(?:(?=a))*", "g", "xab", "#x#a#b#"),
+            ),
+        )
+    }
+
+    @Test
+    fun a2_anEmptyClassAndAQuantifiedLookaheadAreWrittenAsGroupsAQuantifierTakesOnIcu() {
+        // Android's java.util.regex is ICU, which refuses `(?!)*` and `(?=a)*`; the desktop JVM takes either.
+        assertEquals("(?:(?!))", RegexSupport.asciiClasses("[]"))
+        assertEquals("(?:(?!))*", RegexSupport.asciiClasses("[]*"))
+        assertEquals("(?:(?!))*", RegexSupport.asciiClasses("[]*", unicode = true))
+        assertEquals("(?:(?=a))*", RegexSupport.asciiClasses("(?=a)*"))
+        assertEquals("(?:(?!a)){2}", RegexSupport.asciiClasses("(?!a){2}"))
+        assertEquals("x(?:(?=a))+?y", RegexSupport.asciiClasses("x(?=a)+?y"))
+        assertEquals("((?:(?=a))*)", RegexSupport.asciiClasses("((?=a)*)"))
+        assertEquals("(?=a)b", RegexSupport.asciiClasses("(?=a)b"))
+        assertEquals(null, RegexSupport.asciiClasses("(?=a)*", unicode = true))
+    }
 }
