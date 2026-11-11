@@ -413,12 +413,11 @@ enum Regex {
 
     /// Rewrites Dart's (ECMAScript) pattern where ICU reads the same text
     /// another way, or nil where Dart refuses it. Every other escape, `\\`
-    /// included, is copied as is, as are group names, modifier flags,
-    /// backreferences, `\c` and a letter, with `u` (or a named group) what
-    /// follows `\k<`, with `u` that of `\p{`, and the digits of `\xHH` and
-    /// `\uHHHH` (but for a letter of the table, below). A pre-pass counts
-    /// the capturing groups (`(`, `(?<name>`) and collects their names,
-    /// classes and escapes aside: a decimal escape and `\k` are read by them.
+    /// included, is copied as is, as are modifier flags, `\c` and a letter,
+    /// with `u` what follows `\p{`, and the digits of `\xHH` and `\uHHHH`
+    /// (but for a letter of the table, below). A pre-pass counts the
+    /// capturing groups (`(`, `(?<name>`) and collects their names, classes
+    /// and escapes aside: a decimal escape and `\k` are read by them.
     ///
     /// - After `(?` Dart reads only `:`, `=`, `!`, `<=`, `<!`, a group name
     ///   (`<name>`) and modifiers: flags from `ims`, each at most once, then
@@ -504,6 +503,29 @@ enum Regex {
     ///   lookbehind: `^*`, `(?<=a)+`) and one on a quantifier (`a++`, `a**`,
     ///   `a{1}{2}`, `a+?+`), so each is nil: ICU reads `a++` as possessive
     ///   and lets a quantifier follow the lookarounds `\b` and `\B` become.
+    /// - Group names are dropped: `(?<name>X)` is `(X)`, which ICU numbers
+    ///   the same, and `\k<name>` is the group's number, as `\N` is, written
+    ///   `(?:\1)`, or `(?:\1|\2)` for a name two alternatives hold
+    ///   (`(?<a>x)|(?<a>y)`). So every name Dart accepts works, ECMAScript's
+    ///   identifier (ID_Start, `$` or `_`, then ID_Continue, `$`, ZWNJ or
+    ///   ZWJ, its `\u` escapes read), but one with a character written as
+    ///   two `\uHHHH` escapes, a surrogate pair (`(?<\uD835\uDC9C>`), which
+    ///   is nil. A name Dart refuses (`(?<1a>`), one that two groups which
+    ///   may both take part have (`(?<a>x)(?<a>y)`) and, once a group has a
+    ///   name, `\k` without the `<name>` of a group, in a class too, are nil.
+    /// - An unset group matches empty in Dart and fails in ICU, so a
+    ///   reference leaves out the groups it can only see unset: one whose `)`
+    ///   is not behind it (`\1(a)`, `(a\1)`), one in another alternative of
+    ///   a disjunction holding both (`(a)|\1b`), and one in a negative
+    ///   lookaround whose `)` is behind it, as the lookaround succeeds only
+    ///   when its body fails (`(?!(a))\1b`, `(?<!(a))\1b`); with none left
+    ///   it is `(?:)`. Dart resets a quantifier's groups at each pass, so a
+    ///   pass before does not set them. In a lookbehind, which Dart reads
+    ///   right to left, a reference keeps them all, and ICU refuses a
+    ///   reference there, so the pattern is nil where Dart gives a value
+    ///   (`(a)(?<=\1)`). Left to fail, as ICU has it, where Dart's reference
+    ///   matches empty: a group set or not only at run time (`(?:(a)|b)\1`,
+    ///   `(a)?b\1`).
     static func asciiClasses(_ pattern: String, ignoreCase: Bool, unicode: Bool) -> String? {
         // ECMAScript's WhiteSpace and LineTerminator, which `\s` matches under every flag.
         let space = "\\u0009-\\u000D\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF"
@@ -520,12 +542,18 @@ enum Regex {
             )
         }
 
-        // An open group: the `i` inside it, its kind, and where its text starts in `out` (UTF-8 offset).
+        // An open group: the `i` inside it, its kind, whether it is a negative lookaround, where its text starts in
+        // `out` (UTF-8 offset), its number when it captures, `visible` at its `(`, and the groups closed in its
+        // alternatives before the current one.
         struct Group {
             enum Kind { case capturing, nonCapturing, lookahead, lookbehind }  // `(?:` and `(?ms-i:` are non-capturing
             let fold: Bool
             let kind: Kind
+            let negative: Bool
             let start: Int
+            let number: Int?
+            let outer: Set<Int>
+            var earlier: Set<Int> = []
         }
         // What a quantifier at this point would repeat.
         enum Last { case nothing, assertion, quantified, atom }
@@ -535,6 +563,14 @@ enum Regex {
         var out = ""
         var scope: [Group] = []  // each open group, innermost last
         var last = Last.nothing
+        // The capturing groups closed in the current alternative of each open group and of the pattern, which a
+        // reference here can see set but for those in `unset`. Any other is unset here: not closed yet, or closed in
+        // another alternative.
+        var visible: Set<Int> = []
+        // The groups inside a negative lookaround that has closed: it succeeds only when its body fails, so after
+        // it Dart has them unset. They stay in `visible`, where a group name is taken (`(?!(?<a>x))(?<a>y)`).
+        var unset: Set<Int> = []
+        var opened = 0  // the capturing groups opened so far
         func next(_ k: Int) -> Unicode.Scalar? { i + k < p.count ? p[i + k] : nil }
         func isDigit(_ c: Unicode.Scalar?) -> Bool { c.map { ("0"..."9").contains($0) } ?? false }
         func isASCIILetter(_ c: Unicode.Scalar?) -> Bool {
@@ -558,12 +594,36 @@ enum Regex {
             if next(2) == "<" { return next(3) == "=" || next(3) == "!" ? .lookbehind : .capturing }
             return .nonCapturing
         }
-        // At `(?<` or `\k<`: the name up to the first `>`, nil without one.
-        func groupName() -> String? {
-            p[i...].firstIndex(of: ">").map { String(String.UnicodeScalarView(p[(i + 3)..<$0])) }
+        // At `(?<` or `\k<`: the name up to the first `>`, its `\u` escapes read (`\u{…}` without `u` too), and the
+        // length through `>`; nil without a `>` or for a name that is no ECMAScript identifier (ID_Start, `$` or
+        // `_`, then ID_Continue, `$`, ZWNJ or ZWJ), which Dart refuses: `(?<1a>`, `(?<a-b>`, `(?<>`, `(?<a\x62>`.
+        func groupName() -> (name: String, length: Int)? {
+            guard let close = p[i...].firstIndex(of: ">") else { return nil }
+            let at = i
+            defer { i = at }
+            var name = String.UnicodeScalarView()
+            i += 3
+            while i < close {
+                var c = p[i]
+                if c == "\\" {
+                    guard next(1) == "u", let (value, length) = hexEscape(inName: true),
+                        let escaped = value.flatMap({ Unicode.Scalar($0) })
+                    else { return nil }  // `\x62`, a `\u{…}` Dart refuses, a surrogate
+                    c = escaped
+                    i += length
+                } else {
+                    i += 1
+                }
+                let identifier = name.isEmpty
+                    ? c.properties.isIDStart : c.properties.isIDContinue || c == "\u{200C}" || c == "\u{200D}"
+                guard identifier || c == "$" || c == "_" else { return nil }
+                name.append(c)
+            }
+            return name.isEmpty ? nil : (String(name), close + 1 - at)
         }
 
         // The pre-pass: the capturing groups and their names (with numbers, in order), classes and escapes aside.
+        // A name Dart refuses is left out; the main pass refuses the group.
         var groupCount = 0
         var names: [(name: String, number: Int)] = []
         while let c = next(0) {
@@ -576,7 +636,7 @@ enum Regex {
             } else {
                 if c == "(", opening() == .capturing {
                     groupCount += 1
-                    if next(1) == "?", let name = groupName() { names.append((name, groupCount)) }
+                    if next(1) == "?", let name = groupName()?.name { names.append((name, groupCount)) }
                 }
                 i += 1
             }
@@ -613,10 +673,11 @@ enum Regex {
             }
             return next(k) == ":" && (!seen.isEmpty || !off) ? inner : nil
         }
-        // At `\`: the code point `\xHH`, `\uHHHH` or, with `u`, `\u{H…}` spells,
-        // and the escape's length; nil for any other escape. A `\u{…}` Dart
-        // refuses (no digit, one not hex, no `}`, past U+10FFFF) has no value.
-        func hexEscape() -> (value: UInt32?, length: Int)? {
+        // At `\`: the code point `\xHH`, `\uHHHH` or, with `u` or in a group
+        // name, `\u{H…}` spells, and the escape's length; nil for any other
+        // escape. A `\u{…}` Dart refuses (no digit, one not hex, no `}`, past
+        // U+10FFFF) has no value.
+        func hexEscape(inName: Bool = false) -> (value: UInt32?, length: Int)? {
             guard next(0) == "\\", let n = next(1), n == "x" || n == "u" else { return nil }
             func digit(_ k: Int) -> UInt32? {
                 guard let d = next(k), d.properties.isASCIIHexDigit else { return nil }
@@ -624,7 +685,7 @@ enum Regex {
             }
             var value: UInt32 = 0
             var k = 2
-            if n == "u", unicode, next(2) == "{" {
+            if n == "u", unicode || inName, next(2) == "{" {
                 k = 3
                 while let h = digit(k), value <= 0x10FFFF {
                     value = value * 16 + h
@@ -671,7 +732,7 @@ enum Regex {
         // At `\` with `u`: whether ECMAScript's strict grammar has the escape: a syntax character or `/` (in a
         // class `-` too), a class or control escape, `\b` (`\B` outside a class), `\c` and an ASCII letter, `\0`
         // before no digit, `\x`, `\u`, `\p`, `\P` in their forms, and outside a class `\N` up to the group count
-        // and `\k<name>` of a group. What follows `\u{` and `\p{` is read later.
+        // and `\k`. What follows `\u{`, `\p{` and `\k` is read later.
         func strict(inClass: Bool) -> Bool {
             guard let n = next(1) else { return false }
             if "^$\\.*+?()[]{}|/".unicodeScalars.contains(n) || inClass && n == "-" || meaningful(n, inClass: inClass) {
@@ -682,9 +743,7 @@ enum Regex {
             case "x", "u": return hexEscape() != nil
             case "p", "P": return next(2) == "{"
             case "0": return !isDigit(next(2))
-            case "k":
-                guard !inClass, next(2) == "<", let name = groupName() else { return false }
-                return names.contains { $0.name == name }
+            case "k": return !inClass
             default: return !inClass && isDigit(n) && decimal() <= groupCount
             }
         }
@@ -712,7 +771,7 @@ enum Regex {
             if n == "p" || n == "P" { return (n.value, 2) }
             if isASCIILetter(n) { return meaningful(n, inClass: inClass) ? nil : (n.value, 2) }
             guard isDigit(n) else { return nil }
-            if !inClass, n != "0", decimal() <= groupCount { return nil }  // a backreference, copied
+            if !inClass, n != "0", decimal() <= groupCount { return nil }  // a backreference, written below
             if n == "8" || n == "9" { return (n.value, 2) }
             var value: UInt32 = 0
             var k = 1
@@ -735,9 +794,11 @@ enum Regex {
         }
         // At a class member: its text and the code point it stands for, or no
         // code point for a set (`\d`, `\s`, with `u` `\p{…}`); nil where Dart
-        // refuses a `\u{…}` or, with `u`, a property name.
+        // refuses a `\u{…}`, `\k` once a group has a name or, with `u`, a
+        // property name.
         func classMember(_ sets: [Unicode.Scalar: String]) -> (text: String, value: UInt32?)? {
             if unicode, next(0) == "\\", !strict(inClass: true) { return nil }  // `[\_]`, `[\B]`, `[\1]`, `[\c_]`
+            if next(0) == "\\", next(1) == "k", !names.isEmpty { return nil }  // `(?<a>x)[\k]`, without `u` too
             if let escape = hexEscape() {
                 guard let value = escape.value else { return nil }  // a `\u{…}` Dart refuses
                 let text = next(2) == "{" ? braced(value) : String(String.UnicodeScalarView(p[i..<(i + escape.length)]))
@@ -796,6 +857,15 @@ enum Regex {
             }
             return (body, negated, false)
         }
+        // A backreference to the groups `numbers` (`\N`'s, or those `\k<name>` names), written `(?:\1|\2)` so that a
+        // digit after it stays a digit, with only the groups it can see set: an unset group matches empty in Dart
+        // and fails in ICU, so one it cannot see is left out, and with none left it is `(?:)`. In a lookbehind,
+        // which Dart reads right to left, it keeps them all.
+        func reference(_ numbers: [Int]) -> String {
+            let lookbehind = scope.contains { $0.kind == .lookbehind }
+            let seen = numbers.filter { lookbehind || visible.contains($0) && !unset.contains($0) }
+            return "(?:" + seen.map { "\\\($0)" }.joined(separator: "|") + ")"
+        }
 
         while let c = next(0) {
             let fold = scope.last?.fold ?? ignoreCase
@@ -814,7 +884,7 @@ enum Regex {
                     out += fold && closed ? dartFolded(set, body: body, negated: negated, unicode: unicode) : set
                 }
             } else if c == "\\", let n = next(1) {
-                guard !unicode || strict(inClass: false) else { return nil }  // `\A`, `\-`, `\00`, `\c1`, `\x6`, `\8`, `\k`
+                guard !unicode || strict(inClass: false) else { return nil }  // `\A`, `\-`, `\00`, `\c1`, `\x6`, `\8`
                 if let set = sets[n] {
                     out += "(?-i:\(set))"
                     i += 2
@@ -825,8 +895,17 @@ enum Regex {
                 } else if let (value, length) = character(inClass: false) {
                     out += literal(value, fold: fold)  // `\A` is A, `\K` under `i` Dart's set, `\c1` a backslash
                     i += length
-                } else if n == "k", next(2) == "<" {
-                    take(through: ">")  // `\k<name>` keeps its letters
+                } else if n == "k" {
+                    // `\k<name>`; without `u` and with no group named, `\k` is the letter k (above)
+                    guard next(2) == "<", let (name, length) = groupName() else { return nil }  // `\k`, `\ka`, `\k<a`
+                    let numbers = names.filter { $0.name == name }.map(\.number)
+                    guard !numbers.isEmpty else { return nil }  // `\k<b>` with no group b
+                    out += reference(numbers)
+                    i += length
+                } else if isDigit(n) {
+                    let number = decimal()  // a backreference: `character` took every other decimal escape
+                    out += reference([number])
+                    i += 1 + String(number).count  // its digits, the first not 0
                 } else if n == "p" || n == "P", next(2) == "{" {
                     guard propertyEscape() != nil else { return nil }  // with `u`: a name Dart refuses
                     take(through: "}")  // and so does `\p{Script=Latin}`
@@ -843,14 +922,27 @@ enum Regex {
                         take(escape.length)  // `\x4a`, `\u00ff`: digits that may be letters of the table
                     }
                 } else {
-                    take(n == "c" ? 3 : 2)  // `\cK`, and `\x`, `\u` without their digits
+                    take(n == "c" ? 3 : 2)  // `\cK`, `\f`, `\n`, `\r`, `\t`, an escaped symbol: ICU reads them as Dart
                 }
             } else if c == "(" {
                 let start = out.utf8.count
                 var inner: Bool? = fold  // a group keeps the `i` around it
                 let kind = opening()
+                let negative = kind == .lookahead && next(2) == "!" || kind == .lookbehind && next(3) == "!"
+                if kind == .capturing { opened += 1 }
                 switch kind {
-                case .capturing where next(1) == "?": take(through: ">")  // a group name
+                case .capturing where next(1) == "?":
+                    // `(?<name>` is written `(`: ICU numbers the group the same. Nil for a name Dart refuses, or one a
+                    // group this one may take part with has (`(?<a>x)(?<a>y)`, `(?<a>x(?<a>y))`): only groups in two
+                    // alternatives of a disjunction share a name (`(?<a>x)|(?<a>y)`).
+                    guard let (name, length) = groupName() else { return nil }
+                    let open = scope.compactMap(\.number)
+                    let taken = names.contains {
+                        $0.name == name && (visible.contains($0.number) || open.contains($0.number))
+                    }
+                    guard !taken else { return nil }
+                    out += "("
+                    i += length
                 case .capturing: take(1)
                 case .lookahead: take(3)
                 case .lookbehind: take(4)
@@ -859,11 +951,18 @@ enum Regex {
                     take(through: ":")  // `(?-i:`, whose flags ICU reads as Dart does
                 }
                 guard let inner else { return nil }
-                scope.append(Group(fold: inner, kind: kind, start: start))
+                let number = kind == .capturing ? opened : nil
+                scope.append(
+                    Group(fold: inner, kind: kind, negative: negative, start: start, number: number, outer: visible))
                 now = .nothing
             } else if c == ")" {
                 let group = scope.popLast()  // an unbalanced `)` is ICU's to refuse
                 take(1)
+                if let group {  // what follows may see each group closed inside it, in whichever alternative
+                    visible.formUnion(group.earlier)
+                    if let number = group.number { visible.insert(number) }
+                    if group.negative { unset.formUnion(visible.subtracting(group.outer)) }  // each group inside it
+                }
                 if group?.kind == .lookbehind {
                     now = .assertion
                 } else if let group, group.kind == .lookahead, quantifier() != nil {
@@ -876,9 +975,19 @@ enum Regex {
                 guard !unicode else { return nil }  // with `u` Dart refuses them: `{`, `a{1`, `x{,3}`, `]`
                 out += "\\" + String(c)  // a brace that starts no quantifier, and a lone `}` or `]`, are text
                 i += 1
-            } else if c == "^" || c == "$" || c == "|" {
+            } else if c == "|" {
+                // An alternative starts: the groups closed in the one before are unset in it.
+                if let group = scope.last {
+                    scope[scope.count - 1].earlier.formUnion(visible)
+                    visible = group.outer
+                } else {
+                    visible = []
+                }
                 take(1)
-                now = c == "|" ? .nothing : .assertion
+                now = .nothing
+            } else if c == "^" || c == "$" {
+                take(1)
+                now = .assertion
             } else if fold, let set = dartFold(c, unicode: unicode) {
                 out += "(?-i:[\(spelled(set))])"
                 i += 1

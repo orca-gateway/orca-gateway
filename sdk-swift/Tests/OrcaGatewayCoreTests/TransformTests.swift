@@ -1303,6 +1303,238 @@ final class TransformTests: XCTestCase {
         }
     }
 
+    // MARK: S15 — group names, unset references (row 23b.37)
+
+    // Group names are dropped (`(?<a>x)` is `(x)`, `\k<a>` the group's number) and a reference that can only see
+    // its group unset matches empty; Dart 3.12.2 printed every value (nil: refused), the same under g and gu.
+
+    func testG3_aGroupNameIsDroppedSoEveryNameDartAcceptsWorks() {
+        // ECMAScript's identifier: ID_Start, `$` or `_`, then ID_Continue, `$`, ZWNJ or ZWJ, `\u` escapes read.
+        let n = "x xx ab k"
+        let rows: [(String, String, String?, UInt)] = [
+            ("(?<$a>x)", "x", "#", #line),
+            ("(?<\u{E9}>x)", "x", "#", #line),
+            ("(?<a>x)", n, "# ## ab k", #line),
+            ("(?<$>x)", n, "# ## ab k", #line),
+            ("(?<_>x)", n, "# ## ab k", #line),
+            ("(?<a1>x)", n, "# ## ab k", #line),
+            ("(?<a$_\u{200C}\u{200D}>x)", n, "# ## ab k", #line),
+            ("(?<\u{1D49C}>x)", n, "# ## ab k", #line),
+            ("(?<a\u{300}>x)", n, "# ## ab k", #line),
+            ("(?<a\u{B7}>x)", n, "# ## ab k", #line),
+            ("(?<a\\u{62}>x)", n, "# ## ab k", #line),
+            ("(?<a\\u{0062}>x)", n, "# ## ab k", #line),
+            ("(?<\\u{1D49C}>x)", n, "# ## ab k", #line),
+            ("(?<a\\u0024>x)", n, "# ## ab k", #line),
+            ("(?<a\\u0062>x)\\k<ab>", n, "x # ab k", #line),
+            ("(?<ab>x)\\k<a\\u{62}>", n, "x # ab k", #line),
+            ("(?<a\\u{62}>x)\\k<ab>", "x xx", "x #", #line),
+            ("(?<A>x)\\k<A>", n, "x # ab k", #line),
+            ("(?<1a>x)", n, nil, #line),
+            ("(?<a-b>x)", n, nil, #line),
+            ("(?<>x)", n, nil, #line),
+            ("(?<\u{1F600}>x)", n, nil, #line),
+            ("(?<a\u{1F600}>x)", n, nil, #line),
+            ("(?<\u{300}>x)", n, nil, #line),
+            ("(?<\\u0031>x)", n, nil, #line),
+            ("(?<a\\u002D>x)", n, nil, #line),
+            ("(?<a\\x62>x)", n, nil, #line),
+            ("(?<a\\>x)", n, nil, #line),
+            ("(?<a\\u{>x)", n, nil, #line),
+            ("(?<a\\u{}>x)", n, nil, #line),
+            ("(?<a\\u{110000}>x)", n, nil, #line),
+            ("(?<a\\u006>x)", n, nil, #line),
+            ("(?<a\\uD835>x)", n, nil, #line),
+            ("(?<a\\u{D835}\\u{DC9C}>x)", n, nil, #line),
+            ("(?<a", n, nil, #line),
+        ]
+        for flags in ["g", "gu"] {
+            for (pattern, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        }
+    }
+
+    func testG3_aNameTwoAlternativesHoldIsTheGroupThatTookPart() {
+        // Two groups may share a name only in two alternatives of a disjunction; `\k<a>` is then each of them.
+        let rows: [(String, String, String?, UInt)] = [
+            ("(?<a>x)|(?<a>y)", "xy", "##", #line),
+            (#"(?:(?<a>x)|(?<a>y))\k<a>"#, "xx yy xy", "# # xy", #line),
+            ("(?<a>x)|(?<a>y)|(?<a>z)", "xyz w", "### w", #line),
+            (#"(?<a>x)|(?:(?<a>y)|(?<a>z))\k<a>"#, "x yy zz yz zy", "# # # yz zy", #line),
+            (#"(?:(?<a>x)|(?<a>y))\k<a>\k<a>"#, "xxx yyy xyy", "# # xyy", #line),
+            ("(?<a>x)(?<a>y)", "xy", nil, #line),
+            ("(?:(?<a>x)|(?<a>y))(?<a>z)", "xyz", nil, #line),
+            ("(?<a>x(?<a>y))", "xy", nil, #line),
+            ("(?<ab>x)(?<a\\u0062>y)", "xy", nil, #line),
+            ("(?<ab>x)(?<a\\u{62}>y)", "xy", nil, #line),
+        ]
+        for flags in ["g", "gu"] {
+            for (pattern, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        }
+    }
+
+    func testG3_withANamedGroupKIsTheReferenceToOne() {
+        // `\k` without the `<name>` of a group, in a class too, is refused once some group has a name.
+        let rows: [(String, String, String?, UInt)] = [
+            (#"(?<a>x)\1"#, "xx", "#", #line),
+            (#"(?<a>x)(?<b>y)\k<b>\k<a>"#, "xyyx", "#", #line),
+            (#"(?<a>.)\k<a>(?<b>.)\2"#, "aabb", "#", #line),
+            (#"(?<a>x)\k<a>1"#, "xx1 x1 xx", "# x1 xx", #line),
+            (#"(?<a>x)\k<a>*"#, "x xx xxx", "# # #", #line),
+            (#"(?<a>x)\k<a>\k<a>"#, "xxx x", "# x", #line),
+            (#"(?<a>x)\k<\u{61}>"#, "x xx", "x #", #line),
+            (#"(?<a>x)(?:\k<a>|(?<b>y)\k<b>)"#, "xx xyy xy", "# # xy", #line),
+            (#"(?<a>x)\k<b>"#, "xx", nil, #line),
+            (#"(?<a>x)\k"#, "xk", nil, #line),
+            (#"(?<a>x)\k<a"#, "xx", nil, #line),
+            (#"(?<a>x)\ka"#, "x xka", nil, #line),
+            (#"(?<a>x)\k<A>"#, "xx", nil, #line),
+            (#"(?<a>x)\k<1a>"#, "x", nil, #line),
+            ("(?<a>x)\\k<a\\u0062>", "xx", nil, #line),
+            (#"(?<a>x)[\k]"#, "xk", nil, #line),
+            (#"(?<a>x)[\k<a>]"#, "xk", nil, #line),
+        ]
+        for flags in ["g", "gu"] {
+            for (pattern, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        }
+    }
+
+    func testG3_aReferenceThatCanOnlySeeItsGroupUnsetMatchesEmpty() {
+        // It stands before its group closes, or in another alternative of a disjunction that holds the group
+        // (a quantifier resets the groups inside it at each pass, so a pass before cannot set them).
+        let f = "a ab aab b ba aba abab xx"
+        let u = "b ab aa ba bb abb aab xy y x"
+        let rows: [(String, String, String, UInt)] = [
+            (#"\1(a)"#, "aa", "##", #line),
+            (#"(a\1)"#, "aa", "##", #line),
+            (#"(a)|\1b"#, "ab b", "## #", #line),
+            (#"(a)|b\1"#, "ab b", "## #", #line),
+            (#"\2(a)(b)"#, "ab", "#", #line),
+            (#"(?:\1b|(a))+"#, "ab", "#", #line),
+            (#"(a)(?:\2(b))"#, "ab", "#", #line),
+            (#"\k<a>(?<a>x)"#, "xx", "##", #line),
+            (#"(\1a)"#, f, "# #b ##b b b# #b# #b#b xx", #line),
+            (#"(?:\1b|(a))+"#, f, "# # # # # # # xx", #line),
+            (#"(a)|\1b"#, f, "# ## ### # ## ### #### xx", #line),
+            (#"\k<a>(?<a>x)"#, f, "a ab aab b ba aba abab ##", #line),
+            (#"((a)|\2b)"#, "b ab", "# ##", #line),
+            (#"(?:(a)|\1b)+"#, u, "# # # # # # # xy y x", #line),
+            (#"(?:(?:(a))|\1)"#, u, "#b# ##b# ### #b## #b#b# ##b#b# ###b# #x#y# #y# #x#", #line),
+            (#"(a)\1|\1b"#, u, "# a# # #a ## a## ## xy y x", #line),
+            (#"(?=(a)|\1b)"#, "ab b", "#a#b #b", #line),
+            (#"(?<a>x)|\k<a>y"#, u, "b ab aa ba bb abb aab ## # #", #line),
+            (#"(?:(?<a>x)|(?<a>y))|\k<a>z"#, u, "b ab aa ba bb abb aab ## # #", #line),
+            (#"(?:(?<a>x)|(?<a>y)|\k<a>z)"#, u, "b ab aa ba bb abb aab ## # #", #line),
+            (#"(?<a>x)(?<b>y)|\k<a>\k<b>"#, "xy y x", "## #y# #x#", #line),
+            (#"(?<a>x)(?:(?<b>y)|\k<b>)"#, u, "b ab aa ba bb abb aab # y #", #line),
+        ]
+        for flags in ["g", "gu"] {
+            for (pattern, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        }
+    }
+
+    func testG3_guard_aReferenceToAGroupBehindItKeepsItsMatch() {
+        let u = "b ab aa ba bb abb aab xy y x"
+        let rows: [(String, String, String, UInt)] = [
+            (#"((a)\2)"#, u, "b ab # ba bb abb #b xy y x", #line),
+            (#"\1*(a)"#, u, "b #b ## b# bb #bb ##b xy y x", #line),
+            (#"(a)(?:|\1)b"#, u, "b # aa ba bb #b # xy y x", #line),
+            (#"(?=(a))\1"#, u, "b #b ## b# bb #bb ##b xy y x", #line),
+            (#"(?<=(a))\1"#, u, "b ab a# ba bb abb a#b xy y x", #line),
+            (#"(a)(?=\1)"#, u, "b ab #a ba bb abb #ab xy y x", #line),
+            (#"(?<a>a)\k<a>"#, u, "b ab # ba bb abb #b xy y x", #line),
+            (#"(?i:(?<a>x)|\k<a>X)"#, u, "b ab aa ba bb abb aab #y y #", #line),
+            (#"(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)\10"#, "abcdefghijj", "#", #line),
+        ]
+        for flags in ["g", "gu"] {
+            for (pattern, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        }
+        // Past the group count a decimal escape is octal or a digit without `u`, and refused with it.
+        for (pattern, input) in [(#"(a)\2"#, "a\u{2}"), (#"(a)\10"#, "a\u{8}"), (#"(a)\8"#, "a8")] {
+            assertRegex(pattern, "g", input, "#")
+            assertRegex(pattern, "gu", input, nil)
+        }
+    }
+
+    func testG3_aReferenceIsWrittenAsTheNumbersOfTheGroupsItCanSee() {
+        // `(?:\N)`, so that a digit after it stays a digit; in a lookbehind, which Dart reads right to left, all.
+        let rows: [(String, String, UInt)] = [
+            (#"(?<a>x)\k<a>"#, #"(x)(?:\1)"#, #line),
+            (#"(?<a>x)\k<a>1"#, #"(x)(?:\1)1"#, #line),
+            (#"(a)\1"#, #"(a)(?:\1)"#, #line),
+            (#"(?:(?<a>x)|(?<a>y))\k<a>"#, #"(?:(x)|(y))(?:\1|\2)"#, #line),
+            (#"(?<a>x)|(?:(?<a>y)|(?<a>z))\k<a>"#, #"(x)|(?:(y)|(z))(?:\2|\3)"#, #line),
+            (#"\1(a)"#, "(?:)(a)", #line),
+            (#"(a)|b\1"#, "(a)|b(?:)", #line),
+            (#"\k<a>(?<a>x)"#, "(?:)(x)", #line),
+            (#"(?<=\1(a))b"#, #"(?<=(?:\1)(a))b"#, #line),
+            (#"(a)|(?<=\1)b"#, #"(a)|(?<=(?:\1))b"#, #line),
+        ]
+        for (pattern, written, line) in rows {
+            for unicode in [false, true] {
+                XCTAssertEqual(Regex.asciiClasses(pattern, ignoreCase: false, unicode: unicode), written, line: line)
+            }
+        }
+    }
+
+    func testG3_aReferenceToAGroupInANegativeLookaroundMatchesEmpty() {
+        // A negative lookaround succeeds only when its body fails, so after it every group inside is unset.
+        let u = "b ab aa ba bb abb aab xy y x"
+        let rows: [(String, String, String, UInt)] = [
+            (#"(?!(a))\1"#, u, "#b# a#b# aa# #ba# #b#b# a#b#b# aa#b# #x#y# #y# #x#", #line),
+            (#"(?!(a))\1b"#, u, "# a# aa #a ## a## aa# xy y x", #line),
+            (#"(?!(?=(a)))\1"#, u, "#b# a#b# aa# #ba# #b#b# a#b#b# aa#b# #x#y# #y# #x#", #line),
+            (#"(?!(a)|(b))\1\2c"#, "c ac bc cc", "# a# b# ##", #line),
+            (#"(?!(?<n>a))\k<n>b"#, u, "# a# aa #a ## a## aa# xy y x", #line),
+            (#"(a)(?!(b))\1\2"#, "aa ab aab aba", "# ab #b aba", #line),
+            (#"(?<!(a))\1b"#, u, "# ab aa #a ## ab# aab xy y x", #line),
+            (#"(?:(?!(a))\1b)+"#, u, "# a# aa #a # a# aa# xy y x", #line),
+            (#"(?!(?!(a)))\1"#, u, "b #ab #a#a b#a bb #abb #a#ab xy y x", #line),
+            (#"(?!(?!(a))\1)b"#, u, u, #line),
+            (#"(?!(a))(?:\1b)"#, u, "# a# aa #a ## a## aa# xy y x", #line),
+            (#"(?:(?!(a)))\1b"#, u, "# a# aa #a ## a## aa# xy y x", #line),
+            (#"((?!(a)))\2b"#, u, "# a# aa #a ## a## aa# xy y x", #line),
+        ]
+        for flags in ["g", "gu"] {
+            for (pattern, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        }
+    }
+
+    func testG3_guard_aNegativeLookaroundsGroupStaysForWhatIsInsideItAndForItsName() {
+        // Inside the lookaround a reference sees the group closed before it; a name stays taken after it.
+        let u = "b ab aa ba bb abb aab xy y x"
+        let rows: [(String, String, String?, UInt)] = [
+            (#"(?!(a)\1)b"#, u, "# a# aa #a ## a## aa# xy y x", #line),
+            (#"(?!(a)\1)"#, "aa ab", "a#a# #a#b#", #line),
+            (#"(a)(?!\1)"#, u, "b #b a# b# bb #bb a#b xy y x", #line),
+            ("(?<a>x)|(?!(?<a>y))", "xy y x", "#y# y# ##", #line),
+            ("(?!(?<a>x))(?<a>y)", "xy y x", nil, #line),
+            ("(?<!(?<a>x))(?<a>y)", "xy y", nil, #line),
+            ("(?:(?!(?<a>x))|(?<a>y))(?<a>z)", "xyz", nil, #line),
+            ("(?=(?<a>x))(?<a>x)", "xy", nil, #line),
+        ]
+        for flags in ["g", "gu"] {
+            for (pattern, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        }
+    }
+
+    func testG3_aReferenceToAGroupInANegativeLookaroundIsWrittenWithoutIt() {
+        // `(?:)` when all its groups are, the others when some are (the one set at run time is left to fail).
+        let rows: [(String, String, UInt)] = [
+            (#"(?!(a))\1b"#, "(?!(a))(?:)b", #line),
+            (#"(?<!(a))\1b"#, "(?<!(a))(?:)b", #line),
+            (#"(?!(?!(a))\1)b"#, "(?!(?!(a))(?:))b", #line),
+            (#"(?!(a)\1)b"#, #"(?!(a)(?:\1))b"#, #line),
+            (#"(?<!(a)\1)b"#, #"(?<!(a)(?:\1))b"#, #line),
+            (#"(?:(?!(?<a>x))|(?<a>y))\k<a>"#, #"(?:(?!(x))|(y))(?:\2)"#, #line),
+            (#"(?:(?!(a))|(a))\2"#, #"(?:(?!(a))|(a))(?:\2)"#, #line),
+        ]
+        for (pattern, written, line) in rows {
+            for unicode in [false, true] {
+                XCTAssertEqual(Regex.asciiClasses(pattern, ignoreCase: false, unicode: unicode), written, line: line)
+            }
+        }
+    }
+
     func testDoubleToStringMatchesDart() {
         let cases: [(Double, String)] = [
             (0, "0.0"), (-0.0, "-0.0"), (1, "1.0"), (-2.5, "-2.5"), (0.1, "0.1"), (100, "100.0"),
