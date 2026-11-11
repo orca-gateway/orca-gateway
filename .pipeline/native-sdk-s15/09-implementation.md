@@ -3,21 +3,20 @@
 ## Front page
 
 ### In one breath
-group 4 of 6 · tasks: 2 green, 0 blocked · cases: 8 of 11 green (A3, A1, A2, G3) · suites green
-T7 Swift: names dropped, `\k<name>` its numbers, unset refs empty (negative lookarounds too).
-T8 Kotlin: the same, in a redraft on top; this slice's invisible test characters now escapes.
-Tests: engine 703, Flutter 241, Swift 191, iOS 54 + 191, Kotlin core 187, sdk 128, lint clean.
-G3: only the 4 run-time rows differ; on 566 extra rows Swift and Kotlin agree on every row.
+group 5 of 6 · tasks: 2 green, 0 blocked · cases: 10 of 11 green (all but X1) · suites green
+T9 Swift: `\p`/`\P` under `iu` over Dart's 1 454 fold classes; script values Dart's 336 exactly.
+T10 Kotlin: the same, written `(?-i:[CK])`; Qaai, Qaac mapped for the JVM.
+Tests: engine 703, Flutter 241, Swift 198, iOS 54 + 198, Kotlin core 197, sdk 128, lint clean.
+Probe: G4 0 in Swift, 1 in Kotlin (`scx=`, not planned); cost 2.5x and 3.2x of the iu test.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-5 auto-decided: `\N` wrapped or copied; escaped surrogate names nil; identifiers; `unset` set; …
-1 you decided (standing rule): negative-lookaround references empty, as in Dart.
+4 auto-decided: one fold reader; `[CK]` form in Kotlin; one pass over the letters; Zinh as written.
 
 ### Questions for you
-1. Next: group 5, `iu` properties and exact script values (T9 Swift, T10 Kotlin)? (default: go)
+1. Next: group 6, render fixtures 35-36 and the count pins 34 → 36 (T11)? (default: go)
 
 ## Appendix
 
@@ -244,8 +243,56 @@ Once after the group (logs `s15/g4-*.log`), before T7's rework (comments only; 1
   reference inside a lookbehind (ICU and the JVM refuse it), a name written as two surrogate escapes,
   run-time unset (not planned).
 
+### Group 5
+Commits: T9 47bf87a, T10 adf246f (one per task, staged by path, the new files included). Nothing
+pushed. Group 4's card approved with your standing rule (start group 5, minor).
+
+#### Task T9 · Swift: `iu` properties, exact script values
+Files: `…/Resolver/Transforms.swift` · `…/Resolver/RegexPropertyNames.swift` · `…/Resolver/DartFoldClasses.swift` (new) · `…/TransformTests.swift`
+Cases: G4 (36 rows) → green (`swift test`: 198 tests, 0 failures; iOS 54 + 198; the 191 of before
+pass) · red first: 5 row tests on 63 of 159 Dart rows (96 already right, kept as guards).
+Changed: `DartFoldClasses.swift`, Dart's 1 454 fold classes (2 938 letters, 564 above U+FFFF), one row
+per line of the oracle file, parsed once; under `iu` a class or escape holding `\p`/`\P` written
+`(?:(?!L)(?-i:C)|(?-i:[M]))` over every letter with a partner; script values only Dart's 336;
+`spelled` writes `\x{H}` (ranges for runs). Tests: `// MARK: S15 — iu properties, script values`,
+7 tests (`s15/oracle/t9`, 150 extra, Deseret, Osage, Adlam). With `u` the 217 table letters' sets
+are their fold classes (173) or themselves (44), pinned.
+Decisions: 1. both `dartFolded` paths through one reader, `Kept.matched` (`notFoldLetter`,
+`foldLetterText` removed) · 2. `\x{H}` with ranges · 3. the 336 values pinned by a separate
+Dart-printed list. Cost: the 690-pattern giu test 0.30 s → 0.75 s (2.5x; first version 2.10 s).
+Review fit: pass
+Review quality: pass (nits left: `tableKept`'s comment also covers `propertyKept`; DartFoldTable's
+`u` column now duplicates the classes, a test pins they agree, trimming it is outside T9's files)
+
+#### Task T10 · Kotlin: `iu` properties, scripts, JVM aliases
+Files: `…/resolver/Transforms.kt` · `…/resolver/RegexPropertyNames.kt` · `…/resolver/DartFoldClasses.kt` (new) · `…/resolver/TransformTest.kt`
+Cases: G4 (35 planned rows) → green (`./gradlew build`: core 197, sdk 128, 0 failures, lint no
+issues; core 187 of before pass) · red first: a compile failure, then 8 of 10 new tests.
+Changed: `DartFoldClasses.kt` keyed by code point; under `iu` a class holding `\p`/`\P` and a lone
+`\p`/`\P` go through a new `dartClass` (S14's 217-letter path shares it), written `(?-i:[CK])` /
+`(?-i:[^CK])`; script values only Dart's 336 under all four keys; the JVM gets Qaai as Inherited,
+Qaac as Coptic. Tests: 10 tests, 151 Dart-printed rows (`s15/oracle/t10`).
+Decisions: 1. `(?-i:[CK])`, K the letters of the classes meeting C, for the design's `(?!L)` form
+(same output, K ⊆ L; drops L's 142 ranges) · 2. Zinh left as written (the JDK reads it) · 3. one pass
+of C over all letters. Cost: bench of 690 giu patterns 10.2 → 32.5 ms (3.2x; first version 98.4 ms).
+Review fit: pass
+Review quality: pass
+
+#### Group 5 test run
+Once after the group (logs `s15/g5-*.log`):
+- `cd engine && bun test` · 703 pass, 0 fail.
+- `cd sdk && flutter test` · +241: All tests passed · `flutter analyze` · No issues found.
+- `cd sdk-swift && swift test` · 198 tests, 0 failures (cost test 0.741 s) · iOS · 54 + 198, SUCCEEDED.
+- `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL · core 197, sdk 128, 0 failures · lint clean.
+- Probe: rows G4 36: Swift 0, Kotlin 1 differ (were 16, 16; Kotlin's is `\p{scx=Qaai}`, not planned);
+  a1: Swift 15 of 718 (was 43), Kotlin 32 (was 55): negiu, script 0 in Swift; in Kotlin only
+  `\P{Cased}` and `scx=` (desktop-JVM names, not planned). Every earlier extra-case set (ctl … t8c)
+  as before in both; on t9 Kotlin differs only on JVM-only names (Cased, Changes_When_*, scx).
+  Left in all: row 23b.38's emoji rows, run-time unset. No case that matched Dart before differs.
+- F11's "282 above U+FFFF" counts classes; the code points above U+FFFF are 564.
+
 ### Blocked
-none (T7 green after one retry)
+none
 
 ### Not done
 none
