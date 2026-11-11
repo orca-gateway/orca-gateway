@@ -1136,6 +1136,173 @@ final class TransformTests: XCTestCase {
         for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
     }
 
+    // MARK: S15 — strict u (row 23b.37)
+
+    // With `u` Dart reads ECMAScript's strict grammar; Dart 3.12.2 printed every value (nil: refused).
+
+    func testA2_withUDartRefusesAnEscapeTheStrictGrammarLacks() {
+        // An identity escape of anything but `^ $ \ . * + ? ( ) [ ] { } | /` (and `-` in a class), `\0` before a
+        // digit, `\N` beyond the group count, a decimal escape in a class but `\0`, `\c` without an ASCII letter,
+        // `\x` without two hex digits, `\u` without four or a valid `{…}`, `\p` without `{`, and `\k` without the
+        // `<name>` of a group.
+        let refused = [
+            #"\A"#, #"\z"#, #"\-"#, #"\%"#, #"\_"#, #"\a"#, #"\00"#, #"\01"#, #"\8"#, #"\c1"#, #"\c"#, #"[\c_]"#,
+            #"\x6"#, #"\u61"#, #"\u{}"#, #"\k"#, #"\k<a>"#, #"[\k]"#, #"[\B]"#, #"[\a]"#, #"[\_]"#, #"\p"#, #"\pL"#,
+            #"[\8]"#, #"[\1]"#, #"[\00]"#, #"(a)\k<a>"#, #"\k<a"#, #"\1"#, #"\10"#, #"\é"#,
+            #"\N{LATIN SMALL LETTER A}"#, #"\o{141}"#, #"\x{73}"#, #"\u{110000}"#, #"[\c]"#, #"\c\"#, #"[\c1]"#,
+            #"\Qa.\E"#, #"\ "#, "\\#", #"[\%]"#, #"[\ ]"#, #"\V"#, #"\h"#, #"\H"#, #"\R"#, #"\e"#, #"\K"#, #"[\K]"#,
+            #"[\p]"#, #"[\pL]"#, #"\p{L"#, #"\x"#, #"\u"#, #"\u006"#,
+            #"(a)\2"#, #"(a)\8"#, #"(a)\10"#, #"(a)\01"#, #"[\01]"#, #"\07"#, #"\c_"#, #"\c!"#, #"\x6g"#, #"[\x6]"#,
+        ]
+        for pattern in refused { assertRegex(pattern, "gu", "a-%_{}]", nil) }
+        assertRegex(#"[\c_]"#, "gu", "\u{1F}", nil)
+    }
+
+    func testA2_withUDartRefusesALoneBracketARangeOnASetAndAQuantifiedLookahead() {
+        // A lone `{`, `}` or `]` and a brace that finishes no quantifier; a class range with a class escape or a
+        // property on either side; a lookahead with a quantifier (a lookbehind is refused in both modes).
+        let refused = [
+            "{", "}", "]", "a{1", "x{,3}", #"[a-\d]"#, #"[\d-z]"#, #"[\p{L}-z]"#, #"[a-\p{L}]"#, #"[\w-a]"#,
+            "(?=a)*", "(?!a)?", #"(?<a>x)\k<b>"#, #"(?<a>x)\k"#, #"[\d-\d]"#, #"[\s-a]"#, #"[a-\s]"#, #"[\w-\d]"#,
+            #"[\D-z]"#, #"[\P{L}-z]"#, #"[\S-a]"#, #"[a-\W]"#, "(?=a)+", "(?!a)*", "(?=a){2}", "(?<=a)*", "a{,3}",
+            "x{,}", "[]a]", "[[:alpha:]]", "a]",
+        ]
+        for pattern in refused { assertRegex(pattern, "gu", "a-%_{}]", nil) }
+    }
+
+    func testA2_guard_withUTheStrictGrammarsEscapesStayValid() {
+        let rows: [(String, String, String, UInt)] = [
+            (#"\/"#, "a/", "a#", #line),
+            (#"\^"#, "^", "#", #line),
+            (#"[\-]"#, "-a", "#a", #line),
+            (#"\$"#, "$", "#", #line),
+            (#"[\^]"#, "^", "#", #line),
+            (#"[\/]"#, "/", "#", #line),
+            (#"\0"#, "a\u{0}", "a#", #line),
+            (#"[\0]"#, "a\u{0}", "a#", #line),
+            (#"[\b]"#, "\u{8}b", "#b", #line),
+            (#"\cA"#, "\u{1}", "#", #line),
+            (#"(?<a>x)\k<a>"#, "xx x", "# x", #line),
+            (#"[\d-]"#, "a1-", "a##", #line),
+            (#"[-\d]"#, "a1-", "a##", #line),
+            (#"[a\-z]"#, "a-zb", "###b", #line),
+            (#"😀"#, "a\u{1F600}", "a#", #line),
+            ("(?:(?=a))*", "ab", "#a#b#", #line),
+            (#"\]"#, "a]", "a#", #line),
+            (#"\}"#, "a}", "a#", #line),
+            (#"\{"#, "a{", "a#", #line),
+            (#"\|"#, "a|", "a#", #line),
+            (#"(a)\1"#, "aa a", "# a", #line),
+            (#"(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)\10"#, "abcdefghijj", "#", #line),
+            (#"\0a"#, "a\u{0}a", "a#", #line),
+            (#"\cz"#, "\u{1A}", "#", #line),
+            (#"[\cz]"#, "\u{1A}", "#", #line),
+            (#"[\cA-\cC]"#, "\u{1}\u{2}\u{3}\u{4}", "###\u{4}", #line),
+            ("x{1,2}", "xxx", "##", #line),
+            (#"\f\n\r\t"#, "\u{C}\n\r\t", "#", #line),
+            (#"\p{L}"#, "a1", "#1", #line),
+            (#"[\p{L}-]"#, "a-1", "##1", #line),
+            (#"[\b-\n]"#, "\u{8}\t\n\u{B}", "###\u{B}", #line),
+            (#"\."#, "a.", "a#", #line),
+            (#"[\.]"#, "a.", "a#", #line),
+            (#"\x41"#, "A", "#", #line),
+            (#"\u{61}"#, "a", "#", #line),
+            (#"[\]]"#, "a]", "a#", #line),
+            (#"[\-a]"#, "-ab", "##b", #line),
+            (#"\\"#, "a\\", "a#", #line),
+            (#"[\w-]"#, "a-%", "##%", #line),
+            (#"\b\B"#, "ab", "ab", #line),
+        ]
+        for (pattern, input, expected, line) in rows { assertRegex(pattern, "gu", input, expected, line: line) }
+    }
+
+    func testA2_vIsU000BAndSIsECMAScriptsWhiteSpaceUnderEveryFlag() {
+        // `\v` is U+000B alone and `\s` U+0009-000D, U+0020, U+00A0, U+1680, U+2000-200A, U+2028, U+2029,
+        // U+202F, U+205F, U+3000 and U+FEFF (not U+0085, U+180E, U+200B), in and out of classes.
+        let v = "a\u{B}\n\u{C}\r\t\u{85}\u{2028}\u{2029} b"
+        let w = "a\u{FEFF}b\u{180E}\u{200B}c\u{A0}d\u{1680}\u{2000}\u{200A}\u{202F}\u{205F}\u{3000}\u{85}"
+        let everyFlag: [(String, String, String, UInt)] = [
+            (#"\v"#, v, "a#\n\u{C}\r\t\u{85}\u{2028}\u{2029} b", #line),
+            (#"[\v]"#, v, "a#\n\u{C}\r\t\u{85}\u{2028}\u{2029} b", #line),
+            (#"[^\v]"#, v, "#\u{B}#########", #line),
+            (#"\s"#, v, "a#####\u{85}###b", #line),
+            (#"[\s]"#, v, "a#####\u{85}###b", #line),
+            (#"[^\s]"#, v, "#\u{B}\n\u{C}\r\t#\u{2028}\u{2029} #", #line),
+            (#"\S"#, v, "#\u{B}\n\u{C}\r\t#\u{2028}\u{2029} #", #line),
+            (#"[\S]"#, v, "#\u{B}\n\u{C}\r\t#\u{2028}\u{2029} #", #line),
+            (#"[^\S]"#, v, "a#####\u{85}###b", #line),
+            (#"[\s\d]"#, v, "a#####\u{85}###b", #line),
+            (#"[^\s\d]"#, v, "#\u{B}\n\u{C}\r\t#\u{2028}\u{2029} #", #line),
+            (#"[\v-\r]"#, v, "a#\n##\t\u{85}\u{2028}\u{2029} b", #line),
+            (#"\s"#, w, "a#b\u{180E}\u{200B}c#d######\u{85}", #line),
+            (#"\S"#, w, "#\u{FEFF}####\u{A0}#\u{1680}\u{2000}\u{200A}\u{202F}\u{205F}\u{3000}#", #line),
+            (#"[\s]"#, w, "a#b\u{180E}\u{200B}c#d######\u{85}", #line),
+            (#"[\S]"#, w, "#\u{FEFF}####\u{A0}#\u{1680}\u{2000}\u{200A}\u{202F}\u{205F}\u{3000}#", #line),
+            (#"[^\s]"#, w, "#\u{FEFF}####\u{A0}#\u{1680}\u{2000}\u{200A}\u{202F}\u{205F}\u{3000}#", #line),
+            (#"[^\S]"#, w, "a#b\u{180E}\u{200B}c#d######\u{85}", #line),
+            (#"\s+"#, w, "a#b\u{180E}\u{200B}c#d#\u{85}", #line),
+            (#"[\sa]"#, w, "##b\u{180E}\u{200B}c#d######\u{85}", #line),
+        ]
+        for flags in ["g", "gu", "gi", "giu"] {
+            for (pattern, input, expected, line) in everyFlag { assertRegex(pattern, flags, input, expected, line: line) }
+        }
+        let gAndGu: [(String, String, String, UInt)] = [
+            (#"\f"#, v, "a\u{B}\n#\r\t\u{85}\u{2028}\u{2029} b", #line),
+            (#"\n"#, v, "a\u{B}#\u{C}\r\t\u{85}\u{2028}\u{2029} b", #line),
+            (#"\r"#, v, "a\u{B}\n\u{C}#\t\u{85}\u{2028}\u{2029} b", #line),
+            (#"\t"#, v, "a\u{B}\n\u{C}\r#\u{85}\u{2028}\u{2029} b", #line),
+            (#"[\f]"#, v, "a\u{B}\n#\r\t\u{85}\u{2028}\u{2029} b", #line),
+            (#"\s"#, "a\u{FEFF}b\u{180E}\u{200B}c\u{A0}d", "a#b\u{180E}\u{200B}c#d", #line),
+            (#"[\S]"#, "a\u{FEFF}\u{85}", "#\u{FEFF}#", #line),
+            (#"\S"#, "\u{FEFF}\u{85}", "\u{FEFF}#", #line),
+        ]
+        for flags in ["g", "gu"] {
+            for (pattern, input, expected, line) in gAndGu { assertRegex(pattern, flags, input, expected, line: line) }
+        }
+        // `\V`, `\h`, `\H` and `\R` are the letters without `u` and refused with it.
+        for pattern in [#"\V"#, #"\h"#, #"\H"#, #"\R"#] {
+            for flags in ["g", "gi"] { assertRegex(pattern, flags, v, v) }
+            for flags in ["gu", "giu"] { assertRegex(pattern, flags, v, nil) }
+        }
+    }
+
+    func testA2_anEmptyClassTakesAQuantifierUnderEveryFlag() {
+        let rows: [(String, String, String, UInt)] = [
+            ("[]*", "ab", "#a#b#", #line),
+            ("[]+", "ab", "ab", #line),
+            ("[]?", "ab", "#a#b#", #line),
+            ("a[]?b", "ab", "#", #line),
+            ("[]{2}", "ab", "ab", #line),
+            ("[]{0}", "ab", "#a#b#", #line),
+            ("(?:[])*", "ab", "#a#b#", #line),
+            ("[]*?", "ab", "#a#b#", #line),
+            ("[^]*", "ab", "##", #line),
+            ("a[]*b", "ab", "#", #line),
+            ("[]|a", "ab", "#b", #line),
+            ("[^]?", "ab", "###", #line),
+        ]
+        for flags in ["g", "gu", "gi", "giu"] {
+            for (pattern, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        }
+        assertRegex("(?=a)*", "g", "ab", "#a#b#")
+        assertRegex("(?=a)*", "gu", "ab", nil)
+    }
+
+    func testA2_guard_aDecimalEscapePastIntIsNoBackreference() {
+        // Digits past Int.max name no group: with `u` refused, without it `\9` and the digits, or an octal escape.
+        let rows: [(String, String, String, UInt)] = [
+            (#"\99999999999999999999"#, "99999999999999999999 9", "# 9", #line),
+            (#"(a)\12345678901234567890"#, "aaS45678901234567890 a", "a# a", #line),
+            (#"\12345678901234567890"#, "S45678901234567890", "#", #line),
+            (#"[\12345678901234567890]"#, "S4x", "##x", #line),
+            (#"(a)\9223372036854775808"#, "a9223372036854775808", "#", #line),
+        ]
+        for (pattern, input, expected, line) in rows {
+            assertRegex(pattern, "g", input, expected, line: line)
+            assertRegex(pattern, "gu", input, nil, line: line)
+        }
+    }
+
     func testDoubleToStringMatchesDart() {
         let cases: [(Double, String)] = [
             (0, "0.0"), (-0.0, "-0.0"), (1, "1.0"), (-2.5, "-2.5"), (0.1, "0.1"), (100, "100.0"),
