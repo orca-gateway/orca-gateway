@@ -3,20 +3,22 @@
 ## Front page
 
 ### In one breath
-group 5 of 6 · tasks: 2 green, 0 blocked · cases: 10 of 11 green (all but X1) · suites green
-T9 Swift: `\p`/`\P` under `iu` over Dart's 1 454 fold classes; script values Dart's 336 exactly.
-T10 Kotlin: the same, written `(?-i:[CK])`; Qaai, Qaac mapped for the JVM.
-Tests: engine 703, Flutter 241, Swift 198, iOS 54 + 198, Kotlin core 197, sdk 128, lint clean.
-Probe: G4 0 in Swift, 1 in Kotlin (`scx=`, not planned); cost 2.5x and 3.2x of the iu test.
+group 6 of 6 · tasks: 1 green, 0 blocked · cases: 11 of 11 green · suites green
+T11: render fixtures 35 (Annex B, strict `u`) and 36 (group names, unset refs, script values).
+Count pins 34 -> 36 in Swift and Kotlin; every runner resolves both fixtures as Dart does.
+Tests: engine 705, Flutter 243, Swift 198, iOS 54 + 198, Kotlin core 197, sdk 128, lint clean.
+Stage: 11 of 11 tasks green over 6 groups, 0 blocked; committed on the branch, nothing pushed.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-4 auto-decided: one fold reader; `[CK]` form in Kotlin; one pass over the letters; Zinh as written.
+1 needs you: fixture size, 18 rows each (~23 KB) vs trim to ~15 (33-34 are 16-18 KB).
+2 auto-decided: a script writes both fixtures; 19 repeat rows stay unit-test rows only.
 
 ### Questions for you
-1. Next: group 6, render fixtures 35-36 and the count pins 34 → 36 (T11)? (default: go)
+1. Fixtures 35-36: keep 18 rows each (~23 KB) or trim to ~15? (default: keep)
+2. `A` approves the stage; ship (stage 10) pushes the branch and opens the PR. (default: go)
 
 ## Appendix
 
@@ -291,6 +293,37 @@ Once after the group (logs `s15/g5-*.log`):
   Left in all: row 23b.38's emoji rows, run-time unset. No case that matched Dart before differs.
 - F11's "282 above U+FFFF" counts classes; the code points above U+FFFF are 564.
 
+### Group 6
+Commit: T11 f4381a3 (staged by path). Nothing pushed. Group 5's card approved with your standing
+rule (start group 6, minor).
+
+#### Task T11 · Fixtures 35-36, counts pinned at 36
+Files: `schema/fixtures/render/35_regex_annex_b_strict_unicode.json` (new) · `schema/fixtures/render/36_regex_group_names_script_values.json` (new) · `…/ModelRoundTripTests.swift` · `…/models/ModelRoundTripTest.kt` · `…/FixturePathsTest.kt`
+Cases: X1 → green on all four · red first: with the fixtures in and the pins at 34, Swift failed only
+ModelRoundTripTests:10 and Kotlin only FixturePathsTest and allRenderFixturesRoundTrip (36 vs 34);
+the engine and every resolved-value runner (Flutter, Swift, Kotlin) already passed 35 and 36.
+Changed: fixture 35, 18 rows: Annex B without `u` (9), the strict-`u` nulls (4), 2 kept with `u`,
+`a++` null in both modes, `\s+` over ECMAScript's white space, `[]*`. Fixture 36, 18 rows: 3 names
+Dart accepts, 2 it refuses, 3 unset references matching empty, 4 refused script values, 6 kept.
+The pins move 34 → 36 at five seams, "01-36" in the messages.
+Decisions: 1. 18 rows each (23.1 KB, 23.3 KB; 33-34 are 16-18 KB): one row per kind, repeats
+dropped; keep vs trim to ~15 (card question 1) · 2. a script writes both files (`expected` from the
+engine's encodeJsonTree via bun, json.dumps ASCII); it rebuilds 33-34 byte for byte · 3. 19 repeat
+candidates stay TransformTests rows only; none was left out because a runner could not express it.
+Review fit: pass
+Review quality: fixture 36's description called script values "Unicode's long names or four-letter
+codes" yet listed Hrkt as null, fixed (now ECMAScript's table, less Hrkt, plus Qaai and Qaac; the
+rows, `expected` and `resolved` unchanged)
+
+#### Group 6 test run
+Once after the group (logs `s15/g6-*.log`), then again by the rework, the same counts:
+- `cd engine && bun test` · 705 pass, 0 fail (703 + the two fixtures).
+- `cd sdk && flutter test` · +243: All tests passed (35, 36 run in render_resolved_test.dart) ·
+  `flutter analyze` · No issues found.
+- `cd sdk-swift && swift test` · 198 tests, 0 failures · iOS · 54 + 198, TEST SUCCEEDED.
+- `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL · core 197, sdk 128, 0 failures · lint clean.
+- Stage: 11 of 11 tasks green over 6 groups, 0 blocked, 0 skipped; every 07 case green.
+
 ### Blocked
 none
 
@@ -302,3 +335,6 @@ none
   a lookbehind (ICU and the JVM refuse it) and a group name spelled with two `\u` surrogate escapes.
 - Tool input in this session turns backslash-u-hex text into the character: S14's TransformTest.kt
   still has U+00A0 ×2, U+2003 ×2, U+0301 ×3 written literally (left: baseline lines).
+- Follow-ups, outside this row: `DartFoldTable`'s `u` column duplicates `DartFoldClasses` (a test pins
+  they agree); Swift's `tableKept` comment also covers `propertyKept`; the S14 test name
+  `p1_guard_scriptKeysLeaveTheValueToTheEngine` no longer says what it checks.
