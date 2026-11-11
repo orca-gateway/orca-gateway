@@ -510,8 +510,8 @@ class TransformTest {
                 Rx("(?i-s:a.)", "gis", "a\nAb", "a\n#"),
                 Rx("(?ims:x)", "giu", "xX", "##"),
                 Rx("(?ms-i:^a.)", "gi", "aA\nA\n", "#\nA\n"),
-                Rx("(?i)s", "gi", "sS", null), // bare inline flags are not Dart syntax
-                Rx("(?i:s)", "g", "sS", "##"), // without i nothing is rewritten
+                Rx("(?i)s", "gi", "sS", null), // bare inline flags are not Dart syntax: a `(?` form it rejects
+                Rx("(?i:s)", "g", "sS", "##"), // without i the group's i still folds s, to Dart's set
             ),
         )
     }
@@ -570,5 +570,92 @@ class TransformTest {
             Rx("(?ms-i:^a.)", "gi", "aA\nA\n", "#\nA\n"),
         )
         assertDart(gi + giu + modifiers)
+    }
+
+    // MARK: S14 — modifier scope and (? forms (row 23b.36)
+    // Expected values from Dart 3.12.2. A modifier group's letters, classes and
+    // word edges follow the group's `i`, not the pattern's.
+
+    @Test
+    fun m1_aModifierGroupScopesTheIFlag() {
+        val (longS, kelvin, dotless, dotted) = listOf("\u017F", "\u212A", "\u0131", "\u0130")
+        assertDart(
+            listOf(
+                Rx("(?-i:s)", "gi", "sS", "#S"),
+                Rx("(?-i:s)", "giu", "sS", "#S"),
+                Rx("(?i:s)", "g", "${longS}sS", "$longS##"),
+                Rx("(?i:s)", "gu", "${longS}sS", "###"),
+                Rx("(?i:k)", "g", "kK$kelvin", "##$kelvin"),
+                Rx("(?-i:k)", "gi", "kK$kelvin", "#K$kelvin"),
+                Rx("(?i:$longS)", "g", "sS$longS", "sS#"),
+                Rx("(?-i:$longS)", "giu", "sS$longS", "sS#"),
+                Rx("(?-i:S)", "gi", "sS", "s#"),
+                Rx("(?i:S)", "g", "sS$longS", "##$longS"),
+                Rx("(?-i:i)", "gi", "iI$dotless$dotted", "#I$dotless$dotted"),
+                Rx("(?i:i)", "g", "iI$dotless$dotted", "##$dotless$dotted"),
+                Rx("(?-i:[^s])", "gi", "sS${longS}x", "s###"),
+                Rx("(?i:[^s])", "g", "sS${longS}x", "sS##"),
+                Rx("(?i:\\W)", "gu", "sS$longS$kelvin!", "sS$longS$kelvin#"),
+                Rx("(?-i:\\b)", "giu", "$longS a", "$longS #a#"),
+            ),
+        )
+    }
+
+    @Test
+    fun m1_nestedGroupsFollowTheInnermostAndTheScopeEndsAtItsParen() {
+        val longS = "\u017F"
+        assertDart(
+            listOf(
+                Rx("(?i:(?-i:s))", "gi", "sS", "#S"),
+                Rx("(?-i:(?i:s))", "g", "sS$longS", "##$longS"),
+                Rx("(?i:a(?-i:s)S)", "g", "AsS ASs AsS", "# ASs #"),
+                Rx("(?-i:a)s", "gi", "aS AS as", "# AS #"),
+                Rx("(?-i:s)(s)", "gi", "sS SS", "# SS"),
+                Rx("(?i:a)s", "g", "As AS a$longS", "# AS a$longS"),
+                // Modifiers that leave `i` as it is still open a group.
+                Rx("(?m:^a)", "gm", "b\na", "b\n#"),
+                Rx("(?s:a.b)", "g", "a\nb", "#"),
+                // A `)` in a class or escaped closes no group.
+                Rx("(?-i:[)]s)", "gi", ")s )S", "# )S"),
+                Rx("(?-i:\\)s)", "gi", ")s )S", "# )S"),
+            ),
+        )
+    }
+
+    @Test
+    fun m2_parenQuestionFormsDartRejectsAreInvalid() {
+        val rejected = listOf(
+            "(?i)a", "(?im)a", "(?i)", "((?i)s)", "(?-:a)", "(?u:a)", "(?x:a)", "(?ii:a)", "(?i-i:a)",
+            "(?-i-m:a)", "(?>a)", "(?#c)a", "(?P<n>a)", "(?'n'a)", "(?^:a)",
+        )
+        assertDart(rejected.flatMap { p -> listOf(Rx(p, "g", "aA", null), Rx(p, "gi", "aA", null)) })
+        // The matches op compiles with no flags; Dart's is false on an invalid pattern.
+        assertFalse(holds(obj("op" to "matches", "str" to s("a"), "regex" to "(?i)a")))
+    }
+
+    @Test
+    fun m2_guard_parenQuestionFormsDartAcceptsStayValid() {
+        assertDart(
+            listOf(
+                Rx("(?:a)", "g", "aA", "#A"),
+                Rx("(?:a)", "gi", "aA", "##"),
+                Rx("(?=a)", "g", "aA", "#aA"),
+                Rx("(?=a)", "gi", "aA", "#a#A"),
+                Rx("(?!a)", "g", "aA", "a#A#"),
+                Rx("(?!a)", "gi", "aA", "aA#"),
+                Rx("(?<=a)b", "g", "abAB", "a#AB"),
+                Rx("(?<=a)b", "gi", "abAB", "a#A#"),
+                Rx("(?<!a)b", "g", "abcb", "abc#"),
+                Rx("(?<!a)b", "gi", "abcb", "abc#"),
+                Rx("(?<n>a)\\k<n>", "g", "aa", "#"),
+                Rx("(?<n>a)\\k<n>", "gi", "aa", "#"),
+                Rx("(?ms-i:a)", "g", "aA", "#A"),
+                Rx("(?ms-i:a)", "gi", "aA", "#A"),
+                Rx("(?i-ms:a)", "g", "aA", "##"),
+                Rx("(?i-ms:a)", "gi", "aA", "##"),
+                Rx("(?i-:a)", "g", "aA", "##"),
+                Rx("(?i-:a)", "gi", "aA", "##"),
+            ),
+        )
     }
 }

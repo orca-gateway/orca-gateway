@@ -392,7 +392,8 @@ internal object RegexSupport {
         if ('i' in f) options = options or Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
         if ('m' in f) options = options or Pattern.MULTILINE
         if ('s' in f) options = options or Pattern.DOTALL
-        return compileIcuLike(asciiClasses(pattern, ignoreCase = 'i' in f, unicode = 'u' in f), options)
+        val rewritten = asciiClasses(pattern, ignoreCase = 'i' in f, unicode = 'u' in f) ?: return null
+        return compileIcuLike(rewritten, options)
     }
 
     /**
@@ -413,22 +414,32 @@ internal object RegexSupport {
      *   `(?-i:[sSſ])`. A class C becomes `(?:(?!T)C|(?-i:[M]))`, T the ten
      *   letters and M those C matches in Dart, found once by testing C
      *   case-sensitively. Every other letter keeps the engine's folding.
+     * - `i` above is the group's, as in Dart: a modifier group `(?i:` or
+     *   `(?-i:` sets it up to its `)`, any other group keeps the enclosing one
+     *   (the pattern's at the top). Inside `(?-i:` the ten letters stay as
+     *   written, the engine reading them case-sensitively; inside `(?i:` they
+     *   become Dart's sets as under the pattern's `i`. `u` is the pattern's.
+     *
+     * After `(?` Dart takes only `:`, `=`, `!`, `<=`, `<!`, a group name
+     * `<name>` or modifiers: flags from `i`, `m`, `s`, each at most once, at
+     * most one `-`, then `:`, not empty on both sides of the `-`. Any other
+     * form (`(?i)`, `(?-:`, `(?ii:`, `(?x:`, `(?>`, `(?#`, `(?P<`) gives null.
      *
      * An escaped character stays as it is (`\\d` is a backslash and a d), as do
      * group names, a modifier group's flags (`(?ms-i:`) and what follows `\c`,
      * `\k<` and `\p{`. Letters written as escapes (`\x73`) and backreferences
-     * keep the engine's folding, and a letter inside a modifier group is
-     * rewritten by the pattern's flags, not the group's: under `i`, `(?-i:s)`
-     * still matches S, and without it `(?i:s)` matches ſ, where Dart's do not.
+     * keep the engine's folding.
      */
-    fun asciiClasses(pattern: String, ignoreCase: Boolean = false, unicode: Boolean = false): String {
-        if (!ignoreCase && !pattern.contains('\\') && !pattern.contains('[')) return pattern
-        val word = if (ignoreCase && unicode) "A-Za-z0-9_\u017F\u212A" else "A-Za-z0-9_"
-        val w = "(?-i:[$word])"
+    fun asciiClasses(pattern: String, ignoreCase: Boolean = false, unicode: Boolean = false): String? {
+        if (!ignoreCase && pattern.none { it == '\\' || it == '[' || it == '(' }) return pattern
+        val open = ArrayList<Boolean>() // the `i` of each open group
         val out = StringBuilder(pattern.length + 16)
         var i = 0
         while (i < pattern.length) {
             val c = pattern[i]
+            val fold = open.lastOrNull() ?: ignoreCase
+            val word = if (fold && unicode) "A-Za-z0-9_\u017F\u212A" else "A-Za-z0-9_"
+            val w = "(?-i:[$word])"
             when {
                 c == '\\' -> {
                     val piece = when (pattern.getOrNull(i + 1)) {
@@ -444,18 +455,19 @@ internal object RegexSupport {
                     out.append(piece ?: pattern.substring(i, end))
                     i = end
                 }
-                c == '[' -> i = characterClass(pattern, i, word, if (ignoreCase) unicode else null, out)
-                pattern.startsWith("(?<", i) && pattern.getOrNull(i + 3).let { it != '=' && it != '!' } -> {
-                    val end = pattern.indexOf('>', i).let { if (it < 0) pattern.length else it + 1 }
-                    out.append(pattern, i, end) // a group name
+                c == '[' -> i = characterClass(pattern, i, word, if (fold) unicode else null, out)
+                c == '(' -> {
+                    val (end, inner) = groupOpening(pattern, i, fold) ?: return null
+                    open.add(inner)
+                    out.append(pattern, i, end) // a group name, or `(?ms-i:` whose flags the engine reads as Dart does
                     i = end
                 }
-                pattern.startsWith("(?", i) && isModifiers(pattern, i + 2) -> {
-                    val end = pattern.indexOf(':', i) + 1
-                    out.append(pattern, i, end) // `(?ms-i:`, whose flags the engine reads as Dart does
-                    i = end
+                c == ')' -> {
+                    open.removeLastOrNull()
+                    out.append(c)
+                    i += 1
                 }
-                ignoreCase && c in FOLD_LETTERS -> {
+                fold && c in FOLD_LETTERS -> {
                     out.append("(?-i:[").append(dartFold(c, unicode)).append("])")
                     i += 1
                 }
@@ -468,11 +480,31 @@ internal object RegexSupport {
         return out.toString()
     }
 
-    /** Whether flags (`i`, `m`, `s`, `-`) and then a colon start at [k], after a `(?`: a modifier group. */
-    private fun isModifiers(pattern: String, k: Int): Boolean {
-        var e = k
-        while (e < pattern.length && pattern[e] in "ims-") e += 1
-        return e > k && pattern.getOrNull(e) == ':'
+    /**
+     * The end of the group opening at [i] and the group's `i`: [fold], the
+     * enclosing one, unless modifiers add or remove it. Null for a `(?` form
+     * Dart rejects.
+     */
+    private fun groupOpening(pattern: String, i: Int, fold: Boolean): Pair<Int, Boolean>? {
+        if (pattern.getOrNull(i + 1) != '?') return i + 1 to fold
+        val next = pattern.getOrNull(i + 2)
+        return when {
+            next == ':' || next == '=' || next == '!' -> i + 3 to fold
+            next == '<' && pattern.getOrNull(i + 3).let { it == '=' || it == '!' } -> i + 4 to fold
+            next == '<' -> pattern.indexOf('>', i).let { if (it < 0) pattern.length else it + 1 } to fold
+            else -> {
+                var e = i + 2
+                while (e < pattern.length && pattern[e] in "ims-") e += 1
+                val flags = pattern.substring(i + 2, e)
+                val letters = flags.filter { it != '-' }
+                val dart = pattern.getOrNull(e) == ':' && flags != "-" && flags.length - letters.length <= 1 &&
+                    letters.toSet().size == letters.length
+                if (!dart) return null
+                val dash = flags.indexOf('-')
+                val at = flags.indexOf('i')
+                e + 1 to if (at < 0) fold else dash < 0 || at < dash
+            }
+        }
     }
 
     /** s, k, i in either case and the four letters Unicode folds into them. */
@@ -493,8 +525,8 @@ internal object RegexSupport {
     /**
      * The class opening at [start], up to its first unescaped `]` as in
      * ECMAScript, appended to [out]; returns the index after it. [unicode] is
-     * the `u` flag under `i`, null without `i`. Unclosed, it is copied as it is
-     * and fails to compile, as in Dart.
+     * the `u` flag under the group's `i`, null without it. Unclosed, it is
+     * copied as it is and fails to compile, as in Dart.
      */
     private fun characterClass(pattern: String, start: Int, word: String, unicode: Boolean?, out: StringBuilder): Int {
         val negated = pattern.getOrNull(start + 1) == '^'
