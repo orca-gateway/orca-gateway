@@ -1152,4 +1152,189 @@ class TransformTest {
             ),
         )
     }
+
+    // MARK: S15 — Annex B without u (row 23b.37)
+    // Expected values from Dart 3.12.2. Without `u` Dart reads Annex B's
+    // lenient grammar: an escape with no meaning is its character, a brace
+    // that starts no quantifier is a literal, a decimal escape past the group
+    // count is a legacy octal one. Classes follow ECMAScript in both modes.
+
+    @Test
+    fun a1_anEscapedLetterWithNoMeaningIsThatLetterWithoutU() {
+        assertDart(
+            listOf(
+                Rx("\\A", "g", "aA", "a#"),
+                Rx("\\Qa\\E", "g", "QaE a", "# a"),
+                Rx("\\z", "g", "z", "#"),
+                Rx("\\h", "g", "h", "#"),
+                Rx("\\e", "g", "e", "#"),
+                Rx("\\a", "g", "a", "#"),
+                Rx("\\K", "g", "kK\u212A", "k#\u212A"),
+                Rx("\\K", "gi", "kK\u212A", "##\u212A"),
+                Rx("\\K+", "gi", "kKkK\u212A", "#\u212A"),
+                Rx("\\o{2}", "g", "oo", "#"),
+                Rx("\\N{LATIN SMALL LETTER A}", "g", "N{LATIN SMALL LETTER A}", "#"),
+                // \p and \P are letters, and what follows them is ordinary text.
+                Rx("\\p{L}", "g", "p{L} a", "# a"),
+                Rx("\\P{L}", "g", "P{L} a", "# a"),
+                Rx("\\p{L}", "gi", "p{L} P{l}", "# #"),
+                // \k is the letter k when the pattern has no named group.
+                Rx("\\k", "g", "k", "#"),
+                Rx("\\k<a>", "g", "k<a>", "#"),
+                Rx("\\ka", "g", "ka", "#"),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_aBraceThatStartsNoQuantifierIsALiteralWithoutU() {
+        assertDart(
+            listOf(
+                Rx("{", "g", "{x}", "#x}"),
+                Rx("}", "g", "{x}", "{x#"),
+                Rx("x{,3}", "g", "x{,3} x", "# x"),
+                Rx("a{1", "g", "a{1 a", "# a"),
+                Rx("a{1,", "g", "a{1, a", "# a"),
+                Rx("]", "g", "a]", "a#"),
+                Rx("p{L}", "g", "p{L}", "#"),
+                Rx("x{1}{", "g", "x{", "#"),
+                Rx("{*", "g", "{{a", "##a#"),
+                Rx("]+", "g", "]]a", "#a"),
+                Rx("{1,2}", "g", "a", null),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_hexAndUnicodeEscapesWithoutTheirDigitsAreLettersWithoutU() {
+        assertDart(
+            listOf(
+                Rx("\\u61", "g", "u61 a", "# a"),
+                Rx("\\u{3}", "g", "uuu u", "# u"),
+                Rx("\\u{61}", "g", "u{61} a", "u{61} a"),
+                Rx("\\x6", "g", "x6", "#"),
+                Rx("\\x{2}", "g", "xx x", "# x"),
+                Rx("\\xG1", "g", "xG1", "#"),
+                Rx("\\x*", "g", "xa", "##a#"),
+                Rx("[\\x6]", "g", "x6", "##"),
+                Rx("[\\u{61}]", "g", "u{61}", "#####"),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_aControlEscapeWithoutALetterIsABackslashWithoutU() {
+        assertDart(
+            listOf(
+                Rx("\\c1", "g", "\\c1", "#"),
+                Rx("\\c", "g", "\\c", "#"),
+                Rx("\\c!", "g", "\\c!", "#"),
+                Rx("\\c*", "g", "\\ccc \\", "# #"),
+                Rx("\\c1", "gi", "\\C1 \\c1", "# #"),
+                Rx("\\ca", "g", "\u0001a!", "#a!"),
+                // In a class \c and a digit or _ is the control character, anything else the members \ and c.
+                Rx("[\\c1]", "g", "\u0011 c 1", "# c 1"),
+                Rx("[\\c_]", "g", "\u001F_c", "#_c"),
+                Rx("[\\c]", "g", "\\c", "##"),
+                Rx("[\\c-e]", "g", "\\cde-", "####-"),
+                Rx("[\\ca]", "g", "\u0001a!", "#a!"),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_aDecimalEscapePastTheGroupCountIsLegacyOctalWithoutU() {
+        assertDart(
+            listOf(
+                Rx("\\0", "g", "a\u0000", "a#"),
+                Rx("\\01", "g", "\u0001 1", "# 1"),
+                Rx("\\377", "g", "\u00FF", "#"),
+                Rx("\\400", "g", " 0", "#"),
+                Rx("\\8", "g", "8", "#"),
+                Rx("\\18", "g", "\u00018", "#"),
+                Rx("\\08", "g", "\u00008", "#"),
+                Rx("\\012", "g", "\n", "#"),
+                Rx("\\163", "gi", "sS\u017F", "##\u017F"),
+                Rx("(a)\\8", "g", "a8", "#"),
+                Rx("(a)\\2", "g", "a\u0002", "#"),
+                Rx("(a)\\10", "g", "a\u0008", "#"),
+                Rx("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)\\10", "g", "abcdefghijj abcdefghija0", "# abcdefghija0"),
+                // Groups are counted over the whole pattern, not in a class or after an escaped (.
+                Rx("[(]\\1", "g", "(\u0001", "#"),
+                Rx("\\(\\1", "g", "(\u0001", "#"),
+                Rx("(?:a)\\1", "g", "a\u0001", "#"),
+                Rx("(?<n>a)\\1", "g", "aa", "#"),
+                Rx("[^]](a)\\1", "g", "x]aa", "#"),
+            ),
+        )
+    }
+
+    @Test
+    fun a2_backslashZeroIsNulWithU() {
+        assertDart(
+            listOf(
+                Rx("\\0", "gu", "a\u0000", "a#"),
+                Rx("[\\0]", "gu", "a\u0000", "a#"),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_aClassEndsAtItsFirstBracketAndHoldsNoSetSyntax() {
+        assertDart(
+            listOf(
+                Rx("[]", "g", "ab", "ab"),
+                Rx("[^]", "g", "a\nb", "###"),
+                Rx("[]a]", "g", "a]", "a]"),
+                Rx("[^]a]", "g", "a]", "a]"),
+                Rx("[]*", "g", "ab", "#a#b#"),
+                Rx("[^]", "gi", "aB", "##"),
+                Rx("[[:alpha:]]", "g", "a:] a", "a# a"),
+                Rx("[a&&b]", "g", "a&b", "###"),
+                Rx("[a~~b]", "g", "~", "#"),
+                Rx("[a-z&&[aeiou]]", "g", "a&[]", "a&#"),
+                Rx("[a--b]", "g", "a-b", null),
+                Rx("[--0]", "g", "-./0a", "####a"),
+                Rx("[a-z-0]", "g", "a-0z1", "####1"),
+                Rx("[\\x5a-\\x41]", "g", "A", null),
+                Rx("[a-\\c]", "g", "a", null),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_classEscapesFollowAnnexBWithoutU() {
+        assertDart(
+            listOf(
+                // A range with a class escape on either side is a union.
+                Rx("[a-\\d]", "g", "a-1b", "###b"),
+                Rx("[\\d-z]", "g", "1-z y", "### y"),
+                Rx("[\\w-\\d]", "g", "a-1%", "###%"),
+                Rx("[a-\\s]", "g", "a- b", "###b"),
+                Rx("[a-\\d]", "gi", "A-1b", "###b"),
+                // An identity escape is the character, a decimal one octal.
+                Rx("[\\B]", "g", "Bb", "#b"),
+                Rx("[\\1]", "g", "\u0001 1", "# 1"),
+                Rx("[\\8]", "g", "8", "#"),
+                Rx("[\\k]", "g", "k", "#"),
+                Rx("[\\a]", "g", "a", "#"),
+                Rx("[\\K]", "gi", "kK\u212A", "##\u212A"),
+                Rx("[\\18]", "g", "\u00018", "##"),
+                Rx("[\\0-\\x1f]", "g", "\u0000\u001F ", "## "),
+                Rx("[\\p{L}-z]", "g", "a", null),
+                Rx("[a-\\p{L}]", "g", "a-p{L}b", "#-#####"),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_guard_aLookaheadMayBeQuantifiedWithoutU() {
+        assertDart(
+            listOf(
+                Rx("(?=a)*", "g", "ab", "#a#b#"),
+                Rx("(?!a)+", "g", "ab", "a#b#"),
+                Rx("(?=a){2}", "g", "ab", "#ab"),
+            ),
+        )
+    }
 }
