@@ -186,11 +186,12 @@ extension JSONValue {
         return try parser.document()
     }
 
-    /// Encode with sorted keys, so the output is stable across runs.
+    /// The JSON text Dart's `jsonEncode` writes (see `JSONWriter`), with
+    /// sorted keys so the output is stable across runs.
     public func encoded() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        return try encoder.encode(self)
+        var out = ""
+        try JSONWriter.write(self, into: &out)
+        return Data(out.utf8)
     }
 
     /// Re-read a Codable model as a JSONValue tree (used by tests and by the
@@ -207,6 +208,47 @@ extension JSONValue {
     }
 }
 
+// MARK: - Writer
+
+/// Compact JSON text as Dart's `jsonEncode` writes it, so Dart reads each
+/// number back as the kind it was: a double in Dart's `toString` text (`4.0`,
+/// `-0.0`, `1e-7`, `0.000001`), an int as an int, strings escaped as Dart and
+/// `JSON.stringify` do (`/` and non-ASCII raw). Keys in `keys.sorted()`
+/// order, as JSONEncoder's `.sortedKeys` gave. NaN and infinity throw
+/// `EncodingError.invalidValue`, as JSONEncoder did and Dart does. Pure
+/// Swift, so it writes the same on Linux.
+enum JSONWriter {
+    static func write(_ value: JSONValue, into out: inout String) throws {
+        switch value {
+        case .null: out += "null"
+        case .bool(let b): out += b ? "true" : "false"
+        case .int(let i): out += String(i)
+        case .double(let d):
+            guard d.isFinite else {
+                throw EncodingError.invalidValue(d, .init(
+                    codingPath: [], debugDescription: "Unable to encode Double.\(d) directly in JSON."))
+            }
+            out += DartFormat.double(d)
+        case .string(let s): out += CapabilityVector.jsString(s)
+        case .array(let items):
+            out += "["
+            for (n, item) in items.enumerated() {
+                if n > 0 { out += "," }
+                try write(item, into: &out)
+            }
+            out += "]"
+        case .object(let members):
+            out += "{"
+            for (n, member) in members.sorted(by: { $0.key < $1.key }).enumerated() {
+                if n > 0 { out += "," }
+                out += CapabilityVector.jsString(member.key)
+                out += ":"
+                try write(member.value, into: &out)
+            }
+            out += "}"
+        }
+    }
+}
 
 // MARK: - Parser
 
