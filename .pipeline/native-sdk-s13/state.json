@@ -4,9 +4,9 @@
   "idea": "Epic 23b row 23b.35: Swift writes a JSON 4.0 back as 4.0 — JSONValue.encoded() and JSONValue(encoding:) stop going through JSONEncoder, so the page POST's appState, executeAction's params, pageState, appState and caps vector, Value/BoolExpr/Transform/Action .json and the DevTools payloads keep a typed or live 4.0 a double, as Dart and Kotlin write it",
   "kind": "feature",
   "created_at": "2026-11-10T09:40:52Z",
-  "updated_at": "2026-11-11T08:49:49Z",
+  "updated_at": "2026-11-11T09:11:19Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "10",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -51,27 +51,38 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 round 2's only question (approve 09, then push and PR) is minor"
     },
     "10": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/10-r1.md"
+      "card": "cards/10-r1.md",
+      "approved_at": "2026-11-11T09:10:34Z",
+      "approved_with": "Merged, go on"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-11T09:11:19Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 12's questions (close S13 with 13-16 skipped; wait for your Start S14) are minor, both defaults"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S13 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S13 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S13 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S13 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     }
   },
   "gates": {
