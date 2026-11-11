@@ -4,7 +4,7 @@
   "idea": "Epic 23b row 23b.36: native SDKs match Dart in the regex corners S12 left — letters inside a modifier group follow that group's flags; no ICU full case folding under i for the sharp s and ligatures; escaped letters and backreferences fold as Dart does; Kotlin's \\p{…} with long property names; patterns Dart rejects are rejected in Kotlin too. In sdk-swift and sdk-kotlin",
   "kind": "feature",
   "created_at": "2026-11-11T09:18:35Z",
-  "updated_at": "2026-11-11T10:38:51Z",
+  "updated_at": "2026-11-11T10:59:45Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "draft",
-      "rounds": 2,
-      "card": "cards/09-r1.md"
+      "rounds": 3,
+      "card": "cards/09-r2.md"
     },
     "10": {
       "status": "pending"
