@@ -923,6 +923,65 @@ final class TransformTests: XCTestCase {
         XCTAssert(refused.isEmpty, "\(refused.count) refused: " + refused.prefix(8).joined(separator: "; "))
     }
 
+    // MARK: S15 — quantifiers (row 23b.37)
+
+    // Dart 3.12.2 printed every value; a quantifier is `*`, `+`, `?`, `{n}`, `{n,}` or `{n,m}`.
+
+    func testA3_dartRefusesAQuantifierOnAQuantifierAnAssertionOrNothing() {
+        // On a quantifier (but for the lazy `?`), on `^ $ \b \B` or a lookbehind, at the start, after `(` or `|`.
+        let refused = [
+            "a++", "a*+", "a?+", "a{1,2}+", "a{1,}+", "a{1}{2}", "a**", "a+?+", "a???", "{3}",
+            "^*", "$+", "\\b*", "\\B+", "(?i:\\b+)", "(?<=a)*", "(?<!a)+",
+            "*a", "+a", "?a", "a|*b", "(*a)", "(?:+a)", "(?<n>{2}a)", "a{2,1}",
+        ]
+        for flags in ["g", "gu"] {
+            for pattern in refused { assertRegex(pattern, flags, "aaa", nil) }
+        }
+        assertRegex("^*a", "gm", "aaa", nil)
+    }
+
+    func testA3_aLazyQuestionMarkAndAnEmptyGroupStayValid() {
+        let rows: [(String, String, String, String, UInt)] = [
+            ("a+?", "g", "aaa", "###", #line),
+            ("a+?", "gu", "aaa", "###", #line),
+            ("a??", "g", "aaa", "#a#a#a#", #line),
+            ("a??", "gu", "aaa", "#a#a#a#", #line),
+            ("a{1,2}?", "g", "aaa", "###", #line),
+            ("a{1,2}?", "gu", "aaa", "###", #line),
+            ("a{1}?", "g", "aaa", "###", #line),
+            ("a{2,}?", "g", "aaa", "#a", #line),
+            ("(?:)*", "g", "aaa", "#a#a#a#", #line),
+            ("(?:)*", "gu", "aaa", "#a#a#a#", #line),
+            ("()+", "g", "aaa", "#a#a#a#", #line),
+            ("()+", "gu", "aaa", "#a#a#a#", #line),
+            ("(?i:)+", "g", "aaa", "#a#a#a#", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    func testA3_guard_quantifiersAndAssertionsKeepTheirMatches() {
+        let rows: [(String, String, String, String, UInt)] = [
+            ("a{1,2}", "g", "aaa", "##", #line),
+            ("(a)+", "g", "aaa", "#", #line),
+            ("(?<n>a)+", "g", "aaa", "#", #line),
+            ("(?:ab)*", "g", "abab", "##", #line),
+            ("(?-i:a)+", "gi", "aAa", "#A#", #line),
+            ("[a]*", "g", "aaa", "##", #line),
+            ("\\d+", "g", "a12", "a#", #line),
+            ("\\s?a", "g", "aaa", "###", #line),
+            ("\\x61{2}", "g", "aaa", "#a", #line),
+            ("\\b", "g", "a b", "#a# #b#", #line),
+            ("\\B", "g", "ab", "a#b", #line),
+            ("^a", "g", "aaa", "#aa", #line),
+            ("a$", "g", "aaa", "aa#", #line),
+            ("(?=a)a", "g", "aaa", "###", #line),
+            ("a|(?=a)a", "g", "aaa", "###", #line),
+            ("(?<=a)a", "g", "aaa", "a##", #line),
+            ("(?<!a)a", "g", "aaa", "#aa", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
     func testDoubleToStringMatchesDart() {
         let cases: [(Double, String)] = [
             (0, "0.0"), (-0.0, "-0.0"), (1, "1.0"), (-2.5, "-2.5"), (0.1, "0.1"), (100, "100.0"),

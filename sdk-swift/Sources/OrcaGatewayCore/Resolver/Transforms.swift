@@ -456,6 +456,13 @@ enum Regex {
     ///   tables (`dartAcceptsProperty`), in a class too: a name it refuses
     ///   (`IsLatin`, `Latin`, `L&`, `script=Latin`), which ICU may read, is
     ///   nil. Without `u` it is copied as is.
+    /// - A quantifier is `*`, `+`, `?`, or `{n}`, `{n,}`, `{n,m}` in ASCII
+    ///   digits; a `?` right after one makes it lazy (`a+?`, `a{1,2}?`). Dart
+    ///   refuses one with nothing to repeat (at the start, after `(` or `|`:
+    ///   `*a`, `(?:+a)`), one on an assertion (`^`, `$`, `\b`, `\B`, a
+    ///   lookbehind: `^*`, `(?<=a)+`) and one on a quantifier (`a++`, `a**`,
+    ///   `a{1}{2}`, `a+?+`), so each is nil: ICU reads `a++` as possessive
+    ///   and lets a quantifier follow the lookarounds `\b` and `\B` become.
     static func asciiClasses(_ pattern: String, ignoreCase: Bool, unicode: Bool) -> String? {
         // The sets and edges under a group whose `i` is `fold`.
         func escapes(_ fold: Bool) -> (sets: [Unicode.Scalar: String], edges: [Unicode.Scalar: String]) {
@@ -470,10 +477,21 @@ enum Regex {
             )
         }
 
+        // An open group: the `i` inside it, its kind, and where its text starts in `out` (UTF-8 offset).
+        struct Group {
+            enum Kind { case capturing, nonCapturing, lookahead, lookbehind }  // `(?:` and `(?ms-i:` are non-capturing
+            let fold: Bool
+            let kind: Kind
+            let start: Int
+        }
+        // What a quantifier at this point would repeat.
+        enum Last { case nothing, assertion, quantified, atom }
+
         let p = Array(pattern.unicodeScalars)
         var i = 0
         var out = ""
-        var scope: [Bool] = []  // the `i` of each open group, innermost last
+        var scope: [Group] = []  // each open group, innermost last
+        var last = Last.nothing
         func next(_ k: Int) -> Unicode.Scalar? { i + k < p.count ? p[i + k] : nil }
         func take(_ n: Int) {
             for _ in 0..<n where i < p.count {
@@ -532,6 +550,25 @@ enum Regex {
             }
             return (value, k)
         }
+        // At a quantifier, `*`, `+`, `?` or `{n}`, `{n,}`, `{n,m}` (ASCII digits): its length, a
+        // lazy `?` after it aside; nil anywhere else, at a `{` of no such form too.
+        func quantifier() -> Int? {
+            guard let c = next(0) else { return nil }
+            if c == "*" || c == "+" || c == "?" { return 1 }
+            guard c == "{" else { return nil }
+            var k = 1
+            func digits() -> Bool {
+                let first = k
+                while let d = next(k), ("0"..."9").contains(d) { k += 1 }
+                return k > first
+            }
+            guard digits() else { return nil }
+            if next(k) == "," {
+                k += 1
+                _ = digits()
+            }
+            return next(k) == "}" ? k + 1 : nil
+        }
         // ICU refuses `\u{` and reads at most six digits in `\x{…}`.
         func braced(_ value: UInt32) -> String { "\\x{\(String(value, radix: 16, uppercase: true))}" }
         // At `\p{` or `\P{` with `u`: the escape's length through its `}`, or
@@ -576,9 +613,14 @@ enum Regex {
         }
 
         while let c = next(0) {
-            let fold = scope.last ?? ignoreCase
+            let fold = scope.last?.fold ?? ignoreCase
             let (sets, edges) = escapes(fold)
-            if c == "[" {
+            var now = Last.atom  // what a quantifier after this token would repeat
+            if let length = quantifier() {
+                guard last == .atom else { return nil }  // `*a`, `(+a)`, `^*`, `\b+`, `a++`, `a{1}{2}`
+                take(next(length) == "?" ? length + 1 : length)  // `a+?` is lazy
+                now = .quantified
+            } else if c == "[" {
                 guard case let (body, negated, closed)? = classSet(sets) else { return nil }
                 let set = "[" + (negated ? "^" : "") + body + (closed ? "]" : "")
                 out += fold && closed ? dartFolded(set, body: body, negated: negated, unicode: unicode) : set
@@ -587,8 +629,9 @@ enum Regex {
                     out += "(?-i:\(set))"
                     i += 2
                 } else if let edge = edges[n] {
-                    out += edge
+                    out += edge  // lookarounds, which ICU lets a quantifier follow
                     i += 2
+                    now = .assertion
                 } else if n == "k", next(2) == "<" {
                     take(through: ">")  // `\k<name>` keeps its letters
                 } else if n == "p" || n == "P", next(2) == "{" {
@@ -610,28 +653,41 @@ enum Regex {
                     take(n == "c" ? 3 : 2)  // `\cK`, and `\x`, `\u` without their digits
                 }
             } else if c == "(" {
+                let start = out.utf8.count
                 var inner: Bool? = fold  // a group keeps the `i` around it
-                if next(1) != "?" || next(2) == "=" || next(2) == "!"
-                    || next(2) == "<" && (next(3) == "=" || next(3) == "!")
-                {
-                    take(1)  // a group or a lookaround
+                var kind = Group.Kind.capturing
+                if next(1) != "?" {
+                    take(1)  // a group
+                } else if next(2) == "=" || next(2) == "!" {
+                    kind = .lookahead
+                    take(3)
+                } else if next(2) == "<" && (next(3) == "=" || next(3) == "!") {
+                    kind = .lookbehind
+                    take(4)
                 } else if next(2) == "<" {
                     take(through: ">")  // a group name
                 } else {
+                    kind = .nonCapturing
                     inner = modifiers(fold)
                     take(through: ":")  // `(?-i:`, whose flags ICU reads as Dart does
                 }
                 guard let inner else { return nil }
-                scope.append(inner)
+                scope.append(Group(fold: inner, kind: kind, start: start))
+                now = .nothing
             } else if c == ")" {
-                _ = scope.popLast()  // an unbalanced `)` is ICU's to refuse
+                let group = scope.popLast()  // an unbalanced `)` is ICU's to refuse
                 take(1)
+                if group?.kind == .lookbehind { now = .assertion }
+            } else if c == "^" || c == "$" || c == "|" {
+                take(1)
+                now = c == "|" ? .nothing : .assertion
             } else if fold, let set = dartFold(c, unicode: unicode) {
                 out += "(?-i:[\(spelled(set))])"
                 i += 1
             } else {
                 take(1)
             }
+            last = now
         }
         return out
     }
