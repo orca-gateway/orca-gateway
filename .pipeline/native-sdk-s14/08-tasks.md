@@ -190,6 +190,8 @@ runners. 9 tasks in 5 groups, at most 2 per group. `…/` abbreviates the same f
   Kotlin core 130, sdk 128 · lint no issues, 2026-11-11
 - and the probe (`s14/oracle/`) after each group: no Swift or Kotlin difference left in the group's
   corners.
+- commits: per task · gate: per group (answered at gate 08, 2026-11-11, "A, leave them": every default;
+  question 4: backreferences under `i` left for the new epic row 23b.37, added with the corners not planned)
 
 ### Not planned (proposed for a new epic row 23b.37)
 - Backreferences under `i` (`(s)\1` gi on "sſ": Dart no match, both SDKs match; `(.)\1` gi on "ßẞ";
