@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 2 of 6 · tasks: 2 green, 0 blocked · cases: 4 of 11 green (A3, A1) · suites green
-T3 Swift Annex B: `\A` is "A", `\p{L}` is "p{L}", `{` literal, octal, `[]`, `[^]`; 57 A1 rows green.
-T4 Kotlin Annex B: the same 57 rows green; its retry removed a dead `\p` branch (probe unchanged).
-Tests: engine 703, Flutter 241, Swift 176, iOS 54 + 176, Kotlin core 165, sdk 128, lint clean.
-Found: `\v`, `\s` (U+FEFF, U+0085) and `[]*` differ in both SDKs; added to group 3.
+group 3 of 6 · tasks: 2 green, 0 blocked · cases: 6 of 11 green (A3, A1, A2) · suites green
+T5 Swift strict `u`: nil wherever Dart refuses (49 A2 rows); `\v`, `\s`, `\S`, `[]*` as Dart.
+T6 Kotlin strict `u`: the same rows green; its retry removed a dead `\c` arm (probe same).
+Tests: engine 703, Flutter 241, Swift 182, iOS 54 + 182, Kotlin core 179, sdk 128, lint clean.
+Probe: A2 and the control rows 0 differ in both; the rest is groups 4-5 and row 23b.38.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-4 auto-decided: class punctuation escaped; `\c` as code points; corners to group 3; guards kept.
+6 auto-decided: strict check at the escape; `\v` a code point; `\k<name>` strict; wraps; guards.
 
 ### Questions for you
-1. Next: group 3, strict `u` plus `\v`, `\s`, `[]*` (T5 Swift, T6 Kotlin)? (default: go)
+1. Next: group 4, group names and empty references (T7 Swift, T8 Kotlin)? (default: go)
 
 ## Appendix
 
@@ -129,8 +129,59 @@ after, same counts; T4's probe output byte-identical):
   183 (was 345); under `g` and `gi` the rows left are row 23b.38's emoji rows and group 4's
   references (`\1(a)`, named groups).
 
+### Group 3
+Commits: T5 f1e7fbe, T6 be6c8ff (one per task, staged by path). Nothing pushed. Group 2's card approved
+with your standing rule (start group 3, minor); group 3's first card the same (retry T6 once, then
+group 4).
+
+#### Task T5 · Swift: strict grammar under `u`
+Files: `sdk-swift/Sources/OrcaGatewayCore/Resolver/Transforms.swift` · `sdk-swift/Tests/OrcaGatewayCoreTests/TransformTests.swift`
+Cases: A2 (49 rows) → green (`swift test`: 182 tests, 0 failures; iOS 54 + 182; the 176 of before pass)
+· red first: 4 of 5 new tests, 376 assertions (the guard of 40 still-valid rows passed before).
+Changed: with `u`, `strict(inClass:)` at every escape gives nil where Dart refuses; a lone `{ } ]`, a
+class range with a set at either end and a quantified lookahead nil; in both modes `\s`/`\S` are
+ECMAScript's set, `\v` U+000B (`\x{B}`), `[]` `(?:(?!))`; doc comment updated. Tests: `// MARK: S15 —
+strict u`, 6 tables, ~300 Dart-printed rows (`s15/oracle/t5`, 227 extra).
+Decisions: 1. one strict check at the escape, not spread through the readers · 2. `\v` through
+`character()` like `\0` · 3. with `u`, `\k<name>` passes only for a pre-pass name; group 4 extends it.
+Review fit: pass
+Review quality: `strict` re-read a decimal escape `character()` already read, fixed (one rework: one
+`decimal()`, also one `groupName()` and `meaningful()`; a past-Int guard test; probe byte-identical)
+
+#### Task T6 · Kotlin: strict grammar under `u`
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/resolver/Transforms.kt` · `sdk-kotlin/core/src/test/kotlin/com/orcagateway/core/resolver/TransformTest.kt`
+Cases: A2 (49 rows) → green (`./gradlew build`: core 179, sdk 128, 0 failures, lint no issues; core
+165 of before pass) · red first: 10 of 14 new tests; 12 rows (`\c`, `\x6`, `[\k]`, `{` …) were null only
+because the JVM threw, and the rewriter now refuses them itself.
+Changed: with `u`, `escape()` refuses every escape Dart refuses, plus a lone `{ } ]`, a class range
+with a set at either end and a quantified lookahead; in both modes `\v` U+000B, `\s`/`\S` ECMAScript's
+set (`SPACE`), `[]` `(?:(?!))`, a quantified lookahead `(?:(?=a))*` (Android's ICU); KDocs updated.
+Tests: `// MARK: S15 — strict u`, 14 tests, written patterns pinned too (`s15/oracle/t6`, 202 extra).
+Decisions: 1. the strict check in `escape()` · 2. a lookahead wrapped only when a quantifier follows ·
+3. `\v` read in `spelled` as U+000B · 4. (rework) the general "escaped character stays" sentence kept ·
+5. (retry) the `unicode &&` guards on `\u{` and `\p` kept: live branches, KDoc says "with [unicode]".
+Review fit: `backreference`'s KDoc still said "Without `u`", fixed (one rework: three KDocs, comments
+only); after the retry, pass
+Review quality: `spelled` still listed `s`, `S`, dead once both callers take them, fixed (one rework:
+`"fnrt"`; probe byte-identical) · re-review: `escapeEnd`'s `\c` arm (:864) computes an end no caller
+reads now, blocked · retry (your standing rule): arm and `\cX` KDoc removed, every other `escapeEnd`
+and `escape` branch traced live; core 179, sdk 128, lint clean, probe byte-identical · re-review: pass
+
+#### Group 3 test run
+Once after the group (logs `s15/g3-*.log`), before the reworks (each implementer re-ran its suite after:
+Swift 182 with T5's guard test, Kotlin core 179, sdk 128; every probe output byte-identical):
+- `cd engine && bun test` · 703 pass, 0 fail.
+- `cd sdk && flutter test` · +241: All tests passed · `flutter analyze` · No issues found.
+- `cd sdk-swift && swift test` · 181 tests, 0 failures · iOS simulator · 54 + 181, TEST SUCCEEDED.
+- `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL · core 179, sdk 128, 0 failures · lint clean.
+- Probe: rows A2 49: Swift 0, Kotlin 0 differ (were 26, 23); ctl 0 of 28 both (was 14); ctl2 Kotlin 0,
+  Swift 2 of 18 (the `\S` rows on "\u{FEFF}\u{85}": the probe's JSONSerialization drops the leading
+  U+FEFF; the unit test, a Swift literal, gives Dart's value); a1: Swift 72 of 718 (was 190), Kotlin 83
+  (was 183). Left: group 4 (named, unset, fwd, `\1(a)`, rows G3), group 5 (negiu, script, rows G4),
+  row 23b.38 (emoji rows under quant, cls). No case that matched Dart before differs.
+
 ### Blocked
-none (T4 green after one retry)
+none (T6 green after one retry)
 
 ### Not done
 none
