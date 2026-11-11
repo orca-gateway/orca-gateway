@@ -518,8 +518,7 @@ class TransformTest {
 
     @Test
     fun r2_aClassNamingOneOfTheFourFollowsDartUnderI() {
-        // Swift's T6 rows of the same name, run through Kotlin, but for `\p{Lowercase_Letter}`:
-        // java.util.regex has no such name and refuses the pattern (null), where Dart gives "##1" on "aB1".
+        // Swift's T6 rows of the same name, run through Kotlin.
         val (longS, kelvin, dotless, dotted) = listOf("\u017F", "\u212A", "\u0131", "\u0130")
         val iDot = "i\u0307" // what Unicode's full folding turns the dotted I into
         // Without `u` a class naming one of the four holds that letter alone, and its negation all else.
@@ -560,6 +559,7 @@ class TransformTest {
             Rx("[^i]", "giu", "$dotted${dotless}iI", "##iI"),
             Rx("\\p{Script=Latin}", "giu", "a\u0391B", "#\u0391#"),
             Rx("[\\p{Script=Latin}]", "giu", "a\u0391B", "#\u0391#"),
+            Rx("\\p{Lowercase_Letter}", "giu", "aB1", "##1"),
         )
         // Guard: the flag letters of a modifier group are not letters to fold.
         val modifiers = listOf(
@@ -894,6 +894,181 @@ class TransformTest {
                 Rx("[\\u{110000}]", "gu", "a", null),
                 Rx("[\\u{}]", "gu", "a", null),
                 Rx("[\\u{g}]", "gu", "a", null),
+            ),
+        )
+    }
+
+    // MARK: S14 — property names (row 23b.36)
+    // Expected values from Dart 3.12.2. With `u`, `\p{…}` and `\P{…}` take
+    // ECMAScript's names only, and on the JVM each reads the set it reads in Dart.
+
+    /** Latin, Greek, Cyrillic and Han letters, digits, punctuation and spaces. */
+    private val props = "aB1\u017F_ p{L} \u03B1 \u0416 \u4E2D \u0663 ! \u00A0 \u01C5"
+
+    @Test
+    fun p1_namesDartRefusesAreInvalidWithU() {
+        // The JVM's own names (`Is…`, `In…`, `java…`, POSIX, `blk=`), bare scripts, other
+        // spellings or key cases, and `\p` without braces: a syntax error in Dart, in a class too.
+        val rejected = listOf(
+            "\\p{IsLatin}", "\\p{InGreek}", "\\p{IsAlphabetic}", "\\p{IsL}", "\\p{IsLu}", "\\p{IsWhite_Space}",
+            "\\p{IsEmoji}", "\\p{Latin}", "\\p{Greek}", "\\p{Han}", "\\p{javaLowerCase}", "\\p{Javalowercase}",
+            "\\p{javaMirrored}", "\\p{L&}", "\\p{L1}", "\\p{LD}", "\\p{all}", "\\p{Alnum}", "\\p{alpha}", "\\p{lower}",
+            "\\p{XDigit}", "\\p{Punct}", "\\p{Space}", "\\p{script=Latin}", "\\p{script=latin}", "\\p{SC=Latn}",
+            "\\p{Sc=Latn}", "\\p{general_category=Ll}", "\\p{GC=Ll}", "\\p{Gc=Ll}", "\\p{gc=Alphabetic}",
+            "\\p{gc=Lowercase}", "\\p{blk=Greek}", "\\p{block=Greek}", "\\p{InBasic_Latin}", "\\p{Lowercase_letter}",
+            "\\p{ll}", "\\p{Script}", "\\p{Script=}", "\\p{sc=}", "\\p{scx=}", "\\p{=Ll}", "\\p{ASCII=Y}",
+            "\\p{Alphabetic=Yes}", "\\p{ L}", "\\p{L }", "\\p{}", "\\p{Changes_When_NFKC_Casefolded}", "\\p{Basic_Emoji}",
+            "\\P{IsLatin}", "[\\p{IsLatin}]", "[^\\p{Han}]", "[\\P{InGreek}a]", "[a\\p{javaLowerCase}]",
+            "\\pL", "\\PL", "\\p", "\\P", "[\\pL]", "\\p{L", "[\\p{L]", "[\\p{IsL]}", "\\p{\\u004C}",
+        )
+        assertDart(rejected.flatMap { p -> listOf(Rx(p, "gu", "a", null), Rx(p, "giu", "a", null)) })
+    }
+
+    @Test
+    fun p1_generalCategoryLongNamesAndAliasesMatchAsDart() {
+        val other = "a\u0001\u0378b" // a control and an unassigned code point
+        assertDart(
+            listOf(
+                Rx("\\p{Lowercase_Letter}", "gu", props, "#B1#_ #{L} # \u0416 \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("\\p{Letter}", "gu", props, "##1#_ #{#} # # # \u0663 ! \u00A0 #"),
+                Rx("\\p{Cased_Letter}", "gu", props, "##1#_ #{#} # # \u4E2D \u0663 ! \u00A0 #"),
+                Rx("\\p{Uppercase_Letter}", "gu", props, "a#1\u017F_ p{#} \u03B1 # \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("\\p{Titlecase_Letter}", "gu", props, "aB1\u017F_ p{L} \u03B1 \u0416 \u4E2D \u0663 ! \u00A0 #"),
+                Rx("\\p{Other_Letter}", "gu", props, "aB1\u017F_ p{L} \u03B1 \u0416 # \u0663 ! \u00A0 \u01C5"),
+                Rx("\\p{Modifier_Letter}", "gu", "a\u02B0b", "a#b"),
+                Rx("\\p{Decimal_Number}", "gu", props, "aB#\u017F_ p{L} \u03B1 \u0416 \u4E2D # ! \u00A0 \u01C5"),
+                Rx("\\p{digit}", "gu", props, "aB#\u017F_ p{L} \u03B1 \u0416 \u4E2D # ! \u00A0 \u01C5"),
+                Rx("\\p{Number}", "gu", props, "aB#\u017F_ p{L} \u03B1 \u0416 \u4E2D # ! \u00A0 \u01C5"),
+                Rx("\\p{Punctuation}", "gu", props, "aB1\u017F# p#L# \u03B1 \u0416 \u4E2D \u0663 # \u00A0 \u01C5"),
+                Rx("\\p{punct}", "gu", props, "aB1\u017F# p#L# \u03B1 \u0416 \u4E2D \u0663 # \u00A0 \u01C5"),
+                Rx("\\p{Connector_Punctuation}", "gu", props, "aB1\u017F# p{L} \u03B1 \u0416 \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("\\p{Space_Separator}", "gu", props, "aB1\u017F_#p{L}#\u03B1#\u0416#\u4E2D#\u0663#!###\u01C5"),
+                Rx("\\p{Separator}", "gu", props, "aB1\u017F_#p{L}#\u03B1#\u0416#\u4E2D#\u0663#!###\u01C5"),
+                Rx("\\p{cntrl}", "gu", "a\u0001b", "a#b"),
+                Rx("\\p{Control}", "gu", "a\u0001b", "a#b"),
+                Rx("\\p{Combining_Mark}", "gu", "e\u0301", "e#"),
+                Rx("\\p{Mark}", "gu", "e\u0301", "e#"),
+                Rx("\\p{Format}", "gu", "a\u200Db", "a#b"),
+                Rx("\\p{Other}", "gu", other, "a##b"),
+                Rx("\\p{Unassigned}", "gu", other, "a\u0001#b"),
+                // After `General_Category=` or `gc=`.
+                Rx("\\p{General_Category=Lowercase_Letter}", "gu", props, "#B1#_ #{L} # \u0416 \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("\\p{General_Category=Ll}", "gu", props, "#B1#_ #{L} # \u0416 \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("\\p{General_Category=L}", "gu", props, "##1#_ #{#} # # # \u0663 ! \u00A0 #"),
+                Rx("\\p{gc=Ll}", "gu", props, "#B1#_ #{L} # \u0416 \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("\\p{gc=L}", "gu", props, "##1#_ #{#} # # # \u0663 ! \u00A0 #"),
+                Rx("\\p{gc=Cased_Letter}", "gu", props, "##1#_ #{#} # # \u4E2D \u0663 ! \u00A0 #"),
+                Rx("\\p{gc=punct}", "gu", props, "aB1\u017F# p#L# \u03B1 \u0416 \u4E2D \u0663 # \u00A0 \u01C5"),
+                Rx("\\p{gc=Other}", "gu", other, "a##b"),
+                Rx("\\P{General_Category=Other}", "gu", other, "#\u0001\u0378#"),
+                // Negated, in classes, quantified, and under `i`.
+                Rx("\\P{Lowercase_Letter}", "gu", props, "a##\u017F##p####\u03B1############"),
+                Rx("\\P{Letter}", "gu", props, "aB#\u017F##p#L##\u03B1#\u0416#\u4E2D#######\u01C5"),
+                Rx("[^\\p{Lowercase_Letter}]", "gu", props, "a##\u017F##p####\u03B1############"),
+                Rx("[\\p{Uppercase_Letter}\\d]", "gu", props, "a##\u017F_ p{#} \u03B1 # \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("[\\P{Letter}a]", "gu", props, "#B#\u017F##p#L##\u03B1#\u0416#\u4E2D#######\u01C5"),
+                Rx("\\p{Lowercase_Letter}+", "gu", props, "#B1#_ #{L} # \u0416 \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("\\p{Lowercase_Letter}", "giu", props, "##1#_ #{#} # # \u4E2D \u0663 ! \u00A0 #"),
+                Rx("\\p{Letter}", "giu", props, "##1#_ #{#} # # # \u0663 ! \u00A0 #"),
+                Rx("\\p{Uppercase_Letter}", "giu", props, "##1#_ #{#} # # \u4E2D \u0663 ! \u00A0 #"),
+                Rx("\\p{Decimal_Number}", "giu", props, "aB#\u017F_ p{L} \u03B1 \u0416 \u4E2D # ! \u00A0 \u01C5"),
+                Rx("\\p{Punctuation}", "giu", props, "aB1\u017F# p#L# \u03B1 \u0416 \u4E2D \u0663 # \u00A0 \u01C5"),
+                Rx("\\p{General_Category=Lowercase_Letter}", "giu", props, "##1#_ #{#} # # \u4E2D \u0663 ! \u00A0 #"),
+                Rx("\\p{gc=L}", "giu", props, "##1#_ #{#} # # # \u0663 ! \u00A0 #"),
+                Rx("[\\p{Uppercase_Letter}\\d]", "giu", props, "####_ #{#} # # \u4E2D \u0663 ! \u00A0 #"),
+                Rx("[\\p{Lowercase_Letter}]", "giu", props, "##1#_ #{#} # # \u4E2D \u0663 ! \u00A0 #"),
+            ),
+        )
+    }
+
+    @Test
+    fun p1_binaryPropertiesMatchAsDart() {
+        val spaces = "a\u0009b\u00A0c d\u2028e_"
+        val cased = "aB\u2160\u01C5\u00AA" // Roman numeral one, a titlecase letter, the feminine ordinal
+        // Hex_Digit is ASCII's and the fullwidth forms, not the Arabic-Indic three.
+        val hex = "09afAFgG\u0663\uFF10\uFF21\uFF41\uFF47"
+        val any = "a\u0378\uD83D\uDE00"
+        val assigned = "a\u0378b\uFFFE"
+        assertDart(
+            listOf(
+                Rx("\\p{Alphabetic}", "gu", props, "##1#_ #{#} # # # \u0663 ! \u00A0 #"),
+                Rx("\\p{Alpha}", "gu", props, "##1#_ #{#} # # # \u0663 ! \u00A0 #"),
+                Rx("\\p{Alphabetic}", "giu", props, "##1#_ #{#} # # # \u0663 ! \u00A0 #"),
+                Rx("\\p{Alpha}", "giu", props, "##1#_ #{#} # # # \u0663 ! \u00A0 #"),
+                Rx("\\p{White_Space}", "gu", spaces, "a#b#c#d#e_"),
+                Rx("\\p{space}", "gu", spaces, "a#b#c#d#e_"),
+                Rx("\\p{Uppercase}", "gu", cased, "a##\u01C5\u00AA"),
+                Rx("\\p{Upper}", "gu", cased, "a##\u01C5\u00AA"),
+                Rx("\\p{Lowercase}", "gu", cased, "#B\u2160\u01C5#"),
+                Rx("\\p{Lower}", "gu", cased, "#B\u2160\u01C5#"),
+                Rx("\\p{Hex_Digit}", "gu", hex, "######gG\u0663###\uFF47"),
+                Rx("\\p{Hex}", "gu", hex, "######gG\u0663###\uFF47"),
+                Rx("\\p{ASCII_Hex_Digit}", "gu", hex, "######gG\u0663\uFF10\uFF21\uFF41\uFF47"),
+                Rx("\\p{AHex}", "gu", hex, "######gG\u0663\uFF10\uFF21\uFF41\uFF47"),
+                Rx("\\P{Hex_Digit}", "gu", hex, "09afAF###\uFF10\uFF21\uFF41#"),
+                Rx("[\\P{AHex}]", "gu", hex, "09afAF#######"),
+                Rx("[^\\p{Hex}g]", "gu", hex, "09afAFg##\uFF10\uFF21\uFF41#"),
+                Rx("\\p{Hex_Digit}", "giu", hex, "######gG\u0663###\uFF47"),
+                Rx("\\p{Any}", "gu", any, "###"),
+                Rx("\\P{Any}", "gu", any, any),
+                Rx("[\\P{Any}a]", "gu", any, "#\u0378\uD83D\uDE00"),
+                Rx("[^\\P{Any}]", "gu", any, "###"),
+                Rx("\\p{Any}", "giu", any, "###"),
+                Rx("\\p{Assigned}", "gu", assigned, "#\u0378#\uFFFE"),
+                Rx("\\P{Assigned}", "gu", assigned, "a#b#"),
+                Rx("[^\\p{Assigned}]", "gu", assigned, "a#b#"),
+                Rx("\\p{Assigned}", "giu", assigned, "#\u0378#\uFFFE"),
+                Rx("\\p{Ideographic}", "gu", "a\u4E2D\u3006\u3041", "a##\u3041"),
+                Rx("\\p{Ideo}", "gu", "a\u4E2D\u3006\u3041", "a##\u3041"),
+                Rx("\\p{Join_Control}", "gu", "a\u200C\u200Db", "a##b"),
+                Rx("\\p{Join_C}", "gu", "a\u200C\u200Db", "a##b"),
+                Rx("\\p{Noncharacter_Code_Point}", "gu", "a\uFFFE\uFDD0\uFFFD", "a##\uFFFD"),
+                Rx("\\p{NChar}", "gu", "a\uFFFE\uFDD0\uFFFD", "a##\uFFFD"),
+                Rx("\\p{Bidi_Mirrored}", "gu", "a(<)\u00AB\u2208-", "a#####-"),
+                Rx("\\p{Bidi_M}", "gu", "a(<)\u00AB\u2208-", "a#####-"),
+                Rx("[\\p{Alphabetic}\\d]", "gu", props, "####_ #{#} # # # \u0663 ! \u00A0 #"),
+                Rx("[^\\p{White_Space}]", "gu", "a\u0009b\u00A0c", "#\u0009#\u00A0#"),
+                Rx("[\\P{Lowercase}]", "gu", cased, "a###\u00AA"),
+            ),
+        )
+    }
+
+    @Test
+    fun p1_emojiPropertiesMatchAsDartWhereTheRuntimeHasThem() {
+        // java.util.regex has the emoji properties from JDK 21; on JDK 17 these stay invalid.
+        val jvmHasThem = runCatching { Regex("\\p{IsEmoji}") }.isSuccess
+        val e = "a1#\u263A\uD83D\uDE00\uD83D\uDC4D\uD83C\uDFFB" // a smiley, a grinning face, a thumbs-up, a skin tone
+        fun dart(s: String) = s.takeIf { jvmHasThem }
+        assertDart(
+            listOf(
+                Rx("\\p{Emoji}", "gu", e, dart("a######")),
+                Rx("\\p{Emoji_Presentation}", "gu", e, dart("a1#\u263A###")),
+                Rx("\\p{EPres}", "gu", e, dart("a1#\u263A###")),
+                Rx("\\p{Emoji_Modifier}", "gu", e, dart("a1#\u263A\uD83D\uDE00\uD83D\uDC4D#")),
+                Rx("\\p{EMod}", "gu", e, dart("a1#\u263A\uD83D\uDE00\uD83D\uDC4D#")),
+                Rx("\\p{Emoji_Modifier_Base}", "gu", e, dart("a1#\u263A\uD83D\uDE00#\uD83C\uDFFB")),
+                Rx("\\p{EBase}", "gu", e, dart("a1#\u263A\uD83D\uDE00#\uD83C\uDFFB")),
+                Rx("\\p{Emoji_Component}", "gu", e, dart("a##\u263A\uD83D\uDE00\uD83D\uDC4D#")),
+                Rx("\\p{EComp}", "gu", e, dart("a##\u263A\uD83D\uDE00\uD83D\uDC4D#")),
+                Rx("\\p{Extended_Pictographic}", "gu", e, dart("a1####\uD83C\uDFFB")),
+                Rx("\\p{ExtPict}", "gu", e, dart("a1####\uD83C\uDFFB")),
+                Rx("\\P{Emoji}", "gu", e, dart("#1#\u263A\uD83D\uDE00\uD83D\uDC4D\uD83C\uDFFB")),
+                Rx("[\\p{Emoji}a]", "gu", e, dart("#######")),
+            ),
+        )
+    }
+
+    @Test
+    fun p1_guard_scriptKeysLeaveTheValueToTheEngine() {
+        assertDart(
+            listOf(
+                Rx("\\p{Script=Latin}", "gu", props, "##1#_ #{#} \u03B1 \u0416 \u4E2D \u0663 ! \u00A0 #"),
+                Rx("\\p{sc=Latn}", "gu", props, "##1#_ #{#} \u03B1 \u0416 \u4E2D \u0663 ! \u00A0 #"),
+                Rx("\\p{Script=Greek}", "gu", props, "aB1\u017F_ p{L} # \u0416 \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("\\p{sc=Grek}", "gu", props, "aB1\u017F_ p{L} # \u0416 \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("\\P{Script=Latin}", "gu", props, "aB#\u017F##p#L##############\u01C5"),
+                Rx("[\\p{sc=Grek}a]", "gu", props, "#B1\u017F_ p{L} # \u0416 \u4E2D \u0663 ! \u00A0 \u01C5"),
+                Rx("\\p{Script=Latin}", "giu", props, "##1#_ #{#} \u03B1 \u0416 \u4E2D \u0663 ! \u00A0 #"),
             ),
         )
     }

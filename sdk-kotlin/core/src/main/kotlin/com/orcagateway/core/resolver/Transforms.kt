@@ -7,7 +7,6 @@ import java.util.Calendar
 import java.util.GregorianCalendar
 import java.util.TimeZone
 import java.util.regex.Pattern
-import java.util.regex.PatternSyntaxException
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -368,10 +367,11 @@ internal object Placeholders {
  * java.util.regex standing in for Dart's ECMAScript `RegExp`, with the same
  * guard rails: patterns over 200 UTF-16 units are refused and the input is
  * clipped to 10 000 units. The empty pattern is valid and matches everywhere.
- * `\d`, `\w`, `\b` and their negations, and the case folding of the letters
- * of [DartFoldTable], are rewritten to Dart's ([asciiClasses]);
- * the pattern is then compiled with UNICODE_CHARACTER_CLASS where the runtime
- * has it (Android's ICU regex is Unicode-aware already), so `\s` is Unicode as
+ * `\d`, `\w`, `\b` and their negations, the case folding of the letters
+ * of [DartFoldTable] and, with `u`, the `\p{…}` names are rewritten to
+ * Dart's ([asciiClasses]); the pattern is then compiled with
+ * UNICODE_CHARACTER_CLASS where the runtime has it (learned once: the JVM
+ * does, Android's ICU regex is Unicode-aware already), so `\s` is Unicode as
  * Dart's is.
  */
 internal object RegexSupport {
@@ -430,13 +430,21 @@ internal object RegexSupport {
      * form (`(?i)`, `(?-:`, `(?ii:`, `(?x:`, `(?>`, `(?#`, `(?P<`) gives null.
      *
      * An escaped character stays as it is (`\\d` is a backslash and a d), as do
-     * group names, a modifier group's flags (`(?ms-i:`), the digits of `\xHH`
-     * and `\uHHHH`, and what follows `\c`, `\k<` and `\p{`. An `\xHH`, `\uHHHH`
-     * or with `u` `\u{H…}` that spells a letter of the table is that letter
-     * (`\x73` under `i` is `(?-i:[sS])`); inside a class the members test reads
-     * it. With `u`, `\u{H…}` is written `\x{H…}`, in a class too, and one Dart
-     * rejects (`\u{}`, `\u{g}`, `\u{110000}`) gives null; without `u` it is
+     * group names, a modifier group's flags (`(?ms-i:`), the digits of `\xHH` and
+     * `\uHHHH`, and what follows `\c`, `\k<` and, without `u`, `\p{`. An `\xHH`,
+     * `\uHHHH` or with `u` `\u{H…}` that spells a letter of the table is that
+     * letter (`\x73` under `i` is `(?-i:[sS])`); inside a class the members test
+     * reads it. With `u`, `\u{H…}` is written `\x{H…}`, in a class too, and one
+     * Dart rejects (`\u{}`, `\u{g}`, `\u{110000}`) gives null; without `u` it is
      * left as it is. Backreferences keep the engine's folding.
+     *
+     * With `u`, `\p{name}` and `\P{name}` take only the names Dart takes
+     * ([RegexPropertyNames]): any other name, or `\p` or `\P` without `{…}`,
+     * gives null, in a class too. On the JVM an accepted name is written the
+     * way java.util.regex reads Dart's set (`Lowercase_Letter` as `Ll`,
+     * `Alphabetic` as `IsAlphabetic`, `Any` as a class), and one it has no such
+     * spelling of (`Script_Extensions`, `Cased`, `Math` …) gives null; on
+     * Android the name stays as written. Without `u`, `\p{…}` is left as it is.
      */
     fun asciiClasses(pattern: String, ignoreCase: Boolean = false, unicode: Boolean = false): String? {
         if (!ignoreCase && pattern.none { it == '\\' || it == '[' || it == '(' }) return pattern
@@ -605,7 +613,8 @@ internal object RegexSupport {
      * as written; with [unicode], `\u{H…}` spells its own and is written
      * `\x{H…}` without leading zeros (both engines refuse `\u{`, ICU reads at
      * most six digits). Null for a `\u{…}` Dart rejects under `u`: no digit, a
-     * non-hex one, no `}`, or past 10FFFF.
+     * non-hex one, no `}`, or past 10FFFF; with [unicode], `\p` and `\P`
+     * are [property]'s.
      */
     private fun escape(pattern: String, i: Int, unicode: Boolean): Escape? {
         if (unicode && pattern.startsWith("u{", i + 1)) {
@@ -618,6 +627,7 @@ internal object RegexSupport {
             val value = hex.toInt(16)
             return if (value > 0x10FFFF) null else Escape(close + 1, "\\x{$hex}", value)
         }
+        if (unicode && pattern.getOrNull(i + 1).let { it == 'p' || it == 'P' }) return property(pattern, i)
         val end = escapeEnd(pattern, i)
         val digits = when (pattern.getOrNull(i + 1)) {
             'x' -> 2
@@ -628,21 +638,39 @@ internal object RegexSupport {
         return Escape(end, pattern.substring(i, end), if (spelled) pattern.substring(i + 2, end).toInt(16) else null)
     }
 
+    /**
+     * With `u`, the property escape `\p{name}` or `\P{name}` at [i], its
+     * name written the JVM's way on the JVM and as it is on Android. Null
+     * without `{…}`, for a name Dart refuses, or on the JVM for one it has
+     * no spelling of.
+     */
+    private fun property(pattern: String, i: Int): Escape? {
+        val close = if (pattern.getOrNull(i + 2) == '{') pattern.indexOf('}', i + 3) else -1
+        if (close < 0) return null
+        val name = pattern.substring(i + 3, close)
+        if (!RegexPropertyNames.accepts(name)) return null
+        val text = if (unicodeClasses) RegexPropertyNames.jvm(name, negated = pattern[i + 1] == 'P') else pattern.substring(i, close + 1)
+        return text?.let { Escape(close + 1, it, null) }
+    }
+
     private const val HEX_DIGITS = "0123456789abcdefABCDEF"
+
+    /**
+     * Whether the runtime has UNICODE_CHARACTER_CLASS: the JVM does, Android,
+     * whose regex is ICU and Unicode-aware already, does not.
+     */
+    private val unicodeClasses: Boolean = try {
+        Pattern.compile("", Pattern.UNICODE_CHARACTER_CLASS)
+        true
+    } catch (_: IllegalArgumentException) {
+        false
+    }
 
     /** Null for an invalid pattern. */
     fun compileIcuLike(pattern: String, options: Int): Pattern? = try {
-        Pattern.compile(pattern, options or Pattern.UNICODE_CHARACTER_CLASS)
-    } catch (_: PatternSyntaxException) {
-        null
+        Pattern.compile(pattern, if (unicodeClasses) options or Pattern.UNICODE_CHARACTER_CLASS else options)
     } catch (_: IllegalArgumentException) {
-        // A runtime without UNICODE_CHARACTER_CLASS (Android, whose regex is
-        // ICU and Unicode-aware already).
-        try {
-            Pattern.compile(pattern, options)
-        } catch (_: IllegalArgumentException) {
-            null
-        }
+        null
     }
 
     fun clip(s: String): String =
