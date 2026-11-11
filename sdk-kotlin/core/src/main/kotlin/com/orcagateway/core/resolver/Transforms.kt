@@ -368,8 +368,9 @@ internal object Placeholders {
  * guard rails: patterns over 200 UTF-16 units are refused and the input is
  * clipped to 10 000 units. The empty pattern is valid and matches everywhere.
  * `\d`, `\w`, `\s`, `\b` and their negations, `\v`, the case folding of the
- * letters of [DartFoldTable] and, with `u`, the `\p{…}` names are rewritten
- * to Dart's ([asciiClasses]); the pattern is then compiled with
+ * letters of [DartFoldTable] and, with `u`, the `\p{…}` names and under `i`
+ * the classes that hold one ([DartFoldClasses]) are rewritten to Dart's
+ * ([asciiClasses]); the pattern is then compiled with
  * UNICODE_CHARACTER_CLASS where the runtime has it (learned once: the JVM
  * does, Android's ICU regex is Unicode-aware already), so the engine's own
  * case folding and property names are Unicode as Dart's are.
@@ -421,6 +422,19 @@ internal object RegexSupport {
      *   table's letters and M those C matches in Dart, found by testing each
      *   letter once against C case-sensitively. Every other letter keeps the
      *   engine's folding.
+     * - With `u` Dart builds a class's set first and folds after: a character
+     *   matches a class when a member of its fold class ([DartFoldClasses]) is
+     *   in the set, and a negated class when none is. So under `i` `\P{Ll}`
+     *   matches s (its partner S is not Ll) and `[^\P{Ll}]` no letter with a
+     *   partner, where both engines fold the property first and negate after,
+     *   and on the JVM `\p{Lt}` matches every cased letter and `\p{ASCII}`
+     *   misses ſ and K. A class that holds `\p{…}` or `\P{…}`, and such an
+     *   escape outside a class as the class of it alone, is written instead
+     *   as the class C read case-sensitively with K added, the letters of the
+     *   fold classes that meet C: `(?-i:[CK])`, negated `(?-i:[^CK])`. Every
+     *   letter of a fold class that C holds is in K, so these are the sets of
+     *   `(?:(?!L)(?-i:C)|(?-i:[M]))`, L every letter of a fold class and M
+     *   those whose class meets C (negated: misses it), without L.
      * - `i` above is the group's, as in Dart: a modifier group `(?i:` or
      *   `(?-i:` sets it up to its `)`, any other group keeps the enclosing one
      *   (the pattern's at the top). Inside `(?-i:` the table's letters stay as
@@ -510,7 +524,8 @@ internal object RegexSupport {
      * ([RegexPropertyNames]): any other name, or `\p` or `\P` without `{…}`,
      * gives null, in a class too. On the JVM an accepted name is written the
      * way java.util.regex reads Dart's set (`Lowercase_Letter` as `Ll`,
-     * `Alphabetic` as `IsAlphabetic`, `Any` as a class), and one it has no such
+     * `Alphabetic` as `IsAlphabetic`, `Any` as a class, `Script=Qaai` as
+     * `Script=Inherited`), and one it has no such
      * spelling of (`Script_Extensions`, `Cased`, `Math` …) gives null; on
      * Android the name stays as written. Without `u`, `\p{…}` is a p and text.
      *
@@ -603,7 +618,12 @@ internal object RegexSupport {
                         else -> {
                             val escape = spelled(pattern, i, unicode, inClass = false, named) ?: escape(pattern, i, unicode, inClass = false) ?: return null
                             val letter = escape.codePoint?.takeIf { fold && it <= 0xFFFF }?.let { DartFoldTable.set(it.toChar(), unicode) }
-                            if (letter != null) out.append("(?-i:[").append(letter).append("])") else out.append(escape.text)
+                            when {
+                                letter != null -> out.append("(?-i:[").append(letter).append("])")
+                                // A property is the class of it alone, whose set Dart folds.
+                                fold && unicode && (next == 'p' || next == 'P') -> out.append(dartClass(escape.text, negated = false, fold, unicode, properties = true))
+                                else -> out.append(escape.text)
+                            }
                             i = escape.end
                         }
                     }
@@ -910,10 +930,12 @@ internal object RegexSupport {
         val sets = if (unicode) "dDwWsSpP" else "dDwWsS"
         fun classEscape(at: Int) = pattern[at] == '\\' && pattern.getOrNull(at + 1)?.let { it in sets } == true
         val body = StringBuilder()
+        var properties = false // with `u`, whether a member is `\p{…}` or `\P{…}`
         while (j < pattern.length && pattern[j] != ']') {
             val from = j
             val first = classAtom(pattern, j, word, unicode, named) ?: return null
             j = first.end
+            if (unicode && pattern[from] == '\\' && pattern[from + 1] in "pP") properties = true
             if (pattern.getOrNull(j) != '-' || j + 1 >= pattern.length || pattern[j + 1] == ']') {
                 body.append(first.text)
                 continue
@@ -925,20 +947,71 @@ internal object RegexSupport {
             j = second.end
         }
         if (j >= pattern.length) return null
-        val exact = "[${if (negated) "^" else ""}$body]"
-        val members = if (!fold) null else compileIcuLike("[$body]", 0)
-        if (members == null) {
-            out.append(exact)
-        } else {
-            val letters = DartFoldTable.letters
-            val probe = members.matcher("")
-            val inClass = letters.filter { probe.reset(it.toString()).matches() }.toSet()
-            val matched = letters.filter { c -> DartFoldTable.set(c, unicode)!!.any { it in inClass } != negated }
-            out.append("(?:(?!(?-i:[$letters]))").append(exact)
-            if (matched.isNotEmpty()) out.append("|(?-i:[").append(matched).append("])")
-            out.append(')')
-        }
+        out.append(dartClass(body.toString(), negated, fold, unicode, properties))
         return j + 1
+    }
+
+    /**
+     * The class of [body], [negated] or not, as Dart matches it: as written
+     * without [fold], and under `i` as `(?:(?!T)C|(?-i:[M]))`, T the letters
+     * of [DartFoldTable], every other letter keeping the engine's folding in
+     * C, and M those whose Dart set meets C (negated: misses it), found by
+     * testing each letter of T once against C case-sensitively.
+     *
+     * With [properties] (with `u`, a class that holds `\p{…}` or `\P{…}`) it
+     * is `(?-i:[CK])`, negated `(?-i:[^CK])`, C read case-sensitively and K
+     * the letters of the [DartFoldClasses] classes that meet C, found in one
+     * pass of C over all their letters ([asciiClasses] says why). A class the
+     * engine refuses is written as it is, to fail.
+     */
+    private fun dartClass(body: String, negated: Boolean, fold: Boolean, unicode: Boolean, properties: Boolean): String {
+        val exact = "[${if (negated) "^" else ""}$body]"
+        val probe = (if (fold) compileIcuLike("[$body]", 0) else null)?.matcher("") ?: return exact
+        if (properties) {
+            val classOf = DartFoldClasses.classOf
+            val meets = BooleanArray(DartFoldClasses.classes.size)
+            probe.reset(foldLetters)
+            while (probe.find()) foldClassAt[probe.start()].let { if (it >= 0) meets[it] = true }
+            return "(?-i:[${if (negated) "^" else ""}$body${ranges(DartFoldClasses.letters) { meets[classOf[it]] }}])"
+        }
+        val letters = DartFoldTable.letters
+        val members = letters.filter { probe.reset(it.toString()).matches() }.toSet()
+        val matched = letters.filter { c -> DartFoldTable.set(c, unicode)!!.any { it in members } != negated }
+        val out = StringBuilder("(?:(?!(?-i:[").append(letters).append("]))").append(exact)
+        if (matched.isNotEmpty()) out.append("|(?-i:[").append(matched).append("])")
+        return out.append(')').toString()
+    }
+
+    /** The letters of [DartFoldClasses] in code point order, for [dartClass] to find a class's members among. */
+    private val foldLetters: String by lazy { DartFoldClasses.letters.joinToString("") { String(Character.toChars(it)) } }
+
+    /**
+     * At each index of [foldLetters], the class of the letter there, and -1
+     * at the second unit of one above U+FFFF: a match there is no letter's.
+     */
+    private val foldClassAt: IntArray by lazy {
+        DartFoldClasses.letters.indices.flatMap { n -> List(Character.charCount(DartFoldClasses.letters[n])) { if (it == 0) DartFoldClasses.classOf[n] else -1 } }.toIntArray()
+    }
+
+    /**
+     * The code points of [codePoints], in order, whose index [keep] takes, as
+     * a class body: each run of consecutive ones a range, its ends [plain].
+     */
+    private fun ranges(codePoints: IntArray, keep: (Int) -> Boolean): String {
+        val out = StringBuilder()
+        var k = 0
+        while (k < codePoints.size) {
+            if (!keep(k)) {
+                k += 1
+                continue
+            }
+            var end = k
+            while (end + 1 < codePoints.size && codePoints[end + 1] == codePoints[end] + 1 && keep(end + 1)) end += 1
+            out.append(plain(codePoints[k]))
+            if (end > k) out.append('-').append(plain(codePoints[end]))
+            k = end + 1
+        }
+        return out.toString()
     }
 
     /**

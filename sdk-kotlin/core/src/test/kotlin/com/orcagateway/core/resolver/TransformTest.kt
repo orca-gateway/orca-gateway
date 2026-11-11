@@ -1767,4 +1767,305 @@ class TransformTest {
         // A `\k<name>` drops only the groups a negative lookaround holds.
         assertEquals("(?:(a)|(?!(b)))(?:\\1)c", RegexSupport.asciiClasses("(?:(?<n>a)|(?!(?<n>b)))\\k<n>c"))
     }
+
+    // MARK: S15 — iu properties, script values (row 23b.37)
+    // Expected values from Dart 3.12.2. Under `i` with `u` Dart builds a
+    // class's set first and folds after: a character matches a class when a
+    // member of its simple case-fold class (DartFoldClasses) is in the set,
+    // and a negated class when none is. So `\P{Ll}` matches s, whose partner
+    // S is not Ll, and `[^\P{Ll}]` no letter with a partner; both engines
+    // fold the property first and negate after. Script values are ECMA-262's,
+    // case-sensitive, under every key.
+
+    /** The G4 rows' input: s S ſ, k K and the Kelvin sign, punctuation, é É, ǅ Ǆ ǆ, ß ẞ. */
+    private val iuLetters = "sS\u017FkK\u212A_!\u00E9\u00C9\u01C5\u01C4\u01C6\u00DF\u1E9E"
+
+    /** The probe's: a digit, ſ and K after the ASCII pairs, Σ σ ς, ẞ ß. */
+    private val iuMore = "sSkK_!\u00E9\u00C91\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"
+
+    /** Capital and small letters above U+FFFF, Deseret, Osage and Adlam, then a and 1. */
+    private val iuAstral = "\uD801\uDC00\uD801\uDC28\uD801\uDCB0\uD801\uDCD8\uD83A\uDD00\uD83A\uDD22a1"
+
+    /** Latin a, Greek α, a combining grave (Inherited), Coptic ⲁ, the voiced sound mark (Common), Devanagari's stress sign (Inherited). */
+    private val scriptLetters = "a\u03B1\u0300\u2C81\u309B\u0951"
+
+    /** The 336 script values Dart 3.12.2 accepts after `Script=`: four-letter codes and long names (Unicode 16), Qaai and Qaac. */
+    private val dartScriptValues = """
+        Adlam Adlm Aghb Ahom Anatolian_Hieroglyphs Arab Arabic Armenian Armi Armn Avestan Avst Bali Balinese
+        Bamu Bamum Bass Bassa_Vah Batak Batk Beng Bengali Bhaiksuki Bhks Bopo Bopomofo Brah Brahmi Brai Braille
+        Bugi Buginese Buhd Buhid Cakm Canadian_Aboriginal Cans Cari Carian Caucasian_Albanian Chakma Cham Cher
+        Cherokee Chorasmian Chrs Common Copt Coptic Cpmn Cprt Cuneiform Cypriot Cypro_Minoan Cyrillic Cyrl
+        Deseret Deva Devanagari Diak Dives_Akuru Dogr Dogra Dsrt Dupl Duployan Egyp Egyptian_Hieroglyphs Elba
+        Elbasan Elym Elymaic Ethi Ethiopic Gara Garay Geor Georgian Glag Glagolitic Gong Gonm Goth Gothic Gran
+        Grantha Greek Grek Gujarati Gujr Gukh Gunjala_Gondi Gurmukhi Guru Gurung_Khema Han Hang Hangul Hani
+        Hanifi_Rohingya Hano Hanunoo Hatr Hatran Hebr Hebrew Hira Hiragana Hluw Hmng Hmnp Hung Imperial_Aramaic
+        Inherited Inscriptional_Pahlavi Inscriptional_Parthian Ital Java Javanese Kaithi Kali Kana Kannada
+        Katakana Kawi Kayah_Li Khar Kharoshthi Khitan_Small_Script Khmer Khmr Khoj Khojki Khudawadi Kirat_Rai
+        Kits Knda Krai Kthi Lana Lao Laoo Latin Latn Lepc Lepcha Limb Limbu Lina Linb Linear_A Linear_B Lisu
+        Lyci Lycian Lydi Lydian Mahajani Mahj Maka Makasar Malayalam Mand Mandaic Mani Manichaean Marc Marchen
+        Masaram_Gondi Medefaidrin Medf Meetei_Mayek Mend Mende_Kikakui Merc Mero Meroitic_Cursive
+        Meroitic_Hieroglyphs Miao Mlym Modi Mong Mongolian Mro Mroo Mtei Mult Multani Myanmar Mymr Nabataean
+        Nag_Mundari Nagm Nand Nandinagari Narb Nbat New_Tai_Lue Newa Nko Nkoo Nshu Nushu Nyiakeng_Puachue_Hmong
+        Ogam Ogham Ol_Chiki Ol_Onal Olck Old_Hungarian Old_Italic Old_North_Arabian Old_Permic Old_Persian
+        Old_Sogdian Old_South_Arabian Old_Turkic Old_Uyghur Onao Oriya Orkh Orya Osage Osge Osma Osmanya Ougr
+        Pahawh_Hmong Palm Palmyrene Pau_Cin_Hau Pauc Perm Phag Phags_Pa Phli Phlp Phnx Phoenician Plrd Prti
+        Psalter_Pahlavi Qaac Qaai Rejang Rjng Rohg Runic Runr Samaritan Samr Sarb Saur Saurashtra Sgnw Sharada
+        Shavian Shaw Shrd Sidd Siddham SignWriting Sind Sinh Sinhala Sogd Sogdian Sogo Sora Sora_Sompeng Soyo
+        Soyombo Sund Sundanese Sunu Sunuwar Sylo Syloti_Nagri Syrc Syriac Tagalog Tagb Tagbanwa Tai_Le Tai_Tham
+        Tai_Viet Takr Takri Tale Talu Tamil Taml Tang Tangsa Tangut Tavt Telu Telugu Tfng Tglg Thaa Thaana Thai
+        Tibetan Tibt Tifinagh Tirh Tirhuta Tnsa Todhri Todr Toto Tulu_Tigalari Tutg Ugar Ugaritic Unknown Vai
+        Vaii Vith Vithkuqi Wancho Wara Warang_Citi Wcho Xpeo Xsux Yezi Yezidi Yi Yiii Zanabazar_Square Zanb Zinh
+        Zyyy Zzzz
+    """.trim().split(' ', '\n').filter(String::isNotEmpty)
+
+    @Test
+    fun g4_aNegatedPropertyUnderIuMatchesEveryLetterWithAPartnerOutsideIt() {
+        assertDart(
+            listOf(
+                Rx("\\P{Ll}", "giu", iuLetters, "###############"),
+                Rx("\\P{Lu}", "giu", iuLetters, "###############"),
+                Rx("\\P{Lt}", "giu", iuLetters, "###############"),
+                Rx("[\\P{Ll}]", "giu", iuLetters, "###############"),
+                Rx("[^\\P{Ll}]", "giu", iuLetters, iuLetters),
+                Rx("[\\P{Ll}\\d]", "giu", iuLetters, "###############"),
+                Rx("\\P{Lowercase}", "giu", iuLetters, "###############"),
+                Rx("\\P{ASCII}", "giu", iuLetters, "######_!#######"),
+                Rx("\\P{Ll}", "giu", iuMore, "###################"),
+                Rx("\\P{Lu}", "giu", iuMore, "###################"),
+                Rx("[\\P{Ll}]", "giu", iuMore, "###################"),
+                Rx("[^\\P{Ll}]", "giu", iuMore, iuMore),
+                Rx("\\P{Lt}", "giu", iuMore, "###################"),
+                Rx("\\P{Lowercase}", "giu", iuMore, "###################"),
+                Rx("\\P{Uppercase}", "giu", iuMore, "###################"),
+                Rx("[^\\P{Lu}]", "giu", iuMore, iuMore),
+                Rx("[\\P{Ll}\\d]", "giu", iuMore, "###################"),
+                Rx("[^\\P{Ll}\\d]", "giu", iuMore, iuMore),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_onTheJvmLtAndAsciiUnderIuMatchAsDart() {
+        // The JVM folds `\p{Lt}` into every cased letter and leaves ſ and K out of `\p{ASCII}`.
+        assertDart(
+            listOf(
+                Rx("\\p{Lt}", "giu", iuLetters, "sS\u017FkK\u212A_!\u00E9\u00C9###\u00DF\u1E9E"),
+                Rx("\\p{ASCII}", "giu", iuLetters, "########\u00E9\u00C9\u01C5\u01C4\u01C6\u00DF\u1E9E"),
+                Rx("[\\p{Lt}x]", "giu", iuLetters, "sS\u017FkK\u212A_!\u00E9\u00C9###\u00DF\u1E9E"),
+                Rx("\\p{Lt}", "giu", iuMore, "sSkK_!\u00E9\u00C91###\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_aLetterAboveTheBmpMatchesByItsFoldClass() {
+        assertDart(
+            listOf(
+                Rx("\\P{Ll}", "giu", iuAstral, "########"),
+                Rx("\\P{Lu}", "giu", iuAstral, "########"),
+                Rx("[\\P{Ll}]", "giu", iuAstral, "########"),
+                Rx("[^\\P{Ll}]", "giu", iuAstral, iuAstral),
+                Rx("\\p{Lu}", "giu", iuAstral, "#######1"),
+                Rx("\\p{Ll}", "giu", iuAstral, "#######1"),
+                Rx("\\p{Lt}", "giu", iuAstral, iuAstral),
+                Rx("[^\\p{Lu}]", "giu", iuAstral, "\uD801\uDC00\uD801\uDC28\uD801\uDCB0\uD801\uDCD8\uD83A\uDD00\uD83A\uDD22a#"),
+                Rx("\\P{Script=Deseret}", "giu", iuAstral, "\uD801\uDC00\uD801\uDC28######"),
+                Rx("\\p{Script=Osage}", "giu", iuAstral, "\uD801\uDC00\uD801\uDC28##\uD83A\uDD00\uD83A\uDD22a1"),
+                Rx("\\p{sc=Dsrt}", "giu", iuAstral, "##\uD801\uDCB0\uD801\uDCD8\uD83A\uDD00\uD83A\uDD22a1"),
+                Rx("[\\p{sc=Dsrt}a]", "giu", iuAstral, "##\uD801\uDCB0\uD801\uDCD8\uD83A\uDD00\uD83A\uDD22#1"),
+                Rx("[^\\p{sc=Adlm}\\d]", "giu", iuAstral, "####\uD83A\uDD00\uD83A\uDD22#1"),
+                Rx("\\p{ASCII}", "giu", iuAstral, "\uD801\uDC00\uD801\uDC28\uD801\uDCB0\uD801\uDCD8\uD83A\uDD00\uD83A\uDD22##"),
+                Rx("\\P{ASCII}", "giu", iuAstral, "######a1"),
+                Rx("\\P{Ll}+", "giu", iuAstral, "#"),
+                Rx("\\p{Lu}{2}", "giu", iuAstral, "###a1"),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_everyFoldClassMatchesAsDartUnderIu() {
+        // Every letter with a partner, each one's class tried: Dart matches all of them
+        // to `\P{Lu}` and `\p{Any}`, and to `\P{Ll}` all but the three classes whose letters are all Ll.
+        val letters = DartFoldClasses.letters.joinToString("") { String(Character.toChars(it)) }
+        val allLl = setOf(0x0390, 0x1FD3, 0x03B0, 0x1FE3, 0xFB05, 0xFB06) // ΐ ΐ, ΰ ΰ, ﬅ ﬆ
+        fun marked(match: (Int) -> Boolean) = DartFoldClasses.letters.joinToString("") { if (match(it)) "#" else String(Character.toChars(it)) }
+        assertDart(
+            listOf(
+                Rx("\\P{Lu}", "giu", letters, marked { true }),
+                Rx("[^\\P{Lu}]", "giu", letters, letters),
+                Rx("\\P{Ll}", "giu", letters, marked { it !in allLl }),
+                Rx("[^\\P{Ll}]", "giu", letters, marked { it in allLl }),
+                Rx("\\p{Any}", "giu", letters, marked { true }),
+                Rx("[^\\p{Any}]", "giu", letters, letters),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_theFoldClassesHoldTheTablesSetsWithU() {
+        val classes = DartFoldClasses.classes
+        assertEquals(1454, classes.size)
+        assertEquals(2938, DartFoldClasses.letters.size)
+        assertEquals(2938, DartFoldClasses.letters.toSet().size)
+        assertEquals(282, classes.count { k -> k.any { it > 0xFFFF } })
+        assertEquals(564, DartFoldClasses.letters.count { it > 0xFFFF })
+        // Each of DartFoldTable's letters matches with `u` its fold class, or itself
+        // alone where it has no partner (ı, İ, ŉ, ʼ, the ligatures, …): 44 of them.
+        val classOf = classes.flatMap { k -> k.map { it to k.toSet() } }.toMap()
+        val differ = DartFoldTable.letters.filter { c -> DartFoldTable.set(c, unicode = true)!!.map(Char::code).toSet() != (classOf[c.code] ?: setOf(c.code)) }
+        assertEquals("", differ)
+        assertEquals(44, DartFoldTable.letters.count { it.code !in classOf })
+    }
+
+    @Test
+    fun g4_guard_propertiesTheEngineFoldsAsDartKeepTheirMatches() {
+        assertDart(
+            listOf(
+                Rx("\\P{Script=Latin}", "giu", iuLetters, "sS\u017FkK\u212A##\u00E9\u00C9\u01C5\u01C4\u01C6\u00DF\u1E9E"),
+                Rx("\\p{Lu}", "giu", iuLetters, "######_!#######"),
+                Rx("[^\\p{Ll}]", "giu", iuLetters, "sS\u017FkK\u212A##\u00E9\u00C9\u01C5\u01C4\u01C6\u00DF\u1E9E"),
+                Rx("\\p{Lowercase_Letter}", "giu", iuLetters, "######_!#######"),
+                Rx("\\p{LC}", "giu", iuLetters, "######_!#######"),
+                Rx("[^\\p{Ll}]", "giu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("\\P{Script=Latin}", "giu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A###\u1E9E\u00DF"),
+                Rx("[^\\p{Lu}a]", "giu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("\\p{Ll}", "giu", iuMore, "####_!##1##########"),
+                Rx("\\p{Lu}", "giu", iuMore, "####_!##1##########"),
+                Rx("[^a-z]", "giu", iuMore, "sSkK########\u017F\u212A#####"),
+                Rx("[^\\p{L}]", "giu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("\\P{L}", "giu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("\\P{Ll}", "gu", iuMore, "s#k###\u00E9####\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("\\P{Lu}", "gu", iuMore, "#S#K###\u00C9##\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("[^\\p{Ll}]", "gu", iuMore, "s#k###\u00E9####\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("[\\P{Ll}]", "gu", iuMore, "s#k###\u00E9####\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("[^\\P{Ll}]", "gu", iuMore, "#S#K_!#\u00C91\u01C5\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("\\P{Lt}", "gu", iuMore, "#########\u01C5#########"),
+                Rx("\\P{Lowercase}", "gu", iuMore, "s#k###\u00E9####\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("\\P{Uppercase}", "gu", iuMore, "#S#K###\u00C9##\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("\\P{Script=Latin}", "gu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A###\u1E9E\u00DF"),
+                Rx("[^\\p{Lu}a]", "gu", iuMore, "#S#K###\u00C9##\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("\\p{Ll}", "gu", iuMore, "#S#K_!#\u00C91\u01C5\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("\\p{Lu}", "gu", iuMore, "s#k#_!\u00E9#1\u01C5#\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("\\p{Lt}", "gu", iuMore, "sSkK_!\u00E9\u00C91#\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("[^a-z]", "gu", iuMore, "s#k################"),
+                Rx("[^\\p{L}]", "gu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("\\P{L}", "gu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("[^\\P{Lu}]", "gu", iuMore, "s#k#_!\u00E9#1\u01C5#\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("[\\P{Ll}\\d]", "gu", iuMore, "s#k###\u00E9####\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("[^\\P{Ll}\\d]", "gu", iuMore, "#S#K_!#\u00C91\u01C5\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("\\P{Ll}", "gu", iuAstral, "#\uD801\uDC28#\uD801\uDCD8#\uD83A\uDD22a#"),
+                Rx("[^\\P{Ll}]", "gu", iuAstral, "\uD801\uDC00#\uD801\uDCB0#\uD83A\uDD00##1"),
+                Rx("\\p{Lu}", "gu", iuAstral, "#\uD801\uDC28#\uD801\uDCD8#\uD83A\uDD22a1"),
+                Rx("[^\\p{Lu}]", "gu", iuAstral, "\uD801\uDC00#\uD801\uDCB0#\uD83A\uDD00###"),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_scriptValuesAreDartsExactly() {
+        // Case-sensitive, no spaces, the long name's underscores, and Hrkt is not one.
+        assertDart(
+            listOf(
+                Rx("\\p{Script=latin}", "gu", scriptLetters, null),
+                Rx("\\p{Script=latin}", "giu", scriptLetters, null),
+                Rx("\\p{sc=latn}", "gu", scriptLetters, null),
+                Rx("\\p{sc=latn}", "giu", scriptLetters, null),
+                Rx("\\p{Script=Latin }", "gu", scriptLetters, null),
+                Rx("\\p{Script=Latin }", "giu", scriptLetters, null),
+                Rx("\\p{Script= Latin}", "gu", scriptLetters, null),
+                Rx("\\p{Script= Latin}", "giu", scriptLetters, null),
+                Rx("\\p{Script=OldItalic}", "gu", scriptLetters, null),
+                Rx("\\p{Script=OldItalic}", "giu", scriptLetters, null),
+                Rx("\\p{Script=Hrkt}", "gu", scriptLetters, null),
+                Rx("\\p{Script=Hrkt}", "giu", scriptLetters, null),
+                Rx("\\p{Script=Katakana_Or_Hiragana}", "gu", scriptLetters, null),
+                Rx("\\p{Script=Katakana_Or_Hiragana}", "giu", scriptLetters, null),
+                Rx("\\p{scx=latin}", "gu", scriptLetters, null),
+                Rx("\\p{scx=latin}", "giu", scriptLetters, null),
+                Rx("\\p{Script=}", "gu", scriptLetters, null),
+                Rx("\\p{Script=}", "giu", scriptLetters, null),
+                Rx("\\p{Script=LATIN}", "gu", scriptLetters, null),
+                Rx("\\p{Script=LATIN}", "giu", scriptLetters, null),
+                Rx("\\p{Script=old_italic}", "gu", scriptLetters, null),
+                Rx("\\p{Script=old_italic}", "giu", scriptLetters, null),
+                Rx("\\p{Script_Extensions=latin}", "gu", scriptLetters, null),
+                Rx("\\p{Script_Extensions=latin}", "giu", scriptLetters, null),
+                Rx("\\p{Script=Qaaa}", "gu", scriptLetters, null),
+                Rx("\\p{Script=Qaaa}", "giu", scriptLetters, null),
+                Rx("\\p{Script=Latn}", "gu", scriptLetters, "#\u03B1\u0300\u2C81\u309B\u0951"),
+                Rx("\\p{Script=Latn}", "giu", scriptLetters, "#\u03B1\u0300\u2C81\u309B\u0951"),
+                Rx("\\p{Script=Old_Italic}", "gu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Old_Italic}", "giu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Ital}", "gu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Ital}", "giu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Zzzz}", "gu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Zzzz}", "giu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Unknown}", "gu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Unknown}", "giu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Zyyy}", "gu", scriptLetters, "a\u03B1\u0300\u2C81#\u0951"),
+                Rx("\\p{Script=Zyyy}", "giu", scriptLetters, "a\u03B1\u0300\u2C81#\u0951"),
+                Rx("\\p{sc=Common}", "gu", scriptLetters, "a\u03B1\u0300\u2C81#\u0951"),
+                Rx("\\p{sc=Common}", "giu", scriptLetters, "a\u03B1\u0300\u2C81#\u0951"),
+                Rx("\\p{Script=Greek}", "gu", scriptLetters, "a#\u0300\u2C81\u309B\u0951"),
+                Rx("\\p{Script=Greek}", "giu", scriptLetters, "a#\u0300\u2C81\u309B\u0951"),
+                Rx("\\P{sc=Latn}", "gu", scriptLetters, "a#####"),
+                Rx("\\P{sc=Latn}", "giu", scriptLetters, "a#####"),
+                Rx("[\\p{sc=Grek}a]", "gu", scriptLetters, "##\u0300\u2C81\u309B\u0951"),
+                Rx("[\\p{sc=Grek}a]", "giu", scriptLetters, "##\u0300\u2C81\u309B\u0951"),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_onTheJvmQaaiAndQaacReadAsInheritedAndCoptic() {
+        assertDart(
+            listOf(
+                Rx("\\p{Script=Qaai}", "gu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{Script=Qaai}", "giu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{sc=Qaai}", "gu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{sc=Qaai}", "giu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{Script=Zinh}", "gu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{Script=Zinh}", "giu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{sc=Inherited}", "gu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{sc=Inherited}", "giu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\P{Script=Qaai}", "gu", scriptLetters, "##\u0300##\u0951"),
+                Rx("\\P{Script=Qaai}", "giu", scriptLetters, "##\u0300##\u0951"),
+                Rx("[\\p{Script=Qaai}a]", "gu", scriptLetters, "#\u03B1#\u2C81\u309B#"),
+                Rx("[\\p{Script=Qaai}a]", "giu", scriptLetters, "#\u03B1#\u2C81\u309B#"),
+                Rx("\\p{Script=Qaac}", "gu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{Script=Qaac}", "giu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{sc=Qaac}", "gu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{sc=Qaac}", "giu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\P{sc=Qaac}", "gu", scriptLetters, "###\u2C81##"),
+                Rx("\\P{sc=Qaac}", "giu", scriptLetters, "###\u2C81##"),
+                Rx("[^\\p{Script=Qaac}]", "gu", scriptLetters, "###\u2C81##"),
+                Rx("[^\\p{Script=Qaac}]", "giu", scriptLetters, "###\u2C81##"),
+                Rx("\\p{sc=Copt}", "gu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{sc=Copt}", "giu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{Script=Coptic}", "gu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{Script=Coptic}", "giu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_theScriptValuesAreEcma262sUnderEveryKey() {
+        assertEquals(336, dartScriptValues.size)
+        val keys = listOf("Script", "sc", "Script_Extensions", "scx")
+        assertEquals(emptyList(), keys.flatMap { k -> dartScriptValues.map { "$k=$it" } }.filterNot(RegexPropertyNames::accepts))
+        // Another case, a space, no underscore, and codes ECMA-262 leaves out.
+        val others = dartScriptValues.flatMap { listOf(it.lowercase(), it.uppercase(), " $it", "$it ", it.replace("_", "")) } +
+            listOf("Hrkt", "Katakana_Or_Hiragana", "Qaaa", "Qabx", "Zxxx", "Zsym", "Zmth", "")
+        val refused = others.filter { it !in dartScriptValues }
+        assertEquals(emptyList(), keys.flatMap { k -> refused.map { "$k=$it" } }.filter(RegexPropertyNames::accepts))
+    }
+
+    @Test
+    fun g4_everyScriptValueTheRuntimeKnowsCompiles() {
+        // java.util.regex reads the scripts of its Unicode version, so a newer one stays
+        // invalid; Qaai and Qaac, which it lacks, are read as Inherited and Coptic.
+        val known = dartScriptValues.filter { runCatching { Character.UnicodeScript.forName(it) }.isSuccess } + listOf("Qaai", "Qaac")
+        val patterns = known.flatMap { listOf("\\p{Script=$it}", "[\\P{sc=$it}]") }
+        assertEquals(emptyList(), listOf("gu", "giu").flatMap { f -> patterns.filter { RegexSupport.compile(it, f) == null }.map { "$it /$f" } })
+    }
 }
