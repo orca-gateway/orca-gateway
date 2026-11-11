@@ -1,3 +1,4 @@
 {"ts":"2026-11-11T10:38:51Z","stage":"09","round":1,"template":null,"text":"standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 1's only question (go on to group 2) is minor"}
 {"ts":"2026-11-11T10:59:45Z","stage":"09","round":2,"template":null,"text":"standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 2's only question (go on to group 3) is minor"}
 {"ts":"2026-11-11T11:13:25Z","stage":"09","round":3,"template":null,"text":"standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 3's only question (go on to group 4) is minor"}
+{"ts":"2026-11-11T11:43:19Z","stage":"09","round":4,"template":null,"text":"standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 4's only question (go on to group 5) is minor; the JVM gap is design point 5 as approved at gate 08"}

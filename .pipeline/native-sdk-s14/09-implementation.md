@@ -3,22 +3,22 @@
 ## Front page
 
 ### In one breath
-group 3 of 5 · tasks: 2 green, 0 blocked · cases: 4 of 6 green (M1 M2 F1 E1) · every suite green
-T5 Swift: `\x73` under `i` matches s and S, not ſ; with `u`, `\u{73}` and `\u{1F600}` work.
-T6 Kotlin: the same on the JVM; `\u0130` under `i` matches only İ.
-Both match Dart on its 37 escape rows; reviews passed first time; one commit per task.
-Tests: Swift 163 (+4), iOS 54 + 163, Kotlin core 146 (+5) on JDK 17, 21, 25, sdk 128.
-Probe: escapes 16 → 4 in both, all four `\u{…}` without `u` (Annex B, row 23b.37).
+group 4 of 5 · tasks: 2 green, 0 blocked · cases: 5 of 6 green (M1-P1) · every suite green
+T7 Swift: with `u`, `\p{…}` names Dart refuses (`IsLatin`, `Han`, `script=latin`) give null.
+T8 Kotlin: the same, and the JVM now reads Dart's long names (`Lowercase_Letter`, `Alphabetic`).
+Reviews passed first time; Kotlin also green on JDK 17 and 21, the two CI runs.
+Tests: Swift 168 (+5), iOS 54 + 168, Kotlin core 151 (+5), sdk 128, engine 701, Flutter 239.
+Probe: property rows 76 · 123 → 60 · 73; every `u` row left is row 23b.37's.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-4 auto-decided: null for a malformed `\u{`; Annex B forms as before; surrogates on; one helper.
-1 left to row 23b.37: `\x{73}`, read by both engines, refused by Dart (now named in the row).
+5 auto-decided: script values to the engine; `javaMirrored`; runtime flag once; two smaller.
+Gap, to row 23b.37: the JVM has no exact form for 62 binary names and Script_Extensions (null).
 
 ### Questions for you
-1. Next: group 4, `\p{…}` names and JVM spellings (T7 Swift ∥ T8 Kotlin)? (default: go)
+1. Next: group 5, fixtures 33-34 on all four runners (T9)? (default: go)
 
 ## Appendix
 
@@ -172,6 +172,59 @@ Once after the group (logs `s14/g3-*.log`):
   escape (Dart refuses it with `u`, and without reads `x{73}`): so before S14, now named in row 23b.37.
 Every changed file sits in T5's or T6's Files; the untracked `sdk-kotlin/core/bin/` predates S14.
 
+### Group 4
+Commits: T7 5315c4f, T8 790d4df. Nothing pushed. Group 3's card was answered under your standing rule
+(its only question, "go on to group 4", was minor).
+
+#### Task T7 · Swift rejects non-ECMAScript property names
+Files: `sdk-swift/Sources/OrcaGatewayCore/Resolver/RegexPropertyNames.swift` (new) · `sdk-swift/Sources/OrcaGatewayCore/Resolver/Transforms.swift` · `sdk-swift/Tests/OrcaGatewayCoreTests/TransformTests.swift`
+Cases: P1 (Swift: the rejects) → green (`swift test`: 168 tests, 0 failures, no new warnings; the 163
+of group 3 still pass) · red first: 2 of 5 new tests; the 3 guards passed before.
+Changed: `Regex.dartAcceptsProperty(_:)` and two Sets built once (80 General_Category values, bare or
+after `General_Category=`/`gc=`; 96 binary properties; `Script=`/`sc=`/`Script_Extensions=`/`scx=`
+with a value, left to ICU). With `u`, `\p{…}`/`\P{…}` is nil when Dart refuses the name, outside a
+class and inside one (`propertyEscape()`); without `u` nothing changes. Doc comments updated.
+Tests: `// MARK: S14 — property names (row 23b.36)`, 5 `testP1_…` tests: refused names (the 7 binary
+names Dart refuses too), in classes and groups, a no-`u` guard, a loop over all 690 accepted forms.
+Decisions: 1. script values go to ICU once non-empty (F9) · 2. a `\p{` with no `}` is nil from the
+rewrite · 3. the test holds its own copy of Dart's 176 names.
+Review fit: pass
+Review quality: pass
+
+#### Task T8 · Kotlin property names: rejects, JVM spellings
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/resolver/RegexPropertyNames.kt` (new) · `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/resolver/Transforms.kt` · `sdk-kotlin/core/src/test/kotlin/com/orcagateway/core/resolver/TransformTest.kt`
+Cases: P1 (Kotlin) → green (`./gradlew build`: core 151, sdk 128, 0 failures, lint no issues;
+`:core:test` 151 on JDK 17, 21 and 25) · red first: the 4 new p1 tests and the new `r2` row.
+Changed: `RegexPropertyNames`, built once: the same names, `accepts(name)` and `jvm(name, negated)`:
+a category to its short name, a binary to `IsX`, `javaMirrored` or an exact class (Hex_Digit as
+ranges, Any, Assigned as `[\P{Cn}]`). With `u`, T6's `escape()` hands `\p` to `property()`: null
+without `{…}`, for a name Dart refuses, or with no exact JVM spelling; Android keeps names as written.
+UNICODE_CHARACTER_CLASS is learned once (`unicodeClasses`), and `compileIcuLike` reads the flag.
+Tests: the same MARK, 4 `p1_…` tests and a guard; Emoji rows expect Dart's value where the runtime
+has `\p{IsEmoji}` (not JDK 17), else null; F10's note at :521-522 is now a row (added, not changed).
+Decisions: 1. Bidi_Mirrored as `\p{javaMirrored}` (checked on every code point) · 2. `Script=X` as
+written (the JVM lowercases the key) · 3. the runtime flag once.
+Not on the JVM (row 23b.37): 130 of the 690 forms Dart accepts stay null (62 binary names with their
+aliases, and Script_Extensions); 152 on JDK 17 (the six Emoji properties too).
+Review fit: pass
+Review quality: pass
+
+#### Group 4 test run
+Once after the group (logs `s14/g4-*.log`):
+- `cd engine && bun test` · 701 pass, 0 fail.
+- `cd sdk && flutter test` · +239: All tests passed! · `flutter analyze` · No issues found.
+- `cd sdk-swift && swift test` · Executed 168 tests, with 0 failures.
+- `xcodebuild test … id=FDE5D612…` · OrcaGatewayTests 54, OrcaGatewayCoreTests 168, TEST SUCCEEDED.
+- `cd sdk-kotlin && ./gradlew build` (tests rerun, JDK 25) · core 151, sdk 128, 0 failures · lint "No
+  issues found". `:core:test --rerun` on JDK 17 and on JDK 21: 151, 0 failures, each.
+- Probe (`s14/g4-probe.txt`), group 3 → group 4, Swift · Kotlin: property rows 76 · 123 → 60 · 73;
+  syntax 58 · 58 → 58 · 57 (`\pL`); every other corner unchanged, none worse. The 690 accepted forms
+  (`s14/oracle/pnames/`): Swift 0 differ, Kotlin 130 null (above), every other one as Dart. Every `u`
+  property row left is row 23b.37's: `\P{Ll}` giu (both), the JVM's `\p{Lt}` and `\p{ASCII}` giu,
+  Script_Extensions, ID_Start, CWCF, Cased, Dash, Math, `[\p{L}-z]`, `Script=latin`, `Script=Qaai`.
+  The rows without `u` are Annex B (`\p` is the letter p).
+Every changed file sits in T7's or T8's Files; the untracked `sdk-kotlin/core/bin/` predates S14.
+
 ### Blocked
 none
 
@@ -179,4 +232,4 @@ none
 none
 
 ### For ship (stage 10) to know
-nothing yet (groups 4-5 to come)
+nothing yet (group 5 to come)
