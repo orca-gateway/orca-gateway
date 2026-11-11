@@ -433,15 +433,36 @@ internal object RegexSupport {
      * form (`(?i)`, `(?-:`, `(?ii:`, `(?x:`, `(?>`, `(?#`, `(?P<`) gives null.
      *
      * An escaped character stays as it is (`\\d` is a backslash and a d), as do
-     * group names, a modifier group's flags (`(?ms-i:`), the digits of `\xHH` and
-     * `\uHHHH`, and what follows `\k<` where the pattern has a named group. An
-     * `\xHH`, `\uHHHH` or with `u` `\u{H…}` that spells a letter of the table is
-     * that letter (`\x73` under `i` is `(?-i:[sS])`); inside a class the members
-     * test reads it. With `u`, `\u{H…}` is written `\x{H…}`, in a class too, and
-     * one Dart rejects (`\u{}`, `\u{g}`, `\u{110000}`) gives null. `\0` before no
-     * digit is NUL and `\c` and an ASCII letter its control character, with `u`
-     * and without, each written as its code point. Backreferences keep the
-     * engine's folding.
+     * a modifier group's flags (`(?ms-i:`) and the digits of `\xHH` and
+     * `\uHHHH`. An `\xHH`, `\uHHHH` or with `u` `\u{H…}` that spells a letter
+     * of the table is that letter (`\x73` under `i` is `(?-i:[sS])`); inside a
+     * class the members test reads it. With `u`, `\u{H…}` is written `\x{H…}`,
+     * in a class too, and one Dart rejects (`\u{}`, `\u{g}`, `\u{110000}`)
+     * gives null. `\0` before no digit is NUL and `\c` and an ASCII letter its
+     * control character, with `u` and without, each written as its code point.
+     * Backreferences keep the engine's folding.
+     *
+     * Group names are dropped, with `u` and without: `(?<name>X)` is written
+     * `(X)`, the same number (ECMAScript, ICU and the JVM number named groups
+     * in order with the others), and `\k<name>` is `(?:\N)`, N its group's
+     * number, or for a name two alternatives hold `(?:\1|\2)`, the group that
+     * took part matching. So names Dart takes and the engine refuses work
+     * (`(?<$a>x)`, `(?<é>x)`; Dart's are [groupName]'s). Null, as in Dart: a
+     * name twice where both groups may take part (`(?<a>x)(?<a>y)`,
+     * `(?<a>(?<a>x))`), and where the pattern has a named group any `\k` but
+     * `\k<name>` of one of its names, in a class too (`\k<b>`, `\k<a`, `[\k]`).
+     *
+     * A backreference that can only see its group unset matches empty in
+     * Dart, where both engines fail it or, in a repeat, see the last
+     * iteration's value (ECMAScript resets a quantified atom's groups each
+     * time). It is written `(?:)` when it stands before its group closes
+     * (`\1(a)`, `(a\1)`, `(?:\1b|(a))+`) or in another alternative of a
+     * disjunction that holds the group (`(a)|\1b`); a `\k<name>` keeps only
+     * the groups it may see set. Inside a lookbehind, which Dart reads right
+     * to left, none is emptied: `\N` stays, `\k<name>` keeps all its groups
+     * (and the JVM refuses a reference there). Not reached: a group that takes
+     * part or not only at run time (`(?:(a)|b)\1`), as neither engine tells
+     * "unset" from "set elsewhere".
      *
      * Without `u` Dart reads Annex B's grammar, and so does this:
      *
@@ -502,8 +523,16 @@ internal object RegexSupport {
         val captures = captures(pattern)
         val named = captures.names.isNotEmpty()
         val open = ArrayList<Group>()
+        val top = HashSet<Int>() // the capturing groups closed in the top level's alternative being read
+        var opened = 0
         val out = StringBuilder(pattern.length + 16)
         var last = Last.None
+
+        /** The capturing groups closed in the innermost alternative being read. */
+        fun alternative() = open.lastOrNull()?.closed ?: top
+
+        /** Whether group [n] may be set here: closed in an alternative still being read. */
+        fun seen(n: Int) = n in top || open.any { n in it.closed }
         var i = 0
         while (i < pattern.length) {
             val c = pattern[i]
@@ -525,8 +554,9 @@ internal object RegexSupport {
                     i = quantifier
                 }
                 c == '\\' -> {
-                    if (pattern.getOrNull(i + 1).let { it == 'b' || it == 'B' }) last = Last.Assertion
-                    val piece = when (pattern.getOrNull(i + 1)) {
+                    val next = pattern.getOrNull(i + 1)
+                    if (next == 'b' || next == 'B') last = Last.Assertion
+                    val piece = when (next) {
                         'd' -> "[0-9]"
                         'D' -> "[^0-9]"
                         's' -> "[$SPACE]"
@@ -537,18 +567,35 @@ internal object RegexSupport {
                         'B' -> "(?:(?<=$w)(?=$w)|(?<!$w)(?!$w))"
                         else -> null
                     }
-                    val reference = if (piece != null) -1 else backreference(pattern, i, captures.count)
+                    // A reference's end and the groups it names: all of the name's for `\k<name>`, one for `\N`.
+                    val reference = when {
+                        piece != null -> null
+                        named && next == 'k' -> {
+                            val (end, name) = (if (pattern.getOrNull(i + 2) == '<') groupName(pattern, i + 3) else null) ?: return null
+                            end to (captures.names[name] ?: return null)
+                        }
+                        else -> backreference(pattern, i, captures.count)?.let { (end, n) -> end to listOf(n) }
+                    }
                     when {
                         piece != null -> {
                             out.append(piece)
                             i += 2
                         }
-                        reference > 0 -> {
-                            out.append(pattern, i, reference)
-                            i = reference
+                        reference != null -> {
+                            val (end, numbers) = reference
+                            // Dart reads a lookbehind right to left: in one, a reference keeps all its groups.
+                            val set = if (open.any { it.kind == GroupKind.Lookbehind }) numbers else numbers.filter(::seen)
+                            out.append(
+                                when {
+                                    set.isEmpty() -> "(?:)"
+                                    next == 'k' -> set.joinToString("|", "(?:", ")") { "\\$it" }
+                                    else -> pattern.substring(i, end)
+                                },
+                            )
+                            i = end
                         }
                         else -> {
-                            val escape = spelled(pattern, i, unicode, inClass = false, named) ?: escape(pattern, i, unicode, inClass = false, captures.names) ?: return null
+                            val escape = spelled(pattern, i, unicode, inClass = false, named) ?: escape(pattern, i, unicode, inClass = false) ?: return null
                             val letter = escape.codePoint?.takeIf { fold && it <= 0xFFFF }?.let { DartFoldTable.set(it.toChar(), unicode) }
                             if (letter != null) out.append("(?-i:[").append(letter).append("])") else out.append(escape.text)
                             i = escape.end
@@ -562,9 +609,16 @@ internal object RegexSupport {
                 }
                 c == '[' -> i = characterClass(pattern, i, word, fold, unicode, named, out) ?: return null
                 c == '(' -> {
-                    val (end, group) = groupOpening(pattern, i, fold, out.length) ?: return null
+                    val (end, group) = groupOpening(pattern, i, fold, out.length, opened) ?: return null
+                    if (group.kind == GroupKind.Capturing) {
+                        opened += 1
+                        // A name twice where both groups may take part, one inside the other too, is Dart's error.
+                        val earlier = group.name?.let { captures.names[it] }.orEmpty().filter { it < opened }
+                        if (earlier.any { n -> seen(n) || open.any { it.number == n } }) return null
+                    }
                     open.add(group)
-                    out.append(pattern, i, end) // a group name, or `(?ms-i:` whose flags the engine reads as Dart does
+                    // The name is dropped; `(?ms-i:` is copied, its flags the engine reads as Dart does.
+                    out.append(if (group.kind == GroupKind.Capturing) "(" else pattern.substring(i, end))
                     i = end
                     last = Last.None
                 }
@@ -572,6 +626,8 @@ internal object RegexSupport {
                     val group = open.removeLastOrNull()
                     out.append(c)
                     i += 1
+                    // Its capturing groups, itself among them if it is one, are closed in the enclosing alternative.
+                    if (group != null) alternative().addAll(group.before + 1..opened)
                     if (group?.kind == GroupKind.Lookbehind || group?.kind == GroupKind.Lookahead && unicode) {
                         last = Last.Assertion
                     } else if (group != null && group.kind == GroupKind.Lookahead && i < pattern.length && quantifierEnd(pattern, i) > i) {
@@ -580,6 +636,7 @@ internal object RegexSupport {
                 }
                 c == '^' || c == '$' || c == '|' -> {
                     last = if (c == '|') Last.None else Last.Assertion
+                    if (c == '|') alternative().clear()
                     out.append(c)
                     i += 1
                 }
@@ -601,30 +658,38 @@ internal object RegexSupport {
 
     private enum class GroupKind { Capturing, NonCapturing, Lookahead, Lookbehind }
 
-    /** An open group: its `i`, its kind, and the output offset its text starts at. */
-    private class Group(val fold: Boolean, val kind: GroupKind, val start: Int)
+    /**
+     * An open group: its `i`, its kind, the output offset its text starts at,
+     * how many capturing groups open [before] it, its name if it has one, and
+     * the capturing groups [closed] in its alternative being read.
+     */
+    private class Group(val fold: Boolean, val kind: GroupKind, val start: Int, val before: Int, val name: String?) {
+        val number: Int get() = if (kind == GroupKind.Capturing) before + 1 else 0
+        val closed = HashSet<Int>()
+    }
 
-    /** The pattern's capturing groups: how many, and each name with its group's number, in order. */
-    private class Captures(val count: Int, val names: List<Pair<String, Int>>)
+    /** The pattern's capturing groups: how many, and each name with its groups' numbers, in order. */
+    private class Captures(val count: Int, val names: Map<String, List<Int>>)
 
     /**
      * The capturing groups of the whole pattern, as Dart counts them before
      * it reads it: each `(` that [groupOpening] opens a capturing group with,
-     * a plain `(` or `(?<name>`, outside classes and escapes.
+     * a plain `(` or `(?<name>`, outside classes and escapes, and each name
+     * as [groupName] spells it.
      */
     private fun captures(pattern: String): Captures {
         var count = 0
-        val names = ArrayList<Pair<String, Int>>()
+        val names = LinkedHashMap<String, MutableList<Int>>()
         var i = 0
         while (i < pattern.length) {
             when (pattern[i]) {
                 '\\' -> i += 2
                 '[' -> i = classEnd(pattern, i)
                 '(' -> {
-                    val opening = groupOpening(pattern, i, fold = false, start = 0)
-                    if (opening?.second?.kind == GroupKind.Capturing) {
+                    val group = groupOpening(pattern, i, fold = false, start = 0, before = count)?.second
+                    if (group?.kind == GroupKind.Capturing) {
                         count += 1
-                        if (pattern.getOrNull(i + 1) == '?') names.add(pattern.substring(i + 3, opening.first).removeSuffix(">") to count)
+                        group.name?.let { names.getOrPut(it) { ArrayList() }.add(count) }
                     }
                     i += 1
                 }
@@ -647,21 +712,21 @@ internal object RegexSupport {
     }
 
     /**
-     * The end of the backreference at [i], with `u` and without: `\` and a
-     * run of digits, not from 0, whose number is at most [count]; -1 for
-     * none. A decimal escape from 1 past [count] the caller then reads,
-     * without `u`, as [spelled]'s legacy octal escape or digit, and with `u`
-     * refuses, so null.
+     * The backreference at [i], with `u` and without, as its end and its
+     * number: `\` and a run of digits, not from 0, whose number is at most
+     * [count]; null for none. A decimal escape from 1 past [count] the caller
+     * then reads, without `u`, as [spelled]'s legacy octal escape or digit,
+     * and with `u` refuses, so null.
      */
-    private fun backreference(pattern: String, i: Int, count: Int): Int {
-        if (pattern.getOrNull(i + 1)?.let { it in '1'..'9' } != true) return -1
+    private fun backreference(pattern: String, i: Int, count: Int): Pair<Int, Int>? {
+        if (pattern.getOrNull(i + 1)?.let { it in '1'..'9' } != true) return null
         var end = i + 1
         var n = 0
         while (end < pattern.length && pattern[end] in '0'..'9') {
             if (n <= count) n = n * 10 + (pattern[end] - '0')
             end += 1
         }
-        return if (n <= count) end else -1
+        return if (n <= count) end to n else null
     }
 
     /**
@@ -746,19 +811,20 @@ internal object RegexSupport {
 
     /**
      * The end of the group opening at [i] and the group it opens, its text
-     * starting at [start] in the output. The group's `i` is [fold], the
-     * enclosing one, unless modifiers add or remove it. Null for a `(?` form
-     * Dart rejects.
+     * starting at [start] in the output, [before] capturing groups opened
+     * before it. The group's `i` is [fold], the enclosing one, unless
+     * modifiers add or remove it. Null for a `(?` form Dart rejects, a group
+     * name [groupName] refuses too.
      */
-    private fun groupOpening(pattern: String, i: Int, fold: Boolean, start: Int): Pair<Int, Group>? {
-        fun group(kind: GroupKind, inner: Boolean = fold) = Group(inner, kind, start)
+    private fun groupOpening(pattern: String, i: Int, fold: Boolean, start: Int, before: Int): Pair<Int, Group>? {
+        fun group(kind: GroupKind, inner: Boolean = fold, name: String? = null) = Group(inner, kind, start, before, name)
         if (pattern.getOrNull(i + 1) != '?') return i + 1 to group(GroupKind.Capturing)
         val next = pattern.getOrNull(i + 2)
         return when {
             next == ':' -> i + 3 to group(GroupKind.NonCapturing)
             next == '=' || next == '!' -> i + 3 to group(GroupKind.Lookahead)
             next == '<' && pattern.getOrNull(i + 3).let { it == '=' || it == '!' } -> i + 4 to group(GroupKind.Lookbehind)
-            next == '<' -> pattern.indexOf('>', i).let { if (it < 0) pattern.length else it + 1 } to group(GroupKind.Capturing)
+            next == '<' -> groupName(pattern, i + 3)?.let { (end, name) -> end to group(GroupKind.Capturing, name = name) }
             else -> {
                 var e = i + 2
                 while (e < pattern.length && pattern[e] in "ims-") e += 1
@@ -772,6 +838,40 @@ internal object RegexSupport {
                 e + 1 to group(GroupKind.NonCapturing, if (at < 0) fold else dash < 0 || at < dash)
             }
         }
+    }
+
+    /**
+     * The group name at [from], up to its `>`, as Dart reads one with `u` and
+     * without (RegExpIdentifierName), as the end after the `>` and the name it
+     * spells: [identifier] characters, each written as itself (a surrogate pair
+     * too) or as a `\u` escape [escape] reads with `u` (`\u0062`, `\u{62}`).
+     * Null for an empty name, any other character, or no `>`. Two `\uHHHH`
+     * that spell a surrogate pair, one character to Dart, are two halves here.
+     */
+    private fun groupName(pattern: String, from: Int): Pair<Int, String>? {
+        val name = StringBuilder()
+        var j = from
+        while (j < pattern.length && pattern[j] != '>') {
+            val escaped = if (pattern.startsWith("\\u", j)) escape(pattern, j, unicode = true, inClass = false) ?: return null else null
+            val c = escaped?.codePoint ?: pattern.codePointAt(j)
+            if (!identifier(c, first = name.isEmpty())) return null
+            name.appendCodePoint(c)
+            j = escaped?.end ?: (j + Character.charCount(c))
+        }
+        return if (j < pattern.length && name.isNotEmpty()) j + 1 to name.toString() else null
+    }
+
+    /**
+     * Whether [c] may stand in a group name, [first] or after it: ID_Start,
+     * `$` or `_` first, then ID_Continue, `$`, ZWNJ or ZWJ. These are the
+     * runtime's identifier sets, less the format and control characters they
+     * let through and U+2E2F, which they hold and Unicode's do not.
+     */
+    private fun identifier(c: Int, first: Boolean): Boolean = when {
+        c == '$'.code -> true
+        c == 0x2E2F -> false
+        first -> c == '_'.code || Character.isUnicodeIdentifierStart(c)
+        else -> c == 0x200C || c == 0x200D || Character.isUnicodeIdentifierPart(c) && !Character.isIdentifierIgnorable(c)
     }
 
     /**
@@ -855,21 +955,14 @@ internal object RegexSupport {
         return spelled(pattern, j, unicode, inClass = true, named) ?: escape(pattern, j, unicode, inClass = true)
     }
 
-    /**
-     * The end of the escape at [i]: two characters, or with `\xHH`, `\uHHHH`,
-     * `\k<…>` the argument too.
-     */
+    /** The end of the escape at [i]: two characters, or with `\xHH` and `\uHHHH` the digits too. */
     private fun escapeEnd(pattern: String, i: Int): Int {
-        val close = when (pattern.getOrNull(i + 1)) {
-            'x', 'u' -> {
-                val end = i + if (pattern[i + 1] == 'x') 4 else 6
-                return if (end <= pattern.length && (i + 2 until end).all { pattern[it] in HEX_DIGITS }) end else i + 2
-            }
-            'k' -> '>'.takeIf { pattern.getOrNull(i + 2) == '<' }
-            else -> null
-        } ?: return minOf(i + 2, pattern.length)
-        val end = pattern.indexOf(close, i + 3)
-        return if (end < 0) pattern.length else end + 1
+        val end = i + when (pattern.getOrNull(i + 1)) {
+            'x' -> 4
+            'u' -> 6
+            else -> return minOf(i + 2, pattern.length)
+        }
+        return if (end <= pattern.length && (i + 2 until end).all { pattern[it] in HEX_DIGITS }) end else i + 2
     }
 
     /** An escape: where it ends, the text the engine gets, and the code point it spells, if it spells one. */
@@ -883,9 +976,11 @@ internal object RegexSupport {
      * non-hex one, no `}`, or past 10FFFF; with [unicode], `\p` and `\P`
      * are [property]'s. With [unicode] the rest is null but for `\f`, `\n`,
      * `\r`, `\t`, `\xHH`, `\uHHHH`, a syntax character `^ $ \ . * + ? ( ) [ ]
-     * { } | /`, [inClass] a `-` and outside one `\k<name>` of a group in [names].
+     * { } | /` and [inClass] a `-`. `\k` is null in both modes: a `\k<name>`
+     * Dart takes is the caller's, and the letter k [spelled]'s.
      */
-    private fun escape(pattern: String, i: Int, unicode: Boolean, inClass: Boolean, names: List<Pair<String, Int>> = emptyList()): Escape? {
+    private fun escape(pattern: String, i: Int, unicode: Boolean, inClass: Boolean): Escape? {
+        if (pattern.getOrNull(i + 1) == 'k') return null
         if (unicode && pattern.startsWith("u{", i + 1)) {
             val close = pattern.indexOf('}', i + 3)
             if (close < 0) return null
@@ -911,7 +1006,6 @@ internal object RegexSupport {
                 'x', 'u' -> spelled
                 'f', 'n', 'r', 't' -> true
                 '-' -> inClass
-                'k' -> !inClass && pattern[end - 1] == '>' && names.any { it.first == pattern.substring(i + 3, end - 1) }
                 else -> next in "^$\\.*+?()[]{}|/"
             }
             if (!strict) return null

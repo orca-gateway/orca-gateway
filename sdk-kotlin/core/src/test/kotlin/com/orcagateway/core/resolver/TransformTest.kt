@@ -1593,4 +1593,137 @@ class TransformTest {
         assertEquals("(?=a)b", RegexSupport.asciiClasses("(?=a)b"))
         assertEquals(null, RegexSupport.asciiClasses("(?=a)*", unicode = true))
     }
+
+    // MARK: S15 — group names, unset references (row 23b.37)
+    // Expected values from Dart 3.12.2, the same with `u` and without. Group
+    // names are dropped, so names the engine refuses work and a name may stand
+    // in two alternatives; `\k<name>` is its groups' numbers. A reference that
+    // can only see its group unset matches empty in Dart, where both engines
+    // fail it. Not reached: a group unset only at run time (`(?:(a)|b)\1`).
+
+    /** The pattern under `g` and `gu` on [input]. */
+    private fun named(pattern: String, input: String, expected: String?): List<Rx> =
+        listOf(Rx(pattern, "g", input, expected), Rx(pattern, "gu", input, expected))
+
+    /** Group names Dart refuses, and each `\k` it refuses where the pattern has a named group. */
+    private val refusedNames = listOf(
+        "(?<1a>x)", "(?<a-b>x)", "(?<>x)", "(?<😀>x)", "(?<a😀>x)", "(?<a b>x)", "(?<a", "(?<a\\>x)", "(?<a\\x62>x)",
+        "(?<١>x)", "(?<\u0301>x)", "(?<\u200Cx>x)", "(?<a\u00AD>x)", "(?<a\u0001>x)", "(?<ⸯ>x)", "(?<aⸯ>x)", "(?<‿>x)",
+        "(?<a\u2028>x)", "(?<a\\u{}>x)", "(?<a\\u{110000}>x)", "(?<a\\u62>x)", "(?<\\u0031>x)", "(?<a\\u002d>x)",
+        "(?<\\u{1F600}>x)", "(?<a\\U0062>x)", "(?<a\\uD835>x)",
+        "(?<a>x)(?<a>y)", "(?:(?<a>x)|y)(?<a>z)", "(?<a>(?<a>x))", "(?<a>x|(?<a>y))", "(?:(?<a>x)|(?<a>y))(?<a>z)",
+        "(?<=(?<a>x)(?<a>y))", "(?<a>x)\\k<b>", "(?<a>x)\\k", "(?<a>x)\\k<a", "(?<a>x)[\\k]", "(?<a>x)[\\k<a>]",
+        "(?<A>x)\\k<a>", "(?<a>x)\\ka", "(?<a>x)\\k<>", "(?<a>x)\\k<1>", "(?<a>x)\\k<a\\u{62}>",
+    )
+
+    @Test
+    fun g3_groupNamesAreDroppedSoNamesTheEngineRefusesWork() {
+        assertDart(
+            listOf(
+                "(?<\$a>x)", "(?<é>x)", "(?<a>x)", "(?<_a>x)", "(?<a\$>x)", "(?<\$>x)", "(?<_>x)", "(?<a1>x)", "(?<ª>x)",
+                "(?<a·>x)", "(?<a١>x)", "(?<a\u0301>x)", "(?<a\u200C>x)", "(?<a\u200D>x)", "(?<𝐀>x)", "(?<\u212A>x)",
+                "(?<℘>x)", "(?<a\\u{62}>x)", "(?<a\\u0062>x)", "(?<\\u0024>x)", "(?<a\\u{0062}>x)", "(?<a\\u{000000062}>x)",
+                "(?<\\u{1D400}>x)", "(?<a\\u200C>x)", "(?<a\\u{200c}>x)", "(?<a\\u00e9>x)",
+            ).flatMap { named(it, "x", "#") } +
+                named("(?<a\\u0062>x)\\k<ab>", "xx x", "# x") +
+                named("(?<ab>x)\\k<a\\u{62}>", "xx x", "# x") +
+                named("(?<𝐀>x)\\k<\\u{1D400}>", "xx x", "# x"),
+        )
+    }
+
+    @Test
+    fun g3_aNameInTwoAlternativesNamesTheGroupThatTookPart() {
+        assertDart(
+            named("(?<a>x)|(?<a>y)", "xy", "##") +
+                named("(?:(?<a>x)|(?<a>y))\\k<a>", "xx yy xy", "# # xy") +
+                named("(?:(?<a>x)|(?<a>y))+\\k<a>", "xyy yxx xx", "# # #") +
+                named("(?<a>x)|(?:(?<a>y)|(?<a>z))\\k<a>", "x yy zz yz", "# # # yz") +
+                named("(?:(?<a>x)\\k<a>|(?<a>y))", "xx y yy", "# # ##") +
+                named("(?:(?<a>x)|(?<a>y))(?:(?<b>x)|(?<b>y))\\k<a>\\k<b>", "xyxy yyyy", "# #") +
+                named("(?<a>x)|(?<a>y)\\k<a>", "x yy yx", "# # y#") +
+                named("(?:(?<a>x)|(?<a>y)|(?<a>z))\\k<a>", "xx yy zz xy", "# # # xy") +
+                named("(?<a>x)|(?<b>y)|(?<a>z)", "xyz", "###") +
+                named("(?<a>x)(?:(?<b>y)|(?<b>z))", "xy xz", "# #") +
+                named("(?<a>x)\\k<a>0", "xx0 x0", "# x0") +
+                named("(?<a>x)\\k<a>1", "xx1", "#"),
+        )
+    }
+
+    @Test
+    fun g3_namesDartRefusesAreInvalid() {
+        assertDart(refusedNames.flatMap { named(it, "xy", null) })
+    }
+
+    @Test
+    fun g3_theRewriterItselfRefusesTheNamesDartRefuses() {
+        // Not the engine: names are dropped, so it never sees one.
+        val accepted = listOf(false, true).flatMap { u -> refusedNames.filter { RegexSupport.asciiClasses(it, unicode = u) != null }.map { "$it u=$u" } }
+        assertEquals(emptyList(), accepted)
+    }
+
+    @Test
+    fun g3_aReferenceThatCanOnlySeeItsGroupUnsetMatchesEmpty() {
+        val fwd = "a ab aab b ba aba abab"
+        assertDart(
+            named("\\1(a)", "aa", "##") +
+                named("(a\\1)", "aa", "##") +
+                named("(\\1a)", fwd, "# #b ##b b b# #b# #b#b") +
+                named("(?:\\1b|(a))+", "ab", "#") +
+                named("\\2(a)(b)", "ab", "#") +
+                named("(a)(?:\\2(b))", "ab", "#") +
+                named("\\k<a>(?<a>x)", "xx", "##") +
+                named("\\k<a>(?:(?<a>x)|(?<a>y))", "x y", "# #") +
+                named("(a)|\\1b", "ab b", "## #") +
+                named("(a)|b\\1", "ab b", "## #") +
+                named("(?:(a)|\\1b)+", "ab b aab", "# # #") +
+                named("(?:\\1(a))+", "aa a", "# #") +
+                named("((a)|b\\2)", "ab b", "## #") +
+                named("(a)|(?:b|\\1)c", "ac c bc", "## # #") +
+                named("(?:(a)|b)|\\1c", "ac c", "## #") +
+                named("(a)\\1|\\1b", "aa b ab", "# # a#") +
+                named("(?=\\1(a))a", "aa a", "## #") +
+                named("(a)(b)(c)(d)(e)(f)(g)(h)(i)\\10(j)", "abcdefghij", "#") +
+                named("\\1*(a)", "aa", "##") +
+                named("\\k<a>*(?<a>x)", "xx", "##") +
+                named("(a)|\\1*b", "ab b", "## #") +
+                named("\\1(?<=(a))", "aa", "a#a#"),
+        )
+    }
+
+    @Test
+    fun g3_guard_referencesThatCanSeeTheirGroupKeepTheirMatches() {
+        assertDart(
+            named("(?<a>x)\\1", "xx", "#") +
+                named("(?<a>x)(?<b>y)\\k<b>\\k<a>", "xyyx", "#") +
+                named("(?<a>.)\\k<a>(?<b>.)\\2", "aabb", "#") +
+                named("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)\\10", "abcdefghijj", "#") +
+                named("(a)(?:\\1)+", "aaa", "#") +
+                named("(?<=(a))\\1", "aa", "a#") +
+                listOf(
+                    Rx("(a)\\2", "g", "a\u0002", "#"),
+                    Rx("(a)\\2", "gu", "a\u0002", null),
+                    Rx("(a)\\10", "g", "a\b", "#"),
+                    Rx("(a)\\10", "gu", "a\b", null),
+                    Rx("(a)\\8", "g", "a8", "#"),
+                    Rx("(a)\\8", "gu", "a8", null),
+                ),
+        )
+    }
+
+    @Test
+    fun g3_referencesAreWrittenAsTheirGroupsNumbersOrAsAnEmptyGroup() {
+        assertEquals("(x)(?:\\1)", RegexSupport.asciiClasses("(?<a>x)\\k<a>"))
+        assertEquals("(x)(?:\\1)", RegexSupport.asciiClasses("(?<a>x)\\k<a>", unicode = true))
+        assertEquals("(?:(x)|(y))(?:\\1|\\2)", RegexSupport.asciiClasses("(?:(?<a>x)|(?<a>y))\\k<a>"))
+        // An alternative that can only be unset is left out, and with none left the group is empty.
+        assertEquals("(x)|(?:(y)|(z))(?:\\2|\\3)", RegexSupport.asciiClasses("(?<a>x)|(?:(?<a>y)|(?<a>z))\\k<a>"))
+        assertEquals("(?:)(x)", RegexSupport.asciiClasses("\\k<a>(?<a>x)"))
+        assertEquals("(?:)(a)", RegexSupport.asciiClasses("\\1(a)"))
+        assertEquals("(a|(?:))", RegexSupport.asciiClasses("(a|\\1)", unicode = true))
+        assertEquals("(a)|(?:)b", RegexSupport.asciiClasses("(a)|\\1b"))
+        // A reference that can see its group set is copied, and so is one in a lookbehind.
+        assertEquals("(a)\\1", RegexSupport.asciiClasses("(a)\\1"))
+        assertEquals("(?<=\\1(a))b", RegexSupport.asciiClasses("(?<=\\1(a))b"))
+        assertEquals("(x)(?<=(?:\\1))", RegexSupport.asciiClasses("(?<a>x)(?<=\\k<a>)"))
+    }
 }
