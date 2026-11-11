@@ -141,6 +141,8 @@ flutter analyze` · typecheck: none · baseline (2026-11-10, main 29d77e9): engi
 Flutter 239 passed; flutter analyze no issues; Swift 130 tests, 0 failures; iOS UI 54 + core 130,
 TEST SUCCEEDED; Kotlin core 130, sdk 128, 0 failures, lint "No issues found". Green at 09: a task's
 cases pass and nothing that passed here fails.
+commits: per task · gate: per group (answered at gate 08, 2026-11-11, "A": every default; the
+commands as found; two groups, T1 then T2)
 
 ### Not planned
 - An end-to-end DevTools WebSocket check through `DevToolsStub` (F7): the envelope text is pinned in
