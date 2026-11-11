@@ -3,22 +3,20 @@
 ## Front page
 
 ### In one breath
-group 4 of 5 · tasks: 2 green, 0 blocked · cases: 5 of 6 green (M1-P1) · every suite green
-T7 Swift: with `u`, `\p{…}` names Dart refuses (`IsLatin`, `Han`, `script=latin`) give null.
-T8 Kotlin: the same, and the JVM now reads Dart's long names (`Lowercase_Letter`, `Alphabetic`).
-Reviews passed first time; Kotlin also green on JDK 17 and 21, the two CI runs.
-Tests: Swift 168 (+5), iOS 54 + 168, Kotlin core 151 (+5), sdk 128, engine 701, Flutter 239.
-Probe: property rows 76 · 123 → 60 · 73; every `u` row left is row 23b.37's.
+group 5 of 5 · tasks: 9 green, 0 blocked · cases: 6 of 6 green · every suite green
+T9: fixtures 33 and 34 pin S14's corners; the engine, Flutter, Swift and Kotlin pass both.
+S14: Swift and Kotlin match Dart on modifier scope, `(?` rejects, ß and ﬀ, escapes, `\p{…}`.
+Tests: engine 703, Flutter 241, Swift 168, iOS 54 + 168, Kotlin core 151 (JDK 17/21/25), sdk 128.
+Probe: every difference left is row 23b.37's (Annex B, backreferences, UTF-16, the JVM's gaps).
 
 ### New for you
 nothing new
 
 ### Trade-offs
-5 auto-decided: script values to the engine; `javaMirrored`; runtime flag once; two smaller.
-Gap, to row 23b.37: the JVM has no exact form for 62 binary names and Script_Extensions (null).
+2 auto-decided: one shared input for fixture 34; escapes spelled in the pattern.
 
 ### Questions for you
-1. Next: group 5, fixtures 33-34 on all four runners (T9)? (default: go)
+1. `A` approves the stage; stage 10 then pushes the branch and opens the PR. (default: go)
 
 ## Appendix
 
@@ -225,6 +223,49 @@ Once after the group (logs `s14/g4-*.log`):
   The rows without `u` are Annex B (`\p` is the letter p).
 Every changed file sits in T7's or T8's Files; the untracked `sdk-kotlin/core/bin/` predates S14.
 
+### Group 5
+Commit: T9 e346688. Nothing pushed. Group 4's card was answered under your standing rule (its only
+question, "go on to group 5", was minor; the JVM gap is design point 5 as approved at gate 08).
+
+#### Task T9 · Fixtures 33-34, counts pinned at 34
+Files: `schema/fixtures/render/33_regex_modifier_scope_fold_table.json` (new) · `schema/fixtures/render/34_regex_invalid_groups_property_names.json` (new) · `sdk-swift/Tests/OrcaGatewayCoreTests/ModelRoundTripTests.swift` · `sdk-kotlin/core/src/test/kotlin/com/orcagateway/core/models/ModelRoundTripTest.kt` · `sdk-kotlin/core/src/test/kotlin/com/orcagateway/core/FixturePathsTest.kt`
+Cases: X1 → green on the four runners (engine 703, Flutter +241, Swift 168, Kotlin core 151 on JDK
+17, 21, 25, sdk 128) · red first: the count pins (Swift 34 ≠ 32, Kotlin twice).
+Changed: 33, 14 rows: `(?-i:s)`, `(?i:s)`, `a(?i:b)c`; `Å` and `ß` under gi and giu, `ff`,
+`[^^a]`; `\x73`, `ſ`, `İ` gi; `\u{73}`, `\u{1F600}` gu. 34, 13 rows on "aB1é中😀": null for
+`(?i)a`, `(?-:a)`, `(?x:a)`, `(?ii:a)`, `\p{IsLatin}`, `\p{Han}`, `\p{script=latin}`, `\pL`; Dart's
+sets for `\p{Lowercase_Letter}`, `\p{gc=Cased_Letter}`, `\p{Alphabetic}`, `\p{Any}`,
+`[^\p{Lowercase_Letter}]`. 31/32's shape; `expected` is the engine's own output; every value Dart's,
+confirmed by bun's RegExp and Flutter's run. Pins 32 → 34, "01-32" → "01-34" (`>= 9` kept).
+Tests: each runner compares `"data": null` (shown by a temporary edit that made all three fail).
+Decisions: 1. one shared input for 34 (中 tells Alphabetic from Cased_Letter) · 2. escape rows
+spell the escape in the pattern, fold rows the letter.
+Review fit: pass
+Review quality: pass
+
+#### Group 5 test run
+Once after the group (logs `s14/g5-*.log`):
+- `cd engine && bun test` · 703 pass, 0 fail (701 + fixtures 33 and 34).
+- `cd sdk && flutter test` · +241: All tests passed! (both fixtures' resolved props) · `flutter
+  analyze` · No issues found.
+- `cd sdk-swift && swift test` · Executed 168 tests, with 0 failures.
+- `xcodebuild test … id=FDE5D612…` · OrcaGatewayTests 54, OrcaGatewayCoreTests 168, TEST SUCCEEDED.
+- `cd sdk-kotlin && ./gradlew build` (tests rerun, JDK 25) · core 151, sdk 128, 0 failures · lint "No
+  issues found". `:core:test --rerun` on JDK 17 and on JDK 21: 151, 0 failures, each.
+Every changed file sits in T9's Files; the untracked `sdk-kotlin/core/bin/` predates S14.
+
+### Stage 09 in all
+Nine tasks in five groups, all green, none blocked or skipped; cases M1 M2 F1 E1 P1 X1 green.
+Reworks: T1, T2 (the `(?i-:a)` guard row), T4 (`[^^a]`), T3 (`^` + combining mark): one each, all
+fixed. Probe, baseline (08's table) → now, Swift · Kotlin: modifier groups 82 · 86 → 0 · 0; one
+letter, literal and in a class, 130 · 130 → 0 · 0; full foldings 150 · 12 → 0 · 0; escapes 17 · 17 →
+4 · 4; property rows 76 · 123 → 60 · 73; syntax 81 · 77 → 58 · 57. Unchanged, row 23b.37's:
+backreferences 7 · 13, negated sets under `iu` 7 · 8, supplementary and UTF-16 31 · 31. Every
+difference left is row 23b.37's (Annex B, backreferences, UTF-16 units, `\P` under `iu`, the JVM's
+missing properties, `\x{…}`).
+Commits over main (f9d3935, not moved): S13's close, 08 notes, T1 282f32e, T2 bbaae14, T4 d056388,
+T3 57b82e4, T5 079e08a, T6 44d6a2c, T7 5315c4f, T8 790d4df, T9 e346688, and the group notes.
+
 ### Blocked
 none
 
@@ -232,4 +273,11 @@ none
 none
 
 ### For ship (stage 10) to know
-nothing yet (group 5 to come)
+- No migration, config or env. The Swift and Kotlin fixes ship with the next `sdk-swift-v*` and
+  `sdk-kotlin-v*` releases through `release.sh` (stage 11 is skipped by default).
+- Swift on Linux (CI's swift 5.10-jammy and 6.2-noble) was not run here: Docker is off. Kotlin ran on
+  JDK 17, 21 and 25 here; CI runs 17 and 21.
+- The PR touches `sdk-swift/`, `sdk-kotlin/`, `schema/fixtures/render/` and `.pipeline/`: the Swift,
+  Kotlin, engine and Flutter workflows all run (fixtures are read by every runner).
+- Epic plan (outside the repo): row 23b.36 to "S14 PR #…"; row 23b.37 gained `\u{73}` without `u`,
+  `\x{73}`, `[\p{L}-z]`, the JVM's 62 binary names and `Script=Qaai` during 09.
