@@ -633,6 +633,114 @@ final class TransformTests: XCTestCase {
         XCTAssertTrue(matches("(?i:a)", "A"))
     }
 
+    // MARK: S14 — Dart's fold table (row 23b.36)
+
+    func testF1_lettersICUFoldsAnotherWayMatchOnlyDartsSet() {
+        // Without `u` Å (U+212B), Ω (U+2126), ϴ, ẞ and ᾀ match only themselves in Dart; with `u` their simple folding.
+        let rows: [(String, String, String, String, UInt)] = [
+            ("\u{212B}", "gi", "\u{212B} \u{E5} \u{C5}", "# \u{E5} \u{C5}", #line),
+            ("\u{212B}", "giu", "\u{212B} \u{E5} \u{C5}", "# # #", #line),
+            ("\u{2126}", "gi", "\u{2126} \u{3C9} \u{3A9}", "# \u{3C9} \u{3A9}", #line),
+            ("\u{2126}", "giu", "\u{2126} \u{3C9} \u{3A9}", "# # #", #line),
+            ("\u{3F4}", "gi", "\u{3F4} \u{3B8} \u{398} \u{3D1}", "# \u{3B8} \u{398} \u{3D1}", #line),
+            ("\u{3F4}", "giu", "\u{3F4} \u{3B8} \u{398} \u{3D1}", "# # # #", #line),
+            ("\u{1E9E}", "gi", "\u{1E9E} \u{DF}", "# \u{DF}", #line),
+            ("\u{1E9E}", "giu", "\u{1E9E} \u{DF}", "# #", #line),
+            ("\u{1F80}", "gi", "\u{1F80} \u{1F88}", "# \u{1F88}", #line),
+            ("\u{1F80}", "giu", "\u{1F80} \u{1F88}", "# #", #line),
+            ("\u{E5}", "gi", "\u{E5}\u{C5}\u{212B}", "##\u{212B}", #line),
+            ("\u{E5}", "giu", "\u{E5}\u{C5}\u{212B}", "###", #line),
+            ("[\u{E5}]", "gi", "\u{E5}\u{C5}\u{212B}", "##\u{212B}", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    func testF1_fullCaseFoldingNeverMatchesTwoLetters() {
+        // ICU folds ß to "ss" and ﬀ to "ff", and a run "ff" or "αι" to the ligature; Dart never does.
+        let rows: [(String, String, String, String, UInt)] = [
+            ("\u{DF}", "gi", "\u{DF} ss SS \u{1E9E}", "# ss SS \u{1E9E}", #line),
+            ("\u{DF}", "giu", "\u{DF} ss SS \u{1E9E}", "# ss SS #", #line),
+            ("[\u{DF}]", "gi", "\u{DF} ss \u{1E9E}", "# ss \u{1E9E}", #line),
+            ("[\u{DF}]", "giu", "\u{DF} ss \u{1E9E}", "# ss #", #line),
+            ("\u{FB00}", "gi", "\u{FB00} ff FF", "# ff FF", #line),
+            ("ff", "gi", "\u{FB00} ff FF", "\u{FB00} # #", #line),
+            ("FF", "gi", "\u{FB00} ff FF", "\u{FB00} # #", #line),
+            ("[\u{FB00}]", "gi", "\u{FB00} ff FF", "# ff FF", #line),
+            ("\u{FB05}", "gi", "\u{FB05} st \u{FB06}", "# st \u{FB06}", #line),
+            ("\u{FB05}", "giu", "\u{FB05} st \u{FB06}", "# st #", #line),
+            ("\u{2BC}n", "gi", "\u{149} \u{2BC}n", "\u{149} #", #line),
+            ("\u{3B1}\u{3B9}", "gi", "\u{1FB3} \u{3B1}\u{3B9}", "\u{1FB3} #", #line),
+            ("[a-z]+", "gi", "\u{FB00} ff \u{17F}", "\u{FB00} # \u{17F}", #line),
+            ("[^a-z]", "gi", "\u{FB00}\u{212A}a", "##a", #line),
+            // A negated class whose first member is `^`: the letters it names stay out, every other letter is in.
+            ("[^^a]", "gi", "^aAfFsS", "^aA####", #line),
+            ("[^^a]", "giu", "^aAfFsS", "^aA####", #line),
+            // The same with a combining mark after that `^`: the body starts with the scalar `^`, not the Character "^\u{301}".
+            ("[^^\u{301}a]", "gi", "^\u{301}aAfFsS\u{17F}", "^\u{301}aA#####", #line),
+            ("[^^\u{301}a]", "giu", "^\u{301}aAfFsS\u{17F}", "^\u{301}aA#####", #line),
+            ("[^^\u{301}]", "gi", "^\u{301}aAfFsS\u{17F}", "^\u{301}#######", #line),
+            ("[^^\u{301}]", "giu", "^\u{301}aAfFsS\u{17F}", "^\u{301}#######", #line),
+            ("[^\u{301}a]", "gi", "^\u{301}aAfFsS\u{17F}", "#\u{301}aA#####", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    func testF1_theTableFollowsTheModifierScope() {
+        assertRegex("(?i:\u{DF})", "g", "\u{DF} ss \u{1E9E}", "# ss \u{1E9E}")
+        assertRegex("(?-i:\u{DF})", "giu", "\u{DF} ss \u{1E9E}", "# ss \u{1E9E}")
+        assertRegex("(?i:ff)", "g", "\u{FB00} ff FF", "\u{FB00} # #")
+    }
+
+    func testF1_guard_lettersOutsideTheTableKeepICUsFolding() {
+        assertRegex("\u{E9}", "gi", "\u{E9}\u{C9}", "##")
+        assertRegex("\u{3C3}", "gi", "\u{3C3}\u{3C2}\u{3A3}", "###")  // σ: ς Σ
+    }
+
+    func testF1_guard_hexEscapesKeepTheirDigits() {
+        // The table holds a A f F: the digits of `\xHH` and `\uHHHH` are not letters to fold.
+        let rows: [(String, String, String, UInt)] = [
+            ("\\x0a", "a\nb", "a#b", #line),
+            ("\\x7F", "a\u{7F}b", "a#b", #line),
+            ("\\u00ff", "\u{FF}\u{178}", "##", #line),
+            ("\\x4a", "jJ\u{1F0}", "##\u{1F0}", #line),
+            ("\\xAF", "\u{AF}", "#", #line),
+            ("[\\x41-\\x46]+", "abcdefg", "#g", #line),
+            ("\\uFFFF", "\u{FFFF}", "#", #line),
+            ("\\cA", "\u{1}", "#", #line),
+        ]
+        for (pattern, input, expected, line) in rows { assertRegex(pattern, "gi", input, expected, line: line) }
+    }
+
+    func testF1_everyTableLetterMatchesDartsSetAsALetterAndAsAClass() {
+        // A mechanism check over the data: `c` and `[c]` match, among the table's letters, exactly the set
+        // Dart printed for c (without `u` under gi, with `u` under giu).
+        let letters = Regex.foldLetters
+        let input = String(String.UnicodeScalarView(letters.flatMap { [$0, " "] }))
+        func hex(_ set: Set<Unicode.Scalar>) -> String {
+            set.map(\.value).sorted().map { String($0, radix: 16, uppercase: true) }.joined(separator: " ")
+        }
+        var failures: [String] = []
+        for c in letters {
+            let letter = String(Character(c))
+            for (flags, unicode) in [("gi", false), ("giu", true)] {
+                let expected = Set(Regex.dartFold(c, unicode: unicode) ?? [])
+                for pattern in [letter, "[" + letter + "]"] {
+                    let step: JSONValue = [
+                        "type": "regex", "pattern": .string(pattern), "flags": .string(flags), "replacement": "#",
+                    ]
+                    let tokens = run(.string(input), step).stringValue?.unicodeScalars
+                        .split(separator: " ", omittingEmptySubsequences: false) ?? []
+                    let matched = Set(zip(letters, tokens).filter { Array($0.1) == ["#"] }.map(\.0))
+                    if tokens.count != letters.count + 1 || matched != expected {
+                        failures.append("\(pattern.debugDescription) /\(flags): \(hex(matched)) not \(hex(expected))")
+                    }
+                }
+            }
+        }
+        XCTAssertEqual(letters.count, 217)
+        XCTAssert(failures.isEmpty, "\(failures.count) of \(letters.count * 4): " + failures.prefix(8).joined(separator: "; "))
+    }
+
     func testDoubleToStringMatchesDart() {
         let cases: [(Double, String)] = [
             (0, "0.0"), (-0.0, "-0.0"), (1, "1.0"), (-2.5, "-2.5"), (0.1, "0.1"), (100, "100.0"),
