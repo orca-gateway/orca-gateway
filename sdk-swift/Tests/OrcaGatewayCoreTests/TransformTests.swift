@@ -374,8 +374,9 @@ final class TransformTests: XCTestCase {
 
     // Every expected value below was printed by Dart's RegExp on the Dart VM.
 
+    /// `expected` nil: Dart's RegExp refuses the pattern, so the transform is null.
     private func assertRegex(
-        _ pattern: String, _ flags: String, _ input: String, _ expected: String, by: String = "#",
+        _ pattern: String, _ flags: String, _ input: String, _ expected: String?, by: String = "#",
         line: UInt = #line
     ) {
         let step: JSONValue = [
@@ -383,8 +384,8 @@ final class TransformTests: XCTestCase {
         ]
         let got = run(.string(input), step)
         let label = "\(pattern.debugDescription) /\(flags) on \(input.debugDescription)"
-        XCTAssertEqual(got, .string(expected), label, line: line)
-        XCTAssertEqual(units(got), [Array(expected.utf16)], label, line: line)
+        XCTAssertEqual(got, expected.map(JSONValue.string) ?? .null, label, line: line)
+        XCTAssertEqual(units(got), expected.map { [Array($0.utf16)] } ?? [], label, line: line)
     }
 
     func testR1_wordEdgesAreASCIIUnderEveryFlag() {
@@ -548,6 +549,88 @@ final class TransformTests: XCTestCase {
             assertRegex("fi", flags, "\u{fb01}", "\u{fb01}")  // ﬁ
             assertRegex("st", flags, "\u{fb06}", "\u{fb06}")  // ﬆ
         }
+    }
+
+    // MARK: S14 — modifier scope and (? forms (row 23b.36)
+
+    func testM1_aModifierGroupFoldsTheLettersInsideItByItsOwnI() {
+        let (longS, kelvin, dotless, dotted) = ("\u{17F}", "\u{212A}", "\u{131}", "\u{130}")
+        // Dart reads a letter, a class and \w \W \b \B under the `i` of the innermost modifier group
+        // around it: `(?-i:` matches as written, `(?i:` folds as a pattern `i` does (with `u`, ſ and K too).
+        let rows: [(String, String, String, String, UInt)] = [
+            ("(?-i:s)", "gi", "sS", "#S", #line),
+            ("(?-i:s)", "giu", "sS", "#S", #line),
+            ("(?i:s)", "g", longS + "sS", longS + "##", #line),
+            ("(?i:s)", "gu", longS + "sS", "###", #line),
+            ("(?i:k)", "g", "kK" + kelvin, "##" + kelvin, #line),
+            ("(?-i:k)", "gi", "kK" + kelvin, "#K" + kelvin, #line),
+            ("(?i:" + longS + ")", "g", "sS" + longS, "sS#", #line),
+            ("(?-i:" + longS + ")", "giu", "sS" + longS, "sS#", #line),
+            ("(?-i:S)", "gi", "sS", "s#", #line),
+            ("(?i:S)", "g", "sS" + longS, "##" + longS, #line),
+            ("(?-i:i)", "gi", "iI" + dotless + dotted, "#I" + dotless + dotted, #line),
+            ("(?i:i)", "g", "iI" + dotless + dotted, "##" + dotless + dotted, #line),
+            ("(?-i:[^s])", "gi", "sS" + longS + "x", "s###", #line),
+            ("(?i:[^s])", "g", "sS" + longS + "x", "sS##", #line),
+            ("(?i:\\W)", "gu", "sS" + longS + kelvin + "!", "sS" + longS + kelvin + "#", #line),
+            ("(?-i:\\b)", "giu", longS + " a", longS + " #a#", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    func testM1_groupsNestAndAScopeEndsAtItsParen() {
+        let longS = "\u{17F}"
+        // The innermost modifier group wins; any `)` ends the group it closes, and the enclosing `i` returns.
+        let rows: [(String, String, String, String, UInt)] = [
+            ("(?i:(?-i:s))", "gi", "sS", "#S", #line),
+            ("(?-i:(?i:s))", "g", "sS" + longS, "##" + longS, #line),
+            ("(?i:a(?-i:s)S)", "g", "AsS ASs AsS", "# ASs #", #line),
+            ("(?-i:a)s", "gi", "aS AS as", "# AS #", #line),
+            ("(?-i:s)(s)", "gi", "sS SS", "# SS", #line),
+            ("(?i:a)s", "g", "As AS a" + longS, "# AS a" + longS, #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    func testM1_guard_otherModifiersAndParensThatCloseNothing() {
+        // `m` and `s` modifiers open a scope that keeps `i`; a `)` in a class or escaped closes no group.
+        assertRegex("(?m:^a)", "gm", "b\na", "b\n#")
+        assertRegex("(?s:a.b)", "g", "a\nb", "#")
+        assertRegex("(?-i:[)]s)", "gi", ")s )S", "# )S")
+        assertRegex("(?-i:\\)s)", "gi", ")s )S", "# )S")
+    }
+
+    func testM2_dartRefusesEveryOtherFormAfterParenQuestion() {
+        // Dart's RegExp throws (FormatException) on each: no inline `(?i)`, no flag but i m s, each once.
+        let refused = [
+            "(?i)a", "(?im)a", "(?i)", "((?i)s)", "(?-:a)", "(?u:a)", "(?x:a)", "(?ii:a)", "(?i-i:a)",
+            "(?-i-m:a)", "(?>a)", "(?#c)a", "(?P<n>a)", "(?'n'a)", "(?^:a)",
+        ]
+        for flags in ["g", "gi"] {
+            for pattern in refused { assertRegex(pattern, flags, "a", nil) }
+        }
+    }
+
+    func testM2_guard_theFormsDartReadsStayValid() {
+        for flags in ["g", "gi"] {
+            assertRegex("(?:a)", flags, "a", "#")
+            assertRegex("(?=a)", flags, "a", "#a")
+            assertRegex("(?!a)", flags, "a", "a#")
+            assertRegex("(?<=a)b", flags, "ab", "a#")
+            assertRegex("(?<!a)b", flags, "ab b", "ab #")
+            assertRegex("(?<n>a)\\k<n>", flags, "aa", "#")
+        }
+        assertRegex("(?ms-i:a)", "gi", "aA", "#A")
+        assertRegex("(?i-ms:a)", "g", "aA", "##")
+        assertRegex("(?i-:a)", "g", "aA", "##")
+    }
+
+    func testM2_guard_theMatchesOpIsFalseForARefusedForm() {
+        func matches(_ regex: String, _ str: String) -> Bool {
+            holds(["op": "matches", "str": Self.s(.string(str)), "regex": .string(regex)])
+        }
+        XCTAssertFalse(matches("(?i)a", "a"))  // Dart: an invalid pattern never matches
+        XCTAssertTrue(matches("(?i:a)", "A"))
     }
 
     func testDoubleToStringMatchesDart() {

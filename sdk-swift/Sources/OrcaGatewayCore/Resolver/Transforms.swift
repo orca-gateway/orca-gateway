@@ -405,16 +405,25 @@ enum Regex {
         if flags.contains("m") { options.insert(.anchorsMatchLines) }
         if flags.contains("s") { options.insert(.dotMatchesLineSeparators) }
         // ICU refuses "", which Dart accepts (it matches "" everywhere).
-        let source = pattern.isEmpty
+        guard let source = pattern.isEmpty
             ? "(?:)" : asciiClasses(pattern, ignoreCase: flags.contains("i"), unicode: flags.contains("u"))
+        else { return nil }
         return try? NSRegularExpression(pattern: source, options: options)
     }
 
     /// Rewrites Dart's (ECMAScript) pattern where ICU reads the same text
-    /// another way. Every other escape, `\\` included, is copied as is, as are
-    /// group names, modifier flags (`(?-i:`) and what follows `\c`, `\k<` and
-    /// `\p{`; `\s` stays Unicode, as Dart's is.
+    /// another way, or nil where Dart refuses it. Every other escape, `\\`
+    /// included, is copied as is, as are group names, modifier flags and
+    /// what follows `\c`, `\k<` and `\p{`; `\s` stays Unicode, as Dart's is.
     ///
+    /// - After `(?` Dart reads only `:`, `=`, `!`, `<=`, `<!`, a group name
+    ///   (`<name>`) and modifiers: flags from `ims`, each at most once, then
+    ///   optionally `-` and more, then `:`, not both sides empty (`(?ms-i:`).
+    ///   Any other form, `(?i)`, `(?x:`, `(?>`, `(?#` among them, is nil.
+    /// - `i` below is the one in force where the text sits: the pattern's,
+    ///   or that of the innermost modifier group around it (`(?i:`, `(?-i:`),
+    ///   to its `)`. ICU scopes the copied flags the same way, so inside
+    ///   `(?-i:` letters stay as written and inside `(?i:` they fold as below.
     /// - `\d \w \D \W` are ASCII in Dart and Unicode in ICU, which has no
     ///   ASCII switch, so they are spelled out as sets. Inside a class
     ///   (`[\w.]`) the set nests, and ICU unions it with the rest.
@@ -436,18 +445,24 @@ enum Regex {
     ///   letters written as escapes outside a class (`\x73`) and backreferences,
     ///   and ICU's full folding of the other letters: `ß` matches "ss", `ff` "ﬀ"
     ///   and `ﬁ` "fi", which Dart never does.
-    static func asciiClasses(_ pattern: String, ignoreCase: Bool, unicode: Bool) -> String {
-        let word = ignoreCase && unicode ? "A-Za-z0-9_\\u017F\\u212A" : "A-Za-z0-9_"
-        let w = "[\(word)]"
-        let sets: [Unicode.Scalar: String] = ["d": "[0-9]", "D": "[^0-9]", "w": w, "W": "[^\(word)]"]
-        let edges: [Unicode.Scalar: String] = [
-            "b": "(?-i:(?<=\(w))(?!\(w))|(?<!\(w))(?=\(w)))",
-            "B": "(?-i:(?<=\(w))(?=\(w))|(?<!\(w))(?!\(w)))",
-        ]
+    static func asciiClasses(_ pattern: String, ignoreCase: Bool, unicode: Bool) -> String? {
+        // The sets and edges under a group whose `i` is `fold`.
+        func escapes(_ fold: Bool) -> (sets: [Unicode.Scalar: String], edges: [Unicode.Scalar: String]) {
+            let word = fold && unicode ? "A-Za-z0-9_\\u017F\\u212A" : "A-Za-z0-9_"
+            let w = "[\(word)]"
+            return (
+                ["d": "[0-9]", "D": "[^0-9]", "w": w, "W": "[^\(word)]"],
+                [
+                    "b": "(?-i:(?<=\(w))(?!\(w))|(?<!\(w))(?=\(w)))",
+                    "B": "(?-i:(?<=\(w))(?=\(w))|(?<!\(w))(?!\(w)))",
+                ]
+            )
+        }
 
         let p = Array(pattern.unicodeScalars)
         var i = 0
         var out = ""
+        var scope: [Bool] = []  // the `i` of each open group, innermost last
         func next(_ k: Int) -> Unicode.Scalar? { i + k < p.count ? p[i + k] : nil }
         func take(_ n: Int) {
             for _ in 0..<n where i < p.count {
@@ -461,15 +476,28 @@ enum Regex {
                 if c == close { return }
             }
         }
-        // At `(?`: flags and a colon follow, a modifier group (`(?ms-i:`).
-        func modifiers() -> Bool {
+        // At `(?` and no lookaround: the `i` of the modifier group (`(?:`,
+        // `(?ms-i:`) inside `fold`, or nil when Dart refuses the form.
+        func modifiers(_ fold: Bool) -> Bool? {
             var k = 2
-            while let f = next(k), "ims-".unicodeScalars.contains(f) { k += 1 }
-            return k > 2 && next(k) == ":"
+            var seen: Set<Unicode.Scalar> = []
+            var off = false
+            var inner = fold
+            while let f = next(k), f != ":" {
+                if f == "-", !off {
+                    off = true
+                } else if "ims".unicodeScalars.contains(f), seen.insert(f).inserted {
+                    if f == "i" { inner = !off }
+                } else {
+                    return nil
+                }
+                k += 1
+            }
+            return next(k) == ":" && (!seen.isEmpty || !off) ? inner : nil
         }
         // A class up to its first unescaped `]`, as ECMAScript reads it: its
         // body, whether it is negated, and whether it closes.
-        func classSet() -> (body: String, negated: Bool, closed: Bool) {
+        func classSet(_ sets: [Unicode.Scalar: String]) -> (body: String, negated: Bool, closed: Bool) {
             var body = ""
             i += 1
             let negated = next(0) == "^"
@@ -488,10 +516,12 @@ enum Regex {
         }
 
         while let c = next(0) {
+            let fold = scope.last ?? ignoreCase
+            let (sets, edges) = escapes(fold)
             if c == "[" {
-                let (body, negated, closed) = classSet()
+                let (body, negated, closed) = classSet(sets)
                 let set = "[" + (negated ? "^" : "") + body + (closed ? "]" : "")
-                out += ignoreCase && closed ? dartFolded(set, body: body, negated: negated, unicode: unicode) : set
+                out += fold && closed ? dartFolded(set, body: body, negated: negated, unicode: unicode) : set
             } else if c == "\\", let n = next(1) {
                 if let set = sets[n] {
                     out += "(?-i:\(set))"
@@ -506,11 +536,24 @@ enum Regex {
                 } else {
                     take(n == "c" ? 3 : 2)  // and `\cK`
                 }
-            } else if c == "(", next(1) == "?", next(2) == "<", next(3) != "=", next(3) != "!" {
-                take(through: ">")  // a group name
-            } else if c == "(", next(1) == "?", modifiers() {
-                take(through: ":")  // `(?-i:`, whose flags ICU reads as Dart does
-            } else if ignoreCase, foldLetters.contains(c) {
+            } else if c == "(" {
+                var inner: Bool? = fold  // a group keeps the `i` around it
+                if next(1) != "?" || next(2) == "=" || next(2) == "!"
+                    || next(2) == "<" && (next(3) == "=" || next(3) == "!")
+                {
+                    take(1)  // a group or a lookaround
+                } else if next(2) == "<" {
+                    take(through: ">")  // a group name
+                } else {
+                    inner = modifiers(fold)
+                    take(through: ":")  // `(?-i:`, whose flags ICU reads as Dart does
+                }
+                guard let inner else { return nil }
+                scope.append(inner)
+            } else if c == ")" {
+                _ = scope.popLast()  // an unbalanced `)` is ICU's to refuse
+                take(1)
+            } else if fold, foldLetters.contains(c) {
                 out += "(?-i:[\(spelled(dartFold(c, unicode: unicode)))])"
                 i += 1
             } else {
