@@ -415,7 +415,8 @@ enum Regex {
     /// another way, or nil where Dart refuses it. Every other escape, `\\`
     /// included, is copied as is, as are group names, modifier flags and
     /// what follows `\c`, `\k<` and `\p{`, and the digits of `\xHH` and
-    /// `\uHHHH`; `\s` stays Unicode, as Dart's is.
+    /// `\uHHHH` (but for a letter of the table, below); `\s` stays Unicode,
+    /// as Dart's is.
     ///
     /// - After `(?` Dart reads only `:`, `=`, `!`, `<=`, `<!`, a group name
     ///   (`<name>`) and modifiers: flags from `ims`, each at most once, then
@@ -443,8 +444,14 @@ enum Regex {
     ///   `(?-i:[Ssſ])`. A class C becomes `(?:(?!T)C|(?-i:[M]))`, T the
     ///   table's letters and M those C matches in Dart, found by running C,
     ///   compiled case-sensitively, once over T. Every other letter keeps
-    ///   ICU's folding (é with É). Left as ICU has them: letters written as
-    ///   escapes outside a class (`\x73`) and backreferences.
+    ///   ICU's folding (é with É). An escape that spells a letter of the
+    ///   table (`\x73`, `\u017F`, with `u` `\u{17F}`) is that letter: outside
+    ///   a class the same set, inside one ICU reads it in C. Left as ICU has
+    ///   them: backreferences.
+    /// - With `u`, `\u{H…}` (hex digits, at most U+10FFFF) becomes ICU's
+    ///   `\x{H…}`, in a class too, without leading zeros: ICU refuses `\u{`
+    ///   and reads at most six digits. Any other `\u{…}` Dart refuses, so it
+    ///   is nil. Without `u` it is copied as is.
     static func asciiClasses(_ pattern: String, ignoreCase: Bool, unicode: Bool) -> String? {
         // The sets and edges under a group whose `i` is `fold`.
         func escapes(_ fold: Bool) -> (sets: [Unicode.Scalar: String], edges: [Unicode.Scalar: String]) {
@@ -495,14 +502,49 @@ enum Regex {
             }
             return next(k) == ":" && (!seen.isEmpty || !off) ? inner : nil
         }
+        // At `\`: the code point `\xHH`, `\uHHHH` or, with `u`, `\u{H…}` spells,
+        // and the escape's length; nil for any other escape. A `\u{…}` Dart
+        // refuses (no digit, one not hex, no `}`, past U+10FFFF) has no value.
+        func hexEscape() -> (value: UInt32?, length: Int)? {
+            guard next(0) == "\\", let n = next(1), n == "x" || n == "u" else { return nil }
+            func digit(_ k: Int) -> UInt32? {
+                guard let d = next(k), d.properties.isASCIIHexDigit else { return nil }
+                return UInt32(String(d), radix: 16)
+            }
+            var value: UInt32 = 0
+            var k = 2
+            if n == "u", unicode, next(2) == "{" {
+                k = 3
+                while let h = digit(k), value <= 0x10FFFF {
+                    value = value * 16 + h
+                    k += 1
+                }
+                return (k > 3 && next(k) == "}" && value <= 0x10FFFF ? value : nil, k + 1)
+            }
+            for _ in 0..<(n == "x" ? 2 : 4) {
+                guard let h = digit(k) else { return nil }
+                value = value * 16 + h
+                k += 1
+            }
+            return (value, k)
+        }
+        // ICU refuses `\u{` and reads at most six digits in `\x{…}`.
+        func braced(_ value: UInt32) -> String { "\\x{\(String(value, radix: 16, uppercase: true))}" }
         // A class up to its first unescaped `]`, as ECMAScript reads it: its
-        // body, whether it is negated, and whether it closes.
-        func classSet(_ sets: [Unicode.Scalar: String]) -> (body: String, negated: Bool, closed: Bool) {
+        // body, whether it is negated, and whether it closes; nil where Dart
+        // refuses a `\u{…}` in it.
+        func classSet(_ sets: [Unicode.Scalar: String]) -> (body: String, negated: Bool, closed: Bool)? {
             var body = ""
             i += 1
             let negated = next(0) == "^"
             if negated { i += 1 }
             while let c = next(0) {
+                if next(2) == "{", let escape = hexEscape() {  // `\u{…}` with `u`
+                    guard let value = escape.value else { return nil }
+                    body += braced(value)
+                    i += escape.length
+                    continue
+                }
                 i += 1
                 if c == "]" { return (body, negated, true) }
                 guard c == "\\", let n = next(0) else {
@@ -519,7 +561,7 @@ enum Regex {
             let fold = scope.last ?? ignoreCase
             let (sets, edges) = escapes(fold)
             if c == "[" {
-                let (body, negated, closed) = classSet(sets)
+                guard case let (body, negated, closed)? = classSet(sets) else { return nil }
                 let set = "[" + (negated ? "^" : "") + body + (closed ? "]" : "")
                 out += fold && closed ? dartFolded(set, body: body, negated: negated, unicode: unicode) : set
             } else if c == "\\", let n = next(1) {
@@ -533,11 +575,20 @@ enum Regex {
                     take(through: ">")  // `\k<name>` keeps its letters
                 } else if n == "p" || n == "P", next(2) == "{" {
                     take(through: "}")  // and so does `\p{Script=Latin}`
+                } else if let escape = hexEscape() {
+                    // `\x73`, `\u017F`, `\u{17F}`: a letter of the table is that letter
+                    guard let value = escape.value else { return nil }
+                    if fold, let set = Unicode.Scalar(value).flatMap({ dartFold($0, unicode: unicode) }) {
+                        out += "(?-i:[\(spelled(set))])"
+                        i += escape.length
+                    } else if next(2) == "{" {
+                        out += braced(value)
+                        i += escape.length
+                    } else {
+                        take(escape.length)  // `\x4a`, `\u00ff`: digits that may be letters of the table
+                    }
                 } else {
-                    // and `\cK`, `\x4a` and `\u00ff`, whose digits may be letters of the table
-                    let digits = n == "x" ? 2 : n == "u" ? 4 : 0
-                    let hex = (2..<2 + digits).allSatisfy { next($0)?.properties.isASCIIHexDigit == true }
-                    take(n == "c" ? 3 : hex ? 2 + digits : 2)
+                    take(n == "c" ? 3 : 2)  // `\cK`, and `\x`, `\u` without their digits
                 }
             } else if c == "(" {
                 var inner: Bool? = fold  // a group keeps the `i` around it

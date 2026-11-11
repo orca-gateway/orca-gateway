@@ -741,6 +741,67 @@ final class TransformTests: XCTestCase {
         XCTAssert(failures.isEmpty, "\(failures.count) of \(letters.count * 4): " + failures.prefix(8).joined(separator: "; "))
     }
 
+    // MARK: S14 — escaped letters and \u{…} (row 23b.36)
+
+    /// s S ſ k K K ß ẞ: the letters ICU folds another way than Dart, with their partners.
+    private static let folds = "s S \u{17F} k K \u{212A} \u{DF} \u{1E9E}"
+
+    func testE1_anEscapeSpellingATableLetterIsThatLetterUnderI() {
+        let e = Self.folds
+        let rows: [(String, String, String, String, UInt)] = [
+            ("\\x73", "gi", e, "# # \u{17F} k K \u{212A} \u{DF} \u{1E9E}", #line),
+            ("\\x53", "gi", e, "# # \u{17F} k K \u{212A} \u{DF} \u{1E9E}", #line),
+            ("\\u0073", "gi", e, "# # \u{17F} k K \u{212A} \u{DF} \u{1E9E}", #line),
+            ("\\u017F", "gi", e, "s S # k K \u{212A} \u{DF} \u{1E9E}", #line),
+            ("\\u017f", "giu", e, "# # # k K \u{212A} \u{DF} \u{1E9E}", #line),
+            ("\\u212A", "gi", e, "s S \u{17F} k K # \u{DF} \u{1E9E}", #line),
+            ("\\x6b", "gi", e, "s S \u{17F} # # \u{212A} \u{DF} \u{1E9E}", #line),
+            ("\\xdf", "gi", e, "s S \u{17F} k K \u{212A} # \u{1E9E}", #line),
+            ("\\xdf", "giu", e, "s S \u{17F} k K \u{212A} # #", #line),
+            ("\\u1E9E", "gi", e, "s S \u{17F} k K \u{212A} \u{DF} #", #line),
+            ("\\u1E9E", "giu", e, "s S \u{17F} k K \u{212A} # #", #line),
+            ("\\uFB00", "gi", "\u{FB00} ff FF", "# ff FF", #line),
+            ("\\x66\\x66", "gi", "\u{FB00} ff FF", "\u{FB00} # #", #line),
+            ("\\x73\\u017F", "gi", "s\u{17F} S\u{17F} ss", "# # ss", #line),
+            ("\\u0130", "gi", "i I \u{130} \u{131}", "i I # \u{131}", #line),
+            ("\\u0131", "gi", "i I \u{130} \u{131}", "i I \u{130} #", #line),
+            ("\\x41", "gi", "aA", "##", #line),
+            ("\\u00C5", "gi", "\u{E5}\u{C5}\u{212B}", "##\u{212B}", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    func testE1_anEscapeFollowsTheModifierScope() {
+        assertRegex("(?-i:\\x73)", "gi", "sS", "#S")
+        assertRegex("(?i:\\x73)", "g", "sS\u{17F}", "##\u{17F}")
+    }
+
+    func testE1_withUABracedEscapeIsItsCodePoint() {
+        let e = Self.folds
+        let rows: [(String, String, String, String, UInt)] = [
+            ("\\u{73}", "gu", e, "# S \u{17F} k K \u{212A} \u{DF} \u{1E9E}", #line),
+            ("\\u{73}", "giu", e, "# # # k K \u{212A} \u{DF} \u{1E9E}", #line),
+            ("\\u{17F}", "gu", e, "s S # k K \u{212A} \u{DF} \u{1E9E}", #line),
+            ("\\u{17F}", "giu", e, "# # # k K \u{212A} \u{DF} \u{1E9E}", #line),
+            ("\\u{0000073}", "giu", e, "# # # k K \u{212A} \u{DF} \u{1E9E}", #line),  // more than six digits
+            ("\\u{10FFFF}", "gu", "\u{10FFFF}", "#", #line),
+            ("\\u{1F600}", "gu", "x\u{1F600}", "x#", #line),
+            ("\\u{1F600}+", "gu", "\u{1F600}\u{1F600}", "#", #line),
+            ("\\u{61}", "gu", "aA", "#A", #line),
+            ("\\u{61}", "giu", "aA", "##", #line),
+            ("\\u{212B}", "giu", "\u{E5}\u{C5}\u{212B}", "###", #line),
+            // Inside a class too.
+            ("[\\u{1F600}a]", "gu", "a\u{1F600}b", "##b", #line),
+            ("[\\u{17F}]", "giu", e, "# # # k K \u{212A} \u{DF} \u{1E9E}", #line),
+            ("[\\u{17F}]", "gu", e, "s S # k K \u{212A} \u{DF} \u{1E9E}", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    func testE1_withUDartRefusesABracedEscapeWithoutACodePoint() {
+        for pattern in ["\\u{110000}", "\\u{}", "\\u{g}"] { assertRegex(pattern, "gu", "a", nil) }
+    }
+
     func testDoubleToStringMatchesDart() {
         let cases: [(Double, String)] = [
             (0, "0.0"), (-0.0, "-0.0"), (1, "1.0"), (-2.5, "-2.5"), (0.1, "0.1"), (100, "100.0"),
