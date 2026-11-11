@@ -453,14 +453,23 @@ enum Regex {
     ///   table (`\x73`, `\u017F`, with `u` `\u{17F}`) is that letter: outside
     ///   a class the same set, inside one ICU reads it in C. Left as ICU has
     ///   them: backreferences.
+    /// - With `u`, Dart builds a class holding `\p{…}` or `\P{…}` first and
+    ///   folds after: a character matches when a letter of its simple-fold
+    ///   class is in the class, a negated class when none is (`\P{Ll}`
+    ///   matches s, as S is no Ll); ICU folds the property first. So under
+    ///   `i` such a class, and such an escape outside one as the one-member
+    ///   class, becomes `(?:(?!L)(?-i:C)|(?-i:[M]))`: in place of T, L every
+    ///   letter with a partner (`foldClassLetters`), C read case-sensitively,
+    ///   and M the letters of L whose fold class (`foldClasses`) meets C, or,
+    ///   negated, misses it.
     /// - With `u`, `\u{H…}` (hex digits, at most U+10FFFF) becomes ICU's
     ///   `\x{H…}`, in a class too, without leading zeros: ICU refuses `\u{`
     ///   and reads at most six digits. Any other `\u{…}` Dart refuses, so it
     ///   is nil. Without `u` it is the letter u, then `{…}` (below).
     /// - With `u`, Dart reads the name in `\p{…}` and `\P{…}` by ECMA-262's
     ///   tables (`dartAcceptsProperty`), in a class too: a name it refuses
-    ///   (`IsLatin`, `Latin`, `L&`, `script=Latin`), which ICU may read, is
-    ///   nil. Without `u` `\p` is the letter p (below).
+    ///   (`IsLatin`, `Latin`, `L&`, `script=Latin`, `Script=latin`), which ICU
+    ///   may read, is nil. Without `u` `\p` is the letter p (below).
     /// - `\0` before no digit is NUL, with `u` too, written `\x{0}`; `\v` is
     ///   U+000B alone, `\x{B}`, in a class too (ICU's is every vertical space).
     /// - Without `u` Dart reads Annex B's grammar. `\` and a letter with no
@@ -719,8 +728,6 @@ enum Regex {
             }
             return next(k) == "}" ? k + 1 : nil
         }
-        // ICU refuses `\u{` and reads at most six digits in `\x{…}`.
-        func braced(_ value: UInt32) -> String { "\\x{\(String(value, radix: 16, uppercase: true))}" }
         // At `\p{` or `\P{` with `u`: the escape's length through its `}`, or
         // nil when there is no `}` or Dart refuses the name.
         func propertyEscape() -> Int? {
@@ -828,18 +835,23 @@ enum Regex {
             return ("\\\(n)", controls[n] ?? n.value)
         }
         // A class up to its first unescaped `]`, as ECMAScript reads it: its
-        // body, whether it is negated, and whether it closes; nil where Dart
-        // refuses a `\u{…}`, a range out of order or, with `u`, a property name.
-        func classSet(_ sets: [Unicode.Scalar: String]) -> (body: String, negated: Bool, closed: Bool)? {
+        // body, whether it is negated, whether it closes, and whether it holds
+        // `\p{…}` or `\P{…}` (with `u`); nil where Dart refuses a `\u{…}`, a
+        // range out of order or, with `u`, a property name.
+        func classSet(
+            _ sets: [Unicode.Scalar: String]
+        ) -> (body: String, negated: Bool, closed: Bool, property: Bool)? {
             var body = ""
+            var property = false
             i += 1
             let negated = next(0) == "^"
             if negated { i += 1 }
             while let c = next(0) {
                 if c == "]" {
                     i += 1
-                    return (body, negated, true)
+                    return (body, negated, true, property)
                 }
+                if unicode, c == "\\", next(1) == "p" || next(1) == "P" { property = true }
                 guard let low = classMember(sets) else { return nil }
                 guard next(0) == "-", let after = next(1), after != "]" else {
                     body += low.text
@@ -855,7 +867,7 @@ enum Regex {
                     body += low.text + "\\-" + high.text  // without `u` a union: `[\d-z]`
                 }
             }
-            return (body, negated, false)
+            return (body, negated, false, property)
         }
         // A backreference to the groups `numbers` (`\N`'s, or those `\k<name>` names), written `(?:\1|\2)` so that a
         // digit after it stays a digit, with only the groups it can see set: an unset group matches empty in Dart
@@ -876,12 +888,14 @@ enum Regex {
                 take(next(length) == "?" ? length + 1 : length)  // `a+?` is lazy
                 now = .quantified
             } else if c == "[" {
-                guard case let (body, negated, closed)? = classSet(sets) else { return nil }
+                guard case let (body, negated, closed, property)? = classSet(sets) else { return nil }
                 let set = "[" + (negated ? "^" : "") + body + (closed ? "]" : "")
                 if closed, body.isEmpty {
                     out += negated ? "[\\s\\S]" : "(?:(?!))"  // `[^]` is any unit, `[]` none; ICU refuses both, and `(?!)*`
+                } else if fold, closed {
+                    out += dartFolded(set, body: body, negated: negated, unicode: unicode, property: property)
                 } else {
-                    out += fold && closed ? dartFolded(set, body: body, negated: negated, unicode: unicode) : set
+                    out += set
                 }
             } else if c == "\\", let n = next(1) {
                 guard !unicode || strict(inClass: false) else { return nil }  // `\A`, `\-`, `\00`, `\c1`, `\x6`, `\8`
@@ -907,8 +921,14 @@ enum Regex {
                     out += reference([number])
                     i += 1 + String(number).count  // its digits, the first not 0
                 } else if n == "p" || n == "P", next(2) == "{" {
-                    guard propertyEscape() != nil else { return nil }  // with `u`: a name Dart refuses
-                    take(through: "}")  // and so does `\p{Script=Latin}`
+                    guard let length = propertyEscape() else { return nil }  // with `u`: a name Dart refuses
+                    let escape = String(String.UnicodeScalarView(p[i..<(i + length)]))
+                    i += length
+                    if fold {  // the one-member class, which Dart folds after building it
+                        out += dartFolded("[\(escape)]", body: escape, negated: false, unicode: unicode, property: true)
+                    } else {
+                        out += escape
+                    }
                 } else if let escape = hexEscape() {
                     // `\x73`, `\u017F`, `\u{17F}`: a letter of the table is that letter
                     guard let value = escape.value else { return nil }
@@ -1002,34 +1022,107 @@ enum Regex {
     /// The letters of Dart's fold table (`foldTable`), in code point order.
     static let foldLetters = foldTable.keys.sorted { $0.value < $1.value }
 
+    /// The letters of `foldClasses`, every letter with a partner under Dart's
+    /// simple case folding with `u`, in code point order.
+    static let foldClassLetters = foldClasses.keys.sorted { $0.value < $1.value }
+
     /// The letters Dart's `i` matches `c` to, without `u` or with it, or nil
     /// for a letter outside `foldTable`.
     static func dartFold(_ c: Unicode.Scalar, unicode: Bool) -> [Unicode.Scalar]? {
         foldTable[c].map { unicode ? $0.unicode : $0.plain }
     }
 
-    /// Keeps a class's ICU folding off `foldLetters`; and those letters in
-    /// one string, to run a class over each of them once.
-    private static let notFoldLetter = "(?!(?-i:[\(spelled(foldLetters))]))"
-    private static let foldLetterText = String(String.UnicodeScalarView(foldLetters))
+    /// Letters a class keeps off ICU's folding under `i` (`dartFolded`), in
+    /// code point order, each with the number of its fold class (`fold` gives
+    /// the class, the same set for each of its letters); a lookahead that
+    /// keeps them out; and the letters in one string, with where each starts,
+    /// to run a class over each of them once.
+    private struct Kept {
+        let letters: [Unicode.Scalar]
+        let classes: [Int]
+        let lookahead: String
+        let text: String
+        let starts: [Int]
+        let length: Int  // of `text`, in UTF-16 units
+
+        init(_ letters: [Unicode.Scalar], fold: (Unicode.Scalar) -> [Unicode.Scalar]) {
+            var numbers: [Set<Unicode.Scalar>: Int] = [:]
+            var classes: [Int] = []
+            var starts: [Int] = []
+            var start = 0
+            for c in letters {
+                let set = Set(fold(c))
+                let number = numbers[set] ?? numbers.count
+                numbers[set] = number
+                classes.append(number)
+                starts.append(start)
+                start += c.utf16.count
+            }
+            self.letters = letters
+            self.classes = classes
+            self.starts = starts
+            length = start
+            lookahead = "(?!(?-i:[\(Regex.spelled(letters))]))"
+            text = String(String.UnicodeScalarView(letters))
+        }
+
+        /// The letters Dart's `i` matches to the class `[body]`, or `[^body]`
+        /// when `negated`: those whose fold class has a letter `[body]`, read
+        /// case-sensitively, holds, or, negated, none. Nil when ICU refuses it.
+        func matched(_ body: String, negated: Bool) -> [Unicode.Scalar]? {
+            guard let held = try? NSRegularExpression(pattern: "[" + body + "]") else { return nil }
+            var met = [Bool](repeating: false, count: letters.count)  // by class number
+            var k = 0
+            held.enumerateMatches(in: text, range: NSRange(location: 0, length: length)) { r, _, _ in
+                guard let r else { return }
+                while k + 1 < letters.count, starts[k] < r.range.location { k += 1 }
+                met[classes[k]] = true
+            }
+            var matched: [Unicode.Scalar] = []
+            for k in letters.indices where met[classes[k]] != negated { matched.append(letters[k]) }
+            return matched
+        }
+    }
+    /// The table's letters, by the sets without `u` and with it, and for a
+    /// class holding a property every letter with a partner.
+    private static let tableKept = (
+        plain: Kept(foldLetters) { dartFold($0, unicode: false) ?? [] },
+        unicode: Kept(foldLetters) { dartFold($0, unicode: true) ?? [] }
+    )
+    private static let propertyKept = Kept(foldClassLetters) { foldClasses[$0] ?? [] }
 
     /// The class `set` (`[body]`, or `[^body]` when `negated`) under `i`, with
-    /// `foldLetters` matching as in Dart. One ICU refuses stays as it is.
-    private static func dartFolded(_ set: String, body: String, negated: Bool, unicode: Bool) -> String {
-        // C case-sensitively.
-        guard let held = try? NSRegularExpression(pattern: "[" + body + "]") else { return set }
-        let members = Set(allMatches(held, in: foldLetterText).compactMap { $0.group(0)?.unicodeScalars.first })
-        let matched = foldLetters.filter { c in
-            (dartFold(c, unicode: unicode) ?? []).contains(where: members.contains) != negated
-        }
+    /// `foldLetters` matching as in Dart; when it holds a property (`property`,
+    /// with `u`), every letter of `foldClassLetters`, by its class, and the
+    /// rest case-sensitively. One ICU refuses stays as it is.
+    private static func dartFolded(
+        _ set: String, body: String, negated: Bool, unicode: Bool, property: Bool
+    ) -> String {
+        let kept = property ? propertyKept : unicode ? tableKept.unicode : tableKept.plain
+        guard let matched = kept.matched(body, negated: negated) else { return set }
         let exact = matched.isEmpty ? "" : "|(?-i:[\(spelled(matched))])"
-        return "(?:\(notFoldLetter)\(set)\(exact))"
+        return "(?:\(kept.lookahead)\(property ? "(?-i:\(set))" : set)\(exact))"
     }
 
-    /// Letters as ICU set members, the non-ASCII ones as `\uXXXX`.
+    /// Letters as ICU set members, the non-ASCII ones as `\x{H}` (`braced`),
+    /// a run of three or more in a row as a range.
     private static func spelled(_ letters: [Unicode.Scalar]) -> String {
-        letters.map { $0.isASCII ? String(Character($0)) : String(format: "\\u%04X", $0.value) }.joined()
+        func one(_ c: Unicode.Scalar) -> String { c.isASCII ? String(Character(c)) : braced(c.value) }
+        var out = ""
+        var start = 0
+        while start < letters.count {
+            var end = start
+            while end + 1 < letters.count, letters[end + 1].value == letters[end].value + 1 { end += 1 }
+            out += end - start > 1
+                ? one(letters[start]) + "-" + one(letters[end]) : letters[start...end].map(one).joined()
+            start = end + 1
+        }
+        return out
     }
+
+    /// A code point as ICU writes it, `\x{H}`: ICU refuses `\u{` and reads at
+    /// most six digits in `\x{…}`.
+    private static func braced(_ value: UInt32) -> String { "\\x{\(String(value, radix: 16, uppercase: true))}" }
 
     static func clip(_ s: String) -> String {
         let units = s.utf16
