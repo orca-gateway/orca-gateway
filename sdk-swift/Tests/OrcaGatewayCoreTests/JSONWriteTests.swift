@@ -8,26 +8,8 @@ import XCTest
 /// back. Expected text is Dart 3.12.2's printed output. Numbers are checked
 /// by kind, never by `==` alone, which equates 4 and 4.0.
 final class JSONWriteTests: XCTestCase {
-    func text(_ value: JSONValue) throws -> String {
-        String(decoding: try value.encoded(), as: UTF8.self)
-    }
-
     func body(_ request: HTTPRequest?) -> String {
         String(decoding: request?.body ?? Data(), as: UTF8.self)
-    }
-
-    /// The same tree with every number the same kind: `.int(4)` is not
-    /// `.double(4.0)` and `-0.0` is not `0.0` here.
-    func sameKinds(_ a: JSONValue, _ b: JSONValue) -> Bool {
-        switch (a, b) {
-        case (.int(let x), .int(let y)): return x == y
-        case (.double(let x), .double(let y)): return x == y && x.sign == y.sign
-        case (.array(let x), .array(let y)): return x.count == y.count && zip(x, y).allSatisfy(sameKinds)
-        case (.object(let x), .object(let y)):
-            return x.count == y.count && x.allSatisfy { key, v in y[key].map { sameKinds(v, $0) } ?? false }
-        case (.int, _), (.double, _), (.array, _), (.object, _): return false
-        default: return a == b
-        }
     }
 
     // MARK: W1 the writer
@@ -46,7 +28,7 @@ final class JSONWriteTests: XCTestCase {
             ([.double(4.0), .int(4), "x", .null, [.double(1.5e-7)]], #"[4.0,4,"x",null,[1.5e-7]]"#),
         ]
         for (value, dart) in table {
-            XCTAssertEqual(try text(value), dart, "\(value)")
+            XCTAssertEqual(try wireText(value), dart, "\(value)")
             let back = try JSONValue.decode(try value.encoded())
             XCTAssertTrue(sameKinds(back, value), "\(value) read back as \(back)")
         }
@@ -62,18 +44,18 @@ final class JSONWriteTests: XCTestCase {
     }
 
     func testW1_StringsEscapeAsDartAndKeysStaySorted() throws {
-        XCTAssertEqual(try text("a/b"), #""a/b""#)
+        XCTAssertEqual(try wireText("a/b"), #""a/b""#)
         XCTAssertEqual(
-            try text(.string("\"\\\n\t\r\u{08}\u{0C}\u{01}\u{1F}\u{7F}")),
+            try wireText(.string("\"\\\n\t\r\u{08}\u{0C}\u{01}\u{1F}\u{7F}")),
             #""\"\\\n\t\r\b\f\u0001\u001f"# + "\u{7F}\"")
-        XCTAssertEqual(try text("é漢🙂"), "\"é漢🙂\"")
-        XCTAssertEqual(try text(""), #""""#)
-        XCTAssertEqual(try text([]), "[]")
-        XCTAssertEqual(try text([:]), "{}")
-        XCTAssertEqual(try text(["b/c": 100.0, "a": ["b": 4.0]]), #"{"a":{"b":4.0},"b/c":100.0}"#)
+        XCTAssertEqual(try wireText("é漢🙂"), "\"é漢🙂\"")
+        XCTAssertEqual(try wireText(""), #""""#)
+        XCTAssertEqual(try wireText([]), "[]")
+        XCTAssertEqual(try wireText([:]), "{}")
+        XCTAssertEqual(try wireText(["b/c": 100.0, "a": ["b": 4.0]]), #"{"a":{"b":4.0},"b/c":100.0}"#)
         // The order `.sortedKeys` gave on Darwin, which is `keys.sorted()`.
         let keys: JSONValue = ["b": 1, "B": 2, "_x": 3, "a": 4, "aa": 5, "10": 6, "9": 7, "é": 8, "e": 9, "Z": 10]
-        XCTAssertEqual(try text(keys), #"{"10":6,"9":7,"B":2,"Z":10,"_x":3,"a":4,"aa":5,"b":1,"e":9,"é":8}"#)
+        XCTAssertEqual(try wireText(keys), #"{"10":6,"9":7,"B":2,"Z":10,"_x":3,"a":4,"aa":5,"b":1,"e":9,"é":8}"#)
     }
 
     /// `Gen.double()` makes whole-number doubles, which JSONEncoder wrote as ints.
@@ -82,7 +64,7 @@ final class JSONWriteTests: XCTestCase {
             var gen = Gen(seed: seed)
             for i in 0..<150 {
                 let json = gen.json(depth: 4)
-                let written = try text(json)
+                let written = try wireText(json)
                 let back = try JSONValue.decode(Data(written.utf8))
                 XCTAssertTrue(sameKinds(back, json), "seed \(seed) #\(i): \(written)")
             }
@@ -127,13 +109,13 @@ final class JSONWriteTests: XCTestCase {
     func testW3_TheDevToolsEnvelopeKeeps4_0() throws {
         let change = DevToolsEvent.stateChange(scope: .page, pageId: "home", key: "d", oldValue: 4.0, newValue: 5)
         XCTAssertEqual(
-            try text(change.envelope(deviceId: "dev", timestamp: 1_793_980_800_000)),
+            try wireText(change.envelope(deviceId: "dev", timestamp: 1_793_980_800_000)),
             #"{"deviceId":"dev","payload":{"key":"d","newValue":5,"oldValue":4.0,"pageId":"home","scope":"page"},"#
                 + #""timestamp":1793980800000,"type":"state_change"}"#)
         let timing = DevToolsEvent.timing(pageId: "home", path: "/", server: nil, client: .init(
             responseReceivedMs: 12, parseCompleteMs: 12.5, renderStartMs: 13, renderCompleteMs: 14, firstFrameMs: 15))
         XCTAssertEqual(
-            try text(timing.envelope(deviceId: "dev", timestamp: 1)),
+            try wireText(timing.envelope(deviceId: "dev", timestamp: 1)),
             #"{"deviceId":"dev","payload":{"client":{"firstFrameMs":15.0,"parseCompleteMs":12.5,"#
                 + #""renderCompleteMs":14.0,"renderStartMs":13.0,"requestStartMs":0.0,"responseReceivedMs":12.0},"#
                 + #""pageId":"home","path":"/"},"timestamp":1,"type":"timing"}"#)

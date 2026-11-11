@@ -194,11 +194,11 @@ extension JSONValue {
         return Data(out.utf8)
     }
 
-    /// Re-read a Codable model as a JSONValue tree (used by tests and by the
-    /// effect payloads that must compare as data).
+    /// A Codable model as a JSONValue tree, built straight from the model
+    /// (see `JSONValueEncoder`), so a Double stays a `.double`, `4.0` too, as
+    /// Dart's double does. NaN and infinity throw, as JSONEncoder did.
     public init<T: Encodable>(encoding value: T) throws {
-        let data = try JSONEncoder().encode(value)
-        self = try JSONValue.decode(data)
+        self = try JSONValueEncoder.tree(of: value)
     }
 
     /// Decode a Codable model from this tree, as JSONDecoder would from its

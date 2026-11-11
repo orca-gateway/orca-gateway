@@ -55,3 +55,22 @@ func assertJSONEqual(
     let e = (try? expected.encoded()).flatMap { String(data: $0, encoding: .utf8) } ?? "?"
     XCTFail("\(message())\n  actual:   \(a)\n  expected: \(e)", file: file, line: line)
 }
+
+/// The text `encoded()` writes, as a string.
+func wireText(_ value: JSONValue) throws -> String {
+    String(decoding: try value.encoded(), as: UTF8.self)
+}
+
+/// The same tree with every number the same kind: `.int(4)` is not
+/// `.double(4.0)` and `-0.0` is not `0.0` here.
+func sameKinds(_ a: JSONValue, _ b: JSONValue) -> Bool {
+    switch (a, b) {
+    case (.int(let x), .int(let y)): return x == y
+    case (.double(let x), .double(let y)): return x == y && x.sign == y.sign
+    case (.array(let x), .array(let y)): return x.count == y.count && zip(x, y).allSatisfy(sameKinds)
+    case (.object(let x), .object(let y)):
+        return x.count == y.count && x.allSatisfy { key, v in y[key].map { sameKinds(v, $0) } ?? false }
+    case (.int, _), (.double, _), (.array, _), (.object, _): return false
+    default: return a == b
+    }
+}
