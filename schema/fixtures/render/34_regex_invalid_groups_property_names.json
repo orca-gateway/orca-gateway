@@ -1,0 +1,735 @@
+{
+  "name": "regex-invalid-groups-property-names",
+  "description": "A pattern Dart's RegExp refuses makes the `regex` transform resolve to null (the client catches the error), so these rows resolve to null. With `g`, the `(?` forms that are not a well-formed modifier group: `(?i)a` (a modifier with no colon), `(?-:a)` (nothing added or removed), `(?x:a)` (x is not a modifier) and `(?ii:a)` (the same modifier twice). With `gu`, property names outside ECMAScript's tables: `\\p{IsLatin}` (a Java prefix), `\\p{Han}` (a script value without `Script=`), `\\p{script=latin}` (names and values match exactly, case included) and `\\pL` (no braces). With `gu` the long General_Category names, the `gc=` form and the binary properties are accepted; on \"aB1\u00e9\u4e2d\ud83d\ude00\" `\\p{Lowercase_Letter}` gives \"#B1#\u4e2d\ud83d\ude00\", `\\p{gc=Cased_Letter}` gives \"##1#\u4e2d\ud83d\ude00\", `\\p{Alphabetic}` gives \"##1##\ud83d\ude00\" (the ideograph U+4E2D is alphabetic but not a cased letter), `\\p{Any}` gives \"######\" (the emoji is one code point) and `[^\\p{Lowercase_Letter}]` gives \"a##\u00e9##\". Every replace-mode regex puts \"#\" for each match. Every input reads page state, so the engine keeps the Values unresolved with `watches` and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "children": [
+      {
+        "type": "Text",
+        "key": "inline_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?i)a",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "empty_mod",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?-:a)",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "x_mod",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?x:a)",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "twice_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?ii:a)",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "is_latin",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{IsLatin}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "han",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Han}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "loose_script",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{script=latin}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "short_l",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\pL",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "ll",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Lowercase_Letter}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "gc_lc",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{gc=Cased_Letter}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "alpha",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Alphabetic}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "any",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Any}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "not_ll",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[^\\p{Lowercase_Letter}]",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "mix": "aB1\u00e9\u4e2d\ud83d\ude00"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "inline_i",
+        "empty_mod",
+        "x_mod",
+        "twice_i",
+        "is_latin",
+        "han",
+        "loose_script",
+        "short_l",
+        "ll",
+        "gc_lc",
+        "alpha",
+        "any",
+        "not_ll"
+      ],
+      "watches": []
+    },
+    {
+      "id": "not_ll",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[^\\p{Lowercase_Letter}]",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "any",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Any}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "alpha",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Alphabetic}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "gc_lc",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{gc=Cased_Letter}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "ll",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Lowercase_Letter}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "short_l",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\pL",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "loose_script",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{script=latin}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "han",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Han}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "is_latin",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{IsLatin}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "twice_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?ii:a)",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "x_mod",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?x:a)",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "empty_mod",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?-:a)",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "inline_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?i)a",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    }
+  ],
+  "resolved": {
+    "inline_i": {
+      "data": null
+    },
+    "empty_mod": {
+      "data": null
+    },
+    "x_mod": {
+      "data": null
+    },
+    "twice_i": {
+      "data": null
+    },
+    "is_latin": {
+      "data": null
+    },
+    "han": {
+      "data": null
+    },
+    "loose_script": {
+      "data": null
+    },
+    "short_l": {
+      "data": null
+    },
+    "ll": {
+      "data": "#B1#\u4e2d\ud83d\ude00"
+    },
+    "gc_lc": {
+      "data": "##1#\u4e2d\ud83d\ude00"
+    },
+    "alpha": {
+      "data": "##1##\ud83d\ude00"
+    },
+    "any": {
+      "data": "######"
+    },
+    "not_ll": {
+      "data": "a##\u00e9##"
+    }
+  }
+}
