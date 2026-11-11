@@ -658,4 +658,132 @@ class TransformTest {
             ),
         )
     }
+
+    // MARK: S14 — Dart's fold table (row 23b.36)
+    // Expected values from Dart 3.12.2. Under `i` the letters of
+    // DartFoldTable match Dart's sets, not the engine's folding.
+
+    @Test
+    fun f1_lettersThatMatchOnlyThemselvesWithoutU() {
+        val (angstrom, ohm, theta) = listOf("\u212B", "\u2126", "\u03F4")
+        val thetas = "$theta \u03B8 \u0398 \u03D1"
+        assertDart(
+            listOf(
+                Rx(angstrom, "gi", "$angstrom \u00E5 \u00C5", "# \u00E5 \u00C5"),
+                Rx(angstrom, "giu", "$angstrom \u00E5 \u00C5", "# # #"),
+                Rx(ohm, "gi", "$ohm \u03C9 \u03A9", "# \u03C9 \u03A9"),
+                Rx(ohm, "giu", "$ohm \u03C9 \u03A9", "# # #"),
+                Rx(theta, "gi", thetas, "# \u03B8 \u0398 \u03D1"),
+                Rx(theta, "giu", thetas, "# # # #"),
+                Rx("\u1E9E", "gi", "\u1E9E \u00DF", "# \u00DF"),
+                Rx("\u1E9E", "giu", "\u1E9E \u00DF", "# #"),
+                Rx("\u1F80", "gi", "\u1F80 \u1F88", "# \u1F88"),
+                Rx("\u1F80", "giu", "\u1F80 \u1F88", "# #"),
+                Rx("\u00E5", "gi", "\u00E5\u00C5$angstrom", "##$angstrom"),
+                Rx("\u00E5", "giu", "\u00E5\u00C5$angstrom", "###"),
+                Rx("[\u00E5]", "gi", "\u00E5\u00C5$angstrom", "##$angstrom"),
+            ),
+        )
+    }
+
+    @Test
+    fun f1_aLetterWithAFullFoldingMatchesNoRunOfLetters() {
+        val (sharpS, capitalSharpS, ff, st, longSt) = listOf("\u00DF", "\u1E9E", "\uFB00", "\uFB05", "\uFB06")
+        assertDart(
+            listOf(
+                Rx(sharpS, "gi", "$sharpS ss SS $capitalSharpS", "# ss SS $capitalSharpS"),
+                Rx(sharpS, "giu", "$sharpS ss SS $capitalSharpS", "# ss SS #"),
+                Rx("[$sharpS]", "gi", "$sharpS ss $capitalSharpS", "# ss $capitalSharpS"),
+                Rx("[$sharpS]", "giu", "$sharpS ss $capitalSharpS", "# ss #"),
+                Rx(ff, "gi", "$ff ff FF", "# ff FF"),
+                Rx("ff", "gi", "$ff ff FF", "$ff # #"),
+                Rx("FF", "gi", "$ff ff FF", "$ff # #"),
+                Rx("[$ff]", "gi", "$ff ff FF", "# ff FF"),
+                Rx(st, "gi", "$st st $longSt", "# st $longSt"),
+                Rx(st, "giu", "$st st $longSt", "# st #"),
+                Rx("\u02BCn", "gi", "\u0149 \u02BCn", "\u0149 #"),
+                Rx("\u03B1\u03B9", "gi", "\u1FB3 \u03B1\u03B9", "\u1FB3 #"),
+                Rx("[a-z]+", "gi", "$ff ff \u017F", "$ff # \u017F"),
+                Rx("[^a-z]", "gi", "$ff\u212Aa", "##a"),
+            ),
+        )
+    }
+
+    @Test
+    fun f1_theTableFollowsTheModifierScope() {
+        assertDart(
+            listOf(
+                Rx("(?i:\u00DF)", "g", "\u00DF ss \u1E9E", "# ss \u1E9E"),
+                Rx("(?-i:\u00DF)", "giu", "\u00DF ss \u1E9E", "# ss \u1E9E"),
+                Rx("(?i:ff)", "g", "\uFB00 ff FF", "\uFB00 # #"),
+            ),
+        )
+    }
+
+    @Test
+    fun f1_aNegatedClassWhoseBodyStartsWithACaretKeepsItsMembers() {
+        // In `[^^a]` the second `^` is a literal member, not a second negation.
+        val longS = "ſ"
+        assertDart(
+            listOf(
+                Rx("[^^a]", "gi", "^aAfFsS", "^aA####"),
+                Rx("[^^a]", "giu", "^aAfFsS", "^aA####"),
+                Rx("[^^a]", "g", "^aAfFsS", "^a#####"),
+                Rx("[^^s]", "gi", "^sS$longS", "^sS#"),
+                Rx("[^^s]", "giu", "^sS$longS", "^sS$longS"),
+                Rx("[^a]", "gi", "aAfF", "aA##"),
+                Rx("[\\^a]", "gi", "^aAf", "###f"),
+            ),
+        )
+    }
+
+    @Test
+    fun f1_guard_lettersOutsideTheTableKeepTheEnginesFolding() {
+        assertDart(
+            listOf(
+                Rx("\u00E9", "gi", "\u00E9\u00C9", "##"),
+                Rx("\u03C3", "gi", "\u03C3\u03C2\u03A3", "###"),
+            ),
+        )
+    }
+
+    @Test
+    fun f1_guard_hexEscapesAreReadWhole() {
+        // Their digits a-f and A-F are table letters, not letters to fold.
+        assertDart(
+            listOf(
+                Rx("\\x0a", "gi", "a\nb", "a#b"),
+                Rx("\\x7F", "gi", "a\u007Fb", "a#b"),
+                Rx("\\xff", "gi", "\u00FF\u0178", "##"),
+                Rx("\\xFF", "giu", "\u00FF\u0178", "##"),
+                Rx("\\u00ff", "gi", "\u00FF\u0178", "##"),
+                Rx("\\u00FF", "giu", "\u00FF\u0178", "##"),
+                Rx("\\x4a", "gi", "jJ\u01F0", "##\u01F0"),
+                Rx("\\u004a", "gi", "jJ\u01F0", "##\u01F0"),
+                Rx("\\xAF", "gi", "\u00AF", "#"),
+                Rx("[\\x41-\\x46]+", "gi", "abcdefg", "#g"),
+                Rx("[\\u0041-\\u0046]+", "gi", "abcdefg", "#g"),
+                Rx("\\uFFFF", "gi", "\uFFFF", "#"),
+                Rx("\\uffff", "gi", "\uFFFF", "#"),
+                Rx("\\cA", "gi", "\u0001", "#"),
+            ),
+        )
+    }
+
+    @Test
+    fun f1_everyTableLetterAloneAndInAClassMatchesDartsSet() {
+        // Among the table's letters, each one's pattern matches its set as
+        // Dart printed it, without `u` and with.
+        val all = DartFoldTable.letters
+        assertEquals(217, all.length)
+        val rows = all.flatMap { c ->
+            listOf(false, true).flatMap { unicode ->
+                val set = DartFoldTable.set(c, unicode)!!
+                val flags = if (unicode) "giu" else "gi"
+                val expected = all.map { if (it in set) '#' else it }.joinToString("")
+                listOf(Rx("$c", flags, all, expected), Rx("[$c]", flags, all, expected))
+            }
+        }
+        assertDart(rows)
+    }
 }

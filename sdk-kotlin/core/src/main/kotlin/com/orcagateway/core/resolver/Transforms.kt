@@ -368,8 +368,8 @@ internal object Placeholders {
  * java.util.regex standing in for Dart's ECMAScript `RegExp`, with the same
  * guard rails: patterns over 200 UTF-16 units are refused and the input is
  * clipped to 10 000 units. The empty pattern is valid and matches everywhere.
- * `\d`, `\w`, `\b` and their negations, and the case folding of the four
- * letters Unicode folds into ASCII, are rewritten to Dart's ([asciiClasses]);
+ * `\d`, `\w`, `\b` and their negations, and the case folding of the letters
+ * of [DartFoldTable], are rewritten to Dart's ([asciiClasses]);
  * the pattern is then compiled with UNICODE_CHARACTER_CLASS where the runtime
  * has it (Android's ICU regex is Unicode-aware already), so `\s` is Unicode as
  * Dart's is.
@@ -408,15 +408,19 @@ internal object RegexSupport {
      *   and K U+212A (they fold to s and k), and is always case-sensitive.
      * - Under `i`, Dart folds none of ſ, K, ı U+0131, İ U+0130 into ASCII, or
      *   with `u` only ſ and K; the JVM folds all four (but not K into `[A-Z]`),
-     *   ICU ſ and K. So the ten letters involved ([FOLD_LETTERS]) never go to
-     *   the engine's folding. Outside a class each is the case-sensitive set
-     *   Dart folds it to ([dartFold]): `s` is `(?-i:[sS])`, with `u`
-     *   `(?-i:[sSſ])`. A class C becomes `(?:(?!T)C|(?-i:[M]))`, T the ten
-     *   letters and M those C matches in Dart, found once by testing C
-     *   case-sensitively. Every other letter keeps the engine's folding.
+     *   ICU ſ and K. Without `u` Dart matches Å U+212B, Ω U+2126 or ẞ U+1E9E
+     *   only to itself, where both engines fold them, and it never matches ß
+     *   or a ligature to a run of letters, where ICU does ("ss", "ff"). So the
+     *   217 letters of [DartFoldTable] never go to the engine's folding.
+     *   Outside a class each is the case-sensitive set Dart folds it
+     *   to: `s` is `(?-i:[sS])`, with `u` `(?-i:[sSſ])`, `ß` is `(?-i:[ß])`,
+     *   with `u` `(?-i:[ßẞ])`. A class C becomes `(?:(?!T)C|(?-i:[M]))`, T the
+     *   table's letters and M those C matches in Dart, found by testing each
+     *   letter once against C case-sensitively. Every other letter keeps the
+     *   engine's folding.
      * - `i` above is the group's, as in Dart: a modifier group `(?i:` or
      *   `(?-i:` sets it up to its `)`, any other group keeps the enclosing one
-     *   (the pattern's at the top). Inside `(?-i:` the ten letters stay as
+     *   (the pattern's at the top). Inside `(?-i:` the table's letters stay as
      *   written, the engine reading them case-sensitively; inside `(?i:` they
      *   become Dart's sets as under the pattern's `i`. `u` is the pattern's.
      *
@@ -426,9 +430,9 @@ internal object RegexSupport {
      * form (`(?i)`, `(?-:`, `(?ii:`, `(?x:`, `(?>`, `(?#`, `(?P<`) gives null.
      *
      * An escaped character stays as it is (`\\d` is a backslash and a d), as do
-     * group names, a modifier group's flags (`(?ms-i:`) and what follows `\c`,
-     * `\k<` and `\p{`. Letters written as escapes (`\x73`) and backreferences
-     * keep the engine's folding.
+     * group names, a modifier group's flags (`(?ms-i:`), the digits of `\xHH`
+     * and `\uHHHH`, and what follows `\c`, `\k<` and `\p{`. Letters written as
+     * escapes (`\x73`) and backreferences keep the engine's folding.
      */
     fun asciiClasses(pattern: String, ignoreCase: Boolean = false, unicode: Boolean = false): String? {
         if (!ignoreCase && pattern.none { it == '\\' || it == '[' || it == '(' }) return pattern
@@ -440,6 +444,7 @@ internal object RegexSupport {
             val fold = open.lastOrNull() ?: ignoreCase
             val word = if (fold && unicode) "A-Za-z0-9_\u017F\u212A" else "A-Za-z0-9_"
             val w = "(?-i:[$word])"
+            val folded = if (fold) DartFoldTable.set(c, unicode) else null
             when {
                 c == '\\' -> {
                     val piece = when (pattern.getOrNull(i + 1)) {
@@ -467,8 +472,8 @@ internal object RegexSupport {
                     out.append(c)
                     i += 1
                 }
-                fold && c in FOLD_LETTERS -> {
-                    out.append("(?-i:[").append(dartFold(c, unicode)).append("])")
+                folded != null -> {
+                    out.append("(?-i:[").append(folded).append("])")
                     i += 1
                 }
                 else -> {
@@ -507,21 +512,6 @@ internal object RegexSupport {
         }
     }
 
-    /** s, k, i in either case and the four letters Unicode folds into them. */
-    private const val FOLD_LETTERS = "sSkKiI\u017F\u212A\u0131\u0130"
-
-    /**
-     * The letters Dart's `i` matches [c] to, for [c] in [FOLD_LETTERS]: its
-     * ASCII case pair without `u`, its simple case folding class with `u`.
-     */
-    private fun dartFold(c: Char, unicode: Boolean): String = when {
-        c == 'i' || c == 'I' -> "iI"
-        unicode && c in "sS\u017F" -> "sS\u017F"
-        unicode && c in "kK\u212A" -> "kK\u212A"
-        c in "sSkK" -> "${c.lowercaseChar()}${c.uppercaseChar()}"
-        else -> c.toString()
-    }
-
     /**
      * The class opening at [start], up to its first unescaped `]` as in
      * ECMAScript, appended to [out]; returns the index after it. [unicode] is
@@ -556,24 +546,34 @@ internal object RegexSupport {
             return pattern.length
         }
         val exact = "[${if (negated) "^" else ""}$body]"
-        val members = if (unicode == null || body.isEmpty()) null else compileIcuLike("[$body]", 0)
+        // A leading `^` of the body is a member (`[^^a]`), not a negation.
+        val literal = if (body.startsWith('^')) "\\$body" else body
+        val members = if (unicode == null || body.isEmpty()) null else compileIcuLike("[$literal]", 0)
         if (unicode == null || members == null) {
             out.append(exact)
         } else {
-            val matched = FOLD_LETTERS.filter { c ->
-                dartFold(c, unicode).any { members.matcher(it.toString()).matches() } != negated
-            }
-            out.append("(?:(?!(?-i:[$FOLD_LETTERS]))").append(exact)
+            val letters = DartFoldTable.letters
+            val probe = members.matcher("")
+            val inClass = letters.filter { probe.reset(it.toString()).matches() }.toSet()
+            val matched = letters.filter { c -> DartFoldTable.set(c, unicode)!!.any { it in inClass } != negated }
+            out.append("(?:(?!(?-i:[$letters]))").append(exact)
             if (matched.isNotEmpty()) out.append("|(?-i:[").append(matched).append("])")
             out.append(')')
         }
         return j + 1
     }
 
-    /** The end of the escape at [i]: two characters, or with `\cX`, `\k<…>`, `\p{…}`, `\P{…}` the argument too. */
+    /**
+     * The end of the escape at [i]: two characters, or with `\cX`, `\xHH`,
+     * `\uHHHH`, `\k<…>`, `\p{…}`, `\P{…}` the argument too.
+     */
     private fun escapeEnd(pattern: String, i: Int): Int {
         val close = when (pattern.getOrNull(i + 1)) {
             'c' -> return minOf(i + 3, pattern.length)
+            'x', 'u' -> {
+                val end = i + if (pattern[i + 1] == 'x') 4 else 6
+                return if (end <= pattern.length && (i + 2 until end).all { pattern[it] in HEX_DIGITS }) end else i + 2
+            }
             'k' -> '>'.takeIf { pattern.getOrNull(i + 2) == '<' }
             'p', 'P' -> '}'.takeIf { pattern.getOrNull(i + 2) == '{' }
             else -> null
@@ -581,6 +581,8 @@ internal object RegexSupport {
         val end = pattern.indexOf(close, i + 3)
         return if (end < 0) pattern.length else end + 1
     }
+
+    private const val HEX_DIGITS = "0123456789abcdefABCDEF"
 
     /** Null for an invalid pattern. */
     fun compileIcuLike(pattern: String, options: Int): Pattern? = try {
