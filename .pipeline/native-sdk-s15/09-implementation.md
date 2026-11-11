@@ -3,20 +3,21 @@
 ## Front page
 
 ### In one breath
-group 3 of 6 · tasks: 2 green, 0 blocked · cases: 6 of 11 green (A3, A1, A2) · suites green
-T5 Swift strict `u`: nil wherever Dart refuses (49 A2 rows); `\v`, `\s`, `\S`, `[]*` as Dart.
-T6 Kotlin strict `u`: the same rows green; its retry removed a dead `\c` arm (probe same).
-Tests: engine 703, Flutter 241, Swift 182, iOS 54 + 182, Kotlin core 179, sdk 128, lint clean.
-Probe: A2 and the control rows 0 differ in both; the rest is groups 4-5 and row 23b.38.
+group 4 of 6 · tasks: 2 green, 0 blocked · cases: 8 of 11 green (A3, A1, A2, G3) · suites green
+T7 Swift: names dropped, `\k<name>` its numbers, unset refs empty (negative lookarounds too).
+T8 Kotlin: the same, in a redraft on top; this slice's invisible test characters now escapes.
+Tests: engine 703, Flutter 241, Swift 191, iOS 54 + 191, Kotlin core 187, sdk 128, lint clean.
+G3: only the 4 run-time rows differ; on 566 extra rows Swift and Kotlin agree on every row.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-6 auto-decided: strict check at the escape; `\v` a code point; `\k<name>` strict; wraps; guards.
+5 auto-decided: `\N` wrapped or copied; escaped surrogate names nil; identifiers; `unset` set; …
+1 you decided (standing rule): negative-lookaround references empty, as in Dart.
 
 ### Questions for you
-1. Next: group 4, group names and empty references (T7 Swift, T8 Kotlin)? (default: go)
+1. Next: group 5, `iu` properties and exact script values (T9 Swift, T10 Kotlin)? (default: go)
 
 ## Appendix
 
@@ -180,11 +181,77 @@ Swift 182 with T5's guard test, Kotlin core 179, sdk 128; every probe output byt
   (was 183). Left: group 4 (named, unset, fwd, `\1(a)`, rows G3), group 5 (negiu, script, rows G4),
   row 23b.38 (emoji rows under quant, cls). No case that matched Dart before differs.
 
+### Group 4
+Commits: T7 023adc7; T8 036a741, then 3a5ecfd (the approved redraft). Nothing pushed. Group 3's card
+approved with your standing rule (start group 4, minor); group 4's first card the same (all four
+questions minor, defaults taken: retry T7, negative lookarounds in T7 and T8, known differences).
+
+#### Task T7 · Swift: drop names, empty unset backreferences
+Files: `sdk-swift/Sources/OrcaGatewayCore/Resolver/Transforms.swift` · `sdk-swift/Tests/OrcaGatewayCoreTests/TransformTests.swift`
+Cases: G3 (48 planned rows) → green (`swift test`: 188 tests, 0 failures; iOS 54 + 188; the 182 of
+before pass) · red first: 5 of 6 new tests, 196 assertions (the guard passed before).
+Changed: `(?<name>` written `(`; `groupName()` decodes a name (`\u` escapes) and refuses a non-
+identifier; a name twice refused unless in different alternatives; one `reference()` for `\N` and
+`\k<name>` writes `(?:\1|\2)` with the groups it can see, `(?:)` for none, all of them in a lookbehind;
+with a named group, `\k` without a group's name nil, in a class too. Tests: `// MARK: S15 — group
+names, unset references`, 6 tests, written patterns pinned (`s15/oracle/t7`, 188 extra).
+Decisions: 1. `\N` written `(?:\N)` like `\k<name>`, one helper · 2. needs you: a group in a negative
+lookaround (`(?!(a))\1b`) copied, Dart's reference matches empty (question 2) · 3. a name spelled
+with two `\u` surrogate escapes nil (Dart accepts it).
+Review fit: the doc comment said every name Dart accepts works (decision 3 says not), fixed (one
+rework: three sentences made true) · re-review: its example was the literal letter, which works, not
+the escape text `\uD835\uDC9C` (tool input had turned the text into the letter), blocked ·
+retry with the approved change (your standing rule): line 512 written as escape text (checked by
+bytes); a group inside a negative lookaround unset after it (`unset`, filled at its `)`), 3 tests,
+191 in all, probe changed only to Dart's values · re-review: pass
+Review quality: pass
+
+#### Task T8 · Kotlin: drop names, empty unset backreferences
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/resolver/Transforms.kt` · `sdk-kotlin/core/src/test/kotlin/com/orcagateway/core/resolver/TransformTest.kt`
+Cases: G3 (48 planned rows) → green (`./gradlew build`: core 186, sdk 128, 0 failures, lint no issues;
+core 179 of before pass) · red first: 5 of 7 new tests (names the JVM refused, and the guard, passed).
+Changed: `(?<name>` written `(`; `\k<name>` `(?:\N)` or `(?:\1|\2)`; a reference that can only see
+its group unset `(?:)`, copied in a lookbehind; the `Group` stack records the groups closed in the
+current alternative; `captures` maps names to numbers; `backreference` returns (end, number); new
+`groupName`, `identifier`; dead `'k'` arms of `escapeEnd` and the strict check, and `escape`'s
+`names`, removed. Tests: 7 `g3_` tests, written patterns pinned (`s15/oracle/t8`, `t8b`, 264 extra).
+Decisions: 1. escaped surrogate pairs in a name null, as Swift · 2. names checked with the JVM's
+`isUnicodeIdentifierStart/Part` (minus ignorables, U+2E2F), not a Dart table · 3. a visible `\N`
+copied as written.
+Review fit: pass
+Review quality: pass
+Redraft (your standing rule, group 4 card): a reference from outside a negative lookaround to one of
+its groups `(?:)` (`Group.negative`, a pattern-wide `unset` set; decision: not the closed sets, which
+also drive the syntactic duplicate-name check); one test, 26 rows; this slice's 41 literal invisible
+characters in TransformTest.kt strings written as `\u` escapes. Core 187, sdk 128, lint clean. Review
+fit: pass · Review quality: pass. Commit 3a5ecfd.
+
+#### Group 4 test run
+Once after the group (logs `s15/g4-*.log`), before T7's rework (comments only; 188 after):
+- `cd engine && bun test` · 703 pass, 0 fail.
+- `cd sdk && flutter test` · +241: All tests passed · `flutter analyze` · No issues found.
+- `cd sdk-swift && swift test` · 188 tests, 0 failures · iOS simulator · 54 + 188, TEST SUCCEEDED.
+- `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL · core 186, sdk 128, 0 failures · lint clean.
+- Probe: rows G3 52: Swift 4, Kotlin 4 differ (were 29, 28), the four not planned; a1: Swift 43 of 718
+  (was 72), Kotlin 55 (was 83); `named`, `fwd`, `dec` 0 in both. On the tasks' extra rows (452) both
+  SDKs differ from Dart on the same rows: a group in a negative lookaround; a reference inside a
+  lookbehind (ICU and the JVM refuse it: nil where Dart gives a value); escaped surrogate pairs in a
+  name; run-time unset. No case that matched Dart before differs.
+- After the T7 retry and T8 redraft (logs `s15/g4b-*.log`): engine 703, Flutter +241, analyze clean,
+  Swift 191, iOS 54 + 191, Kotlin core 187, sdk 128, lint clean. a1 and rows unchanged (43 / 55, 20 /
+  20); the negative-lookaround rows now match Dart; on the 566 extra rows (t7, t7c, t8, t8b, t8c)
+  Swift and Kotlin give the same output on every row. Left in this group's area, both SDKs alike: a
+  reference inside a lookbehind (ICU and the JVM refuse it), a name written as two surrogate escapes,
+  run-time unset (not planned).
+
 ### Blocked
-none (T6 green after one retry)
+none (T7 green after one retry)
 
 ### Not done
 none
 
 ### For ship (stage 10) to know
-nothing
+- Row 23b.37's known differences (epic plan) gain (approved at group 4's card): a backreference inside
+  a lookbehind (ICU and the JVM refuse it) and a group name spelled with two `\u` surrogate escapes.
+- Tool input in this session turns backslash-u-hex text into the character: S14's TransformTest.kt
+  still has U+00A0 ×2, U+2003 ×2, U+0301 ×3 written literally (left: baseline lines).
