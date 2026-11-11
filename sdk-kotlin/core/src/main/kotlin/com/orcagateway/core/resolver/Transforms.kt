@@ -453,16 +453,20 @@ internal object RegexSupport {
      * `\k<name>` of one of its names, in a class too (`\k<b>`, `\k<a`, `[\k]`).
      *
      * A backreference that can only see its group unset matches empty in
-     * Dart, where both engines fail it or, in a repeat, see the last
-     * iteration's value (ECMAScript resets a quantified atom's groups each
-     * time). It is written `(?:)` when it stands before its group closes
-     * (`\1(a)`, `(a\1)`, `(?:\1b|(a))+`) or in another alternative of a
-     * disjunction that holds the group (`(a)|\1b`); a `\k<name>` keeps only
-     * the groups it may see set. Inside a lookbehind, which Dart reads right
-     * to left, none is emptied: `\N` stays, `\k<name>` keeps all its groups
-     * (and the JVM refuses a reference there). Not reached: a group that takes
-     * part or not only at run time (`(?:(a)|b)\1`), as neither engine tells
-     * "unset" from "set elsewhere".
+     * Dart, where both engines fail it or see a value the group held before
+     * (in a repeat the last iteration's: ECMAScript resets a quantified atom's
+     * groups each time). It is written `(?:)` when it stands before its group
+     * closes (`\1(a)`, `(a\1)`, `(?:\1b|(a))+`), in another alternative of a
+     * disjunction that holds the group (`(a)|\1b`), or after a negative
+     * lookaround that holds it, which succeeds only when its body fails
+     * (`(?!(a))\1b`, `(?<!(a))\1b`, `(?:(?!(a)))\1b`); a `\k<name>` keeps only
+     * the groups it may see set. Inside the negative lookaround a reference
+     * sees the group as anywhere else (`(?!(a)\1)b` keeps `\1`), and a
+     * positive one leaves its groups set (`(?=(a))\1`). Inside a lookbehind,
+     * which Dart reads right to left, none is emptied: `\N` stays,
+     * `\k<name>` keeps all its groups (and the JVM refuses a reference
+     * there). Not reached: a group that takes part or not only at run time
+     * (`(?:(a)|b)\1`), as neither engine tells "unset" from "set elsewhere".
      *
      * Without `u` Dart reads Annex B's grammar, and so does this:
      *
@@ -524,6 +528,7 @@ internal object RegexSupport {
         val named = captures.names.isNotEmpty()
         val open = ArrayList<Group>()
         val top = HashSet<Int>() // the capturing groups closed in the top level's alternative being read
+        val unset = HashSet<Int>() // the capturing groups of the negative lookarounds closed so far, unset after them
         var opened = 0
         val out = StringBuilder(pattern.length + 16)
         var last = Last.None
@@ -531,7 +536,7 @@ internal object RegexSupport {
         /** The capturing groups closed in the innermost alternative being read. */
         fun alternative() = open.lastOrNull()?.closed ?: top
 
-        /** Whether group [n] may be set here: closed in an alternative still being read. */
+        /** Whether group [n] takes part with what is read here: closed in an alternative still being read. */
         fun seen(n: Int) = n in top || open.any { n in it.closed }
         var i = 0
         while (i < pattern.length) {
@@ -584,7 +589,8 @@ internal object RegexSupport {
                         reference != null -> {
                             val (end, numbers) = reference
                             // Dart reads a lookbehind right to left: in one, a reference keeps all its groups.
-                            val set = if (open.any { it.kind == GroupKind.Lookbehind }) numbers else numbers.filter(::seen)
+                            // Elsewhere it keeps those it may see set: taking part here, and not reset by a negative lookaround.
+                            val set = if (open.any { it.kind == GroupKind.Lookbehind }) numbers else numbers.filter { seen(it) && it !in unset }
                             out.append(
                                 when {
                                     set.isEmpty() -> "(?:)"
@@ -627,7 +633,12 @@ internal object RegexSupport {
                     out.append(c)
                     i += 1
                     // Its capturing groups, itself among them if it is one, are closed in the enclosing alternative.
-                    if (group != null) alternative().addAll(group.before + 1..opened)
+                    // A negative lookaround succeeds only when its body fails, so its groups are unset after it.
+                    if (group != null) {
+                        val inner = group.before + 1..opened
+                        alternative().addAll(inner)
+                        if (group.negative) unset.addAll(inner)
+                    }
                     if (group?.kind == GroupKind.Lookbehind || group?.kind == GroupKind.Lookahead && unicode) {
                         last = Last.Assertion
                     } else if (group != null && group.kind == GroupKind.Lookahead && i < pattern.length && quantifierEnd(pattern, i) > i) {
@@ -660,10 +671,11 @@ internal object RegexSupport {
 
     /**
      * An open group: its `i`, its kind, the output offset its text starts at,
-     * how many capturing groups open [before] it, its name if it has one, and
-     * the capturing groups [closed] in its alternative being read.
+     * how many capturing groups open [before] it, its name if it has one,
+     * whether it is a [negative] lookaround, and the capturing groups [closed]
+     * in its alternative being read.
      */
-    private class Group(val fold: Boolean, val kind: GroupKind, val start: Int, val before: Int, val name: String?) {
+    private class Group(val fold: Boolean, val kind: GroupKind, val start: Int, val before: Int, val name: String?, val negative: Boolean) {
         val number: Int get() = if (kind == GroupKind.Capturing) before + 1 else 0
         val closed = HashSet<Int>()
     }
@@ -817,13 +829,13 @@ internal object RegexSupport {
      * name [groupName] refuses too.
      */
     private fun groupOpening(pattern: String, i: Int, fold: Boolean, start: Int, before: Int): Pair<Int, Group>? {
-        fun group(kind: GroupKind, inner: Boolean = fold, name: String? = null) = Group(inner, kind, start, before, name)
+        fun group(kind: GroupKind, inner: Boolean = fold, name: String? = null, negative: Boolean = false) = Group(inner, kind, start, before, name, negative)
         if (pattern.getOrNull(i + 1) != '?') return i + 1 to group(GroupKind.Capturing)
         val next = pattern.getOrNull(i + 2)
         return when {
             next == ':' -> i + 3 to group(GroupKind.NonCapturing)
-            next == '=' || next == '!' -> i + 3 to group(GroupKind.Lookahead)
-            next == '<' && pattern.getOrNull(i + 3).let { it == '=' || it == '!' } -> i + 4 to group(GroupKind.Lookbehind)
+            next == '=' || next == '!' -> i + 3 to group(GroupKind.Lookahead, negative = next == '!')
+            next == '<' && pattern.getOrNull(i + 3).let { it == '=' || it == '!' } -> i + 4 to group(GroupKind.Lookbehind, negative = pattern[i + 3] == '!')
             next == '<' -> groupName(pattern, i + 3)?.let { (end, name) -> end to group(GroupKind.Capturing, name = name) }
             else -> {
                 var e = i + 2

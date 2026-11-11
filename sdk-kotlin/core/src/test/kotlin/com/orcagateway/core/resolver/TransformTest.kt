@@ -1483,17 +1483,17 @@ class TransformTest {
     }
 
     /** ECMAScript's WhiteSpace and LineTerminator, after the five controls U+0009-000D. */
-    private val spaces = "                  　﻿"
+    private val spaces = " \u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF"
 
     /** The whole set, 25 characters. */
     private val white = "\t\n\u000B\u000C\r$spaces"
 
     /** NEL, the Mongolian vowel separator and the zero-width space are not in it. */
-    private val notWhite = "\u0085᠎​a"
+    private val notWhite = "\u0085\u180E\u200Ba"
 
     @Test
     fun a2_backslashVIsTheLineTabulationAloneInBothModes() {
-        val ctl = "a\u000B\n\u000C\r\t\u0085   b"
+        val ctl = "a\u000B\n\u000C\r\t\u0085\u2028\u2029 b"
         assertDart(
             listOf("g", "gu", "gi", "giu").flatMap { f ->
                 listOf(
@@ -1504,8 +1504,8 @@ class TransformTest {
                 )
             } + listOf("g", "gu").flatMap { f ->
                 listOf(
-                    Rx("\\v", f, ctl, "a#\n\u000C\r\t\u0085   b"),
-                    Rx("[\\v]", f, ctl, "a#\n\u000C\r\t\u0085   b"),
+                    Rx("\\v", f, ctl, "a#\n\u000C\r\t\u0085\u2028\u2029 b"),
+                    Rx("[\\v]", f, ctl, "a#\n\u000C\r\t\u0085\u2028\u2029 b"),
                     Rx("[^\\v]", f, ctl, "#\u000B#########"),
                 )
             } + Rx("\\V", "g", white + notWhite, white + notWhite),
@@ -1531,11 +1531,11 @@ class TransformTest {
                 )
             } + listOf("g", "gu").flatMap { f ->
                 listOf(
-                    Rx("\\s", f, "a﻿b᠎​c d", "a#b᠎​c#d"),
-                    Rx("[\\S]", f, "a﻿\u0085", "#﻿#"),
-                    Rx("\\S", f, "﻿\u0085", "﻿#"),
-                    Rx("\\s", f, "a\u000B\n\u000C\r\t\u0085   b", "a#####\u0085###b"),
-                    Rx("[\\s]", f, "a\u000B\n\u000C\r\t\u0085   b", "a#####\u0085###b"),
+                    Rx("\\s", f, "a\uFEFFb\u180E\u200Bc\u00A0d", "a#b\u180E\u200Bc#d"),
+                    Rx("[\\S]", f, "a\uFEFF\u0085", "#\uFEFF#"),
+                    Rx("\\S", f, "\uFEFF\u0085", "\uFEFF#"),
+                    Rx("\\s", f, "a\u000B\n\u000C\r\t\u0085\u2028\u2029 b", "a#####\u0085###b"),
+                    Rx("[\\s]", f, "a\u000B\n\u000C\r\t\u0085\u2028\u2029 b", "a#####\u0085###b"),
                 )
             },
         )
@@ -1725,5 +1725,46 @@ class TransformTest {
         assertEquals("(a)\\1", RegexSupport.asciiClasses("(a)\\1"))
         assertEquals("(?<=\\1(a))b", RegexSupport.asciiClasses("(?<=\\1(a))b"))
         assertEquals("(x)(?<=(?:\\1))", RegexSupport.asciiClasses("(?<a>x)(?<=\\k<a>)"))
+    }
+
+    @Test
+    fun g3_aGroupInANegativeLookaroundIsUnsetAfterIt() {
+        // A negative lookaround succeeds only when its body fails, so after it
+        // Dart sees each of its groups unset, through any enclosing group too.
+        // Inside it a reference sees its group as usual, a positive lookaround
+        // leaves its groups set, and a name stays taken by a group inside one.
+        val neg = "b ab aa ba bb abb aab c ac bc abc aac xy y x"
+        assertDart(
+            named("(?!(a))\\1b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?!(a))\\1", neg, "#b# a#b# aa# #ba# #b#b# a#b#b# aa#b# #c# a#c# #b#c# a#b#c# aa#c# #x#y# #y# #x#") +
+                named("(?!(?=(a)))\\1", neg, "#b# a#b# aa# #ba# #b#b# a#b#b# aa#b# #c# a#c# #b#c# a#b#c# aa#c# #x#y# #y# #x#") +
+                named("(?=(?!(a)))\\1b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?<=(?!(a)))\\1b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?!(?!(a)))\\1", neg, "b #ab #a#a b#a bb #abb #a#ab c #ac bc #abc #a#ac xy y x") +
+                named("(?!(a)|(b))\\1\\2c", neg, "b ab aa ba bb abb aab # a# b# ab# aa# xy y x") +
+                named("(a)(?!(b))\\1\\2", neg, "b ab # ba bb abb #b c ac bc abc #c xy y x") +
+                named("((?!(a)))\\2b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?:(?!(a)))\\1b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?:(?!(a))|(a))\\1", neg, "#b# ##b# ### #b## #b#b# ##b#b# ###b# #c# ##c# #b#c# ##b#c# ###c# #x#y# #y# #x#") +
+                named("(?:(?!(a))\\1b)+", neg, "# a# aa #a # a# aa# c ac #c a#c aac xy y x") +
+                named("(?:(?!(a))b)+\\1", neg, "# a# aa #a # a# aa# c ac #c a#c aac xy y x") +
+                named("(?!(a))(?:\\1)b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?!(a))(?=\\1b)", neg, "#b a#b aa #ba #b#b a#b#b aa#b c ac #bc a#bc aac xy y x") +
+                named("(?!(?!(a))\\1b)c", neg, "b ab aa ba bb abb aab # a# b# ab# aa# xy y x") +
+                named("(?<!(a))\\1b", neg, "# ab aa #a ## ab# aab c ac #c abc aac xy y x") +
+                named("(?!(?<n>a))\\k<n>b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?!(a)(?<n>b))\\k<n>c", neg, "b ab aa ba bb abb aab # a# b# ab# aa# xy y x") +
+                named("(?=(a))\\1", neg, "b #b ## b# bb #bb ##b c #c bc #bc ##c xy y x") +
+                named("(?!(a)\\1)b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?!(?<n>a))|(?<n>b)\\k<n>", neg, "#b# a#b# aa# #ba# #b#b# a#b#b# aa#b# #c# a#c# #b#c# a#b#c# aa#c# #x#y# #y# #x#") +
+                named("(?!(?<n>a)|(?<n>b))c", neg, "b ab aa ba bb abb aab # a# b# ab# aa# xy y x") +
+                named("(?!(?<n>a))(?<n>b)", neg, null) +
+                named("(?<n>a)(?!(?<n>b))", neg, null) +
+                named("(?<!(?<n>a))(?<n>b)", neg, null),
+        )
+        assertEquals("(?!(a))(?:)b", RegexSupport.asciiClasses("(?!(a))\\1b"))
+        assertEquals("(?!(a)\\1)b", RegexSupport.asciiClasses("(?!(a)\\1)b"))
+        // A `\k<name>` drops only the groups a negative lookaround holds.
+        assertEquals("(?:(a)|(?!(b)))(?:\\1)c", RegexSupport.asciiClasses("(?:(?<n>a)|(?!(?<n>b)))\\k<n>c"))
     }
 }
