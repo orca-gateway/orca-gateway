@@ -445,20 +445,41 @@ internal object RegexSupport {
      * `Alphabetic` as `IsAlphabetic`, `Any` as a class), and one it has no such
      * spelling of (`Script_Extensions`, `Cased`, `Math` …) gives null; on
      * Android the name stays as written. Without `u`, `\p{…}` is left as it is.
+     *
+     * A quantifier, `*`, `+`, `?` or a brace form `{n}`, `{n,}`, `{n,m}` of
+     * digits, gives null where Dart finds nothing to repeat, with `u` and
+     * without: at the start, after a group opening or `|`, after an assertion
+     * (`^`, `$`, `\b`, `\B`, a lookbehind), and after another quantifier but
+     * for one `?` that makes it lazy (`a+?` stays, `a++`, `a{1}{2}`, `a+??`
+     * give null). A quantified lookahead is left to the engine, as is a `{`
+     * of no such form.
      */
     fun asciiClasses(pattern: String, ignoreCase: Boolean = false, unicode: Boolean = false): String? {
-        if (!ignoreCase && pattern.none { it == '\\' || it == '[' || it == '(' }) return pattern
-        val open = ArrayList<Boolean>() // the `i` of each open group
+        val open = ArrayList<Group>()
         val out = StringBuilder(pattern.length + 16)
+        var last = Last.None
         var i = 0
         while (i < pattern.length) {
             val c = pattern[i]
-            val fold = open.lastOrNull() ?: ignoreCase
+            val fold = open.lastOrNull()?.fold ?: ignoreCase
             val word = if (fold && unicode) "A-Za-z0-9_\u017F\u212A" else "A-Za-z0-9_"
             val w = "(?-i:[$word])"
             val folded = if (fold) DartFoldTable.set(c, unicode) else null
+            val quantifier = quantifierEnd(pattern, i)
+            val atom = last
+            last = Last.Atom
             when {
+                quantifier > i -> {
+                    last = when {
+                        atom == Last.Atom -> Last.Quantifier
+                        atom == Last.Quantifier && c == '?' -> Last.Lazy
+                        else -> return null
+                    }
+                    out.append(pattern, i, quantifier)
+                    i = quantifier
+                }
                 c == '\\' -> {
+                    if (pattern.getOrNull(i + 1).let { it == 'b' || it == 'B' }) last = Last.Assertion
                     val piece = when (pattern.getOrNull(i + 1)) {
                         'd' -> "[0-9]"
                         'D' -> "[^0-9]"
@@ -480,13 +501,19 @@ internal object RegexSupport {
                 }
                 c == '[' -> i = characterClass(pattern, i, word, fold, unicode, out) ?: return null
                 c == '(' -> {
-                    val (end, inner) = groupOpening(pattern, i, fold) ?: return null
-                    open.add(inner)
+                    val (end, group) = groupOpening(pattern, i, fold, out.length) ?: return null
+                    open.add(group)
                     out.append(pattern, i, end) // a group name, or `(?ms-i:` whose flags the engine reads as Dart does
                     i = end
+                    last = Last.None
                 }
                 c == ')' -> {
-                    open.removeLastOrNull()
+                    if (open.removeLastOrNull()?.kind == GroupKind.Lookbehind) last = Last.Assertion
+                    out.append(c)
+                    i += 1
+                }
+                c == '^' || c == '$' || c == '|' -> {
+                    last = if (c == '|') Last.None else Last.Assertion
                     out.append(c)
                     i += 1
                 }
@@ -503,18 +530,47 @@ internal object RegexSupport {
         return out.toString()
     }
 
+    /** What the reader wrote last, as a quantifier after it sees it. */
+    private enum class Last { None, Assertion, Atom, Quantifier, Lazy }
+
+    private enum class GroupKind { Capturing, NonCapturing, Lookahead, Lookbehind }
+
+    /** An open group: its `i`, its kind, and the output offset its text starts at. */
+    private class Group(val fold: Boolean, val kind: GroupKind, val start: Int)
+
     /**
-     * The end of the group opening at [i] and the group's `i`: [fold], the
+     * The end of the quantifier at [i]: `*`, `+`, `?`, or a brace form `{n}`,
+     * `{n,}` or `{n,m}` of digits. -1 for none, a `{` of no such form too.
+     */
+    private fun quantifierEnd(pattern: String, i: Int): Int {
+        if (pattern[i] == '*' || pattern[i] == '+' || pattern[i] == '?') return i + 1
+        if (pattern[i] != '{') return -1
+        fun digits(from: Int): Int {
+            var e = from
+            while (e < pattern.length && pattern[e] in '0'..'9') e += 1
+            return e
+        }
+        val n = digits(i + 1)
+        if (n == i + 1) return -1
+        val m = if (pattern.getOrNull(n) == ',') digits(n + 1) else n
+        return if (pattern.getOrNull(m) == '}') m + 1 else -1
+    }
+
+    /**
+     * The end of the group opening at [i] and the group it opens, its text
+     * starting at [start] in the output. The group's `i` is [fold], the
      * enclosing one, unless modifiers add or remove it. Null for a `(?` form
      * Dart rejects.
      */
-    private fun groupOpening(pattern: String, i: Int, fold: Boolean): Pair<Int, Boolean>? {
-        if (pattern.getOrNull(i + 1) != '?') return i + 1 to fold
+    private fun groupOpening(pattern: String, i: Int, fold: Boolean, start: Int): Pair<Int, Group>? {
+        fun group(kind: GroupKind, inner: Boolean = fold) = Group(inner, kind, start)
+        if (pattern.getOrNull(i + 1) != '?') return i + 1 to group(GroupKind.Capturing)
         val next = pattern.getOrNull(i + 2)
         return when {
-            next == ':' || next == '=' || next == '!' -> i + 3 to fold
-            next == '<' && pattern.getOrNull(i + 3).let { it == '=' || it == '!' } -> i + 4 to fold
-            next == '<' -> pattern.indexOf('>', i).let { if (it < 0) pattern.length else it + 1 } to fold
+            next == ':' -> i + 3 to group(GroupKind.NonCapturing)
+            next == '=' || next == '!' -> i + 3 to group(GroupKind.Lookahead)
+            next == '<' && pattern.getOrNull(i + 3).let { it == '=' || it == '!' } -> i + 4 to group(GroupKind.Lookbehind)
+            next == '<' -> pattern.indexOf('>', i).let { if (it < 0) pattern.length else it + 1 } to group(GroupKind.Capturing)
             else -> {
                 var e = i + 2
                 while (e < pattern.length && pattern[e] in "ims-") e += 1
@@ -525,7 +581,7 @@ internal object RegexSupport {
                 if (!dart) return null
                 val dash = flags.indexOf('-')
                 val at = flags.indexOf('i')
-                e + 1 to if (at < 0) fold else dash < 0 || at < dash
+                e + 1 to group(GroupKind.NonCapturing, if (at < 0) fold else dash < 0 || at < dash)
             }
         }
     }

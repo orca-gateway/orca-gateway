@@ -1072,4 +1072,84 @@ class TransformTest {
             ),
         )
     }
+
+    // MARK: S15 \u2014 quantifiers (row 23b.37)
+    // Expected values from Dart 3.12.2. A quantifier repeats the atom before it:
+    // after another quantifier (but for one lazy `?`), after an assertion, or
+    // with nothing before it, Dart refuses the pattern, with `u` and without.
+
+    /** Each pattern under `g` and `gu` on "aaa", where Dart throws. */
+    private fun refused(vararg patterns: String): List<Rx> =
+        patterns.flatMap { p -> listOf(Rx(p, "g", "aaa", null), Rx(p, "gu", "aaa", null)) }
+
+    @Test
+    fun a3_aQuantifierOnAQuantifierIsInvalid() {
+        assertDart(
+            refused("a++", "a*+", "a?+", "a{1,2}+", "a{1}{2}", "a**", "a{2,1}", "a+?+", "a+??") +
+                listOf(
+                    Rx("a{1,}+", "g", "aaa", null),
+                    Rx("(?=a)**", "g", "aaa", null),
+                    Rx("a{1,2}+", "gi", "aaa", null),
+                    Rx("s++", "gi", "sss", null),
+                ),
+        )
+    }
+
+    @Test
+    fun a3_aQuantifierOnAnAssertionIsInvalid() {
+        assertDart(
+            refused("^*", "$+", "\\b*", "\\B+", "(?<=a)*", "(?<!a)+", "(?<=a){2}", "\\b{2}", "^?", "$*") +
+                listOf(
+                    Rx("(?<!a)?", "g", "aaa", null),
+                    Rx("\\b+a", "g", "aaa", null),
+                    Rx("\\B+", "gi", "aaa", null),
+                ),
+        )
+    }
+
+    @Test
+    fun a3_aQuantifierWithNothingToRepeatIsInvalid() {
+        assertDart(
+            refused("{3}", "*a", "+a", "?a") +
+                listOf("(?:*a)", "(*a)", "a|*b", "(?<n>*a)").map { Rx(it, "g", "aaa", null) },
+        )
+    }
+
+    @Test
+    fun a3_aLazyQuestionMarkAndAQuantifiedGroupStayValid() {
+        assertDart(
+            listOf(
+                Rx("a+?", "g", "aaa", "###"),
+                Rx("a??", "g", "aaa", "#a#a#a#"),
+                Rx("a{1,2}?", "g", "aaa", "###"),
+                Rx("a{0}?", "g", "aaa", "#a#a#a#"),
+                Rx("a{1,}?", "g", "aaa", "###"),
+                Rx("(?:)*", "g", "aaa", "#a#a#a#"),
+                Rx("()+", "g", "aaa", "#a#a#a#"),
+            ),
+        )
+    }
+
+    @Test
+    fun a3_guard_quantifiersAndAssertionsDartAcceptsKeepTheirMatches() {
+        assertDart(
+            listOf(
+                Rx("a{1,2}", "g", "aaa", "##"),
+                Rx("a{2}", "g", "aaa", "#a"),
+                Rx("(a)+", "g", "aaa", "#"),
+                Rx("(?:ab)*", "g", "abab", "##"),
+                Rx("(?:a|)*", "g", "aaa", "##"),
+                Rx("(?i:a)+", "gi", "aAa", "#"),
+                Rx("[a]+", "g", "aaa", "#"),
+                Rx("\\d+", "g", "a12", "a#"),
+                Rx("\\b", "g", "a b", "#a# #b#"),
+                Rx("^a", "g", "aaa", "#aa"),
+                Rx("a$", "g", "aaa", "aa#"),
+                Rx("(?<=a)a+", "g", "aaa", "a#"),
+                Rx("(?=a)a", "g", "aaa", "###"),
+                // A quantified lookahead without `u` is Annex B's, and the engine already reads it so.
+                Rx("(?=a)*", "g", "ab", "#a#b#"),
+            ),
+        )
+    }
 }
