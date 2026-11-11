@@ -27,7 +27,7 @@ class ModelRoundTripTest {
     @Test
     fun allRenderFixturesRoundTrip() {
         val files = Fixtures.files("render")
-        assertEquals(34, files.size, "render fixtures 01-34")
+        assertEquals(36, files.size, "render fixtures 01-36")
         var nodes = 0
         for ((name, fixture) in files) {
             val expected = fixture["expected"]
@@ -173,7 +173,7 @@ class ModelRoundTripTest {
                 }
             }
         }
-        assertTrue(count >= 9, "Value objects in fixtures 01-34")
+        assertTrue(count >= 9, "Value objects in fixtures 01-36")
     }
 
     // MARK: helpers
