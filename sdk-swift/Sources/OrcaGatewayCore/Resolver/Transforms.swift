@@ -452,6 +452,10 @@ enum Regex {
     ///   `\x{H…}`, in a class too, without leading zeros: ICU refuses `\u{`
     ///   and reads at most six digits. Any other `\u{…}` Dart refuses, so it
     ///   is nil. Without `u` it is copied as is.
+    /// - With `u`, Dart reads the name in `\p{…}` and `\P{…}` by ECMA-262's
+    ///   tables (`dartAcceptsProperty`), in a class too: a name it refuses
+    ///   (`IsLatin`, `Latin`, `L&`, `script=Latin`), which ICU may read, is
+    ///   nil. Without `u` it is copied as is.
     static func asciiClasses(_ pattern: String, ignoreCase: Bool, unicode: Bool) -> String? {
         // The sets and edges under a group whose `i` is `fold`.
         func escapes(_ fold: Bool) -> (sets: [Unicode.Scalar: String], edges: [Unicode.Scalar: String]) {
@@ -530,9 +534,17 @@ enum Regex {
         }
         // ICU refuses `\u{` and reads at most six digits in `\x{…}`.
         func braced(_ value: UInt32) -> String { "\\x{\(String(value, radix: 16, uppercase: true))}" }
+        // At `\p{` or `\P{` with `u`: the escape's length through its `}`, or
+        // nil when there is no `}` or Dart refuses the name.
+        func propertyEscape() -> Int? {
+            guard let close = p[i...].firstIndex(of: "}"),
+                dartAcceptsProperty(String(String.UnicodeScalarView(p[(i + 3)..<close])))
+            else { return nil }
+            return close + 1 - i
+        }
         // A class up to its first unescaped `]`, as ECMAScript reads it: its
         // body, whether it is negated, and whether it closes; nil where Dart
-        // refuses a `\u{…}` in it.
+        // refuses a `\u{…}` or, with `u`, a property name in it.
         func classSet(_ sets: [Unicode.Scalar: String]) -> (body: String, negated: Bool, closed: Bool)? {
             var body = ""
             i += 1
@@ -543,6 +555,12 @@ enum Regex {
                     guard let value = escape.value else { return nil }
                     body += braced(value)
                     i += escape.length
+                    continue
+                }
+                if unicode, c == "\\", next(1) == "p" || next(1) == "P", next(2) == "{" {
+                    guard let length = propertyEscape() else { return nil }
+                    body.unicodeScalars.append(contentsOf: p[i..<(i + length)])
+                    i += length
                     continue
                 }
                 i += 1
@@ -574,6 +592,7 @@ enum Regex {
                 } else if n == "k", next(2) == "<" {
                     take(through: ">")  // `\k<name>` keeps its letters
                 } else if n == "p" || n == "P", next(2) == "{" {
+                    guard !unicode || propertyEscape() != nil else { return nil }  // a name Dart refuses
                     take(through: "}")  // and so does `\p{Script=Latin}`
                 } else if let escape = hexEscape() {
                     // `\x73`, `\u017F`, `\u{17F}`: a letter of the table is that letter

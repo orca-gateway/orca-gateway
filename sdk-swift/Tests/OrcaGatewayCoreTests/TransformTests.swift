@@ -802,6 +802,127 @@ final class TransformTests: XCTestCase {
         for pattern in ["\\u{110000}", "\\u{}", "\\u{g}"] { assertRegex(pattern, "gu", "a", nil) }
     }
 
+    // MARK: S14 — property names (row 23b.36)
+
+    // With `u` Dart reads the name in `\p{…}` and `\P{…}` by ECMA-262's tables; Dart 3.12.2 printed every value.
+
+    func testP1_withUDartRefusesANameOutsideECMAScriptsTables() {
+        // ICU's own names, bare scripts, a key or value in another case, a value under the wrong key, spaces,
+        // an empty value, and the binary properties ECMAScript's table lacks.
+        let refused = [
+            "IsLatin", "InGreek", "IsAlphabetic", "Latin", "Greek", "Han", "javaLowerCase", "Javalowercase", "L&",
+            "script=latin", "script=Latin", "general_category=Ll", "Gc=Ll", "Lowercase_letter", "ll", "gc=Lowercase",
+            "ASCII=Y", "Alphabetic=Yes", "Any=", "Script", "=Ll", "gc=Ll=Lu", "Lu,Ll", "L|Lu", " L", "L ", "XIDS ",
+            "Script=", "sc=", "Script_Extensions=", "scx=", "gc=", "General_Category=",
+            "Changes_When_NFKC_Casefolded", "CWKCF", "Basic_Emoji", "RGI_Emoji", "Emoji_Keycap_Sequence",
+            "IDS_Unary_Operator", "ID_Compat_Math_Start",
+        ]
+        for flags in ["gu", "giu"] {
+            for name in refused {
+                assertRegex("\\p{\(name)}", flags, "aL", nil)
+                assertRegex("\\P{\(name)}", flags, "aL", nil)
+            }
+        }
+    }
+
+    func testP1_withUANameDartRefusesInAClassOrAGroupIsRefusedToo() {
+        let refused = [
+            #"[\p{IsLatin}]"#, #"[^\p{Han}]"#, #"[a\P{Latin}]"#, #"[\p{L}\p{Greek}]"#, #"[\p{javaLowerCase}-]"#,
+            #"[\P{CWKCF}]"#, #"[\p{L&}]"#, #"[^\p{script=latin}]"#, #"[\p{ L}]"#, #"[\p{Script=}]"#,
+            #"[\w\p{IsAlphabetic}]"#, #"(?i:[\p{Han}])"#, #"(?-i:\p{IsLatin})"#, #"(?i:\P{InGreek})"#, #"a|\p{Latin}"#,
+        ]
+        for flags in ["gu", "giu"] {
+            for pattern in refused { assertRegex(pattern, flags, "aL", nil) }
+        }
+    }
+
+    func testP1_guard_withoutUTheNameIsNotRead() {
+        // Without `u` Dart reads `\p` as the letter p (Annex B): each pattern is valid; its matches are row 23b.37's.
+        for flags in ["g", "gi"] {
+            for pattern in [#"\p{IsLatin}"#, #"[\p{Han}]"#, #"\P{CWKCF}"#, #"\p{javaLowerCase}"#] {
+                let step: JSONValue = [
+                    "type": "regex", "pattern": .string(pattern), "flags": .string(flags), "replacement": "#",
+                ]
+                XCTAssertNotEqual(run(.string("aL p{IsLatin}"), step), .null, "\(pattern) /\(flags)")
+            }
+        }
+    }
+
+    func testP1_guard_aNameDartAcceptsKeepsItsMatches() {
+        let input = "aB1\u{17F}_ p{L} \u{3B1} \u{416} \u{4E2D} \u{663} ! \u{A0} \u{1C5}"
+        let rows: [(String, String, String, UInt)] = [
+            (#"\p{Lowercase_Letter}"#, "gu", "#B1#_ #{L} # \u{416} \u{4E2D} \u{663} ! \u{A0} \u{1C5}", #line),
+            (#"\p{gc=Ll}"#, "giu", "##1#_ #{#} # # \u{4E2D} \u{663} ! \u{A0} #", #line),
+            (
+                #"\p{General_Category=Lowercase_Letter}"#, "gu",
+                "#B1#_ #{L} # \u{416} \u{4E2D} \u{663} ! \u{A0} \u{1C5}", #line
+            ),
+            (#"\p{Script=Latin}"#, "gu", "##1#_ #{#} \u{3B1} \u{416} \u{4E2D} \u{663} ! \u{A0} #", #line),
+            (#"\P{Script=Latin}"#, "gu", "aB#\u{17F}##p#L##############\u{1C5}", #line),
+            (#"\p{sc=Greek}"#, "giu", "aB1\u{17F}_ p{L} # \u{416} \u{4E2D} \u{663} ! \u{A0} \u{1C5}", #line),
+            (#"\p{scx=Cyrl}"#, "gu", "aB1\u{17F}_ p{L} \u{3B1} # \u{4E2D} \u{663} ! \u{A0} \u{1C5}", #line),
+            (#"\p{Script_Extensions=Latin}"#, "giu", "##1#_ #{#} \u{3B1} \u{416} \u{4E2D} \u{663} ! \u{A0} #", #line),
+            (#"\p{ASCII}"#, "gu", "###\u{17F}#######\u{3B1}#\u{416}#\u{4E2D}#\u{663}###\u{A0}#\u{1C5}", #line),
+            (#"\p{Any}"#, "giu", "########################", #line),
+            (#"\p{digit}"#, "gu", "aB#\u{17F}_ p{L} \u{3B1} \u{416} \u{4E2D} # ! \u{A0} \u{1C5}", #line),
+            (#"\p{punct}"#, "gu", "aB1\u{17F}# p#L# \u{3B1} \u{416} \u{4E2D} \u{663} # \u{A0} \u{1C5}", #line),
+            (#"[\p{Uppercase_Letter}\d]"#, "gu", "a##\u{17F}_ p{#} \u{3B1} # \u{4E2D} \u{663} ! \u{A0} \u{1C5}", #line),
+            (#"[\p{Uppercase_Letter}\d]"#, "giu", "####_ #{#} # # \u{4E2D} \u{663} ! \u{A0} #", #line),
+            (#"[^\p{Lowercase_Letter}]"#, "gu", "a##\u{17F}##p####\u{3B1}############", #line),
+            (#"[\P{Any}a]"#, "gu", "#B1\u{17F}_ p{L} \u{3B1} \u{416} \u{4E2D} \u{663} ! \u{A0} \u{1C5}", #line),
+            (#"[^\P{Any}]"#, "giu", "########################", #line),
+            (#"[\p{Script=Greek}\p{Nd}]"#, "gu", "aB#\u{17F}_ p{L} # \u{416} \u{4E2D} # ! \u{A0} \u{1C5}", #line),
+            (#"(?-i:\p{Lu})"#, "giu", "a#1\u{17F}_ p{#} \u{3B1} # \u{4E2D} \u{663} ! \u{A0} \u{1C5}", #line),
+        ]
+        for (pattern, flags, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    /// The General_Category values and binary properties Dart 3.12.2 accepts after `\p{` with `u`.
+    private static let dartCategories = """
+        C Other Cc Control cntrl Cf Format Cn Unassigned Co Private_Use Cs Surrogate L Letter LC Cased_Letter Ll \
+        Lowercase_Letter Lm Modifier_Letter Lo Other_Letter Lt Titlecase_Letter Lu Uppercase_Letter M Mark \
+        Combining_Mark Mc Spacing_Mark Me Enclosing_Mark Mn Nonspacing_Mark N Number Nd Decimal_Number digit Nl \
+        Letter_Number No Other_Number P Punctuation punct Pc Connector_Punctuation Pd Dash_Punctuation Pe \
+        Close_Punctuation Pf Final_Punctuation Pi Initial_Punctuation Po Other_Punctuation Ps Open_Punctuation S \
+        Symbol Sc Currency_Symbol Sk Modifier_Symbol Sm Math_Symbol So Other_Symbol Z Separator Zl \
+        Line_Separator Zp Paragraph_Separator Zs Space_Separator
+        """.split(separator: " ").map(String.init)
+    private static let dartBinaryProperties = """
+        ASCII ASCII_Hex_Digit AHex Alphabetic Alpha Any Assigned Bidi_Control Bidi_C Bidi_Mirrored Bidi_M \
+        Case_Ignorable CI Cased Changes_When_Casefolded CWCF Changes_When_Casemapped CWCM \
+        Changes_When_Lowercased CWL Changes_When_Titlecased CWT Changes_When_Uppercased CWU Dash \
+        Default_Ignorable_Code_Point DI Deprecated Dep Diacritic Dia Emoji Emoji_Component EComp Emoji_Modifier \
+        EMod Emoji_Modifier_Base EBase Emoji_Presentation EPres Extended_Pictographic ExtPict Extender Ext \
+        Grapheme_Base Gr_Base Grapheme_Extend Gr_Ext Hex_Digit Hex IDS_Binary_Operator IDSB IDS_Trinary_Operator \
+        IDST ID_Continue IDC ID_Start IDS Ideographic Ideo Join_Control Join_C Logical_Order_Exception LOE \
+        Lowercase Lower Math Noncharacter_Code_Point NChar Pattern_Syntax Pat_Syn Pattern_White_Space Pat_WS \
+        Quotation_Mark QMark Radical Regional_Indicator RI Sentence_Terminal STerm Soft_Dotted SD \
+        Terminal_Punctuation Term Unified_Ideograph UIdeo Uppercase Upper Variation_Selector VS White_Space \
+        space XID_Continue XIDC XID_Start XIDS
+        """.split(separator: " ").map(String.init)
+
+    func testP1_guard_everyFormDartAcceptsStaysValid() {
+        // Each category bare and after `General_Category=` and `gc=`, each binary property, and scripts; Dart
+        // accepts every form as `\p{…}` and as `[\P{…}]`, under gu and giu.
+        let scripts = [
+            "Script=Latin", "sc=Latn", "Script=Greek", "sc=Grek", "Script_Extensions=Latin", "scx=Latn",
+            "Script=Han", "sc=Cyrl", "scx=Cyrl",
+        ]
+        let names = Self.dartCategories.flatMap { [$0, "General_Category=" + $0, "gc=" + $0] }
+            + Self.dartBinaryProperties + scripts
+        XCTAssertEqual(names.count, 345)
+        var refused: [String] = []
+        for flags in ["gu", "giu"] {
+            for pattern in names.flatMap({ ["\\p{\($0)}", "[\\P{\($0)}]"] }) {
+                let step: JSONValue = [
+                    "type": "regex", "pattern": .string(pattern), "flags": .string(flags), "replacement": "#",
+                ]
+                if run(.string("a"), step) == .null { refused.append("\(pattern) /\(flags)") }
+            }
+        }
+        XCTAssert(refused.isEmpty, "\(refused.count) refused: " + refused.prefix(8).joined(separator: "; "))
+    }
+
     func testDoubleToStringMatchesDart() {
         let cases: [(Double, String)] = [
             (0, "0.0"), (-0.0, "-0.0"), (1, "1.0"), (-2.5, "-2.5"), (0.1, "0.1"), (100, "100.0"),
