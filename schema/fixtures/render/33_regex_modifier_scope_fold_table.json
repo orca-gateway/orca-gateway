@@ -1,0 +1,798 @@
+{
+  "name": "regex-modifier-scope-fold-table",
+  "description": "Modifier groups, the case-fold table and escaped letters follow Dart's RegExp (ECMAScript). A modifier group changes `i` for its own contents only: `(?-i:s)` with `gi` on \"sS\" gives \"#S\" (the group turns `i` off), `(?i:s)` with `g` on \"\u017fsS\" gives \"\u017f##\" (the group turns it on, and without `u` the long s U+017F still matches no ASCII letter), and `a(?i:b)c` with `g` on \"aBc ABc aBC\" gives \"# ABc aBC\" (only the b ignores case). Without `u`, `i` compares each character's uppercase and keeps a character whose uppercase is not one character: the Angstrom sign U+212B is its own uppercase while U+00E5 and U+00C5 share U+00C5, so U+212B on \"\u212b\u00e5\u00c5\" gives \"#\u00e5\u00c5\"; the sharp s U+00DF (uppercase \"SS\") matches neither \"ss\" nor the capital sharp s U+1E9E, \"\u00df ss \u1e9e\" gives \"# ss \u1e9e\"; `ff` does not match the ligature U+FB00 (uppercase \"FF\"), \"\ufb00 ff\" gives \"\ufb00 #\"; and `[^^a]` excludes the caret and both cases of a, \"^aAfF\" gives \"^aA##\". With `giu` simple case folding applies: U+212B, U+00E5 and U+00C5 all fold to U+00E5 (\"###\") and U+1E9E folds to U+00DF (\"# ss #\"). An escaped letter folds as the letter itself, with `gi`: `\\x73` is s (\"s S \u017f\" gives \"# # \u017f\"), `\\u017f` matches only the long s (\"s S #\") and `\\u0130` only the dotted capital I (\"iI\u0130\u0131\" gives \"iI#\u0131\"). With `gu`, `\\u{73}` is s (\"sS\" gives \"#S\") and `\\u{1F600}` is one code point, one match per emoji (\"\ud83d\ude00a\ud83d\ude00\" gives \"#a#\"). Every replace-mode regex puts \"#\" for each match. Every input reads page state, so the engine keeps the Values unresolved with `watches` and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "children": [
+      {
+        "type": "Text",
+        "key": "mod_off",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "sS"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?-i:s)",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "mod_on",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "longS"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?i:s)",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "mod_scope",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "abc"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "a(?i:b)c",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "angstrom_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "angstrom"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\u212b",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "angstrom_iu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "angstrom"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\u212b",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sharp_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "sharp"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\u00df",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sharp_iu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "sharp"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\u00df",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "ff_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "lig"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "ff",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "caret_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "caret"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[^^a]",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "x73_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "esc"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\x73",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u017f_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "esc"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\u017f",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u0130_i",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "dotted"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\u0130",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "brace_u",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "sS"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\u{73}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "astral_u",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "astral"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\u{1F600}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "sS": "sS",
+      "longS": "\u017fsS",
+      "abc": "aBc ABc aBC",
+      "angstrom": "\u212b\u00e5\u00c5",
+      "sharp": "\u00df ss \u1e9e",
+      "lig": "\ufb00 ff",
+      "caret": "^aAfF",
+      "esc": "s S \u017f",
+      "dotted": "iI\u0130\u0131",
+      "astral": "\ud83d\ude00a\ud83d\ude00"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "mod_off",
+        "mod_on",
+        "mod_scope",
+        "angstrom_i",
+        "angstrom_iu",
+        "sharp_i",
+        "sharp_iu",
+        "ff_i",
+        "caret_i",
+        "x73_i",
+        "u017f_i",
+        "u0130_i",
+        "brace_u",
+        "astral_u"
+      ],
+      "watches": []
+    },
+    {
+      "id": "astral_u",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "astral"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\u{1F600}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "astral"
+      ]
+    },
+    {
+      "id": "brace_u",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "sS"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\u{73}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "sS"
+      ]
+    },
+    {
+      "id": "u0130_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "dotted"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\u0130",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "dotted"
+      ]
+    },
+    {
+      "id": "u017f_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "esc"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\u017f",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "esc"
+      ]
+    },
+    {
+      "id": "x73_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "esc"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\x73",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "esc"
+      ]
+    },
+    {
+      "id": "caret_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "caret"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[^^a]",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "caret"
+      ]
+    },
+    {
+      "id": "ff_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "lig"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "ff",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "lig"
+      ]
+    },
+    {
+      "id": "sharp_iu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "sharp"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\u00df",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "sharp"
+      ]
+    },
+    {
+      "id": "sharp_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "sharp"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\u00df",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "sharp"
+      ]
+    },
+    {
+      "id": "angstrom_iu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "angstrom"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\u212b",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "angstrom"
+      ]
+    },
+    {
+      "id": "angstrom_i",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "angstrom"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\u212b",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "angstrom"
+      ]
+    },
+    {
+      "id": "mod_scope",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "abc"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "a(?i:b)c",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "abc"
+      ]
+    },
+    {
+      "id": "mod_on",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "longS"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?i:s)",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "longS"
+      ]
+    },
+    {
+      "id": "mod_off",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "sS"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?-i:s)",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "sS"
+      ]
+    }
+  ],
+  "resolved": {
+    "mod_off": {
+      "data": "#S"
+    },
+    "mod_on": {
+      "data": "\u017f##"
+    },
+    "mod_scope": {
+      "data": "# ABc aBC"
+    },
+    "angstrom_i": {
+      "data": "#\u00e5\u00c5"
+    },
+    "angstrom_iu": {
+      "data": "###"
+    },
+    "sharp_i": {
+      "data": "# ss \u1e9e"
+    },
+    "sharp_iu": {
+      "data": "# ss #"
+    },
+    "ff_i": {
+      "data": "\ufb00 #"
+    },
+    "caret_i": {
+      "data": "^aA##"
+    },
+    "x73_i": {
+      "data": "# # \u017f"
+    },
+    "u017f_i": {
+      "data": "s S #"
+    },
+    "u0130_i": {
+      "data": "iI#\u0131"
+    },
+    "brace_u": {
+      "data": "#S"
+    },
+    "astral_u": {
+      "data": "#a#"
+    }
+  }
+}
