@@ -431,8 +431,12 @@ internal object RegexSupport {
      *
      * An escaped character stays as it is (`\\d` is a backslash and a d), as do
      * group names, a modifier group's flags (`(?ms-i:`), the digits of `\xHH`
-     * and `\uHHHH`, and what follows `\c`, `\k<` and `\p{`. Letters written as
-     * escapes (`\x73`) and backreferences keep the engine's folding.
+     * and `\uHHHH`, and what follows `\c`, `\k<` and `\p{`. An `\xHH`, `\uHHHH`
+     * or with `u` `\u{H…}` that spells a letter of the table is that letter
+     * (`\x73` under `i` is `(?-i:[sS])`); inside a class the members test reads
+     * it. With `u`, `\u{H…}` is written `\x{H…}`, in a class too, and one Dart
+     * rejects (`\u{}`, `\u{g}`, `\u{110000}`) gives null; without `u` it is
+     * left as it is. Backreferences keep the engine's folding.
      */
     fun asciiClasses(pattern: String, ignoreCase: Boolean = false, unicode: Boolean = false): String? {
         if (!ignoreCase && pattern.none { it == '\\' || it == '[' || it == '(' }) return pattern
@@ -456,11 +460,17 @@ internal object RegexSupport {
                         'B' -> "(?:(?<=$w)(?=$w)|(?<!$w)(?!$w))"
                         else -> null
                     }
-                    val end = if (piece == null) escapeEnd(pattern, i) else i + 2
-                    out.append(piece ?: pattern.substring(i, end))
-                    i = end
+                    if (piece != null) {
+                        out.append(piece)
+                        i += 2
+                    } else {
+                        val escape = escape(pattern, i, unicode) ?: return null
+                        val letter = escape.codePoint?.takeIf { fold && it <= 0xFFFF }?.let { DartFoldTable.set(it.toChar(), unicode) }
+                        if (letter != null) out.append("(?-i:[").append(letter).append("])") else out.append(escape.text)
+                        i = escape.end
+                    }
                 }
-                c == '[' -> i = characterClass(pattern, i, word, if (fold) unicode else null, out)
+                c == '[' -> i = characterClass(pattern, i, word, fold, unicode, out) ?: return null
                 c == '(' -> {
                     val (end, inner) = groupOpening(pattern, i, fold) ?: return null
                     open.add(inner)
@@ -514,11 +524,11 @@ internal object RegexSupport {
 
     /**
      * The class opening at [start], up to its first unescaped `]` as in
-     * ECMAScript, appended to [out]; returns the index after it. [unicode] is
-     * the `u` flag under the group's `i`, null without it. Unclosed, it is
-     * copied as it is and fails to compile, as in Dart.
+     * ECMAScript, appended to [out]; returns the index after it, or null for a
+     * `\u{…}` Dart rejects. [fold] is the group's `i`, [unicode] the `u` flag.
+     * Unclosed, it is copied as it is and fails to compile, as in Dart.
      */
-    private fun characterClass(pattern: String, start: Int, word: String, unicode: Boolean?, out: StringBuilder): Int {
+    private fun characterClass(pattern: String, start: Int, word: String, fold: Boolean, unicode: Boolean, out: StringBuilder): Int? {
         val negated = pattern.getOrNull(start + 1) == '^'
         val body = StringBuilder()
         var j = if (negated) start + 2 else start + 1
@@ -537,9 +547,14 @@ internal object RegexSupport {
                 'W' -> "[^$word]"
                 else -> null
             }
-            val end = if (piece == null) escapeEnd(pattern, j) else j + 2
-            body.append(piece ?: pattern.substring(j, end))
-            j = end
+            if (piece != null) {
+                body.append(piece)
+                j += 2
+            } else {
+                val escape = escape(pattern, j, unicode) ?: return null
+                body.append(escape.text)
+                j = escape.end
+            }
         }
         if (j >= pattern.length) {
             out.append(pattern, start, pattern.length)
@@ -548,8 +563,8 @@ internal object RegexSupport {
         val exact = "[${if (negated) "^" else ""}$body]"
         // A leading `^` of the body is a member (`[^^a]`), not a negation.
         val literal = if (body.startsWith('^')) "\\$body" else body
-        val members = if (unicode == null || body.isEmpty()) null else compileIcuLike("[$literal]", 0)
-        if (unicode == null || members == null) {
+        val members = if (!fold || body.isEmpty()) null else compileIcuLike("[$literal]", 0)
+        if (members == null) {
             out.append(exact)
         } else {
             val letters = DartFoldTable.letters
@@ -580,6 +595,37 @@ internal object RegexSupport {
         } ?: return minOf(i + 2, pattern.length)
         val end = pattern.indexOf(close, i + 3)
         return if (end < 0) pattern.length else end + 1
+    }
+
+    /** An escape: where it ends, the text the engine gets, and the code point it spells, if it spells one. */
+    private class Escape(val end: Int, val text: String, val codePoint: Int?)
+
+    /**
+     * The escape at [i]. `\xHH` and `\uHHHH` spell their code point and stay
+     * as written; with [unicode], `\u{H…}` spells its own and is written
+     * `\x{H…}` without leading zeros (both engines refuse `\u{`, ICU reads at
+     * most six digits). Null for a `\u{…}` Dart rejects under `u`: no digit, a
+     * non-hex one, no `}`, or past 10FFFF.
+     */
+    private fun escape(pattern: String, i: Int, unicode: Boolean): Escape? {
+        if (unicode && pattern.startsWith("u{", i + 1)) {
+            val close = pattern.indexOf('}', i + 3)
+            if (close < 0) return null
+            val digits = pattern.substring(i + 3, close)
+            if (digits.isEmpty() || digits.any { it !in HEX_DIGITS }) return null
+            val hex = digits.trimStart('0').ifEmpty { "0" }
+            if (hex.length > 6) return null
+            val value = hex.toInt(16)
+            return if (value > 0x10FFFF) null else Escape(close + 1, "\\x{$hex}", value)
+        }
+        val end = escapeEnd(pattern, i)
+        val digits = when (pattern.getOrNull(i + 1)) {
+            'x' -> 2
+            'u' -> 4
+            else -> null
+        }
+        val spelled = digits != null && end - i == digits + 2
+        return Escape(end, pattern.substring(i, end), if (spelled) pattern.substring(i + 2, end).toInt(16) else null)
     }
 
     private const val HEX_DIGITS = "0123456789abcdefABCDEF"

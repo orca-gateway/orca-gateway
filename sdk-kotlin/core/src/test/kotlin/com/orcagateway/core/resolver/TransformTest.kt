@@ -786,4 +786,115 @@ class TransformTest {
         }
         assertDart(rows)
     }
+
+    // MARK: S14 — escaped letters and \u{…} (row 23b.36)
+    // Expected values from Dart 3.12.2. Under `i` an escape spelling a table
+    // letter matches that letter's set; with `u`, `\u{H…}` is its code point.
+
+    /** s S ſ k K K ß ẞ, the letters the escapes below spell. */
+    private val spelled = "s S \u017F k K \u212A \u00DF \u1E9E"
+
+    @Test
+    fun e1_anEscapeSpellingATableLetterFoldsAsTheLetter() {
+        val (longS, kelvin, sharpS, capitalSharpS, ff) = listOf("\u017F", "\u212A", "\u00DF", "\u1E9E", "\uFB00")
+        val (dotless, dotted, angstrom) = listOf("\u0131", "\u0130", "\u212B")
+        assertDart(
+            listOf(
+                Rx("\\x73", "gi", spelled, "# # $longS k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\x53", "gi", spelled, "# # $longS k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\u0073", "gi", spelled, "# # $longS k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\u017F", "gi", spelled, "s S # k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\u017f", "giu", spelled, "# # # k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\u212A", "gi", spelled, "s S $longS k K # $sharpS $capitalSharpS"),
+                Rx("\\x6b", "gi", spelled, "s S $longS # # $kelvin $sharpS $capitalSharpS"),
+                Rx("\\xdf", "gi", spelled, "s S $longS k K $kelvin # $capitalSharpS"),
+                Rx("\\xdf", "giu", spelled, "s S $longS k K $kelvin # #"),
+                Rx("\\u1E9E", "gi", spelled, "s S $longS k K $kelvin $sharpS #"),
+                Rx("\\u1E9E", "giu", spelled, "s S $longS k K $kelvin # #"),
+                Rx("\\uFB00", "gi", "$ff ff FF", "# ff FF"),
+                Rx("\\x66\\x66", "gi", "$ff ff FF", "$ff # #"),
+                Rx("\\x73\\u017F", "gi", "s$longS S$longS ss", "# # ss"),
+                Rx("\\u0130", "gi", "i I $dotted $dotless", "i I # $dotless"),
+                Rx("\\u0131", "gi", "i I $dotted $dotless", "i I $dotted #"),
+                Rx("\\x41", "gi", "aA", "##"),
+                Rx("\\u00C5", "gi", "\u00E5\u00C5$angstrom", "##$angstrom"),
+            ),
+        )
+    }
+
+    @Test
+    fun e1_anEscapedLetterFollowsTheModifierScope() {
+        assertDart(
+            listOf(
+                Rx("(?-i:\\x73)", "gi", "sS", "#S"),
+                Rx("(?i:\\x73)", "g", "sS\u017F", "##\u017F"),
+            ),
+        )
+    }
+
+    @Test
+    fun e1_withUABracedEscapeIsItsCodePoint() {
+        val (longS, kelvin, sharpS, capitalSharpS) = listOf("\u017F", "\u212A", "\u00DF", "\u1E9E")
+        val (grin, last, angstrom) = listOf("\uD83D\uDE00", "\uDBFF\uDFFF", "\u212B")
+        assertDart(
+            listOf(
+                Rx("\\u{73}", "gu", spelled, "# S $longS k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\u{73}", "giu", spelled, "# # # k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\u{17F}", "gu", spelled, "s S # k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\u{17F}", "giu", spelled, "# # # k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\u{0000073}", "giu", spelled, "# # # k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\u{10FFFF}", "gu", last, "#"),
+                Rx("\\u{1F600}", "gu", "x$grin", "x#"),
+                Rx("\\u{1F600}+", "gu", "$grin$grin", "#"),
+                Rx("[\\u{1F600}a]", "gu", "a${grin}b", "##b"),
+                Rx("\\u{61}", "gu", "aA", "#A"),
+                Rx("\\u{61}", "giu", "aA", "##"),
+                Rx("[\\u{17F}]", "giu", spelled, "# # # k K $kelvin $sharpS $capitalSharpS"),
+                Rx("[\\u{17F}]", "gu", spelled, "s S # k K $kelvin $sharpS $capitalSharpS"),
+                Rx("\\u{212B}", "giu", "\u00E5\u00C5$angstrom", "###"),
+            ),
+        )
+    }
+
+    @Test
+    fun e1_withUABracedEscapeDartRejectsIsInvalid() {
+        assertDart(
+            listOf(
+                Rx("\\u{110000}", "gu", "a", null),
+                Rx("\\u{}", "gu", "a", null),
+                Rx("\\u{g}", "gu", "a", null),
+            ),
+        )
+    }
+
+    @Test
+    fun e1_guard_otherEscapesKeepTheEnginesReading() {
+        // Expected values from Dart 3.12.2 too: a letter outside the table keeps
+        // the engine's folding, ranges and quantifiers take the code point, and
+        // an unclosed or out-of-range `\u{` is invalid in a class as well.
+        val grin = "\uD83D\uDE00"
+        assertDart(
+            listOf(
+                Rx("\\xe9", "gi", "\u00E9\u00C9", "##"),
+                Rx("\\u00e9", "gi", "\u00E9\u00C9", "##"),
+                Rx("\\u{e9}", "giu", "\u00E9\u00C9", "##"),
+                Rx("\\u{e9}", "gu", "\u00E9\u00C9", "#\u00C9"),
+                Rx("\\x73+", "gi", "sSs\u017F", "#\u017F"),
+                Rx("(?-i:\\u{73})", "giu", "sS\u017F", "#S\u017F"),
+                Rx("(?i:\\u{73})", "gu", "sS\u017F", "###"),
+                Rx("[\\u{1F600}a]", "giu", "aA${grin}b", "###b"),
+                Rx("[\\u{61}-\\u{63}]+", "gu", "abcd", "#d"),
+                Rx("[\\u{61}-\\u{63}]+", "giu", "aBcD", "#D"),
+                Rx("\\u{0}", "gu", "a\u0000b", "a#b"),
+                Rx("\\u{0010FFFF}", "gu", "\uDBFF\uDFFF", "#"),
+                Rx("\\u{73", "gu", "s", null),
+                Rx("\\u{", "gu", "a", null),
+                Rx("a\\", "gi", "a", null),
+                Rx("[a\\", "giu", "a", null),
+                Rx("[\\u{110000}]", "gu", "a", null),
+                Rx("[\\u{}]", "gu", "a", null),
+                Rx("[\\u{g}]", "gu", "a", null),
+            ),
+        )
+    }
 }
