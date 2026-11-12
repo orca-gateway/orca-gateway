@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 
 @testable import OrcaGatewayCore
@@ -1694,6 +1695,16 @@ final class TransformTests: XCTestCase {
         // Unicode's long names and four-letter codes, case-sensitive, no space, plus Qaai and Qaac; none newer
         // than Dart's Unicode (Sidetic, Tai_Yo), no alias (Hrkt, Katakana_Or_Hiragana, Jpan, Zsym), the same under scx.
         let input = "a\u{3B1}\u{300}\u{2C81}\u{309B}\u{951}"  // a, α, U+0300 (Zinh), ⲁ (Copt), ゛ (Zyyy), U+0951 (Zinh)
+        // An ICU older than a script's Unicode refuses it, so the pattern is null: Linux's Foundation (in CI, before
+        // Unicode 14 with Swift 5.10, before 16 with 6.2), the known difference, pinned. Apple's ICU has Unicode 16.
+        let garay = Self.icuKnows(#"\p{sc=Gara}"#)  // Unicode 16
+        let cpmn = Self.icuKnows(#"\p{sc=Cpmn}"#)  // Unicode 14
+        #if canImport(Darwin)
+            XCTAssert(garay && cpmn, "Apple's ICU has Unicode 16, so every row is checked")
+        #endif
+        // With Unicode 16 only, which gave U+0300 its own Script_Extensions: an older ICU's depend on its version.
+        let unchecked: Set<String> =
+            garay ? [] : [#"\p{scx=Qaai}"#, #"\p{scx=Inherited}"#, #"\p{scx=Qaac}"#, #"\p{scx=Copt}"#]
         let rows: [(String, String?, UInt)] = [
             (#"\p{Script=latin}"#, nil, #line),
             (#"\p{sc=latn}"#, nil, #line),
@@ -1716,7 +1727,9 @@ final class TransformTests: XCTestCase {
             (#"\P{sc=Latn}"#, "a#####", #line),
             (#"[\p{sc=Grek}a]"#, "##\u{300}\u{2C81}\u{309B}\u{951}", #line),
         ]
-        for (pattern, expected, line) in rows { assertRegex(pattern, "gu", input, expected, line: line) }
+        for (pattern, expected, line) in rows where !unchecked.contains(pattern) {
+            assertRegex(pattern, "gu", input, expected, line: line)
+        }
         let both: [(String, String?, UInt)] = [
             (#"\p{Script=LATIN}"#, nil, #line),
             (#"\p{Script=Latin}"#, "#\u{3B1}\u{300}\u{2C81}\u{309B}\u{951}", #line),
@@ -1726,9 +1739,9 @@ final class TransformTests: XCTestCase {
             (#"[^\p{sc=latn}]"#, nil, #line),
             (#"\p{Script=Sidetic}"#, nil, #line),
             (#"\p{Script=Tai_Yo}"#, nil, #line),
-            (#"\p{Script=Garay}"#, input, #line),
-            (#"\p{sc=Gara}"#, input, #line),
-            (#"\p{scx=Garay}"#, input, #line),
+            (#"\p{Script=Garay}"#, garay ? input : nil, #line),
+            (#"\p{sc=Gara}"#, garay ? input : nil, #line),
+            (#"\p{scx=Garay}"#, garay ? input : nil, #line),
             (#"\p{Script=Qaac}"#, "a\u{3B1}\u{300}#\u{309B}\u{951}", #line),
             (#"\p{scx=Qaac}"#, "a\u{3B1}##\u{309B}\u{951}", #line),
             (#"\p{scx=Copt}"#, "a\u{3B1}##\u{309B}\u{951}", #line),
@@ -1763,11 +1776,13 @@ final class TransformTests: XCTestCase {
             (#"\p{sc=Geok}"#, nil, #line),
             (#"\p{sc=Hans}"#, nil, #line),
             (#"\p{sc=Qabx}"#, nil, #line),
-            (#"\p{sc=Cpmn}"#, input, #line),
+            (#"\p{sc=Cpmn}"#, cpmn ? input : nil, #line),
             (#"\p{sc=Copt}"#, "a\u{3B1}\u{300}#\u{309B}\u{951}", #line),
         ]
         for flags in ["gu", "giu"] {
-            for (pattern, expected, line) in both { assertRegex(pattern, flags, input, expected, line: line) }
+            for (pattern, expected, line) in both where !unchecked.contains(pattern) {
+                assertRegex(pattern, flags, input, expected, line: line)
+            }
         }
     }
 
@@ -1800,19 +1815,31 @@ final class TransformTests: XCTestCase {
         Zyyy Zzzz
         """.split(separator: " ").map(String.init)
 
-    func testG4_guard_everyScriptValueDartAcceptsStaysValid() {
-        // Under each of the four keys, as ICU knows each value too.
+    /// Whether the platform's ICU compiles `pattern` as written, the SDK's rewriter bypassed.
+    private static func icuKnows(_ pattern: String) -> Bool { (try? NSRegularExpression(pattern: pattern)) != nil }
+
+    func testG4_guard_everyScriptValueTheICUKnowsStaysValid() {
+        // Under each of the four keys, every value the platform's ICU knows: all 1 344 on Apple's; a script newer
+        // than its Unicode is refused as written (Linux's Foundation), so the SDK's null there is the known difference.
         XCTAssertEqual(Self.dartScripts.count, 336)
         XCTAssertEqual(Regex.scriptValues, Set(Self.dartScripts))
         var refused: [String] = []
+        var skipped = 0
         for key in ["Script", "sc", "Script_Extensions", "scx"] {
             for value in Self.dartScripts {
                 let pattern = "\\p{\(key)=\(value)}"
+                guard Self.icuKnows(pattern) else {
+                    skipped += 1
+                    continue
+                }
                 let step: JSONValue = ["type": "regex", "pattern": .string(pattern), "flags": "gu", "replacement": "#"]
                 if run(.string("a"), step) == .null { refused.append(pattern) }
             }
         }
         XCTAssert(refused.isEmpty, "\(refused.count) refused: " + refused.prefix(8).joined(separator: "; "))
+        #if canImport(Darwin)
+            XCTAssertEqual(skipped, 0, "Apple's ICU has Unicode 16, so all 1 344 are checked")
+        #endif
     }
 
     func testG4_theFoldClassesHoldTheFoldTablesSetsWithU() {

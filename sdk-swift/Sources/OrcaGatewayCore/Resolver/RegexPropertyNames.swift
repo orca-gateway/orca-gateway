@@ -60,7 +60,10 @@ extension Regex {
     /// four-letter codes, and `Qaai` (Inherited) and `Qaac` (Coptic). Not
     /// among them, though ICU knows them: `Hrkt` (`Katakana_Or_Hiragana`),
     /// ISO 15924's codes Unicode does not use (`Jpan`, `Zsym`, `Latf`) and
-    /// scripts newer than Dart's Unicode (`Sidetic`, `Tai_Yo`).
+    /// scripts newer than Dart's Unicode (`Sidetic`, `Tai_Yo`). A script newer
+    /// than the platform ICU's Unicode is refused there, so the pattern is
+    /// null, and Script_Extensions follow that ICU's data: Linux's Foundation
+    /// (in CI, before Unicode 14 with Swift 5.10, before 16 with Swift 6.2).
     static let scriptValues: Set<String> = [
         "Adlam", "Adlm", "Aghb", "Ahom", "Anatolian_Hieroglyphs", "Arab", "Arabic", "Armenian", "Armi", "Armn",
         "Avestan", "Avst", "Bali", "Balinese", "Bamu", "Bamum", "Bass", "Bassa_Vah", "Batak", "Batk", "Beng", "Bengali",
