@@ -3,16 +3,16 @@
 ## Front page
 
 ### In one breath
-Round 2: PR #22's two Linux Swift jobs failed; Linux's Foundation ships an older ICU than Apple's.
-Fixed in a7f9eb8: the script tests ask the platform's ICU first, as Kotlin's do; Apple checks all.
-Swift 198 and iOS 54 + 198 green here, pushed; CI re-runs, and Linux runs only there.
-Epic row 23b.37 and the PR body gain the Linux ICU known difference; the merge is still yours.
+Round 3: Linux Swift is green now (round 2's a7f9eb8); two other jobs failed, neither from S15.
+Flutter: CI's stable moved to 3.50, which deprecates material.dart; analyze fails on 18 imports.
+Fixed in da9213b: sdk.yml pins Flutter 3.47.9, the last green; moving to material_ui is a follow-up.
+iOS: GitHub found no macOS runner in 15 minutes; this push re-runs it. The merge is still yours.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-none
+1 auto-decided (minor): pin Flutter 3.47.9 now; material_ui waits for its own change
 
 ### Questions for you
 1. Merge PR #22 once its checks are green: yours, so this card waits for you. (default: ok)
@@ -54,6 +54,20 @@ session scratchpad (`pr-s15.md`).
 - Reviews: quality found the gates could close quietly on an Apple runtime (fixed by the Darwin asserts,
   then pass). CI's iOS 18.5 job had passed the old strict tests, so those asserts hold there.
 - Linux was not run here (Docker off). Forcing the probe false on macOS failed only the expected rows.
+
+### Round 3: Flutter 3.50 and a missing macOS runner (your words, again: "CI is failing on the PR. Find out why, fix it, and push.")
+- Read once on b1b4c8d: both Linux Swift jobs, Kotlin JDK 17 and 21, the engine and codegen passed.
+- "SDK CI / test" failed at `flutter analyze`: subosito's `channel: stable` now gives Flutter 3.50.0
+  (yesterday's green run had 3.47.9), which deprecates `package:flutter/material.dart` for
+  `package:material_ui`. 18 infos (15 files in `sdk/lib`, 3 in `sdk/test`) and analyze exits 1. S15
+  changes no Dart, so main would fail the same way on its next `sdk/` or `schema/` push.
+- Fixed in da9213b (CI config, written by the main session; no product or test code): `sdk.yml` pins
+  `flutter-version: 3.47.9` with the reason beside it, and the workflow file joins its path filters.
+  The strict analyze stays. Not run here: this Mac has Flutter 3.44.7; CI is the check.
+- "UI tests and example (iOS simulator)" was cancelled after 15 minutes with no step run: "The job was
+  not acquired by Runner of type hosted even after multiple attempts" (macOS capacity). Nothing to fix;
+  this push starts it again.
+- Follow-up: move the SDK to `material_ui`, then lift the pin (proposed as its own session).
 
 ### What UAT covers here
 No screen was added; the cases ran at 09 (09-implementation.md, six groups):
