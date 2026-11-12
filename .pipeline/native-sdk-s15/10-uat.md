@@ -3,10 +3,10 @@
 ## Front page
 
 ### In one breath
-PR #22 is open (feat/native-sdk-s15 → main), bound here, Auto-fix off; main had not moved.
-At this card its CI read 0 checks (just queued); Swift on Linux runs there, not here.
-S15 adds no screen: TransformTests, fixtures 35-36 and the Dart probe are its proof.
-Epic row 23b.37 reads "S15 PR #22", its known differences extended; row 23b.38 is next.
+Round 2: PR #22's two Linux Swift jobs failed; Linux's Foundation ships an older ICU than Apple's.
+Fixed in a7f9eb8: the script tests ask the platform's ICU first, as Kotlin's do; Apple checks all.
+Swift 198 and iOS 54 + 198 green here, pushed; CI re-runs, and Linux runs only there.
+Epic row 23b.37 and the PR body gain the Linux ICU known difference; the merge is still yours.
 
 ### New for you
 nothing new
@@ -40,6 +40,21 @@ SDK Swift (core tests, swift 5.10-jammy and 6.2-noble, linux), SDK Swift UI (iOS
 Kotlin (JDK 17 and 21, linux), and the engine and Flutter jobs that read `schema/`. The body is in the
 session scratchpad (`pr-s15.md`).
 
+### Round 2: the Linux CI failure (your words: "CI is failing on the PR. Find out why, fix it, and push.")
+- Failing: "Core tests (swift 5.10-jammy, linux)" (31 failures) and "(swift 6.2-noble, linux)" (27), both
+  in `testG4_guard_everyScriptValueDartAcceptsStaysValid` and `testG4_withUAScriptValueIsOneOfECMAScriptsExactly`.
+  The other 6 checks passed (Kotlin JDK 17 and 21, the iOS simulator on iOS 18.5, engine, Flutter, codegen).
+- Cause: Linux's Foundation uses an older ICU, before Unicode 14 on Swift 5.10 (refuses 104 = 26 names x
+  4 keys) and before 16 on 6.2 (56). Newer scripts are null there, and U+0300 lacks Unicode 16's
+  Script_Extensions. Apple's ICU and Dart have Unicode 16. Matching Dart would mean shipping Unicode data.
+- Fix, a7f9eb8 (tests plus one doc sentence in RegexPropertyNames.swift): `icuKnows` probes the raw
+  pattern; the Garay and Cpmn rows expect null where ICU lacks the script; the four U+0300 scx rows run
+  only with Unicode 16; the guard (now `...TheICUKnowsStaysValid`) compiles every value ICU knows.
+  Under `#if canImport(Darwin)` both tests assert nothing was gated, so Apple still checks every row.
+- Reviews: quality found the gates could close quietly on an Apple runtime (fixed by the Darwin asserts,
+  then pass). CI's iOS 18.5 job had passed the old strict tests, so those asserts hold there.
+- Linux was not run here (Docker off). Forcing the probe false on macOS failed only the expected rows.
+
 ### What UAT covers here
 No screen was added; the cases ran at 09 (09-implementation.md, six groups):
 - A3: quantifiers on quantifiers and assertions refused (T1, T2).
@@ -67,4 +82,5 @@ Seeing it by eye means a page whose regex uses one of these corners; no example 
 
 ### Cleanup
 - No server or emulator ran beyond the test runners; the iOS simulator stays booted as before.
-- Logs, diffs and the probe are in the session scratchpad (`s15/`).
+- The session scratchpad was cleared overnight: the probe and the S15 logs are gone; the CI logs of
+  round 2 are in `s15/ci/`.
