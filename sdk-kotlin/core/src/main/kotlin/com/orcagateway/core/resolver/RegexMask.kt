@@ -39,6 +39,15 @@ package com.orcagateway.core.resolver
  * Dart's set of a letter it is in, as the stand-in, and a class, escape or
  * property takes the stand-in where Dart takes the letter.
  *
+ * JDK 17's backreference under `i` never repeats a capture above U+FFFF,
+ * and throws at the input's end. There, with `u` on an input that holds such
+ * a character, [withAllLetters] masks every letter of a [DartFoldClasses]
+ * class the input holds instead, one stand-in for each class, and each
+ * reference under `i` is written exact: equal stand-ins are letters Dart
+ * folds together and every other character folds only to itself, so the
+ * exact comparison is Dart's and the engine's never runs. The limit above
+ * then covers every letter of such an input on that JVM.
+ *
  * Stand-ins are private-use characters: no letter, digit, space or line
  * terminator, and no case, as the halves have none. They are the lowest
  * such characters that neither the input nor the pattern holds, as a
@@ -141,10 +150,21 @@ internal class RegexMask private constructor(
          */
         fun withLetters(pattern: String, flags: String, input: String): RegexMask? = build(pattern, flags, input, letters = true)
 
-        private fun build(pattern: String, flags: String, input: String, letters: Boolean): RegexMask? {
+        /**
+         * The mask for a JVM whose backreference under `i` never repeats a
+         * character above U+FFFF, with `u` on an input that holds one
+         * ([RegexSupport.search] says when): each letter of a [DartFoldClasses]
+         * class that the input holds, and the other letters of its class,
+         * take one stand-in, so that a reference written exact compares them
+         * as Dart does. Null when the input holds none, or when the pool runs
+         * out.
+         */
+        fun withAllLetters(pattern: String, flags: String, input: String): RegexMask? = build(pattern, flags, input, letters = true, all = true)
+
+        private fun build(pattern: String, flags: String, input: String, letters: Boolean, all: Boolean = false): RegexMask? {
             val unicode = 'u' in flags
             val units = if (unicode) CharArray(0) else halves(pattern, input)
-            val classes = if (letters) letterSets(input, unicode) else emptyList()
+            val classes = if (letters) letterSets(input, unicode, all) else emptyList()
             if (classes.isEmpty() && (letters || units.isEmpty())) return null
             val pool = StandInPool(pattern, input)
             val standIns = CharArray(units.size)
@@ -190,18 +210,20 @@ internal class RegexMask private constructor(
          * [lettersWithoutU], with `u` of [lettersWithU], or of a class the engine does not fold in
          * full ([DartFoldClasses.lagging]), without `u` one in the BMP, as Dart reads units there.
          * Each class is tested against the lagging ones, and its set built, once: its first letter
-         * met stands for the rest, as the set of a lagging class is the class.
+         * met stands for the rest, as the set of a lagging class is the class. With [all], the set of
+         * each letter of any class instead ([withAllLetters]), built once per class the same way:
+         * Dart's set with `u` of a letter of the table is its class too.
          */
-        private fun letterSets(input: String, unicode: Boolean): List<String> {
+        private fun letterSets(input: String, unicode: Boolean, all: Boolean): List<String> {
             val candidates = if (unicode) lettersWithU else lettersWithoutU
             val lagging = DartFoldClasses.lagging
-            val met = if (lagging.isEmpty()) null else BooleanArray(DartFoldClasses.classes.size)
+            val met = if (lagging.isEmpty() && !all) null else BooleanArray(DartFoldClasses.classes.size)
             val sets = HashSet<String>()
             var i = 0
             while (i < input.length) {
                 val c = if (unicode) input.codePointAt(i) else input[i].code
                 i += Character.charCount(c)
-                if (c <= 0xFFFF && candidates.binarySearch(c.toChar()) >= 0) {
+                if (!all && c <= 0xFFFF && candidates.binarySearch(c.toChar()) >= 0) {
                     RegexSupport.dartSet(c, unicode)?.let(sets::add)
                     continue
                 }
@@ -211,7 +233,10 @@ internal class RegexMask private constructor(
                 val k = DartFoldClasses.classOf[n]
                 if (met[k]) continue
                 met[k] = true
-                if (k in lagging) RegexSupport.dartSet(c, unicode)?.let(sets::add)
+                when {
+                    all -> sets.add(RegexSupport.dartSet(c, unicode) ?: DartFoldClasses.classes[k].joinToString("") { String(Character.toChars(it)) })
+                    k in lagging -> RegexSupport.dartSet(c, unicode)?.let(sets::add)
+                }
             }
             return sets.sorted()
         }

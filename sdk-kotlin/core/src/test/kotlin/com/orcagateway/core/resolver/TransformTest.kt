@@ -2361,26 +2361,21 @@ class TransformTest {
         )
     }
 
+    /** U2's rows with `u`: each letter of a class above U+FFFF matches the others, as a letter, in a class and by a reference. */
+    private val u2GuardRows: List<Rx> by lazy {
+        listOf(Rx(dU, "giu", d, "#"), Rx("[$dU]", "giu", d, "#"), Rx("($dU)\\1", "giu", dU + d, "#"), Rx("(.)\\1", "giu", dU + d, "#")) +
+            astralPairs.flatMap { (x, y) ->
+                listOf(Rx(x, "giu", y, "#"), Rx("[$x]", "giu", y, "#"), Rx("($x)\\1", "giu", x + y, "#"), Rx("(.)\\1", "giu", x + y, "#"))
+            }
+    }
+
     @Test
     fun u2_guard_withULettersAboveTheBmpFold() {
-        // With `u` the JVM folds these letters itself. JDK 21 (Unicode 15) and 17 (Unicode 13) fold
-        // only the pairs their Unicode has, and JDK 17's case-insensitive backreference never repeats
-        // a capture above U+FFFF (it throws at the input's end): the platform's difference, not the
-        // SDK's, so those rows are left out there.
-        val ci = Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
-        fun jvmFolds(x: String, y: String) = Pattern.compile(Pattern.quote(x), ci).matcher(y).matches()
-        val jvmRepeats = runCatching { Pattern.compile("(.)\\1", ci).matcher(dU + dU).find() }.getOrDefault(false)
-        var leftOut = 0
-        fun kept(runs: Boolean, rows: List<Rx>): List<Rx> = if (runs) rows else emptyList<Rx>().also { leftOut += rows.size }
-        val rows = listOf(Rx(dU, "giu", d, "#"), Rx("[$dU]", "giu", d, "#")) +
-            kept(jvmRepeats, listOf(Rx("($dU)\\1", "giu", dU + d, "#"), Rx("(.)\\1", "giu", dU + d, "#"))) +
-            astralPairs.flatMap { (x, y) ->
-                val folds = jvmFolds(x, y)
-                kept(folds, listOf(Rx(x, "giu", y, "#"), Rx("[$x]", "giu", y, "#"))) +
-                    kept(folds && jvmRepeats, listOf(Rx("($x)\\1", "giu", x + y, "#"), Rx("(.)\\1", "giu", x + y, "#")))
-            }
-        if (Runtime.version().feature() >= 24) assertEquals(0, leftOut, "rows left out on a JDK with Unicode 16")
-        assertDart(rows)
+        // With `u` Dart folds these letters, and the SDK does on every JDK: where its Unicode lacks a
+        // class it writes the letters as Dart's sets (none lacks one on JDK 24 and later), and where its
+        // backreference never repeats a letter above U+FFFF (JDK 17's) it compares masked letters exactly.
+        if (Runtime.version().feature() >= 24) assertEquals(emptyList(), DartFoldClasses.lagging.toList(), "classes learned lagging on a JDK with Unicode 16")
+        assertDart(u2GuardRows)
     }
 
     @Test
@@ -2981,28 +2976,6 @@ class TransformTest {
         )
     }
 
-    /** Whether the JVM's case-insensitive backreference repeats a capture above U+FFFF: JDK 17's never does (T5's). */
-    private val jvmRepeats: Boolean by lazy {
-        runCatching { Pattern.compile("(.)\\1", Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE).matcher(dU + dU).find() }.getOrDefault(false)
-    }
-
-    /** Whether a row's reference compares, under `i` and `u`, a character above U+FFFF: left out where the JVM never repeats one. */
-    private fun aboveFfff(pattern: String, flags: String, input: String): Boolean =
-        'u' in flags && ('i' in flags || "(?i:" in pattern) && input.any(Char::isSurrogate)
-
-    /** [rows] as the JVM runs them: all where it repeats a capture above U+FFFF, else those that compare none. */
-    private fun r1Kept(rows: List<Rx>): List<Rx> = keptWhereTheJvmRepeats(rows) { aboveFfff(it.pattern, it.flags, it.input) }
-
-    /** [r1Steps] as the JVM runs them: each holds a letter above U+FFFF under `i` and `u`, or none. */
-    private fun r1StepsKept(): List<Step> = keptWhereTheJvmRepeats(r1Steps) { s -> s.input.any(Char::isSurrogate) }
-
-    /** [rows] less those [comparesAboveFfff] where the JVM never repeats such a capture; none left out on JDK 21 and later. */
-    private fun <T> keptWhereTheJvmRepeats(rows: List<T>, comparesAboveFfff: (T) -> Boolean): List<T> {
-        val kept = rows.filter { jvmRepeats || !comparesAboveFfff(it) }
-        if (Runtime.version().feature() >= 21) assertEquals(rows.size, kept.size, "rows left out on a JDK whose backreference repeats a letter above U+FFFF")
-        return kept
-    }
-
     /**
      * [rows] searched as the SDK searches each ([RegexSupport.search]) with the engine's own case
      * folding off: where the engine folds a pair itself, only the run's stand-ins then match the
@@ -3030,8 +3003,8 @@ class TransformTest {
 
     @Test
     fun r1_aBackreferenceMatchesTheLettersOfALaggingClassAsDart() {
-        assertDart(r1Kept(r1Rows + r1Parts + r1Folded))
-        assertSteps(r1StepsKept())
+        assertDart(r1Rows + r1Parts + r1Folded)
+        assertSteps(r1Steps)
     }
 
     @Test
@@ -3039,8 +3012,234 @@ class TransformTest {
         // With the classes JDK 17 lacks set, every JVM masks their letters, and the rows hold with the
         // engine's own folding off too.
         lagging(lacks17)
-        assertDart(r1Kept(r1Rows + r1Parts + r1Folded))
-        assertSearched(r1Kept(r1Rows + r1Parts))
-        assertSteps(r1StepsKept())
+        assertDart(r1Rows + r1Parts + r1Folded)
+        assertSearched(r1Rows + r1Parts)
+        assertSteps(r1Steps)
+    }
+
+    // MARK: S17 — JDK 17's backreference under `i` (row 23b.40)
+    // Expected values from Dart 3.14.0. JDK 17's case-insensitive backreference never repeats a
+    // capture above U+FFFF, not even `(.)\1` on two identical 😀, and throws at the input's end. There,
+    // with `u` and such a character in the input, the SDK masks every letter of a Dart fold class the
+    // input holds and writes each reference under `i` exact. JDK 21 and later repeat one: there the
+    // seam sets the JDK 17 path.
+
+    @AfterTest
+    fun probeTheBackreferenceAgain() {
+        RegexSupport.repeatsAboveFfffForTests = null
+    }
+
+    /** 🎉 U+1F389. */
+    private val party = cps("1F389")
+
+    /** A J1 row: [pattern] on [input], and Dart's output under giu, gu, gi and g; E in them is 😀, P 🎉, D 𐐀 and d 𐐨. */
+    private class JRow(val pattern: String, val input: String, val giu: String, val gu: String, val gi: String, val g: String)
+
+    /** [s] with E, P, D and d as 😀, 🎉, 𐐀 and 𐐨. */
+    private fun jText(s: String): String = s.map {
+        when (it) {
+            'E' -> e
+            'P' -> party
+            'D' -> dU
+            'd' -> d
+            else -> "$it"
+        }
+    }.joinToString("")
+
+    /**
+     * J1: a reference under `i` on an input with a character above U+FFFF repeats it as Dart does,
+     * with `u` and without, and in `(?i:` under `u`, and nothing throws. The probe's 405 rows, each
+     * printed by Dart: `(?i:…)` under gu as the pattern under giu, but on 𐐀𐐨 `(?i:(.)\1|x)`, whose
+     * first alternative's reference Dart compares case-sensitively there (Dart's quirk, a known
+     * follow-up), so that row is left out.
+     */
+    private val j1Rows: List<Rx> by lazy {
+        listOf(
+            JRow("(.)\\1", "EE", "#", "#", "EE", "EE"),
+            JRow("(.)\\1", "EEx", "#x", "#x", "EEx", "EEx"),
+            JRow("(.)\\1", "xEE", "x#", "x#", "xEE", "xEE"),
+            JRow("(.)\\1", "EP", "EP", "EP", "EP", "EP"),
+            JRow("(.)\\1", "aEaE", "aEaE", "aEaE", "aEaE", "aEaE"),
+            JRow("(.)\\1", "EEEE", "##", "##", "EEEE", "EEEE"),
+            JRow("(.)\\1", "Dd", "#", "Dd", "Dd", "Dd"),
+            JRow("(.)\\1", "DDx", "#x", "#x", "DDx", "DDx"),
+            JRow("(.)\\1", "aEEa", "a#a", "a#a", "aEEa", "aEEa"),
+            JRow("($e)\\1", "EE", "#", "#", "#", "#"),
+            JRow("($e)\\1", "EEx", "#x", "#x", "#x", "#x"),
+            JRow("($e)\\1", "xEE", "x#", "x#", "x#", "x#"),
+            JRow("($e)\\1", "EP", "EP", "EP", "EP", "EP"),
+            JRow("($e)\\1", "aEaE", "aEaE", "aEaE", "aEaE", "aEaE"),
+            JRow("($e)\\1", "EEEE", "##", "##", "##", "##"),
+            JRow("($e)\\1", "Dd", "Dd", "Dd", "Dd", "Dd"),
+            JRow("($e)\\1", "DDx", "DDx", "DDx", "DDx", "DDx"),
+            JRow("($e)\\1", "aEEa", "a#a", "a#a", "a#a", "a#a"),
+            JRow("(\\S)\\1", "EE", "#", "#", "EE", "EE"),
+            JRow("(\\S)\\1", "EEx", "#x", "#x", "EEx", "EEx"),
+            JRow("(\\S)\\1", "xEE", "x#", "x#", "xEE", "xEE"),
+            JRow("(\\S)\\1", "EP", "EP", "EP", "EP", "EP"),
+            JRow("(\\S)\\1", "aEaE", "aEaE", "aEaE", "aEaE", "aEaE"),
+            JRow("(\\S)\\1", "EEEE", "##", "##", "EEEE", "EEEE"),
+            JRow("(\\S)\\1", "Dd", "#", "Dd", "Dd", "Dd"),
+            JRow("(\\S)\\1", "DDx", "#x", "#x", "DDx", "DDx"),
+            JRow("(\\S)\\1", "aEEa", "a#a", "a#a", "aEEa", "aEEa"),
+            JRow("(?<n>.)\\k<n>", "EE", "#", "#", "EE", "EE"),
+            JRow("(?<n>.)\\k<n>", "EEx", "#x", "#x", "EEx", "EEx"),
+            JRow("(?<n>.)\\k<n>", "xEE", "x#", "x#", "xEE", "xEE"),
+            JRow("(?<n>.)\\k<n>", "EP", "EP", "EP", "EP", "EP"),
+            JRow("(?<n>.)\\k<n>", "aEaE", "aEaE", "aEaE", "aEaE", "aEaE"),
+            JRow("(?<n>.)\\k<n>", "EEEE", "##", "##", "EEEE", "EEEE"),
+            JRow("(?<n>.)\\k<n>", "Dd", "#", "Dd", "Dd", "Dd"),
+            JRow("(?<n>.)\\k<n>", "DDx", "#x", "#x", "DDx", "DDx"),
+            JRow("(?<n>.)\\k<n>", "aEEa", "a#a", "a#a", "aEEa", "aEEa"),
+            JRow("(.)(.)\\2\\1", "EE", "EE", "EE", "EE", "EE"),
+            JRow("(.)(.)\\2\\1", "EEx", "EEx", "EEx", "EEx", "EEx"),
+            JRow("(.)(.)\\2\\1", "xEE", "xEE", "xEE", "xEE", "xEE"),
+            JRow("(.)(.)\\2\\1", "EP", "EP", "EP", "EP", "EP"),
+            JRow("(.)(.)\\2\\1", "aEaE", "aEaE", "aEaE", "aEaE", "aEaE"),
+            JRow("(.)(.)\\2\\1", "EEEE", "#", "#", "EEEE", "EEEE"),
+            JRow("(.)(.)\\2\\1", "Dd", "Dd", "Dd", "Dd", "Dd"),
+            JRow("(.)(.)\\2\\1", "DDx", "DDx", "DDx", "DDx", "DDx"),
+            JRow("(.)(.)\\2\\1", "aEEa", "#", "#", "aEEa", "aEEa"),
+            JRow("(a.)\\1", "EE", "EE", "EE", "EE", "EE"),
+            JRow("(a.)\\1", "EEx", "EEx", "EEx", "EEx", "EEx"),
+            JRow("(a.)\\1", "xEE", "xEE", "xEE", "xEE", "xEE"),
+            JRow("(a.)\\1", "EP", "EP", "EP", "EP", "EP"),
+            JRow("(a.)\\1", "aEaE", "#", "#", "aEaE", "aEaE"),
+            JRow("(a.)\\1", "EEEE", "EEEE", "EEEE", "EEEE", "EEEE"),
+            JRow("(a.)\\1", "Dd", "Dd", "Dd", "Dd", "Dd"),
+            JRow("(a.)\\1", "DDx", "DDx", "DDx", "DDx", "DDx"),
+            JRow("(a.)\\1", "aEEa", "aEEa", "aEEa", "aEEa", "aEEa"),
+            JRow("(.+)\\1", "EE", "#", "#", "#", "#"),
+            JRow("(.+)\\1", "EEx", "#x", "#x", "#x", "#x"),
+            JRow("(.+)\\1", "xEE", "x#", "x#", "x#", "x#"),
+            JRow("(.+)\\1", "EP", "EP", "EP", "EP", "EP"),
+            JRow("(.+)\\1", "aEaE", "#", "#", "#", "#"),
+            JRow("(.+)\\1", "EEEE", "#", "#", "#", "#"),
+            JRow("(.+)\\1", "Dd", "#", "Dd", "Dd", "Dd"),
+            JRow("(.+)\\1", "DDx", "#x", "#x", "#x", "#x"),
+            JRow("(.+)\\1", "aEEa", "a#a", "a#a", "a#a", "a#a"),
+            JRow("(.)\\1+", "EE", "#", "#", "EE", "EE"),
+            JRow("(.)\\1+", "EEx", "#x", "#x", "EEx", "EEx"),
+            JRow("(.)\\1+", "xEE", "x#", "x#", "xEE", "xEE"),
+            JRow("(.)\\1+", "EP", "EP", "EP", "EP", "EP"),
+            JRow("(.)\\1+", "aEaE", "aEaE", "aEaE", "aEaE", "aEaE"),
+            JRow("(.)\\1+", "EEEE", "#", "#", "EEEE", "EEEE"),
+            JRow("(.)\\1+", "Dd", "#", "Dd", "Dd", "Dd"),
+            JRow("(.)\\1+", "DDx", "#x", "#x", "DDx", "DDx"),
+            JRow("(.)\\1+", "aEEa", "a#a", "a#a", "aEEa", "aEEa"),
+            JRow("(.)\\1|x", "EE", "#", "#", "EE", "EE"),
+            JRow("(.)\\1|x", "EEx", "##", "##", "EE#", "EE#"),
+            JRow("(.)\\1|x", "xEE", "##", "##", "#EE", "#EE"),
+            JRow("(.)\\1|x", "EP", "EP", "EP", "EP", "EP"),
+            JRow("(.)\\1|x", "aEaE", "aEaE", "aEaE", "aEaE", "aEaE"),
+            JRow("(.)\\1|x", "EEEE", "##", "##", "EEEE", "EEEE"),
+            JRow("(.)\\1|x", "Dd", "#", "Dd", "Dd", "Dd"),
+            JRow("(.)\\1|x", "DDx", "##", "##", "DD#", "DD#"),
+            JRow("(.)\\1|x", "aEEa", "a#a", "a#a", "aEEa", "aEEa"),
+        ).flatMap { r ->
+            val input = jText(r.input)
+            val quirk = r.pattern == "(.)\\1|x" && r.input == "Dd"
+            listOf("giu" to r.giu, "gu" to r.gu, "gi" to r.gi, "g" to r.g).map { (f, out) -> Rx(r.pattern, f, input, jText(out)) } +
+                if (quirk) emptyList() else listOf(Rx("(?i:${r.pattern})", "gu", input, jText(r.giu)))
+        }
+    }
+
+    /**
+     * J1 (F13): masked, the word letters stay Dart's word characters outside a class, for `\w`, `\W`,
+     * `\b` and `\B`, ſ and K among them under `i` and `u`, and a class's `\w` takes them too.
+     */
+    private val j1Words: List<Rx> by lazy {
+        val longS = cps("017F")
+        val kelvin = cps("212A")
+        listOf(
+            Rx("\\w(.)\\1", "giu", "a$e$e", "#"),
+            Rx("\\b(.)\\1", "giu", "a$e$e", "a#"),
+            Rx("\\B(.)\\1", "giu", "a$e$e", "a$e$e"),
+            Rx("\\W(.)\\1", "giu", " $e$e", "#"),
+            Rx("[\\w](.)\\1", "giu", "a$e$e", "#"),
+            Rx("\\w(.)\\1", "giu", "$longS$e$e", "#"),
+            Rx("\\w(.)\\1", "giu", "$kelvin$e$e", "#"),
+            Rx("a(?i:(.)\\1)", "gu", "a$e$e", "#"),
+            Rx("(?-i:a)(.)\\1", "giu", "a$e$e", "#"),
+            Rx("(a)\\1", "giu", "aA$e", "#$e"),
+            Rx("\\w+(.)\\1", "giu", "Ab$e$e", "#"),
+            Rx("\\W(.)\\1", "giu", "a$e$e", "a$e$e"),
+            Rx("(.)\\1\\b", "giu", "$e${e}a", "#a"),
+            Rx("\\B(.)\\1", "giu", "$longS$e$e", "$longS$e$e"),
+            Rx("k(.)\\1", "giu", "$kelvin$e$e", "#"),
+            Rx("(\\w)\\1", "giu", "s$longS$e", "#$e"),
+            Rx("\\w(.)\\1", "giu", "_$e$e", "#"),
+            Rx("\\w(.)\\1", "giu", "1$e$e", "#"),
+            Rx("\\W+(.)\\1", "giu", " $longS$e$e", " $longS$e$e"),
+            Rx("[^\\w](.)\\1", "giu", "a$e$e", "a$e$e"),
+            Rx("[^\\W](.)\\1", "giu", "a$e$e", "#"),
+            Rx("[^\\W](.)\\1", "giu", "$kelvin$e$e", "#"),
+            Rx("s(.)\\1", "giu", "$longS$e$e", "#"),
+            Rx("[s](.)\\1", "giu", "$longS$e$e", "#"),
+            Rx("[^s](.)\\1", "giu", "$longS$e$e", "$longS$e$e"),
+            Rx("[^k](.)\\1", "giu", "$kelvin$e$e", "$kelvin$e$e"),
+            Rx("\\b(.)\\1", "giu", "$kelvin$e$e", "$kelvin#"),
+            Rx("\\b(.)\\1", "giu", "${cps("0131")}$e$e", "${cps("0131")}$e$e"),
+        )
+    }
+
+    /** J1 through classes, negated ones, properties, names and escapes, beside letters the JVM folds otherwise. */
+    private val j1Parts: List<Rx> by lazy {
+        val longS = cps("017F")
+        val kelvin = cps("212A")
+        listOf(
+            Rx("[^a](.)\\1", "giu", "A$e$e", "A$e$e"),
+            Rx("[^a](.)\\1", "giu", "b$e$e", "#"),
+            Rx("[^A](.)\\1", "giu", "a$e$e", "a$e$e"),
+            Rx("\\p{Lu}(.)\\1", "giu", "a$e$e", "#"),
+            Rx("\\P{Lu}(.)\\1", "giu", "A$e$e", "#"),
+            Rx("[^\\p{Lu}](.)\\1", "giu", "a$e$e", "a$e$e"),
+            Rx("[^\\P{Ll}](.)\\1", "giu", "s$e$e", "s$e$e"),
+            Rx("(.)\\1", "giu", "aA$e", "#$e"),
+            Rx("(.)\\1", "giu", "${longS}s$e", "#$e"),
+            Rx("(.)\\1", "giu", "${cps("0131")}I$e", "${cps("0131")}I$e"),
+            Rx("(.)\\1", "giu", "${cps("0130")}i$e", "${cps("0130")}i$e"),
+            Rx("(.)\\1", "giu", "${cps("0390")}${cps("1FD3")}$e", "#$e"),
+            Rx("(.)\\1", "giu", "${cps("FB05")}${cps("FB06")}$e", "#$e"),
+            Rx("(.)\\1", "giu", "${kelvin}k$e", "#$e"),
+            Rx("(.)\\1", "giu", "${cps("00DF")}${cps("1E9E")}$e", "#$e"),
+            Rx("(?<n>a)\\k<n>", "giu", "aA$e", "#$e"),
+            Rx("(?:(?<n>a)|(?<n>b))\\k<n>", "giu", "bB$e", "#$e"),
+            Rx("(.)\\1", "giu", "${dU}${d}a", "#a"),
+            Rx("(.)\\1", "giu", "${e}aA", "$e#"),
+            Rx("[a-z](.)\\1", "giu", "Q$e$e", "#"),
+            Rx("\\x61(.)\\1", "giu", "A$e$e", "#"),
+            Rx("\\u{41}(.)\\1", "giu", "a$e$e", "#"),
+            Rx("(.)\\1", "giu", "${lambda}$lambdaCap$e", "#$e"),
+            Rx("(.)\\1", "gu", "aA$e", "aA$e"),
+            Rx("(?i:(.)\\1)", "gu", "aA$e", "#$e"),
+            Rx("(?i:(.)\\1)a", "gu", "bBa$e", "#$e"),
+            Rx("(.)\\1|a", "giu", "A$e", "#$e"),
+            Rx("\\p{L}(.)\\1", "giu", "a$e$e", "#"),
+            Rx("[^\\p{L}](.)\\1", "giu", "a$e$e", "a$e$e"),
+            Rx("(?-i:[^a])(.)\\1", "giu", "A$e$e", "#"),
+        )
+    }
+
+    @Test
+    fun j1_aReferenceUnderIRepeatsACharacterAboveFfffAsDart() {
+        assertDart(j1Rows + j1Words + j1Parts)
+    }
+
+    @Test
+    fun j1_seam_onAJvmWhoseReferenceNeverRepeatsOneTheRunComparesExactly() {
+        // With the backreference set as JDK 17's, every JVM runs its path, and the rows hold with the
+        // engine's own folding off too: no reference compares a letter by case there.
+        RegexSupport.repeatsAboveFfffForTests = false
+        assertDart(j1Rows + j1Words + j1Parts)
+        assertSearched(j1Rows + j1Words + j1Parts)
+    }
+
+    @Test
+    fun j1_seam_r1AndU2HoldWithJdk17sClassesAndBackreference() {
+        RegexSupport.repeatsAboveFfffForTests = false
+        lagging(lacks17)
+        assertDart(r1Rows + r1Parts + r1Folded + u2GuardRows)
+        assertSteps(r1Steps)
     }
 }

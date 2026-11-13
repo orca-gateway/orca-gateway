@@ -416,34 +416,42 @@ internal object RegexSupport {
      * units the engine would join into one code point ([RegexMask.of]), and
      * where the pattern writes a backreference under `i`, read once to find
      * out, also on the letters such a reference compares otherwise
-     * ([RegexMask.withLetters]); compiled as it always was elsewhere. Null
-     * for an invalid pattern.
+     * ([RegexMask.withLetters]). On a JVM whose such reference never repeats
+     * a character above U+FFFF ([repeatsAboveFfff]), with `u` on an input
+     * that holds one, it is masked on every letter of a fold class instead
+     * ([RegexMask.withAllLetters]) and each such reference is written exact,
+     * so that the engine's never runs, when no letter is masked too. Compiled
+     * as it always was elsewhere. Null for an invalid pattern.
      */
     fun search(pattern: String, flags: String?, input: String): Search? {
         val f = flags ?: ""
         val reading = Reading()
         var mask = RegexMask.of(pattern, f, input)
         var re = compile(pattern, flags, mask, reading) ?: return null
-        val letters = if (reading.foldedReference) RegexMask.withLetters(pattern, f, input) else null
-        if (letters != null) {
-            mask = letters
-            re = compile(pattern, flags, letters) ?: return null
+        if (reading.foldedReference) {
+            val exact = 'u' in f && holdsAboveFfff(input) && !repeatsAboveFfff
+            val letters = if (exact) RegexMask.withAllLetters(pattern, f, input) else RegexMask.withLetters(pattern, f, input)
+            if (letters != null || exact) {
+                mask = letters ?: mask
+                re = compile(pattern, flags, mask, exactReferences = exact) ?: return null
+            }
         }
         return Search(re, mask?.text ?: input, input, 'u' in f)
     }
 
     /**
      * [pattern] under [flags], its surrogates and masked letters written as
-     * [mask]'s stand-ins when there is one; [reading], if given, learns what
-     * the reader met.
+     * [mask]'s stand-ins when there is one, and with [exactReferences] each
+     * backreference where `i` is in force written exact; [reading], if
+     * given, learns what the reader met.
      */
-    fun compile(pattern: String, flags: String?, mask: RegexMask? = null, reading: Reading? = null): Pattern? {
+    fun compile(pattern: String, flags: String?, mask: RegexMask? = null, reading: Reading? = null, exactReferences: Boolean = false): Pattern? {
         val f = flags ?: ""
         var options = 0
         if ('i' in f) options = options or Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
         if ('m' in f) options = options or Pattern.MULTILINE
         if ('s' in f) options = options or Pattern.DOTALL
-        val rewritten = asciiClasses(pattern, ignoreCase = 'i' in f, unicode = 'u' in f, mask, reading) ?: return null
+        val rewritten = asciiClasses(pattern, ignoreCase = 'i' in f, unicode = 'u' in f, mask, reading, exactReferences) ?: return null
         return compileIcuLike(rewritten, options)
     }
 
@@ -517,7 +525,8 @@ internal object RegexSupport {
      * gives null. `\0` before no digit is NUL and `\c` and an ASCII letter its
      * control character, with `u` and without, each written as its code point.
      * Backreferences keep the engine's folding, but for the letters a masked
-     * run hides from it (below).
+     * run hides from it, and on a JVM whose folding fails them none does
+     * (below).
      *
      * Group names are dropped, with `u` and without: `(?<name>X)` is written
      * `(X)`, the same number (ECMAScript, ICU and the JVM number named groups
@@ -622,10 +631,18 @@ internal object RegexSupport {
      * the masked letters Dart matches C with, found as for [dartClass]'s M:
      * so a class, a negated one and, with `u`, a property (written as a class
      * of it alone: `\p{L}` under `u` takes ı's stand-in) match a stand-in
-     * where Dart matches its letter. The other escapes need nothing: no
-     * masked letter is a digit, a space or one of Dart's word characters
-     * under the flags, nor is a stand-in, and `.` matches both. Without a
-     * mask nothing changes.
+     * where Dart matches its letter. Outside a class `\w`, `\W`, `\b` and
+     * `\B` take the stand-ins of the masked ASCII letters as word characters,
+     * ſ's and K's with them ([RegexMask.withAllLetters] masks these, each
+     * with its class; no other mask does). The other escapes need nothing: no
+     * masked letter is a digit or a space, nor is a stand-in, and `.` matches
+     * both. Without a mask nothing changes.
+     *
+     * With [exactReferences] (a JVM whose reference under `i` never repeats a
+     * character above U+FFFF: [search] says when) each backreference where
+     * `i` is in force is written exact, `(?-i:\N)`, a `\k<name>` as
+     * `(?-i:(?:\1|\2))`: the engine compares its units, which on
+     * [RegexMask.withAllLetters]'s stand-ins is Dart's comparison.
      *
      * [reading], if given, learns whether the pattern writes a backreference
      * where `i` is in force, from the flags or a `(?i:` group.
@@ -636,10 +653,12 @@ internal object RegexSupport {
         unicode: Boolean = false,
         mask: RegexMask? = null,
         reading: Reading? = null,
+        exactReferences: Boolean = false,
     ): String? {
         val captures = captures(pattern)
         val named = captures.names.isNotEmpty()
         val letters = mask?.letters?.isNotEmpty() == true
+        val wordStandIns = if (mask == null) "" else wordStandIns(mask)
         val open = ArrayList<Group>()
         val top = HashSet<Int>() // the capturing groups closed in the top level's alternative being read
         val unset = HashSet<Int>() // the capturing groups of the negative lookarounds closed so far, unset after them
@@ -657,7 +676,7 @@ internal object RegexSupport {
             val c = pattern[i]
             val fold = open.lastOrNull()?.fold ?: ignoreCase
             val word = if (fold && unicode) "A-Za-z0-9_\u017F\u212A" else "A-Za-z0-9_"
-            val w = "(?-i:[$word])"
+            val w = "(?-i:[$word$wordStandIns])"
             val codePoint = if (unicode) pattern.codePointAt(i) else c.code
             val folded = if (fold) dartSet(codePoint, unicode) else null
             val quantifier = quantifierEnd(pattern, i)
@@ -682,7 +701,7 @@ internal object RegexSupport {
                         's' -> "[$SPACE]"
                         'S' -> "[^$SPACE]"
                         'w' -> w
-                        'W' -> "(?-i:[^$word])"
+                        'W' -> "(?-i:[^$word$wordStandIns])"
                         'b' -> "(?:(?<=$w)(?!$w)|(?<!$w)(?=$w))"
                         'B' -> "(?:(?<=$w)(?=$w)|(?<!$w)(?!$w))"
                         else -> null
@@ -707,13 +726,12 @@ internal object RegexSupport {
                             // Elsewhere it keeps those it may see set: taking part here, and not reset by a negative lookaround.
                             val set = if (open.any { it.kind == GroupKind.Lookbehind }) numbers else numbers.filter { seen(it) && it !in unset }
                             if (fold && set.isNotEmpty()) reading?.foldedReference = true
-                            out.append(
-                                when {
-                                    set.isEmpty() -> "(?:)"
-                                    next == 'k' -> set.joinToString("|", "(?:", ")") { "\\$it" }
-                                    else -> pattern.substring(i, end)
-                                },
-                            )
+                            val written = when {
+                                set.isEmpty() -> "(?:)"
+                                next == 'k' -> set.joinToString("|", "(?:", ")") { "\\$it" }
+                                else -> pattern.substring(i, end)
+                            }
+                            out.append(if (exactReferences && fold && set.isNotEmpty()) "(?-i:$written)" else written)
                             i = end
                         }
                         else -> {
@@ -944,6 +962,24 @@ internal object RegexSupport {
     }
 
     /**
+     * The stand-ins of the ASCII letters [mask] masks, as class members: the
+     * word letters a masked run hides from `\w`, `\W`, `\b` and `\B`. Only
+     * [RegexMask.withAllLetters] masks them, each with its class, so each
+     * class's lower-case letter gives its stand-in once, ſ's and K's too
+     * (they share s's and k's).
+     */
+    private fun wordStandIns(mask: RegexMask): String {
+        val letters = mask.letters
+        val out = StringBuilder()
+        for (n in letters.indices) {
+            val c = letters[n]
+            if (c > 'z'.code) break
+            if (c >= 'a'.code) out.append(plain(mask.letterStandIns[n]))
+        }
+        return out.toString()
+    }
+
+    /**
      * The end of the quantifier at [i]: `*`, `+`, `?`, or a brace form `{n}`,
      * `{n,}` or `{n,m}` of digits. -1 for none, a `{` of no such form too.
      */
@@ -1150,29 +1186,24 @@ internal object RegexSupport {
             }
         }
         if (masked.isEmpty() || mask == null) return dart
-
-        /** Whether C holds a letter of [set], each tested once against it. */
-        fun meets(set: String): Boolean {
-            var j = 0
-            while (j < set.length) {
-                val end = j + Character.charCount(set.codePointAt(j))
-                if (probe.reset(set.substring(j, end)).matches()) return true
-                j = end
-            }
-            return false
+        val letterStandIns = mask.letterStandIns
+        // Whether C holds each masked letter, read case-sensitively: each tested once, in one buffer.
+        val one = StringBuilder(2)
+        val holds = BooleanArray(masked.size) { n ->
+            one.setLength(0)
+            probe.reset(one.appendCodePoint(masked[n])).matches()
         }
+        // Under `i` the letters of one Dart set, masked whole, share a stand-in: those of the sets C meets.
+        val met = if (fold) IntArray(masked.size) { if (holds[it]) letterStandIns[it] else -1 }.apply { sort() } else null
 
         /** The stand-ins of the masked letters [keep] takes, by index, each once, as class members. */
         fun standIns(keep: (Int) -> Boolean): String {
-            val kept = IntArray(masked.size) { if (keep(it)) mask.letterStandIns[it] else -1 }.apply { sort() }
+            val kept = IntArray(masked.size) { if (keep(it)) letterStandIns[it] else -1 }.apply { sort() }
             val out = StringBuilder()
             for (n in kept.indices) if (kept[n] >= 0 && (n == 0 || kept[n] != kept[n - 1])) out.append(plain(kept[n]))
             return out.toString()
         }
-        val matched = BooleanArray(masked.size) { n ->
-            val c = masked[n]
-            meets((if (fold) dartSet(c, unicode) else null) ?: String(Character.toChars(c))) != negated
-        }
+        val matched = BooleanArray(masked.size) { n -> (if (met != null) met.binarySearch(letterStandIns[n]) >= 0 else holds[n]) != negated }
         val out = StringBuilder("(?:(?!(?-i:[").append(standIns { true }).append("]))").append(dart)
         if (matched.any { it }) out.append("|(?-i:[").append(standIns { matched[it] }).append("])")
         return out.append(')').toString()
@@ -1386,6 +1417,30 @@ internal object RegexSupport {
         true
     } catch (_: IllegalArgumentException) {
         false
+    }
+
+    /**
+     * Whether the engine's backreference under `i` repeats a capture above
+     * U+FFFF. JDK 17's never does, not even `(.)\1` on two identical 😀: it
+     * steps over the capture by code points as many times as it has units,
+     * and throws past the input's end. JDK 21 and later do. Learned once, on
+     * first use; [repeatsAboveFfffForTests], when set, stands in for it.
+     */
+    private val repeatsAboveFfff: Boolean get() = repeatsAboveFfffForTests ?: learnedRepeatsAboveFfff
+
+    /** What [repeatsAboveFfff] gives instead of the learned value, or null for that: a test seam. */
+    @Volatile
+    internal var repeatsAboveFfffForTests: Boolean? = null
+
+    private val learnedRepeatsAboveFfff: Boolean by lazy {
+        val deseret = String(Character.toChars(0x10400))
+        runCatching { Pattern.compile("(.)\\1", Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE).matcher(deseret + deseret).find() }.getOrDefault(false)
+    }
+
+    /** Whether [input] holds a character above U+FFFF: a high half with a low half right after it. */
+    private fun holdsAboveFfff(input: String): Boolean {
+        for (n in 0 until input.length - 1) if (input[n].isHighSurrogate() && input[n + 1].isLowSurrogate()) return true
+        return false
     }
 
     /** Null for an invalid pattern. */
