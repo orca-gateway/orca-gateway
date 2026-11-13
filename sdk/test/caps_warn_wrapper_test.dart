@@ -8,7 +8,7 @@
 // was given an infinite size" inside the Column's unbounded height.
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orca_gateway/orca_gateway.dart';
 

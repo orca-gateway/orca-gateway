@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:flutter/material.dart' show Icons;
+import 'package:material_ui/material_ui.dart' show Icons;
 import 'package:orca_gateway/orca_gateway.dart';
 import 'package:video_player/video_player.dart';
 

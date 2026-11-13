@@ -5,14 +5,15 @@ homepage: https://github.com/amrebada/orca-gateway
 repository: https://github.com/amrebada/orca-gateway
 
 environment:
-  sdk: ^3.11.3
-  flutter: ">=3.24.0"
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
 
 dependencies:
   flutter:
     sdk: flutter
   orca_gateway: ^0.3.0
   google_maps_flutter: ^2.10.0
+  material_ui: ^1.11.0
 
 dev_dependencies:
   flutter_test:

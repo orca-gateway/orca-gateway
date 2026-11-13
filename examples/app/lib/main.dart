@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:orca_gateway/orca_gateway.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
@@ -210,7 +210,7 @@ class ExampleSelector extends StatelessWidget {
       body: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _examples.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
           final example = _examples[index];
           return Card(
@@ -303,7 +303,7 @@ class _OrcaAppPage extends StatelessWidget {
       return OrcaApp(
         client: client,
         appId: appId,
-        title: 'Static Flows Demo',
+        materialApp: const OrcaMaterialAppConfig(title: 'Static Flows Demo'),
         enableOffline: true,
         enableSessionTracking: true,
         debugConfig: const OrcaDebugConfig(

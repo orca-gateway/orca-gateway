@@ -14,17 +14,23 @@ on:
 
 jobs:
   test:
+    name: test (flutter ${{ matrix.flutter.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The SDK's minimum (pubspec `flutter: ">=3.47.0"`, from material_ui)
+        # and the newest stable. Raise the first with the pubspec.
+        flutter:
+          - { name: "3.47.9", version: "3.47.9" }
+          - { name: stable, version: "" }
     steps:
       - uses: actions/checkout@v4
-      # Pinned to the last stable this job passed on. Flutter 3.50 deprecates
-      # package:flutter/material.dart in favour of package:material_ui, and
-      # flutter analyze fails on those infos (18 imports in lib/ and test/).
-      # Moving the SDK to material_ui is its own change; bump this with it.
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.47.9
+          flutter-version: ${{ matrix.flutter.version }}
+      - run: flutter --version
       - run: flutter pub get
         working-directory: sdk
       - run: flutter analyze

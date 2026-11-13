@@ -1,5 +1,5 @@
 import 'dart:ui' show ImageFilter;
-import 'package:flutter/material.dart'
+import 'package:material_ui/material_ui.dart'
     show
         InteractiveViewer,
         Material,
@@ -701,7 +701,8 @@ Widget _buildReorderableListView(OrcaComponentContext ctx) {
     ReorderableListView(
       scrollDirection: scrollDirection,
       padding: padding,
-      // onReorderItem only exists on Flutter >= 3.41; the SDK supports >= 3.24.
+      // onReorderItem passes an adjusted newIndex; switching to it would change
+      // the eventData the server receives.
       // ignore: deprecated_member_use
       onReorder: (oldIndex, newIndex) {
         ctx.fireAction(

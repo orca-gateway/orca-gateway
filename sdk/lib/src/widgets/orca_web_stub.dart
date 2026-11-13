@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A branded placeholder a plugin can register as a web stub (Epic 38 task
 /// 38.5) for a widget that has no real Flutter Web implementation — a native

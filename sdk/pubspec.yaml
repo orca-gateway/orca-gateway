@@ -12,8 +12,8 @@ topics:
   - rendering
 
 environment:
-  sdk: ^3.11.3
-  flutter: ">=3.24.0"
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
 
 dependencies:
   flutter:
@@ -27,6 +27,9 @@ dependencies:
   web_socket_channel: ^3.0.0
   # Epic 25b slice 2: sha256 for capability vector hashing
   crypto: ^3.0.0
+  # Material widgets and theming. Flutter 3.50 deprecates the framework's
+  # own Material library in favour of this package.
+  material_ui: ^1.11.0
 
 dev_dependencies:
   flutter_test:
