@@ -612,10 +612,12 @@ internal object RegexSupport {
      * under `i`: [RegexMask.withLetters], with `u` too) the input holds a
      * stand-in for each of Dart's fold classes of the masked letters, which
      * has no case: so a reference matches it to itself only, as Dart matches
-     * the class, where the JVM compares by upper and lower case. A masked
-     * letter outside a class, as a character or an escape, is its stand-in,
-     * and so is one in Dart's set of a letter under `i` (without `u`, `ſ` is
-     * `(?-i:[X])`, X its stand-in). A class C is
+     * the class, where the JVM compares by upper and lower case, and only as
+     * its own Unicode pairs them. A masked letter outside a class, as a
+     * character or an escape (with `u` above U+FFFF also a high half's
+     * `\uHHHH` with a low half's), is its stand-in, two units for a letter of
+     * two, and so is one in Dart's set of a letter under `i` (without `u`,
+     * `ſ` is `(?-i:[X])`, X its stand-in). A class C is
      * `(?:(?!(?-i:[A]))C|(?-i:[M]))`, A the letters' stand-ins and M those of
      * the masked letters Dart matches C with, found as for [dartClass]'s M:
      * so a class, a negated one and, with `u`, a property (written as a class
@@ -637,7 +639,7 @@ internal object RegexSupport {
     ): String? {
         val captures = captures(pattern)
         val named = captures.names.isNotEmpty()
-        val letters = mask?.maskedLetters?.isNotEmpty() == true
+        val letters = mask?.letters?.isNotEmpty() == true
         val open = ArrayList<Group>()
         val top = HashSet<Int>() // the capturing groups closed in the top level's alternative being read
         val unset = HashSet<Int>() // the capturing groups of the negative lookarounds closed so far, unset after them
@@ -716,18 +718,18 @@ internal object RegexSupport {
                         }
                         else -> {
                             val escape = spelled(pattern, i, unicode, inClass = false, named) ?: escape(pattern, i, unicode, inClass = false) ?: return null
-                            val pair = if (fold && unicode) surrogatePair(pattern, i, escape) else null
+                            val pair = if (unicode && (fold || letters)) surrogatePair(pattern, i, escape) else null
                             val letter = (pair?.codePoint ?: escape.codePoint)?.takeIf { fold }?.let { dartSet(it, unicode) }
-                            val standIn = mask?.let { m -> unitAt(pattern, i, escape)?.let(m::standIn) }
+                            val standIn = mask?.let { m -> (pair?.codePoint ?: unitAt(pattern, i, escape))?.let(m::standIn) }
                             when {
                                 letter != null -> out.append("(?-i:[").append(withStandIns(letter, mask)).append("])")
-                                standIn != null -> out.append(plain(standIn.code))
+                                standIn != null -> out.append(plain(standIn))
                                 // A property is the class of it alone, whose set Dart folds, or which takes the masked letters it holds.
                                 (fold || letters) && unicode && (next == 'p' || next == 'P') ->
                                     out.append(dartClass(escape.text, negated = false, fold, unicode, properties = true, mask))
                                 else -> out.append(escape.text)
                             }
-                            i = if (letter != null && pair != null) pair.end else escape.end
+                            i = if ((letter != null || standIn != null) && pair != null) pair.end else escape.end
                         }
                     }
                 }
@@ -779,9 +781,9 @@ internal object RegexSupport {
                     i += Character.charCount(codePoint)
                 }
                 else -> {
-                    val standIn = mask?.standIn(c.code)
-                    if (standIn != null) out.append(plain(standIn.code)) else out.append(c)
-                    i += 1
+                    val standIn = mask?.standIn(codePoint)
+                    if (standIn != null) out.append(plain(standIn)) else out.appendCodePoint(codePoint)
+                    i += Character.charCount(codePoint)
                 }
             }
         }
@@ -928,8 +930,18 @@ internal object RegexSupport {
         if (codePoint in 'a'.code..'z'.code || codePoint in 'A'.code..'Z'.code) codePoint.toChar().toString() else "\\x{${Integer.toHexString(codePoint)}}"
 
     /** The letters of [set] as class members, each one [mask] masks as its stand-in. */
-    private fun withStandIns(set: String, mask: RegexMask?): String =
-        if (mask == null) set else set.map { c -> mask.standIn(c.code)?.let { plain(it.code) } ?: c.toString() }.joinToString("")
+    private fun withStandIns(set: String, mask: RegexMask?): String {
+        if (mask == null) return set
+        val out = StringBuilder(set.length)
+        var j = 0
+        while (j < set.length) {
+            val c = set.codePointAt(j)
+            val standIn = mask.standIn(c)
+            if (standIn != null) out.append(plain(standIn)) else out.appendCodePoint(c)
+            j += Character.charCount(c)
+        }
+        return out.toString()
+    }
 
     /**
      * The end of the quantifier at [i]: `*`, `+`, `?`, or a brace form `{n}`,
@@ -1105,7 +1117,7 @@ internal object RegexSupport {
      */
     private fun dartClass(body: String, negated: Boolean, fold: Boolean, unicode: Boolean, properties: Boolean, mask: RegexMask? = null): String {
         val exact = "[${if (negated) "^" else ""}$body]"
-        val masked = mask?.maskedLetters.orEmpty()
+        val masked = mask?.letters ?: IntArray(0)
         val probe = (if (fold || masked.isNotEmpty()) compileIcuLike("[$body]", 0) else null)?.matcher("") ?: return exact
         fun member(c: Char) = probe.reset(c.toString()).matches()
 
@@ -1137,11 +1149,32 @@ internal object RegexSupport {
                 out.append(')').toString()
             }
         }
-        if (masked.isEmpty()) return dart
-        fun standIns(of: List<Pair<Char, Char>>) = of.map { it.second }.distinct().joinToString("") { plain(it.code) }
-        val matched = masked.filter { (c, _) -> (if (fold) DartFoldTable.set(c, unicode)!! else c.toString()).any(::member) != negated }
-        val out = StringBuilder("(?:(?!(?-i:[").append(standIns(masked)).append("]))").append(dart)
-        if (matched.isNotEmpty()) out.append("|(?-i:[").append(standIns(matched)).append("])")
+        if (masked.isEmpty() || mask == null) return dart
+
+        /** Whether C holds a letter of [set], each tested once against it. */
+        fun meets(set: String): Boolean {
+            var j = 0
+            while (j < set.length) {
+                val end = j + Character.charCount(set.codePointAt(j))
+                if (probe.reset(set.substring(j, end)).matches()) return true
+                j = end
+            }
+            return false
+        }
+
+        /** The stand-ins of the masked letters [keep] takes, by index, each once, as class members. */
+        fun standIns(keep: (Int) -> Boolean): String {
+            val kept = IntArray(masked.size) { if (keep(it)) mask.letterStandIns[it] else -1 }.apply { sort() }
+            val out = StringBuilder()
+            for (n in kept.indices) if (kept[n] >= 0 && (n == 0 || kept[n] != kept[n - 1])) out.append(plain(kept[n]))
+            return out.toString()
+        }
+        val matched = BooleanArray(masked.size) { n ->
+            val c = masked[n]
+            meets((if (fold) dartSet(c, unicode) else null) ?: String(Character.toChars(c))) != negated
+        }
+        val out = StringBuilder("(?:(?!(?-i:[").append(standIns { true }).append("]))").append(dart)
+        if (matched.any { it }) out.append("|(?-i:[").append(standIns { matched[it] }).append("])")
         return out.append(')').toString()
     }
 
@@ -1151,7 +1184,7 @@ internal object RegexSupport {
      * [DartFoldClasses.lagging] (without `u` the letter is in the BMP, so its class is one of
      * [laggingClasses] too). Null for any other letter, which keeps the engine's folding.
      */
-    private fun dartSet(codePoint: Int, unicode: Boolean): String? {
+    internal fun dartSet(codePoint: Int, unicode: Boolean): String? {
         if (codePoint <= 0xFFFF) DartFoldTable.set(codePoint.toChar(), unicode)?.let { return it }
         val n = DartFoldClasses.letters.binarySearch(codePoint).takeIf { it >= 0 }?.let { DartFoldClasses.classOf[it] } ?: return null
         return if (n in DartFoldClasses.lagging) DartFoldClasses.classes[n].joinToString("") { String(Character.toChars(it)) } else null

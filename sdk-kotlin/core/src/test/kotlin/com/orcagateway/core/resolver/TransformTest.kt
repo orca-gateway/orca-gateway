@@ -2873,4 +2873,174 @@ class TransformTest {
         lagging(lacks17)
         assertEquals(today, written())
     }
+
+    /**
+     * R1: under `i` a backreference matches a letter of a class the JVM lacks to each other letter of
+     * its class, as Dart does: `(x)\1` and `(.)\1` on x then y, mid-input too, and in `(?i:`, in the
+     * BMP with `u` and without, above U+FFFF with `u` (without it two units, S16's). The 770 rows
+     * over the classes JDK 17 lacks were each printed by Dart as this rule.
+     */
+    private val r1Rows: List<Rx> by lazy {
+        pairsOf(lacks17).flatMap { (x, y) ->
+            val bmp = x.length == 1
+            (if (bmp) listOf("gi", "giu") else listOf("giu")).flatMap { f ->
+                listOf(Rx("($x)\\1", f, x + y, "#"), Rx("(.)\\1", f, x + y, "#"), Rx("($x)\\1", f, "$x${y}z", "#z"), Rx("(.)\\1", f, "z$x${y}z", "z#z"))
+            } + (if (bmp) listOf("g", "gu") else listOf("gu")).map { f -> Rx("(?i:($x)\\1)", f, x + y, "#") }
+        }
+    }
+
+    /** R1 through escapes, classes and names, beside the other parts of a masked run and other masked characters. */
+    private val r1Parts: List<Rx> by lazy {
+        val supplementaryPua = cps("F0000")
+        val longS = cps("017F")
+        listOf(
+            Rx("(${esc("019B")})\\1", "gi", lambda + lambdaCap, "#"),
+            Rx("(${esc("019B")})\\1", "giu", lambda + lambdaCap, "#"),
+            Rx("(\\u{10D50})\\1", "giu", garayA + garaySmallA, "#"),
+            Rx("(${escapes(garayA)})\\1", "giu", garayA + garaySmallA, "#"),
+            Rx("([$garayA])\\1", "giu", garayA + garaySmallA, "#"),
+            Rx("([$lambda])\\1", "gi", lambda + lambdaCap, "#"),
+            Rx("([^a])\\1", "giu", garayA + garaySmallA, "#"),
+            Rx("(?<n>.)\\k<n>", "giu", garayA + garaySmallA, "#"),
+            Rx("(?<n>.)\\k<n>", "gi", lambda + lambdaCap, "#"),
+            Rx("(.)\\1", "giu", garayA + garayA, "#"),
+            Rx("(.)\\1", "giu", garaySmallA + garaySmallA, "#"),
+            Rx("(.)\\1", "gi", lambdaCap + lambdaCap, "#"),
+            Rx("(.)\\1", "giu", garayA + garaySmallA + garaySmallA + garayA, "##"),
+            Rx("(.)\\1+", "giu", "$garayA$garaySmallA${garayA}b", "#b"),
+            // Letters of two classes: no reference joins them.
+            Rx("(.)\\1", "giu", garayA + cps("10D51"), garayA + cps("10D51")),
+            Rx("(.)\\1", "gi", lambda + cps("019C"), lambda + cps("019C")),
+            // In a masked run the pattern's letters, escapes and classes match the stand-ins where Dart matches the letters.
+            Rx("(.)\\1|(?-i:$garayA)", "giu", garayA, "#"),
+            Rx("(.)\\1|(?-i:\\u{10D50})", "giu", garayA, "#"),
+            Rx("(.)\\1|(?-i:${escapes(garayA)})", "giu", garayA, "#"),
+            Rx("(.)\\1|(?-i:$lambda)", "gi", lambda, "#"),
+            Rx("(.)\\1|(?-i:${esc("019B")})", "gi", lambda, "#"),
+            Rx("(.)\\1|$garayA", "giu", garaySmallA, "#"),
+            Rx("(.)\\1|\\u{10D50}", "giu", garaySmallA, "#"),
+            Rx("(.)\\1|[$garayA]", "giu", garaySmallA, "#"),
+            Rx("(.)\\1|[^$garayA]", "giu", "${garaySmallA}a", "$garaySmallA#"),
+            Rx("(.)\\1|(?-i:[$garayA])", "giu", garayA, "#"),
+            Rx("(.)\\1|[\\u{10D40}-\\u{10D5F}]", "giu", garaySmallA, "#"),
+            Rx("(.)\\1|.", "giu", garayA, "#"),
+            Rx("(.)\\1|[^a]", "giu", garayA, "#"),
+            Rx("(.)\\1|^.\$", "giu", garayA, "#"),
+            Rx("(.)\\1|$lambda", "gi", lambdaCap, "#"),
+            Rx("(.)\\1|[$lambda]", "gi", lambdaCap, "#"),
+            Rx("(.)\\1|[^$lambda]", "gi", "${lambdaCap}a", "$lambdaCap#"),
+            Rx("(.)\\1|[${esc("0190")}-${esc("01A0")}]", "gi", lambdaCap, "#"),
+            Rx("(?i:(.)\\1)|(?-i:$garayA)", "gu", garayA, "#"),
+            Rx("(?i:(.)\\1)", "gu", "a$garayA${garaySmallA}b", "a#b"),
+            // The stand-ins are characters neither the input nor the pattern holds; other masked characters keep theirs.
+            Rx("(.)\\1", "giu", supplementaryPua + garayA + garaySmallA, "$supplementaryPua#"),
+            Rx("(.)\\1", "giu", garayA + supplementaryPua + garaySmallA, garayA + supplementaryPua + garaySmallA),
+            Rx("\\u{F0000}|(.)\\1", "giu", garayA + garaySmallA, "#"),
+            Rx("[\\u{F0000}]|(.)\\1", "giu", garayA + garaySmallA, "#"),
+            // A high half's escape and a low half's right after it spell one character the pattern holds.
+            Rx("(a)\\1|${escapes(supplementaryPua)}", "giu", garayA, garayA),
+            Rx("(.)\\1", "giu", p0 + garayA + garaySmallA, "$p0#"),
+            Rx("(.)\\1", "gi", p0 + lambda + lambdaCap, "$p0#"),
+            Rx("(.)\\1", "giu", e + garayA + garaySmallA, "$e#"),
+            Rx("(.)\\1", "gi", e + lambda + lambdaCap, "$e#"),
+            Rx("(.)\\1", "gi", "${longS}s$lambda$lambdaCap", "${longS}s#"),
+            Rx("(.)\\1", "giu", "ı$lambda${lambdaCap}ıI", "ı#ıI"),
+            // Without `u` a letter above U+FFFF is two units (S16), and without `i` no letter folds.
+            Rx("($garayA)\\1", "gi", garayA + garaySmallA, garayA + garaySmallA),
+            Rx("(.)\\1", "gi", garayA + garaySmallA, garayA + garaySmallA),
+            Rx("(.)\\1", "gu", garayA + garaySmallA, garayA + garaySmallA),
+            Rx("(.)\\1", "g", lambda + lambdaCap, lambda + lambdaCap),
+        )
+    }
+
+    /** R1 where the engine's own folding takes part too: the letters the run leaves unmasked. */
+    private val r1Folded: List<Rx> by lazy {
+        val longS = cps("017F")
+        listOf(
+            Rx("(.)\\1", "giu", "$longS$garayA$garaySmallA${longS}s", "$longS##"),
+            Rx("(.)\\1", "giu", "Aa$garayA$garaySmallA", "##"),
+            Rx("(.)\\1", "gi", "Aa$lambda$lambdaCap", "##"),
+        )
+    }
+
+    /** R1: `$1` and the match are the input's letters, read back from it by range. */
+    private val r1Steps: List<Step> by lazy {
+        val both = "[\$1|{{value}}]"
+        val vithkuqi = cps("10570")
+        val vithkuqiSmall = cps("10597")
+        listOf(
+            Step(garayA + garaySmallA, rep("(.)\\1", "giu", both), "[$garayA|$garayA$garaySmallA]"),
+            Step(garaySmallA + garayA, rep("(.)\\1", "giu", both), "[$garaySmallA|$garaySmallA$garayA]"),
+            Step("z$garayA${garaySmallA}z", rep("(.)\\1", "giu", both), "z[$garayA|$garayA$garaySmallA]z"),
+            Step(garaySmallA + garayA + garaySmallA, rep("($garayA)\\1", "giu", both), "[$garaySmallA|$garaySmallA$garayA]$garaySmallA"),
+            Step(vithkuqi + vithkuqiSmall, rep("(.)\\1", "giu", both), "[$vithkuqi|$vithkuqi$vithkuqiSmall]"),
+            Step(vithkuqiSmall + vithkuqi, rep("(?i:(.)\\1)", "gu", both), "[$vithkuqiSmall|$vithkuqiSmall$vithkuqi]"),
+            Step(lambda + lambdaCap, rep("(.)\\1", "gi", both), "[$lambda|$lambda$lambdaCap]"),
+            Step(lambdaCap + lambda, rep("(.)\\1", "gi", both), "[$lambdaCap|$lambdaCap$lambda]"),
+            Step(lambda + lambdaCap, rep("(.)\\1", "giu", both), "[$lambda|$lambda$lambdaCap]"),
+        )
+    }
+
+    /** Whether the JVM's case-insensitive backreference repeats a capture above U+FFFF: JDK 17's never does (T5's). */
+    private val jvmRepeats: Boolean by lazy {
+        runCatching { Pattern.compile("(.)\\1", Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE).matcher(dU + dU).find() }.getOrDefault(false)
+    }
+
+    /** Whether a row's reference compares, under `i` and `u`, a character above U+FFFF: left out where the JVM never repeats one. */
+    private fun aboveFfff(pattern: String, flags: String, input: String): Boolean =
+        'u' in flags && ('i' in flags || "(?i:" in pattern) && input.any(Char::isSurrogate)
+
+    /** [rows] as the JVM runs them: all where it repeats a capture above U+FFFF, else those that compare none. */
+    private fun r1Kept(rows: List<Rx>): List<Rx> = keptWhereTheJvmRepeats(rows) { aboveFfff(it.pattern, it.flags, it.input) }
+
+    /** [r1Steps] as the JVM runs them: each holds a letter above U+FFFF under `i` and `u`, or none. */
+    private fun r1StepsKept(): List<Step> = keptWhereTheJvmRepeats(r1Steps) { s -> s.input.any(Char::isSurrogate) }
+
+    /** [rows] less those [comparesAboveFfff] where the JVM never repeats such a capture; none left out on JDK 21 and later. */
+    private fun <T> keptWhereTheJvmRepeats(rows: List<T>, comparesAboveFfff: (T) -> Boolean): List<T> {
+        val kept = rows.filter { jvmRepeats || !comparesAboveFfff(it) }
+        if (Runtime.version().feature() >= 21) assertEquals(rows.size, kept.size, "rows left out on a JDK whose backreference repeats a letter above U+FFFF")
+        return kept
+    }
+
+    /**
+     * [rows] searched as the SDK searches each ([RegexSupport.search]) with the engine's own case
+     * folding off: where the engine folds a pair itself, only the run's stand-ins then match the
+     * letters as Dart does.
+     */
+    private fun assertSearched(rows: List<Rx>) {
+        fun shown(s: String?): String = s?.map { if (it in ' '..'~') "$it" else "\\u%04X".format(it.code) }?.joinToString("") ?: "null"
+        val folding = (Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE).inv()
+        val failures = rows.mapNotNull { r ->
+            val search = RegexSupport.search(r.pattern, r.flags, r.input)
+            val got = search?.let { s ->
+                val m = Pattern.compile(s.re.pattern(), s.re.flags() and folding).matcher(s.text)
+                val out = StringBuilder()
+                var at = 0
+                while (m.find()) {
+                    out.append(s.input, at, m.start()).append('#')
+                    at = m.end()
+                }
+                out.append(s.input, at, s.input.length).toString()
+            }
+            if (got == r.expected) null else "${shown(r.pattern)} /${r.flags} on ${shown(r.input)}: written ${shown(search?.re?.pattern())}, got ${shown(got)}"
+        }
+        if (failures.isNotEmpty()) fail(failures.joinToString("\n"))
+    }
+
+    @Test
+    fun r1_aBackreferenceMatchesTheLettersOfALaggingClassAsDart() {
+        assertDart(r1Kept(r1Rows + r1Parts + r1Folded))
+        assertSteps(r1StepsKept())
+    }
+
+    @Test
+    fun r1_seam_aBackreferenceComparesTheStandInsOfTheClassesSet() {
+        // With the classes JDK 17 lacks set, every JVM masks their letters, and the rows hold with the
+        // engine's own folding off too.
+        lagging(lacks17)
+        assertDart(r1Kept(r1Rows + r1Parts + r1Folded))
+        assertSearched(r1Kept(r1Rows + r1Parts))
+        assertSteps(r1StepsKept())
+    }
 }
