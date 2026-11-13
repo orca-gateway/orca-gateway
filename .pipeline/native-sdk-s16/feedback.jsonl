@@ -1,0 +1,3 @@
+{"ts":"2026-11-13T15:33:58Z","stage":"09","round":1,"template":null,"text":"standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 1's one question (start group 2) is minor, default go"}
+{"ts":"2026-11-13T16:24:53Z","stage":"09","round":2,"template":null,"text":"C retry T3 once with the quality finding's fix (standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 2: question 1 (retry T3 once, comments only) and question 2 (then group 3) are minor, both defaults)"}
+{"ts":"2026-11-13T16:37:06Z","stage":"09","round":3,"template":null,"text":"standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 2's card (round 3): its one question (start group 3) is minor, default go"}
