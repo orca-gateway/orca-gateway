@@ -7,6 +7,7 @@ import com.orcagateway.core.support.arr
 import com.orcagateway.core.support.j
 import com.orcagateway.core.support.obj
 import com.orcagateway.core.support.props
+import java.util.regex.Pattern
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -2361,17 +2362,24 @@ class TransformTest {
 
     @Test
     fun u2_guard_withULettersAboveTheBmpFold() {
-        assertDart(
-            listOf(
-                Rx(dU, "giu", d, "#"),
-                Rx("[$dU]", "giu", d, "#"),
-                Rx("($dU)\\1", "giu", dU + d, "#"),
-                Rx("(.)\\1", "giu", dU + d, "#"),
-            ) +
-                astralPairs.flatMap { (x, y) ->
-                    listOf(Rx(x, "giu", y, "#"), Rx("[$x]", "giu", y, "#"), Rx("($x)\\1", "giu", x + y, "#"), Rx("(.)\\1", "giu", x + y, "#"))
-                },
-        )
+        // With `u` the JVM folds these letters itself. JDK 21 (Unicode 15) and 17 (Unicode 13) fold
+        // only the pairs their Unicode has, and JDK 17's case-insensitive backreference never repeats
+        // a capture above U+FFFF (it throws at the input's end): the platform's difference, not the
+        // SDK's, so those rows are left out there.
+        val ci = Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
+        fun jvmFolds(x: String, y: String) = Pattern.compile(Pattern.quote(x), ci).matcher(y).matches()
+        val jvmRepeats = runCatching { Pattern.compile("(.)\\1", ci).matcher(dU + dU).find() }.getOrDefault(false)
+        var leftOut = 0
+        fun kept(runs: Boolean, rows: List<Rx>): List<Rx> = if (runs) rows else emptyList<Rx>().also { leftOut += rows.size }
+        val rows = listOf(Rx(dU, "giu", d, "#"), Rx("[$dU]", "giu", d, "#")) +
+            kept(jvmRepeats, listOf(Rx("($dU)\\1", "giu", dU + d, "#"), Rx("(.)\\1", "giu", dU + d, "#"))) +
+            astralPairs.flatMap { (x, y) ->
+                val folds = jvmFolds(x, y)
+                kept(folds, listOf(Rx(x, "giu", y, "#"), Rx("[$x]", "giu", y, "#"))) +
+                    kept(folds && jvmRepeats, listOf(Rx("($x)\\1", "giu", x + y, "#"), Rx("(.)\\1", "giu", x + y, "#")))
+            }
+        if (Runtime.version().feature() >= 24) assertEquals(0, leftOut, "rows left out on a JDK with Unicode 16")
+        assertDart(rows)
     }
 
     @Test
