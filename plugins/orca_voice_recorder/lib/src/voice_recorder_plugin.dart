@@ -4,7 +4,7 @@ import 'dart:io' show Platform;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/widgets.dart';
-import 'package:flutter/material.dart' show Icons;
+import 'package:material_ui/material_ui.dart' show Icons;
 import 'package:orca_gateway/orca_gateway.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';

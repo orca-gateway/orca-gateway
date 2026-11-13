@@ -5,8 +5,8 @@ homepage: https://github.com/amrebada/orca-gateway
 repository: https://github.com/amrebada/orca-gateway
 
 environment:
-  sdk: ^3.11.3
-  flutter: ">=3.24.0"
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
 
 dependencies:
   flutter:
@@ -15,6 +15,7 @@ dependencies:
   record: ^6.2.0
   audioplayers: ^6.1.0
   path_provider: ^2.1.0
+  material_ui: ^1.11.0
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,3 @@
+dependency_overrides:
+  orca_gateway:
+    path: ../../sdk
