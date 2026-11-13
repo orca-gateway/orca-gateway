@@ -463,8 +463,8 @@ enum Regex {
     ///   compiled case-sensitively, once over T. Every other letter keeps
     ///   ICU's folding (é with É). An escape that spells a letter of the
     ///   table (`\x73`, `\u017F`, with `u` `\u{17F}`) is that letter: outside
-    ///   a class the same set, inside one ICU reads it in C. Left as ICU has
-    ///   them: backreferences.
+    ///   a class the same set, inside one ICU reads it in C. Backreferences
+    ///   are ICU's, but in a run masked for them (below).
     /// - With `u`, Dart builds a class holding `\p{…}` or `\P{…}` first and
     ///   folds after: a character matches when a letter of its simple-fold
     ///   class is in the class, a negated class when none is (`\P{Ll}`
@@ -547,14 +547,23 @@ enum Regex {
     ///   (`(a)(?<=\1)`). Left to fail, as ICU has it, where Dart's reference
     ///   matches empty: a group set or not only at run time (`(?:(a)|b)\1`,
     ///   `(a)?b\1`).
-    /// - With `mask`, a masked run's (`RegexMask`, never with `u`), the
+    /// - With `mask` holding halves (`RegexMask`, never with `u`), the
     ///   pattern reads code units as the input does: a character above U+FFFF
     ///   is its halves' two stand-ins, but in a group name; an escape that
     ///   spells a half is its stand-in, in a class too; a class range is
     ///   ordered by Dart's units (`[😀-🙁]` is D83D, then DE00-D83D: nil), and
-    ///   one over surrogates or reaching a stand-in is written as its parts
-    ///   outside the surrogate block without the stand-ins, plus the
-    ///   stand-ins of the halves it covers.
+    ///   one over surrogates or reaching a half's stand-in is written as its
+    ///   parts outside the surrogate block without the halves' stand-ins, plus
+    ///   the stand-ins of the halves it covers.
+    /// - With `mask` holding letters (a run masked for a backreference under
+    ///   `i`, with `u` too), its copy holds each such letter as the stand-in
+    ///   of its Dart fold class. A masked letter, literal or escaped (`\xDF`,
+    ///   `\337`, `\ß`), is its stand-in, under `i` or not. In a class it
+    ///   stays a letter, and each class or property C (`[…]`, `[^…]`, `\p{…}`)
+    ///   becomes `(?:(?!S)X|(?-i:[M]))`: S every letter's stand-in, X C as
+    ///   written above, M the stand-ins of the fold classes C, read
+    ///   case-sensitively, meets, or, negated, misses: Dart's rule under `i`;
+    ///   where `i` is off, exact for a class of one letter.
     static func asciiClasses(_ pattern: String, ignoreCase: Bool, unicode: Bool, mask: RegexMask? = nil) -> String? {
         // ECMAScript's WhiteSpace and LineTerminator, which `\s` matches under every flag.
         let space = "\\u0009-\\u000D\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF"
@@ -569,6 +578,26 @@ enum Regex {
                     "B": "(?-i:(?<=\(w))(?=\(w))|(?<!\(w))(?!\(w)))",
                 ]
             )
+        }
+        // A run masked for a backreference under `i`: the mask, its letters by their Dart fold classes, and a
+        // lookahead that keeps a class off their stand-ins.
+        let masked = mask.flatMap { mask in
+            mask.letters.isEmpty
+                ? nil
+                : (
+                    mask, Kept(mask.letters) { dartFold($0, unicode: unicode) ?? [$0] },
+                    "(?!(?-i:[\(spelled(mask.lettersStandIns))]))"
+                )
+        }
+        // The class `[body]`, or `[^body]` when `negated`, written as `written`, in a run masked for letters: a
+        // stand-in matches it where Dart's class matches the letters it stands for, and only there.
+        func standingIn(_ written: String, body: String, negated: Bool) -> String {
+            guard let (mask, kept, lookahead) = masked, let letters = kept.matched(body, negated: negated) else {
+                return written
+            }
+            let standIns = Set(letters.compactMap { mask.standIn(forLetter: $0.value) }).sorted()
+            let exact = standIns.isEmpty ? "" : "|(?-i:[\(spelled(standIns.compactMap(Unicode.Scalar.init)))])"
+            return "(?:\(lookahead)\(written)\(exact))"
         }
 
         // An open group: the `i` inside it, its kind, whether it is a negative lookaround, where its text starts in
@@ -810,6 +839,7 @@ enum Regex {
         }
         // The code point `value` outside a class, under `i` a letter of the table as Dart's set.
         func literal(_ value: UInt32, fold: Bool) -> String {
+            if let standIn = mask?.standIn(forLetter: value) { return braced(UInt32(standIn)) }  // `\337`, masked
             guard let c = Unicode.Scalar(value) else { return braced(value) }
             if fold, let set = dartFold(c, unicode: unicode) { return "(?-i:[\(spelled(set))])" }
             return isASCIILetter(c) || isDigit(c) ? String(c) : braced(value)
@@ -880,13 +910,13 @@ enum Regex {
                 }
                 i += 1
                 guard let high = classMember(sets) else { return nil }
-                // In a masked run a stand-in's order is that of the half it stands for.
+                // In a masked run a half's stand-in takes the order of the half it stands for.
                 let order = { (value: UInt32) in mask?.dartUnit(value) ?? value }
                 if let a = low.value.map(order), let b = high.value.map(order) {
                     guard a <= b else { return nil }  // `[z-a]`, `[a--b]`, with `u` too
                     if let (parts, standIns) = mask?.range(a, b) {
-                        // Over surrogates or reaching a stand-in: the parts outside the surrogate block, without the
-                        // stand-ins, then the stand-ins of the halves it covers.
+                        // Over surrogates or reaching a half's stand-in: the parts outside the surrogate block,
+                        // without the halves' stand-ins, then the stand-ins of the halves it covers.
                         for part in parts {
                             body += braced(part.lowerBound)
                             if part.upperBound > part.lowerBound { body += "-" + braced(part.upperBound) }
@@ -925,8 +955,10 @@ enum Regex {
                 let set = "[" + (negated ? "^" : "") + body + (closed ? "]" : "")
                 if closed, body.isEmpty {
                     out += negated ? "[\\s\\S]" : "(?:(?!))"  // `[^]` is any unit, `[]` none; ICU refuses both, and `(?!)*`
-                } else if fold, closed {
-                    out += dartFolded(set, body: body, negated: negated, unicode: unicode, property: property)
+                } else if closed {
+                    let written =
+                        fold ? dartFolded(set, body: body, negated: negated, unicode: unicode, property: property) : set
+                    out += standingIn(written, body: body, negated: negated)
                 } else {
                     out += set
                 }
@@ -957,16 +989,15 @@ enum Regex {
                     guard let length = propertyEscape() else { return nil }  // with `u`: a name Dart refuses
                     let escape = String(String.UnicodeScalarView(p[i..<(i + length)]))
                     i += length
-                    if fold {  // the one-member class, which Dart folds after building it
-                        out += dartFolded("[\(escape)]", body: escape, negated: false, unicode: unicode, property: true)
-                    } else {
-                        out += escape
-                    }
+                    let written = fold  // the one-member class, which Dart folds after building it
+                        ? dartFolded("[\(escape)]", body: escape, negated: false, unicode: unicode, property: true)
+                        : escape
+                    out += standingIn(written, body: escape, negated: false)
                 } else if let escape = hexEscape() {
                     // `\x73`, `\u017F`, `\u{17F}`: a letter of the table is that letter
                     guard let value = escape.value else { return nil }
-                    if let standIn = mask?.standIn(forUnit: value) {
-                        out += braced(UInt32(standIn))  // a half, masked
+                    if let standIn = mask?.standIn(forUnit: value) ?? mask?.standIn(forLetter: value) {
+                        out += braced(UInt32(standIn))  // a half or a letter, masked
                         i += escape.length
                     } else if fold, let set = Unicode.Scalar(value).flatMap({ dartFold($0, unicode: unicode) }) {
                         out += "(?-i:[\(spelled(set))])"
@@ -977,6 +1008,9 @@ enum Regex {
                     } else {
                         take(escape.length)  // `\x4a`, `\u00ff`: digits that may be letters of the table
                     }
+                } else if let standIn = mask?.standIn(forLetter: n.value) {
+                    out += braced(UInt32(standIn))  // `\ß` without `u`, masked
+                    i += 2
                 } else {
                     take(n == "c" ? 3 : 2)  // `\cK`, `\f`, `\n`, `\r`, `\t`, an escaped symbol: ICU reads them as Dart
                 }
@@ -1044,6 +1078,9 @@ enum Regex {
             } else if c == "^" || c == "$" {
                 take(1)
                 now = .assertion
+            } else if let standIn = mask?.standIn(forLetter: c.value) {
+                out += braced(UInt32(standIn))  // a masked letter, under `i` or not
+                i += 1
             } else if fold, let set = dartFold(c, unicode: unicode) {
                 out += "(?-i:[\(spelled(set))])"
                 i += 1

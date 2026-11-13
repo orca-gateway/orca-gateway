@@ -2252,7 +2252,7 @@ final class TransformTests: XCTestCase {
     }
 
     func testK1_guard_withUAPairIsOneCharacter() {
-        // With `u` nothing is masked: ICU and Dart read code points, and an empty match never falls inside a pair
+        // With `u` no half is masked: ICU and Dart read code points, and an empty match never falls inside a pair
         // (`a??`, ``, `(?:)`, `x*` on 😀 are "#😀#"). One value per input of `pairs`, the same under gu and giu.
         let (e, small) = ("\u{1F600}", "\u{10428}")
         let rows: [(String, [String?], UInt)] = [
@@ -2303,6 +2303,309 @@ final class TransformTests: XCTestCase {
                 }
             }
         }
+    }
+
+    // MARK: S16 — backreferences under i (row 23b.38)
+
+    // Under `i` a backreference compares the text its group took with the input, both folded as the engine folds:
+    // Dart without `u` canonicalizes by upper case and never maps a non-ASCII letter to ASCII, with `u` it folds
+    // simply, and ICU compares by full case folding (ß with "ss"). So the run searches a copy in which each letter
+    // the two fold apart is a stand-in, one per Dart fold class, and reads every match from the input. Dart 3.14.0
+    // printed every value (nil: refused).
+
+    func testB1_withoutUABackreferenceKeepsApartTheLettersDartKeepsApart() {
+        // `(a)\1` and `(.)\1` on a + b, two letters of one fold class: under `gi` "#" when Dart folds both together
+        // (`folded`), else unchanged, as Dart keeps K apart from the Kelvin sign, s from ſ, Å from the angstrom sign,
+        // θ from ϴ, Ω from the ohm sign, ß from ẞ, ᾀ from ᾈ; under `giu` "#", as Dart folds simply.
+        let folded: Set<Unicode.Scalar> = [
+            "K", "k", "S", "s", "\u{C5}", "\u{E5}", "\u{398}", "\u{3B8}", "\u{3D1}", "\u{3A9}", "\u{3C9}",
+        ]
+        let greek: [[UInt32]] = [0x1F80, 0x1F90, 0x1FA0].flatMap { row in (row..<(row + 8)).map { [$0, $0 + 8] } }
+            + [[0x1FB3, 0x1FBC], [0x1FC3, 0x1FCC], [0x1FF3, 0x1FFC]]
+        let classes: [[Unicode.Scalar]] = [
+            ["K", "k", "\u{212A}"], ["S", "s", "\u{17F}"], ["\u{C5}", "\u{E5}", "\u{212B}"],
+            ["\u{398}", "\u{3B8}", "\u{3D1}", "\u{3F4}"], ["\u{3A9}", "\u{3C9}", "\u{2126}"], ["\u{DF}", "\u{1E9E}"],
+        ] + greek.map { $0.compactMap(Unicode.Scalar.init) }
+        XCTAssertEqual(classes.count, 33)
+        var apart = 0
+        for members in classes {
+            for a in members {
+                for b in members where b != a {
+                    let input = String(a) + String(b)
+                    let together = folded.contains(a) && folded.contains(b)
+                    if !together { apart += 1 }
+                    for pattern in ["(\(a))\\1", #"(.)\1"#] {
+                        assertRegex(pattern, "gi", input, together ? "#" : input)
+                        assertRegex(pattern, "giu", input, "#")
+                    }
+                }
+            }
+        }
+        XCTAssertEqual(apart, 78)
+    }
+
+    func testB2_guard_dotlessIAndDottedIStayApartFromIAndi() {
+        // ı (U+0131) and İ (U+0130) against I and i, `(a)\1` and `(.)\1` on a + b: unchanged under gi and giu.
+        let (dotless, dotted) = ("\u{131}", "\u{130}")
+        let pairs = [
+            ("I", dotless), ("i", dotless), (dotless, "I"), (dotless, "i"), ("i", dotted), (dotted, "i"), ("I", dotted),
+            (dotted, "I"),
+        ]
+        for (a, b) in pairs {
+            for flags in ["gi", "giu"] {
+                for pattern in ["(\(a))\\1", #"(.)\1"#] { assertRegex(pattern, flags, a + b, a + b) }
+            }
+        }
+    }
+
+    func testB3_aBackreferenceNeverMatchesALettersFullCaseFolding() {
+        // The 104 letters whose full case folding is two or more letters, each with it (ß "ss", İ "i\u{307}", ﬀ
+        // "ff"): `(L)\1` on L + F and `(F)\1` on F + L are unchanged under gi and giu, as is `(.)\1` on L + F but where
+        // F starts with a letter twice (`(.)\1` on "ßss" is "ß#"). ICU matched them all.
+        let folds: [(String, String, String?)] = [
+            ("\u{DF}", "ss", "\u{DF}#"), ("\u{130}", "i\u{307}", nil), ("\u{149}", "\u{2BC}n", nil),
+            ("\u{1F0}", "j\u{30C}", nil), ("\u{390}", "\u{3B9}\u{308}\u{301}", nil),
+            ("\u{3B0}", "\u{3C5}\u{308}\u{301}", nil), ("\u{587}", "\u{565}\u{582}", nil),
+            ("\u{1E96}", "h\u{331}", nil), ("\u{1E97}", "t\u{308}", nil), ("\u{1E98}", "w\u{30A}", nil),
+            ("\u{1E99}", "y\u{30A}", nil), ("\u{1E9A}", "a\u{2BE}", nil), ("\u{1E9E}", "ss", "\u{1E9E}#"),
+            ("\u{1F50}", "\u{3C5}\u{313}", nil), ("\u{1F52}", "\u{3C5}\u{313}\u{300}", nil),
+            ("\u{1F54}", "\u{3C5}\u{313}\u{301}", nil), ("\u{1F56}", "\u{3C5}\u{313}\u{342}", nil),
+            ("\u{1F80}", "\u{1F00}\u{3B9}", nil), ("\u{1F81}", "\u{1F01}\u{3B9}", nil),
+            ("\u{1F82}", "\u{1F02}\u{3B9}", nil), ("\u{1F83}", "\u{1F03}\u{3B9}", nil),
+            ("\u{1F84}", "\u{1F04}\u{3B9}", nil), ("\u{1F85}", "\u{1F05}\u{3B9}", nil),
+            ("\u{1F86}", "\u{1F06}\u{3B9}", nil), ("\u{1F87}", "\u{1F07}\u{3B9}", nil),
+            ("\u{1F88}", "\u{1F00}\u{3B9}", nil), ("\u{1F89}", "\u{1F01}\u{3B9}", nil),
+            ("\u{1F8A}", "\u{1F02}\u{3B9}", nil), ("\u{1F8B}", "\u{1F03}\u{3B9}", nil),
+            ("\u{1F8C}", "\u{1F04}\u{3B9}", nil), ("\u{1F8D}", "\u{1F05}\u{3B9}", nil),
+            ("\u{1F8E}", "\u{1F06}\u{3B9}", nil), ("\u{1F8F}", "\u{1F07}\u{3B9}", nil),
+            ("\u{1F90}", "\u{1F20}\u{3B9}", nil), ("\u{1F91}", "\u{1F21}\u{3B9}", nil),
+            ("\u{1F92}", "\u{1F22}\u{3B9}", nil), ("\u{1F93}", "\u{1F23}\u{3B9}", nil),
+            ("\u{1F94}", "\u{1F24}\u{3B9}", nil), ("\u{1F95}", "\u{1F25}\u{3B9}", nil),
+            ("\u{1F96}", "\u{1F26}\u{3B9}", nil), ("\u{1F97}", "\u{1F27}\u{3B9}", nil),
+            ("\u{1F98}", "\u{1F20}\u{3B9}", nil), ("\u{1F99}", "\u{1F21}\u{3B9}", nil),
+            ("\u{1F9A}", "\u{1F22}\u{3B9}", nil), ("\u{1F9B}", "\u{1F23}\u{3B9}", nil),
+            ("\u{1F9C}", "\u{1F24}\u{3B9}", nil), ("\u{1F9D}", "\u{1F25}\u{3B9}", nil),
+            ("\u{1F9E}", "\u{1F26}\u{3B9}", nil), ("\u{1F9F}", "\u{1F27}\u{3B9}", nil),
+            ("\u{1FA0}", "\u{1F60}\u{3B9}", nil), ("\u{1FA1}", "\u{1F61}\u{3B9}", nil),
+            ("\u{1FA2}", "\u{1F62}\u{3B9}", nil), ("\u{1FA3}", "\u{1F63}\u{3B9}", nil),
+            ("\u{1FA4}", "\u{1F64}\u{3B9}", nil), ("\u{1FA5}", "\u{1F65}\u{3B9}", nil),
+            ("\u{1FA6}", "\u{1F66}\u{3B9}", nil), ("\u{1FA7}", "\u{1F67}\u{3B9}", nil),
+            ("\u{1FA8}", "\u{1F60}\u{3B9}", nil), ("\u{1FA9}", "\u{1F61}\u{3B9}", nil),
+            ("\u{1FAA}", "\u{1F62}\u{3B9}", nil), ("\u{1FAB}", "\u{1F63}\u{3B9}", nil),
+            ("\u{1FAC}", "\u{1F64}\u{3B9}", nil), ("\u{1FAD}", "\u{1F65}\u{3B9}", nil),
+            ("\u{1FAE}", "\u{1F66}\u{3B9}", nil), ("\u{1FAF}", "\u{1F67}\u{3B9}", nil),
+            ("\u{1FB2}", "\u{1F70}\u{3B9}", nil), ("\u{1FB3}", "\u{3B1}\u{3B9}", nil),
+            ("\u{1FB4}", "\u{3AC}\u{3B9}", nil), ("\u{1FB6}", "\u{3B1}\u{342}", nil),
+            ("\u{1FB7}", "\u{3B1}\u{342}\u{3B9}", nil), ("\u{1FBC}", "\u{3B1}\u{3B9}", nil),
+            ("\u{1FC2}", "\u{1F74}\u{3B9}", nil), ("\u{1FC3}", "\u{3B7}\u{3B9}", nil),
+            ("\u{1FC4}", "\u{3AE}\u{3B9}", nil), ("\u{1FC6}", "\u{3B7}\u{342}", nil),
+            ("\u{1FC7}", "\u{3B7}\u{342}\u{3B9}", nil), ("\u{1FCC}", "\u{3B7}\u{3B9}", nil),
+            ("\u{1FD2}", "\u{3B9}\u{308}\u{300}", nil), ("\u{1FD3}", "\u{3B9}\u{308}\u{301}", nil),
+            ("\u{1FD6}", "\u{3B9}\u{342}", nil), ("\u{1FD7}", "\u{3B9}\u{308}\u{342}", nil),
+            ("\u{1FE2}", "\u{3C5}\u{308}\u{300}", nil), ("\u{1FE3}", "\u{3C5}\u{308}\u{301}", nil),
+            ("\u{1FE4}", "\u{3C1}\u{313}", nil), ("\u{1FE6}", "\u{3C5}\u{342}", nil),
+            ("\u{1FE7}", "\u{3C5}\u{308}\u{342}", nil), ("\u{1FF2}", "\u{1F7C}\u{3B9}", nil),
+            ("\u{1FF3}", "\u{3C9}\u{3B9}", nil), ("\u{1FF4}", "\u{3CE}\u{3B9}", nil),
+            ("\u{1FF6}", "\u{3C9}\u{342}", nil), ("\u{1FF7}", "\u{3C9}\u{342}\u{3B9}", nil),
+            ("\u{1FFC}", "\u{3C9}\u{3B9}", nil), ("\u{FB00}", "ff", "\u{FB00}#"), ("\u{FB01}", "fi", nil),
+            ("\u{FB02}", "fl", nil), ("\u{FB03}", "ffi", "\u{FB03}#i"), ("\u{FB04}", "ffl", "\u{FB04}#l"),
+            ("\u{FB05}", "st", nil), ("\u{FB06}", "st", nil), ("\u{FB13}", "\u{574}\u{576}", nil),
+            ("\u{FB14}", "\u{574}\u{565}", nil), ("\u{FB15}", "\u{574}\u{56B}", nil),
+            ("\u{FB16}", "\u{57E}\u{576}", nil), ("\u{FB17}", "\u{574}\u{56D}", nil),
+        ]
+        XCTAssertEqual(folds.count, 104)
+        for (letter, folding, doubled) in folds {
+            for flags in ["gi", "giu"] {
+                assertRegex("(\(letter))\\1", flags, letter + folding, letter + folding)
+                assertRegex("(\(folding))\\1", flags, folding + letter, folding + letter)
+                assertRegex(#"(.)\1"#, flags, letter + folding, doubled ?? letter + folding)
+            }
+        }
+        // With `u` Dart folds ß with ẞ, which share a stand-in: still a match.
+        assertRegex("(\u{DF})\\1", "giu", "\u{DF}\u{1E9E}", "#")
+        assertRegex("(\u{1E9E})\\1", "giu", "\u{1E9E}\u{DF}", "#")
+    }
+
+    func testB1_iFromAGroupAndANamedReferenceMaskToo() {
+        // `i` in force anywhere: the flags' or a modifier group's (`(?i:`, `(?mi:`), the reference inside it or
+        // outside; `\k<name>` as `\1`. A reference outside `i` compares case-sensitively, in both.
+        let rows: [(String, String, String, String?, UInt)] = [
+            (#"(?i:(s)\1)"#, "g", "s\u{17F}", "s\u{17F}", #line),
+            (#"(?i:(s)\1)"#, "g", "sS", "#", #line),
+            ("(?i:(\u{DF})\\1)", "g", "\u{DF}ss", "\u{DF}ss", #line),
+            (#"(?mi:(.)\1)"#, "g", "\u{DF}ss", "\u{DF}#", #line),
+            (#"(?i:(s))\1"#, "g", "s\u{17F}", "s\u{17F}", #line),
+            (#"(s)(?i:\1)"#, "g", "s\u{17F}", "s\u{17F}", #line),
+            (#"(s)(?i:\1)"#, "g", "sS", "#", #line),
+            (#"(?-i:(s)\1)"#, "gi", "s\u{17F}", "s\u{17F}", #line),
+            (#"(?-i:(s)\1)"#, "gi", "sS", "sS", #line),
+            ("(?i:(\u{DF})\\1)", "gu", "\u{DF}\u{1E9E}", "#", #line),
+            ("(?i:(\u{DF})\\1)", "gu", "\u{DF}ss", "\u{DF}ss", #line),
+            (#"(?<a>s)\k<a>"#, "gi", "s\u{17F}", "s\u{17F}", #line),
+            (#"(?<a>s)\k<a>"#, "gi", "sS", "#", #line),
+            ("(?<a>\u{DF})\\k<a>", "giu", "\u{DF}\u{1E9E}", "#", #line),
+            (#"(?<a>.)\k<a>"#, "gi", "\u{DF}ss", "\u{DF}#", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        // `matches` takes no flags: `i` comes from a group.
+        func matches(_ regex: String, _ str: String) -> Bool {
+            holds(["op": "matches", "str": Self.s(.string(str)), "regex": .string(regex)])
+        }
+        let has: [(String, String, Bool, UInt)] = [
+            (#"(?i:(s)\1)"#, "s\u{17F}", false, #line),
+            ("(?i:(\u{17F})\\1)", "\u{17F}\u{17F}", true, #line),
+            (#"(?i:(s)\1)"#, "sS", true, #line),
+            (#"^(?i:(.)\1)$"#, "\u{DF}ss", false, #line),
+            ("(?i:(\u{DF})\\1)", "\u{DF}ss", false, #line),
+        ]
+        for (regex, str, expected, line) in has { XCTAssertEqual(matches(regex, str), expected, regex, line: line) }
+    }
+
+    func testB1_aMaskedLetterIsItsStandInHoweverThePatternSpellsIt() {
+        // `\xDF`, `\u00DF`, with `u` `\u{DF}`, the octal `\337`, without `u` the identity escape `\ß`: the letter.
+        let rows: [(String, String, String, String?, UInt)] = [
+            (#"(\xDF)\1"#, "gi", "\u{DF}\u{DF}", "#", #line),
+            (#"(\u00DF)\1"#, "gi", "\u{DF}\u{DF}", "#", #line),
+            (#"(\u00df)\1"#, "gi", "\u{DF}\u{DF}", "#", #line),
+            (#"(\xDF)\1"#, "gi", "\u{DF}ss", "\u{DF}ss", #line),
+            (#"(\u00DF)\1"#, "gi", "\u{DF}ss", "\u{DF}ss", #line),
+            (#"(\u00df)\1"#, "gi", "\u{DF}ss", "\u{DF}ss", #line),
+            (#"(\xDF)\1"#, "giu", "\u{DF}\u{1E9E}", "#", #line),
+            (#"(\u00DF)\1"#, "giu", "\u{DF}\u{1E9E}", "#", #line),
+            (#"(\u00df)\1"#, "giu", "\u{DF}\u{1E9E}", "#", #line),
+            (#"(\u{DF})\1"#, "giu", "\u{DF}\u{1E9E}", "#", #line),
+            (#"(\u{DF})\1"#, "giu", "\u{DF}ss", "\u{DF}ss", #line),
+            (#"(\u017F)\1"#, "gi", "\u{17F}\u{17F}", "#", #line),
+            (#"(\u017F)\1"#, "gi", "\u{17F}s", "\u{17F}s", #line),
+            (#"(\337)\1"#, "gi", "\u{DF}\u{DF}", "#", #line),
+            (#"(\337)\1"#, "gi", "\u{DF}ss", "\u{DF}ss", #line),
+            ("(\\\u{DF})\\1", "gi", "\u{DF}\u{DF}", "#", #line),
+            ("(\\\u{DF})\\1", "gi", "\u{DF}ss", "\u{DF}ss", #line),
+            ("(\\\u{17F})\\1", "gi", "\u{17F}s", "\u{17F}s", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    func testB1_aClassDartMatchesALetterWithTakesItsStandIn() {
+        // A class, negated or not, a range, `\w` and `\W` inside one or out, `[^]`, a lookaround, under the fold in
+        // force; a range over the private-use block, where the stand-ins are, leaves them out.
+        let rows: [(String, String, String, String?, UInt)] = [
+            ("([\u{17F}])\\1", "gi", "\u{17F}\u{17F}", "#", #line),
+            (#"([s])\1"#, "gi", "s\u{17F}", "s\u{17F}", #line),
+            (#"([^s])\1"#, "gi", "\u{17F}\u{17F}", "#", #line),
+            ("([^\u{17F}])\\1", "gi", "\u{17F}\u{17F}", "\u{17F}\u{17F}", #line),
+            (#"([a-z])\1"#, "gi", "s\u{17F}", "s\u{17F}", #line),
+            (#"([^a-z])\1"#, "gi", "\u{17F}\u{17F}", "#", #line),
+            (#"([\x00-\xFF])\1"#, "gi", "\u{DF}ss", "\u{DF}#", #line),
+            (#"([\u0100-\uFFFF])\1"#, "gi", "\u{17F}\u{17F}", "#", #line),
+            ("([\u{DF}])\\1", "giu", "\u{DF}\u{1E9E}", "#", #line),
+            ("([\u{1E9E}])\\1", "giu", "\u{DF}\u{1E9E}", "#", #line),
+            ("([^\u{DF}])\\1", "gi", "\u{1E9E}\u{1E9E}", "#", #line),
+            ("([^\u{DF}])\\1", "giu", "\u{1E9E}\u{1E9E}", "\u{1E9E}\u{1E9E}", #line),
+            ("([\u{DF}])\\1", "gi", "\u{DF}ss", "\u{DF}ss", #line),
+            (#"(\w)\1"#, "gi", "\u{17F}\u{17F}", "\u{17F}\u{17F}", #line),
+            (#"(\W)\1"#, "gi", "\u{17F}\u{17F}", "#", #line),
+            (#"([\W])\1"#, "gi", "\u{17F}\u{17F}", "#", #line),
+            (#"([^\W])\1"#, "gi", "\u{17F}\u{17F}", "\u{17F}\u{17F}", #line),
+            (#"([\xDE-\xE0])\1"#, "gi", "\u{DF}\u{DF}", "#", #line),
+            ("([\u{17F}]+)\\1", "gi", "\u{17F}\u{17F}\u{17F}\u{17F}", "#", #line),
+            (#"([^])\1"#, "gi", "\u{17F}\u{17F}", "#", #line),
+            ("(\u{17F}|s)\\1", "gi", "\u{17F}s", "\u{17F}s", #line),
+            ("(\u{17F}|s)\\1", "gi", "sS", "#", #line),
+            (#"([\uE000-\uF8FF])\1"#, "gi", "\u{17F}\u{17F}", "\u{17F}\u{17F}", #line),
+            (#"([^\uE000-\uF8FF])\1"#, "gi", "\u{17F}\u{17F}", "#", #line),
+            ("([\u{E000}-\u{F8FF}])\\1", "gi", "\u{17F}\u{17F}", "\u{17F}\u{17F}", #line),
+            ("([\u{1F80}])\\1", "gi", "\u{1F80}\u{1F88}", "\u{1F80}\u{1F88}", #line),
+            ("([\u{1F80}])\\1", "giu", "\u{1F80}\u{1F88}", "#", #line),
+            ("([\u{1F88}])\\1", "giu", "\u{1F80}\u{1F88}", "#", #line),
+            ("([\u{FB00}])\\1", "gi", "\u{FB00}ff", "\u{FB00}ff", #line),
+            ("([^\u{FB00}])\\1", "gi", "\u{FB00}ff", "\u{FB00}#", #line),
+            ("([\u{212A}k])\\1", "gi", "\u{212A}K", "\u{212A}K", #line),
+            ("([\u{212A}])\\1", "gi", "\u{212A}k", "\u{212A}k", #line),
+            (#"([k])\1"#, "gi", "k\u{212A}", "k\u{212A}", #line),
+            ("(?=\u{17F})(.)\\1", "gi", "\u{17F}\u{17F}", "#", #line),
+            ("(?!\u{17F})(.)\\1", "gi", "\u{17F}\u{17F}sS", "\u{17F}\u{17F}#", #line),
+            ("(?<=\u{17F})(.)\\1", "gi", "\u{17F}ss", "\u{17F}#", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    func testB1_withUAPropertyDartMatchesALetterWithTakesItsStandIn() {
+        // `\p{…}` and `\P{…}`, alone or in a class, negated or not, under `i` or a modifier group: Dart builds the
+        // class, then folds, so ß matches `\p{Lu}` (ẞ is Lu); ŉ has no partner.
+        let rows: [(String, String, String, String?, UInt)] = [
+            (#"(\p{Ll})\1"#, "giu", "\u{149}\u{149}", "#", #line),
+            (#"(\P{Ll})\1"#, "giu", "\u{149}\u{149}", "\u{149}\u{149}", #line),
+            (#"([\p{Ll}])\1"#, "giu", "\u{DF}\u{DF}", "#", #line),
+            (#"([^\p{Ll}])\1"#, "giu", "\u{DF}\u{DF}", "\u{DF}\u{DF}", #line),
+            (#"(\p{Lu})\1"#, "giu", "\u{DF}\u{1E9E}", "#", #line),
+            (#"(\p{Lu})\1"#, "giu", "\u{149}\u{149}", "\u{149}\u{149}", #line),
+            (#"(\p{Script=Greek})\1"#, "giu", "\u{1F80}\u{1F88}", "#", #line),
+            (#"(\P{L})\1"#, "giu", "\u{FB00}\u{FB00}", "\u{FB00}\u{FB00}", #line),
+            (#"([\p{Lu}])\1"#, "giu", "\u{DF}\u{1E9E}", "#", #line),
+            (#"([^\p{Lu}])\1"#, "giu", "\u{DF}\u{1E9E}", "\u{DF}\u{1E9E}", #line),
+            (#"([^\P{Ll}])\1"#, "giu", "\u{149}\u{149}", "#", #line),
+            (#"(\p{L})\1"#, "giu", "\u{DF}ss", "\u{DF}#", #line),
+            ("([\\p{L}\u{DF}])\\1", "giu", "\u{1E9E}\u{1E9E}", "#", #line),
+            (#"(?i:(\p{L})\1)"#, "gu", "\u{DF}\u{1E9E}", "#", #line),
+            (#"(?i:(\p{Ll})\1)"#, "gu", "\u{149}\u{149}", "#", #line),
+            (#"(?-i:\p{Lu})(.)\1"#, "giu", "\u{1E9E}\u{DF}\u{DF}", "#", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    func testB1_theResultAndEveryGroupAreReadFromTheInput() {
+        // The copy holds stand-ins; the text between matches, match 0, `$n` and `{{value}}` come from the input.
+        let rows: [(String, String, String, String?, String?, UInt)] = [
+            (#"(.)\1"#, "gi", "\u{DF}ss", "[$1]", "\u{DF}[s]", #line),
+            (#"(.)\1"#, "gi", "\u{17F}\u{17F}x", "<{{value}}>", "<\u{17F}\u{17F}>x", #line),
+            (#"(.)\1"#, "gi", "s\u{17F}ss", "[$1$1]", "s\u{17F}[ss]", #line),
+            ("(\u{DF}|s)\\1", "giu", "a\u{1E9E}\u{DF}b", "[$1]", "a[\u{1E9E}]b", #line),
+            (#"(.)\1"#, "gi", "\u{17F}\u{17F}", nil, "\u{17F}\u{17F}", #line),
+            (#"(.)\1"#, "gi", "\u{DF}ss", nil, "ss", #line),
+            (#"(.)\1"#, "giu", "x\u{1E9E}\u{DF}", nil, "\u{1E9E}\u{DF}", #line),
+            (#"(s)\1"#, "gi", "s\u{17F}", nil, nil, #line),
+        ]
+        for (pattern, flags, input, replacement, expected, line) in rows {
+            var step: [String: JSONValue] = ["type": "regex", "pattern": .string(pattern), "flags": .string(flags)]
+            if let replacement { step["replacement"] = .string(replacement) }
+            assertSame(run(.string(input), .object(step)), expected.map(JSONValue.string) ?? .null, line: line)
+        }
+    }
+
+    func testB1_letterStandInsComeAfterTheHalvesFromTheSamePool() {
+        // Without `u` a pair's halves and the letters share one run; a stand-in is no private-use character of the
+        // input or the pattern.
+        let rows: [(String, String, String, String?, UInt)] = [
+            (#"(.)\1"#, "gi", "\u{1F600}\u{17F}\u{17F}", "\u{1F600}#", #line),
+            (#"(.)\1"#, "gi", "\u{1F600}s\u{17F}", "\u{1F600}s\u{17F}", #line),
+            (#"(.)\1"#, "gi", "\u{17F}\u{17F}\u{1F600}", "#\u{1F600}", #line),
+            (#"(.)\1"#, "gi", "\u{E000}\u{17F}s", "\u{E000}\u{17F}s", #line),
+            (#"(.)\1"#, "gi", "\u{E000}\u{E000}s\u{17F}", "#s\u{17F}", #line),
+            (#"(.)\1"#, "gi", "\u{E000}\u{17F}\u{17F}\u{E001}", "\u{E000}#\u{E001}", #line),
+            ("(\u{E000})\\1", "gi", "\u{E000}\u{E000}\u{17F}", "#\u{17F}", #line),
+            ("([\u{E000}])\\1", "gi", "\u{17F}\u{17F}", "\u{17F}\u{17F}", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        // With no private-use unit left for a letter the run is not masked, so `(s)\1` takes "sſ", the known
+        // difference (row 23b.38), pinned; with one left it is Dart's. With 😀 its halves take the last two first.
+        let block = String(String.UnicodeScalarView((UInt32(0xE000)...0xF8FF).compactMap(Unicode.Scalar.init)))
+        let (one, two, three) = (String(block.dropFirst()), String(block.dropFirst(2)), String(block.dropFirst(3)))
+        assertRegex(#"(s)\1"#, "gi", block + "s\u{17F}", block + "#")  // Dart: unchanged
+        assertRegex(#"(s)\1"#, "gi", one + "s\u{17F}", one + "s\u{17F}")
+        assertRegex(#"(.)\1"#, "gi", two + "\u{1F600}s\u{17F}", two + "\u{1F600}#")  // Dart: unchanged
+        assertRegex(#"(.)\1"#, "gi", three + "\u{1F600}s\u{17F}", three + "\u{1F600}s\u{17F}")
+    }
+
+    func testB1_whereIIsOffTheLettersOfOneClassShareAStandIn() {
+        // The known limit (row 23b.38, gate 08): under `giu` ß and ẞ share a stand-in, so in a masked run `(?-i:ß)`
+        // takes ẞ too, pinned (Dart: "ẞ"); without `u` each has its own.
+        let rows: [(String, String, String, String?, UInt)] = [
+            ("(?-i:\u{DF})|(.)\\1", "giu", "\u{1E9E}", "#", #line),  // Dart: "\u{1E9E}"
+            ("(?-i:\u{DF})|(.)\\1", "giu", "\u{DF}", "#", #line),
+            ("(?-i:\u{DF})|(.)\\1", "gi", "\u{1E9E}", "\u{1E9E}", #line),
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
     }
 
     func testDoubleToStringMatchesDart() {
