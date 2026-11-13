@@ -2068,4 +2068,380 @@ class TransformTest {
         val patterns = known.flatMap { listOf("\\p{Script=$it}", "[\\P{sc=$it}]") }
         assertEquals(emptyList(), listOf("gu", "giu").flatMap { f -> patterns.filter { RegexSupport.compile(it, f) == null }.map { "$it /$f" } })
     }
+
+    // MARK: S16 — UTF-16 units without u (row 23b.38)
+    // Expected values from Dart 3.14.0. Without `u` Dart reads the pattern and the input as UTF-16
+    // code units: each half of a surrogate pair is one character, a match may hold one half alone,
+    // and no letter above U+FFFF folds. With `u`, after an empty match at a pair's first half, the
+    // next search starts after the pair.
+
+    /** 😀 U+1F600 and 😂 U+1F602, and 😀's two halves. */
+    private val e = String(Character.toChars(0x1F600))
+    private val e2 = String(Character.toChars(0x1F602))
+    private val eHi = Char(0xD83D).toString()
+    private val eLo = Char(0xDE00).toString()
+
+    /** 𐐨 U+10428 and 𐐀 U+10400, one Deseret fold class, and their halves. */
+    private val d = String(Character.toChars(0x10428))
+    private val dHi = Char(0xD801).toString()
+    private val dLo = Char(0xDC28).toString()
+    private val dU = String(Character.toChars(0x10400))
+
+    /** Private-use characters, from the block a masked run takes its stand-ins from. */
+    private val p0 = Char(0xE000).toString()
+    private val p1 = Char(0xE001).toString()
+    private val p2 = Char(0xE002).toString()
+
+    /** Every private-use character of the BMP, U+E000-F8FF. */
+    private val allPua = (0xE000..0xF8FF).joinToString("") { Char(it).toString() }
+
+    /** A backslash, `u` and the four hex digits [hex], as pattern text. */
+    private fun esc(hex: String): String = "\\u" + hex
+
+    private val noU = listOf("g", "gi", "gm", "gs")
+    private val withU = listOf("gu", "giu")
+
+    /** The unit rows' inputs: E, "aEb", "EE", 𐐨 and "a\nE". */
+    private val unitInputs = listOf(e, "a${e}b", e + e, d, "a\n$e")
+
+    /** Inputs with private-use characters next to E, for classes and ranges. */
+    private val classInputs = listOf(e, "a${e}b", "$p0$e$p1", "b$p2$e")
+    private val puaInputs = listOf("$p0$e", "$e$p0$p1", "$p0$p0$e")
+    private val stepInputs = listOf(e, e + e, "a$e", "${e}a")
+
+    /**
+     * [pattern] on each of [inputs] under each of [flags], with Dart's output for each input in
+     * order (null where Dart throws). On "a\nE", the last of [unitInputs], [gm] and [gs] are
+     * Dart's under `gm` and `gs` where they differ from the others.
+     */
+    private fun units(
+        pattern: String,
+        vararg expected: String?,
+        inputs: List<String> = unitInputs,
+        flags: List<String> = noU,
+        gm: String? = null,
+        gs: String? = null,
+    ): List<Rx> {
+        assertEquals(inputs.size, expected.size, pattern)
+        return flags.flatMap { f ->
+            inputs.mapIndexed { n, input ->
+                val out = when {
+                    inputs !== unitInputs || n < inputs.lastIndex -> expected[n]
+                    f == "gm" -> gm ?: expected[n]
+                    f == "gs" -> gs ?: expected[n]
+                    else -> expected[n]
+                }
+                Rx(pattern, f, input, out)
+            }
+        }
+    }
+
+    /** A regex step on an input, and Dart's output. */
+    private class Step(val input: String, val step: JsonValue, val expected: String?)
+
+    private fun assertSteps(rows: List<Step>) {
+        val failures = rows.mapNotNull { r ->
+            val got = run(r.input, r.step)
+            if (got == j(r.expected)) null else "${r.step} on ${codes(r.input)}: got ${got.stringValue?.let(::codes)}, expected ${r.expected?.let(::codes)}"
+        }
+        if (failures.isNotEmpty()) fail(failures.joinToString("\n"))
+    }
+
+    /** The UTF-16 units of [s] in hex, for a failure message. */
+    private fun codes(s: String): String = s.map { "%04X".format(it.code) }.joinToString(" ")
+
+    @Test
+    fun u1_withoutUEachHalfOfAPairIsOneUnit() {
+        assertDart(
+            listOf(
+                units(".", "##", "####", "####", "##", "#\n##", gs = "####"),
+                units("[^a]", "##", "a###", "####", "##", "a###"),
+                units("\\S", "##", "####", "####", "##", "#\n##"),
+                units("\\W", "##", "a##b", "####", "##", "a###"),
+                units("\\D", "##", "####", "####", "##", "####"),
+                units("[^]", "##", "####", "####", "##", "####"),
+                units(".{2}", "#", "##", "##", "#", "a\n#", gs = "##"),
+                units("^.\$", e, "a${e}b", "$e$e", d, "a\n$e", gm = "#\n$e"),
+                units("^..\$", "#", "a${e}b", "$e$e", "#", "a\n$e", gm = "a\n#"),
+                units("(.)", "##", "####", "####", "##", "#\n##", gs = "####"),
+                units(".?", "###", "#####", "#####", "###", "##\n###", gs = "#####"),
+                units("[$e]", "##", "a##b", "####", d, "a\n##"),
+                units("[^$e]", e, "#$e#", "$e$e", "##", "##$e"),
+                units("$e+", "#", "a#b", "##", d, "a\n#"),
+                units("[${esc("D83D")}]", "#$eLo", "a#${eLo}b", "#$eLo#$eLo", d, "a\n#$eLo"),
+                units(esc("D83D"), "#$eLo", "a#${eLo}b", "#$eLo#$eLo", d, "a\n#$eLo"),
+                units(esc("DE00"), "$eHi#", "a$eHi#b", "$eHi#$eHi#", d, "a\n$eHi#"),
+                units("[${esc("D800")}-${esc("DBFF")}]", "#$eLo", "a#${eLo}b", "#$eLo#$eLo", "#$dLo", "a\n#$eLo"),
+                units("[${esc("DC00")}-${esc("DFFF")}]", "$eHi#", "a$eHi#b", "$eHi#$eHi#", "$dHi#", "a\n$eHi#"),
+                units("[${esc("D83D")}${esc("DE00")}]", "##", "a##b", "####", d, "a\n##"),
+                units(".(?=.)", "#$eLo", "###b", "###$eLo", "#$dLo", "a\n#$eLo", gs = "###$eLo"),
+                units("(?<=.).", "$eHi#", "a###", "$eHi###", "$dHi#", "a\n$eHi#", gs = "a###"),
+                units(".\$", "$eHi#", "a$e#", "$e$eHi#", "$dHi#", "a\n$eHi#", gm = "#\n$eHi#"),
+                units("[$d]", e, "a${e}b", "$e$e", "##", "a\n$e"),
+            ).flatten(),
+        )
+    }
+
+    @Test
+    fun u1_guard_withoutUEmptyMatchesEdgesAndWholePairsKeepTheirMatches() {
+        // Kotlin's already: an empty match steps one unit, `\b` and `^` find no edge inside a pair,
+        // and a pair written whole matches a pair.
+        assertDart(
+            listOf(
+                units("a??", "#$eHi#$eLo#", "#a#$eHi#$eLo#b#", "#$eHi#$eLo#$eHi#$eLo#", "#$dHi#$dLo#", "#a#\n#$eHi#$eLo#"),
+                units("", "#$eHi#$eLo#", "#a#$eHi#$eLo#b#", "#$eHi#$eLo#$eHi#$eLo#", "#$dHi#$dLo#", "#a#\n#$eHi#$eLo#"),
+                units("(?:)", "#$eHi#$eLo#", "#a#$eHi#$eLo#b#", "#$eHi#$eLo#$eHi#$eLo#", "#$dHi#$dLo#", "#a#\n#$eHi#$eLo#"),
+                units("x*", "#$eHi#$eLo#", "#a#$eHi#$eLo#b#", "#$eHi#$eLo#$eHi#$eLo#", "#$dHi#$dLo#", "#a#\n#$eHi#$eLo#"),
+                units("\\b", e, "#a#$e#b#", "$e$e", d, "#a#\n$e"),
+                units("\\B", "#$eHi#$eLo#", "a$eHi#${eLo}b", "#$eHi#$eLo#$eHi#$eLo#", "#$dHi#$dLo#", "a\n#$eHi#$eLo#"),
+                units("\$", "$e#", "a${e}b#", "$e$e#", "$d#", "a\n$e#", gm = "a#\n$e#"),
+                units("^", "#$e", "#a${e}b", "#$e$e", "#$d", "#a\n$e", gm = "#a\n#$e"),
+                units(e, "#", "a#b", "##", d, "a\n#"),
+                units("(?:$e)+", "#", "a#b", "#", d, "a\n#"),
+                units("${esc("D83D")}${esc("DE00")}", "#", "a#b", "##", d, "a\n#"),
+                units(d, e, "a${e}b", "$e$e", "#", "a\n$e"),
+            ).flatten(),
+        )
+    }
+
+    @Test
+    fun u1_withoutUClassesAndRangesHoldUnits() {
+        // A range is read on Dart's units: `[a-E]` is a to the high half, then the low half; the
+        // halves a range covers are in it, a private-use character the input holds is itself.
+        assertDart(
+            listOf(
+                units("[a-${esc("D83D")}]", "#$eLo", "##$eLo#", "$p0#$eLo$p1", "#$p2#$eLo", inputs = classInputs),
+                units("[${esc("D83D")}-${esc("DE00")}]", "##", "a##b", "$p0##$p1", "b$p2##", inputs = classInputs),
+                units("[${esc("D83D")}-${esc("E000")}]", "##", "a##b", "###$p1", "b$p2##", inputs = classInputs),
+                units("[^${esc("E000")}-${esc("F8FF")}]", "##", "####", "$p0##$p1", "#$p2##", inputs = classInputs),
+                units("[$e-$e2]", null, null, null, null, inputs = classInputs),
+                units("[a-$e]", "##", "####", "$p0##$p1", "#$p2##", inputs = classInputs),
+                units("[^${esc("D83D")}]", "$eHi#", "#$eHi##", "#$eHi##", "##$eHi#", inputs = classInputs),
+                units("[${esc("0000")}-${esc("FFFF")}]", "##", "####", "####", "####", inputs = classInputs),
+                units("[^${esc("0000")}-${esc("FFFF")}]", e, "a${e}b", "$p0$e$p1", "b$p2$e", inputs = classInputs),
+                units("[${esc("D800")}-${esc("DFFF")}]+", "#", "a#b", "$p0#$p1", "b$p2#", inputs = classInputs),
+                units("[$eHi-$eLo]", "##", "a##b", "$p0##$p1", "b$p2##", inputs = classInputs),
+                units("[$eHi]", "#$eLo", "a#${eLo}b", "$p0#$eLo$p1", "b$p2#$eLo", inputs = classInputs),
+                units(eHi, "#$eLo", "a#${eLo}b", "$p0#$eLo$p1", "b$p2#$eLo", inputs = classInputs),
+                units("$eLo|$eHi", "##", "a##b", "$p0##$p1", "b$p2##", inputs = classInputs),
+                units("[\\d-${esc("D83D")}]", "#$eLo", "a#${eLo}b", "$p0#$eLo$p1", "b$p2#$eLo", inputs = classInputs),
+                units("[${esc("D83D")}-\\w]", "#$eLo", "##$eLo#", "$p0#$eLo$p1", "#$p2#$eLo", inputs = classInputs),
+                units("[\\$e]", "##", "a##b", "$p0##$p1", "b$p2##", inputs = classInputs),
+                units(".", "###", "####", "####", inputs = puaInputs),
+                units("[^a]", "###", "####", "####", inputs = puaInputs),
+                units("\\S", "###", "####", "####", inputs = puaInputs),
+                units(".{2}", "#$eLo", "##", "##", inputs = puaInputs),
+            ).flatten(),
+        )
+    }
+
+    @Test
+    fun u1_guard_withoutUPrivateUseCharactersAndReversedRangesStayDarts() {
+        // A reversed range is Dart's error on units too, and a private-use character in the input or
+        // the pattern is only itself; an input that holds every one of them runs unmasked.
+        assertDart(
+            listOf(
+                units("[${esc("E000")}-${esc("F8FF")}]", e, "a${e}b", "#$e#", "b#$e", inputs = classInputs),
+                units("[${esc("E000")}-${esc("D83D")}]", null, null, null, null, inputs = classInputs),
+                units("[${esc("DE00")}-${esc("D83D")}]", null, null, null, null, inputs = classInputs),
+                units("[a$e]+", "#", "#b", "$p0#$p1", "b$p2#", inputs = classInputs),
+                units("[^${e}a]", e, "a$e#", "#$e#", "##$e", inputs = classInputs),
+                units("\\$e", "#", "a#b", "$p0#$p1", "b$p2#", inputs = classInputs),
+                units("[${esc("E001")}]", e, "a${e}b", "$p0$e#", "b$p2$e", inputs = classInputs),
+                units(esc("E000"), e, "a${e}b", "#$e$p1", "b$p2$e", inputs = classInputs),
+                units("[$p0-$p1]", e, "a${e}b", "#$e#", "b$p2$e", inputs = classInputs),
+                units("[$p0-${esc("E002")}]", e, "a${e}b", "#$e#", "b#$e", inputs = classInputs),
+                units(esc("E000"), "#$e", "$e#$p1", "##$e", inputs = puaInputs),
+                units("[${esc("E000")}]", "#$e", "$e#$p1", "##$e", inputs = puaInputs),
+                units(p0, "#$e", "$e#$p1", "##$e", inputs = puaInputs),
+                units("[$p0]", "#$e", "$e#$p1", "##$e", inputs = puaInputs),
+                units("^.\$", "$p0$e", "$e$p0$p1", "$p0$p0$e", inputs = puaInputs),
+                units("(.)\\1", "$p0$e", "$e$p0$p1", "#$e", inputs = puaInputs),
+            ).flatten() +
+                listOf(
+                    Rx("[${esc("E000")}-${esc("F8FF")}]+", "g", allPua + e, "#$e"),
+                    Rx("x", "g", allPua + e, allPua + e),
+                ),
+        )
+    }
+
+    @Test
+    fun u1_theGroupsAndTheMatchAreReadFromTheInput() {
+        // `$1`, `{{value}}`, the text between matches and the match-only result are the input's
+        // units, a lone half among them.
+        assertSteps(
+            listOf(
+                Step(e, rep("(.)", "g", "[\$1]"), "[$eHi][$eLo]"),
+                Step(e, rep("(.)", "gi", "[\$1]"), "[$eHi][$eLo]"),
+                Step(e, rep("(.)", "", "[\$1]"), "[$eHi]$eLo"),
+                Step(e, rep("(.)(.)", "g", "\$2\$1"), "$eLo$eHi"),
+                Step(e, rep("(.)(.)", "gi", "\$2\$1"), "$eLo$eHi"),
+                Step(e, rep("(.)(.)", "", "\$2\$1"), "$eLo$eHi"),
+                Step("a$e", rep(".", "g", "<{{value}}>"), "<a><$eHi><$eLo>"),
+                Step("a$e", rep(".", "gi", "<{{value}}>"), "<a><$eHi><$eLo>"),
+                Step("a$e", rep(".", "", "<{{value}}>"), "<a>$e"),
+                Step("${e}b", rep("(${esc("D83D")})", "g", "[\$1]"), "[$eHi]${eLo}b"),
+                Step("${e}b", rep("(${esc("D83D")})", "gi", "[\$1]"), "[$eHi]${eLo}b"),
+                Step("${e}b", rep("(${esc("D83D")})", "", "[\$1]"), "[$eHi]${eLo}b"),
+                Step("${e}b", rep("(${esc("DE00")})(b)", "g", "[\$2\$1]"), "$eHi[b$eLo]"),
+                Step("${e}b", rep("(${esc("DE00")})(b)", "gi", "[\$2\$1]"), "$eHi[b$eLo]"),
+                Step("${e}b", rep("(${esc("DE00")})(b)", "", "[\$2\$1]"), "$eHi[b$eLo]"),
+                Step(e, obj("type" to "regex", "pattern" to ".", "flags" to "g"), eHi),
+                Step(e, obj("type" to "regex", "pattern" to ".", "flags" to "gi"), eHi),
+                Step(e, obj("type" to "regex", "pattern" to ".", "flags" to ""), eHi),
+                Step(e, obj("type" to "regex", "pattern" to esc("DE00"), "flags" to "g"), eLo),
+                Step(e, obj("type" to "regex", "pattern" to esc("DE00"), "flags" to "gi"), eLo),
+                Step(e, obj("type" to "regex", "pattern" to esc("DE00"), "flags" to ""), eLo),
+                Step("$e$e", rep("(.)\\1", "g", "[\$1]"), "$e$e"),
+                Step("$e$e", rep("(.)\\1", "gi", "[\$1]"), "$e$e"),
+                Step("$e$e", rep("(.)\\1", "", "[\$1]"), "$e$e"),
+            ),
+        )
+    }
+
+    @Test
+    fun u1_theMatchesOpReadsUnitsToo() {
+        // `matches` takes no flags: Dart's `RegExp(regex).hasMatch`, without `u`.
+        val rows = listOf(
+            Triple(e, "^.\$", false),
+            Triple(d, "^.\$", false),
+            Triple("x", "^.\$", true),
+            Triple(e, "^..\$", true),
+            Triple(d, "^..\$", true),
+            Triple("x", "^..\$", false),
+            Triple(e, "^${esc("D83D")}", true),
+            Triple(d, "^${esc("D83D")}", false),
+            Triple(e, "${esc("DE00")}\$", true),
+            Triple(d, "${esc("DE00")}\$", false),
+            Triple(e, "^$e\$", true),
+            Triple(d, "^$e\$", false),
+            Triple(e, "^[$e]\$", false),
+            Triple(d, "^[$e]\$", false),
+            Triple(e, "^[$e]{2}\$", true),
+            Triple(d, "^[$e]{2}\$", false),
+            Triple(e, "^$dU\$", false),
+            Triple(d, "^$dU\$", false),
+        )
+        val wrong = rows.filter { (input, regex, want) -> holds(obj("op" to "matches", "str" to s(input), "regex" to regex)) != want }
+        assertEquals(emptyList(), wrong.map { (input, regex, want) -> "$regex on ${codes(input)}: expected $want" })
+    }
+
+    /** Each ordered pair of two letters of a fold class above U+FFFF, as strings (282 classes, 564 pairs). */
+    private val astralPairs: List<Pair<String, String>> by lazy {
+        DartFoldClasses.classes.filter { k -> k.any { it > 0xFFFF } }.flatMap { k ->
+            k.flatMap { a -> k.filter { it != a }.map { b -> String(Character.toChars(a)) to String(Character.toChars(b)) } }
+        }
+    }
+
+    @Test
+    fun u2_withoutULettersAboveTheBmpDoNotFold() {
+        // Dart folds units under `i` without `u`, and a half has no partner: 𐐀 matches only itself,
+        // `[𐐀]` the high half it shares with 𐐨, and no reference repeats the other letter.
+        assertDart(
+            listOf(
+                Rx(dU, "gi", d, d),
+                Rx("[$dU]", "gi", d, "#$dLo"),
+                Rx("($dU)\\1", "gi", dU + d, dU + d),
+                Rx("(.)\\1", "gi", dU + d, dU + d),
+            ),
+        )
+        // Every class above U+FFFF, both orders: the probe's 2 256 rows for x and y, each printed by
+        // Dart as this rule, `[x]` marking the units of y that x holds.
+        assertDart(
+            astralPairs.flatMap { (x, y) ->
+                listOf(
+                    Rx(x, "gi", y, y),
+                    Rx("[$x]", "gi", y, y.map { if (it in x) "#" else "$it" }.joinToString("")),
+                    Rx("($x)\\1", "gi", x + y, x + y),
+                    Rx("(.)\\1", "gi", x + y, x + y),
+                )
+            },
+        )
+    }
+
+    @Test
+    fun u2_guard_withULettersAboveTheBmpFold() {
+        assertDart(
+            listOf(
+                Rx(dU, "giu", d, "#"),
+                Rx("[$dU]", "giu", d, "#"),
+                Rx("($dU)\\1", "giu", dU + d, "#"),
+                Rx("(.)\\1", "giu", dU + d, "#"),
+            ) +
+                astralPairs.flatMap { (x, y) ->
+                    listOf(Rx(x, "giu", y, "#"), Rx("[$x]", "giu", y, "#"), Rx("($x)\\1", "giu", x + y, "#"), Rx("(.)\\1", "giu", x + y, "#"))
+                },
+        )
+    }
+
+    @Test
+    fun k1_withUAnEmptyMatchAtAPairSkipsItsSecondHalf() {
+        assertDart(
+            listOf(
+                units("a??", "#$e#", "#a#$e#b#", "#$e#$e#", "#$d#", "#a#\n#$e#", flags = withU),
+                units("", "#$e#", "#a#$e#b#", "#$e#$e#", "#$d#", "#a#\n#$e#", flags = withU),
+                units("(?:)", "#$e#", "#a#$e#b#", "#$e#$e#", "#$d#", "#a#\n#$e#", flags = withU),
+                units("x*", "#$e#", "#a#$e#b#", "#$e#$e#", "#$d#", "#a#\n#$e#", flags = withU),
+                units("\\B", "#$e#", "a$eHi#${eLo}b", "#$e#$e#", "#$d#", "a\n#$e#", flags = withU),
+                units("^|x*", "#$e#", "#$e#$e#", "#a#$e#", "#$e#a#", inputs = stepInputs, flags = withU),
+                units("(?<=a)|x*", "#$e#", "#$e#$e#", "#a#$e#", "#$e#a#", inputs = stepInputs, flags = withU),
+                units("(?:)|$e", "#$e#", "#$e#$e#", "#a#$e#", "#$e#a#", inputs = stepInputs, flags = withU),
+                units("x*|.", "#$e#", "#$e#$e#", "#a#$e#", "#$e#a#", inputs = stepInputs, flags = withU),
+                units("(x*)", "#$e#", "#$e#$e#", "#a#$e#", "#$e#a#", inputs = stepInputs, flags = withU),
+            ).flatten(),
+        )
+        assertSteps(
+            listOf(
+                Step(e, rep("(x*)", "gu", "[\$1]"), "[]$e[]"),
+                Step(e, rep("(x*)", "giu", "[\$1]"), "[]$e[]"),
+                Step(e, rep("x*", "gu", "[{{value}}]"), "[]$e[]"),
+                Step(e, rep("x*", "giu", "[{{value}}]"), "[]$e[]"),
+            ),
+        )
+    }
+
+    @Test
+    fun k1_guard_withUTheSearchStillTriesEveryUnit() {
+        // Dart's search tries every unit, so `\B` finds the edge between a pair's halves; only the
+        // step after an empty match skips a pair, and `^` and lookbehinds read the whole input.
+        assertDart(
+            listOf(
+                listOf(Rx("\\B", "gu", "a${e}b", "a$eHi#${eLo}b"), Rx("\\B", "giu", "a${e}b", "a$eHi#${eLo}b")),
+                units(".", "#", "###", "##", "#", "#\n#", flags = withU),
+                units("[^a]", "#", "a##", "##", "#", "a##", flags = withU),
+                units("\\S", "#", "###", "##", "#", "#\n#", flags = withU),
+                units("\\W", "#", "a#b", "##", "#", "a##", flags = withU),
+                units("\\D", "#", "###", "##", "#", "###", flags = withU),
+                units("[^]", "#", "###", "##", "#", "###", flags = withU),
+                units(".{2}", e, "#b", "#", d, "a\n$e", flags = withU),
+                units("^.\$", "#", "a${e}b", "$e$e", "#", "a\n$e", flags = withU),
+                units("^..\$", e, "a${e}b", "#", d, "a\n$e", flags = withU),
+                units("(.)", "#", "###", "##", "#", "#\n#", flags = withU),
+                units(".?", "##", "####", "###", "##", "##\n##", flags = withU),
+                units("\\b", e, "#a#$e#b#", "$e$e", d, "#a#\n$e", flags = withU),
+                units("\$", "$e#", "a${e}b#", "$e$e#", "$d#", "a\n$e#", flags = withU),
+                units("^", "#$e", "#a${e}b", "#$e$e", "#$d", "#a\n$e", flags = withU),
+                units("[$e]", "#", "a#b", "##", d, "a\n#", flags = withU),
+                units("[^$e]", e, "#$e#", "$e$e", "#", "##$e", flags = withU),
+                units(e, "#", "a#b", "##", d, "a\n#", flags = withU),
+                units("$e+", "#", "a#b", "#", d, "a\n#", flags = withU),
+                units("(?:$e)+", "#", "a#b", "#", d, "a\n#", flags = withU),
+                units("[${esc("D83D")}]", e, "a${e}b", "$e$e", d, "a\n$e", flags = withU),
+                units(esc("D83D"), e, "a${e}b", "$e$e", d, "a\n$e", flags = withU),
+                units(esc("DE00"), e, "a${e}b", "$e$e", d, "a\n$e", flags = withU),
+                units("[${esc("D800")}-${esc("DBFF")}]", e, "a${e}b", "$e$e", d, "a\n$e", flags = withU),
+                units("[${esc("DC00")}-${esc("DFFF")}]", e, "a${e}b", "$e$e", d, "a\n$e", flags = withU),
+                units("${esc("D83D")}${esc("DE00")}", "#", "a#b", "##", d, "a\n#", flags = withU),
+                units("[${esc("D83D")}${esc("DE00")}]", "#", "a#b", "##", d, "a\n#", flags = withU),
+                units(".(?=.)", e, "##b", "#$e", d, "a\n$e", flags = withU),
+                units("(?<=.).", e, "a##", "$e#", d, "a\n$e", flags = withU),
+                units(".\$", "#", "a$e#", "$e#", "#", "a\n#", flags = withU),
+                units("[$d]", e, "a${e}b", "$e$e", "#", "a\n$e", flags = withU),
+                units(d, e, "a${e}b", "$e$e", "#", "a\n$e", flags = withU),
+                units("(?<=$e)|^", "#$e#", "#$e#$e#", "#a$e#", "#$e#a", inputs = stepInputs, flags = withU),
+                units("(?<=.)", "$e#", "$e#$e#", "a#$e#", "$e#a#", inputs = stepInputs, flags = withU),
+                units("x*(?=$e)", "#$e", "#$e#$e", "a#$e", "#${e}a", inputs = stepInputs, flags = withU),
+            ).flatten(),
+        )
+    }
 }

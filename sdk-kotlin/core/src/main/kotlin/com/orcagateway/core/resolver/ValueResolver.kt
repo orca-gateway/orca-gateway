@@ -206,9 +206,9 @@ public class ValueResolver(
             "matches" -> {
                 val pattern = expr["regex"]?.stringValue ?: ""
                 if (pattern.length > RegexSupport.MAX_PATTERN_LENGTH) return false
-                val re = RegexSupport.compile(pattern, null) ?: return false
                 val input = RegexSupport.clip(DartFormat.string(operand("str")))
-                RegexSupport.firstMatch(re, input) != null
+                val search = RegexSupport.search(pattern, null, input) ?: return false
+                RegexSupport.firstMatch(search) != null
             }
             else -> false
         }

@@ -211,17 +211,17 @@ internal object Transforms {
         val pattern = def["pattern"]?.stringValue ?: ""
         if (pattern.length > RegexSupport.MAX_PATTERN_LENGTH) return JsonValue.Null
         val flags = def["flags"]?.stringValue
-        val re = RegexSupport.compile(pattern, flags) ?: return JsonValue.Null
         val input = RegexSupport.clip(if (current.isNull) "" else DartFormat.string(current))
+        val search = RegexSupport.search(pattern, flags, input) ?: return JsonValue.Null
 
         val replacement = def["replacement"]?.stringValue
         if (replacement == null) {
-            val m = RegexSupport.firstMatch(re, input) ?: return JsonValue.Null
+            val m = RegexSupport.firstMatch(search) ?: return JsonValue.Null
             return JsonValue.String(m.group(0) ?: "")
         }
         val params = def["params"]?.objectValue
         val global = flags?.contains('g') ?: false
-        val matches = if (global) RegexSupport.allMatches(re, input) else listOfNotNull(RegexSupport.firstMatch(re, input))
+        val matches = if (global) RegexSupport.allMatches(search) else listOfNotNull(RegexSupport.firstMatch(search))
 
         val out = StringBuilder()
         var cursor = 0
@@ -373,27 +373,58 @@ internal object Placeholders {
  * ([asciiClasses]); the pattern is then compiled with
  * UNICODE_CHARACTER_CLASS where the runtime has it (learned once: the JVM
  * does, Android's ICU regex is Unicode-aware already), so the engine's own
- * case folding and property names are Unicode as Dart's are.
+ * case folding and property names are Unicode as Dart's are. Where Dart
+ * reads UTF-16 units and the engine code points, the engine searches a
+ * masked copy of the input ([RegexMask], [search]).
  */
 internal object RegexSupport {
     const val MAX_PATTERN_LENGTH: Int = 200
     const val MAX_INPUT_LENGTH: Int = 10_000
 
-    class Match(private val result: java.util.regex.MatchResult) {
+    /**
+     * A match of a [Search]: its range, and the text of each group read from
+     * the input by its range, not from the masked copy the engine searched.
+     */
+    class Match(private val result: java.util.regex.MatchResult, private val input: String) {
         val start: Int get() = result.start()
         val end: Int get() = result.end()
         val groupCount: Int get() = result.groupCount()
 
-        fun group(i: Int): String? = if (i > result.groupCount()) null else result.group(i)
+        fun group(i: Int): String? {
+            if (i > result.groupCount()) return null
+            val from = result.start(i)
+            return if (from < 0) null else input.substring(from, result.end(i))
+        }
     }
 
-    fun compile(pattern: String, flags: String?): Pattern? {
+    /**
+     * One call's search: [re] runs on [text], the input or its [RegexMask]
+     * copy of the same UTF-16 length, and each [Match] reads [input]. [unicode]
+     * is the `u` flag.
+     */
+    class Search(val re: Pattern, val text: String, val input: String, val unicode: Boolean)
+
+    /**
+     * [pattern] under [flags] made ready to search [input], the one way in
+     * for the `regex` transform and the `matches` op: masked where Dart reads
+     * units the engine would join into one code point ([RegexMask.of]),
+     * compiled as it always was elsewhere. Null for an invalid pattern.
+     */
+    fun search(pattern: String, flags: String?, input: String): Search? {
+        val f = flags ?: ""
+        val mask = RegexMask.of(pattern, f, input)
+        val re = compile(pattern, flags, mask) ?: return null
+        return Search(re, mask?.text ?: input, input, 'u' in f)
+    }
+
+    /** [pattern] under [flags], its surrogates written as [mask]'s stand-ins when there is one. */
+    fun compile(pattern: String, flags: String?, mask: RegexMask? = null): Pattern? {
         val f = flags ?: ""
         var options = 0
         if ('i' in f) options = options or Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
         if ('m' in f) options = options or Pattern.MULTILINE
         if ('s' in f) options = options or Pattern.DOTALL
-        val rewritten = asciiClasses(pattern, ignoreCase = 'i' in f, unicode = 'u' in f) ?: return null
+        val rewritten = asciiClasses(pattern, ignoreCase = 'i' in f, unicode = 'u' in f, mask) ?: return null
         return compileIcuLike(rewritten, options)
     }
 
@@ -537,8 +568,15 @@ internal object RegexSupport {
      * give null). With `u` a lookahead is an assertion too; without, Annex B
      * lets it take a quantifier and it is written as a group that does, which
      * ICU needs (`(?=a)*` is `(?:(?=a))*`).
+     *
+     * With a [mask] (a masked run, so without `u`) each surrogate unit the
+     * pattern names is written as its stand-in: a literal half, an escape
+     * that spells one (`\uHHHH`, or `\` before a half), a class member. A
+     * range is ordered by Dart's units, a reversed one null as in Dart, and
+     * one that meets the surrogate block or a stand-in is written as the
+     * ranges [RegexMask.ranges] gives. Without a mask nothing changes.
      */
-    fun asciiClasses(pattern: String, ignoreCase: Boolean = false, unicode: Boolean = false): String? {
+    fun asciiClasses(pattern: String, ignoreCase: Boolean = false, unicode: Boolean = false, mask: RegexMask? = null): String? {
         val captures = captures(pattern)
         val named = captures.names.isNotEmpty()
         val open = ArrayList<Group>()
@@ -618,8 +656,10 @@ internal object RegexSupport {
                         else -> {
                             val escape = spelled(pattern, i, unicode, inClass = false, named) ?: escape(pattern, i, unicode, inClass = false) ?: return null
                             val letter = escape.codePoint?.takeIf { fold && it <= 0xFFFF }?.let { DartFoldTable.set(it.toChar(), unicode) }
+                            val standIn = mask?.let { m -> unitAt(pattern, i, escape)?.let(m::standIn) }
                             when {
                                 letter != null -> out.append("(?-i:[").append(letter).append("])")
+                                standIn != null -> out.append(plain(standIn.code))
                                 // A property is the class of it alone, whose set Dart folds.
                                 fold && unicode && (next == 'p' || next == 'P') -> out.append(dartClass(escape.text, negated = false, fold, unicode, properties = true))
                                 else -> out.append(escape.text)
@@ -633,7 +673,7 @@ internal object RegexSupport {
                     out.append('\\').append(c)
                     i += 1
                 }
-                c == '[' -> i = characterClass(pattern, i, word, fold, unicode, named, out) ?: return null
+                c == '[' -> i = characterClass(pattern, i, word, fold, unicode, named, out, mask) ?: return null
                 c == '(' -> {
                     val (end, group) = groupOpening(pattern, i, fold, out.length, opened) ?: return null
                     if (group.kind == GroupKind.Capturing) {
@@ -676,7 +716,8 @@ internal object RegexSupport {
                     i += 1
                 }
                 else -> {
-                    out.append(c)
+                    val standIn = mask?.standIn(c.code)
+                    if (standIn != null) out.append(plain(standIn.code)) else out.append(c)
                     i += 1
                 }
             }
@@ -918,9 +959,19 @@ internal object RegexSupport {
      * `-` between two members is a range only when neither is a class escape:
      * without `u` it is then a member (`[a-\d]` is a, - and a digit), with `u`
      * null, a property on either side too; a range out of order fails to
-     * compile, as in Dart.
+     * compile, as in Dart. With a [mask] its members are [classAtom]'s, and a
+     * range is ordered and written on Dart's units ([asciiClasses]).
      */
-    private fun characterClass(pattern: String, start: Int, word: String, fold: Boolean, unicode: Boolean, named: Boolean, out: StringBuilder): Int? {
+    private fun characterClass(
+        pattern: String,
+        start: Int,
+        word: String,
+        fold: Boolean,
+        unicode: Boolean,
+        named: Boolean,
+        out: StringBuilder,
+        mask: RegexMask?,
+    ): Int? {
         val negated = pattern.getOrNull(start + 1) == '^'
         var j = if (negated) start + 2 else start + 1
         if (pattern.getOrNull(j) == ']') {
@@ -933,17 +984,29 @@ internal object RegexSupport {
         var properties = false // with `u`, whether a member is `\p{…}` or `\P{…}`
         while (j < pattern.length && pattern[j] != ']') {
             val from = j
-            val first = classAtom(pattern, j, word, unicode, named) ?: return null
+            val first = classAtom(pattern, j, word, unicode, named, mask) ?: return null
             j = first.end
             if (unicode && pattern[from] == '\\' && pattern[from + 1] in "pP") properties = true
             if (pattern.getOrNull(j) != '-' || j + 1 >= pattern.length || pattern[j + 1] == ']') {
                 body.append(first.text)
                 continue
             }
-            val second = classAtom(pattern, j + 1, word, unicode, named) ?: return null
+            val second = classAtom(pattern, j + 1, word, unicode, named, mask) ?: return null
             val union = classEscape(from) || classEscape(j + 1)
             if (union && unicode) return null
-            body.append(first.text).append(if (union) "\\-" else "-").append(second.text)
+            val lo = if (mask != null && !union) unitAt(pattern, from, first) else null
+            val hi = if (lo != null) unitAt(pattern, j + 1, second) else null
+            // Dart orders a range by its units; one over halves or stand-ins is the engine's units it covers.
+            if (lo != null && hi != null && lo > hi) return null
+            val covered = if (lo != null && hi != null) mask?.ranges(lo, hi) else null
+            if (covered != null) {
+                for (r in covered) {
+                    body.append(plain(r.first))
+                    if (r.last > r.first) body.append('-').append(plain(r.last))
+                }
+            } else {
+                body.append(first.text).append(if (union) "\\-" else "-").append(second.text)
+            }
             j = second.end
         }
         if (j >= pattern.length) return null
@@ -1018,11 +1081,13 @@ internal object RegexSupport {
      * The class member at [j] as the engine's text: a character (ASCII
      * punctuation escaped), a class escape, or an escape for one character,
      * read as [spelled], then [escape], reads it. Null for an escape Dart rejects.
+     * With a [mask], a member that spells a masked unit is its stand-in.
      */
-    private fun classAtom(pattern: String, j: Int, word: String, unicode: Boolean, named: Boolean): Escape? {
+    private fun classAtom(pattern: String, j: Int, word: String, unicode: Boolean, named: Boolean, mask: RegexMask?): Escape? {
         val c = pattern[j]
         if (c != '\\') {
             val end = if (unicode) j + Character.charCount(pattern.codePointAt(j)) else j + 1
+            mask?.standIn(c.code)?.let { return Escape(end, plain(it.code), null) }
             val text = if (c in '!'..'~' && !c.isLetterOrDigit()) "\\$c" else pattern.substring(j, end)
             return Escape(end, text, null)
         }
@@ -1037,7 +1102,30 @@ internal object RegexSupport {
             else -> null
         }
         if (piece != null) return Escape(j + 2, piece, null)
-        return spelled(pattern, j, unicode, inClass = true, named) ?: escape(pattern, j, unicode, inClass = true)
+        val atom = spelled(pattern, j, unicode, inClass = true, named) ?: escape(pattern, j, unicode, inClass = true) ?: return null
+        val standIn = mask?.let { m -> unitAt(pattern, j, atom)?.let(m::standIn) } ?: return atom
+        return Escape(atom.end, plain(standIn.code), atom.codePoint)
+    }
+
+    /**
+     * The unit Dart reads, without `u`, in the character or the one-character
+     * escape [atom] at [at] (not a class escape): the character, the escape's
+     * code point, `\f`, `\n`, `\r`, `\t`, a class's `\b`, or the character an
+     * identity escape stands for (`\` before a half is that half). Null for a
+     * lone `\` at the end.
+     */
+    private fun unitAt(pattern: String, at: Int, atom: Escape): Int? = when {
+        pattern[at] != '\\' -> pattern[at].code
+        atom.codePoint != null -> atom.codePoint
+        else -> when (val c = pattern.getOrNull(at + 1)) {
+            null -> null
+            'b' -> 0x08
+            'f' -> 0x0C
+            'n' -> 0x0A
+            'r' -> 0x0D
+            't' -> 0x09
+            else -> c.code
+        }
     }
 
     /** The end of the escape at [i]: two characters, or with `\xHH` and `\uHHHH` the digits too. */
@@ -1154,15 +1242,30 @@ internal object RegexSupport {
             re.matcher(input)
         }
 
-    fun firstMatch(re: Pattern, input: String): Match? {
-        val m = matcher(re, input)
-        return if (m.find()) Match(m.toMatchResult()) else null
+    fun firstMatch(search: Search): Match? {
+        val m = matcher(search.re, search.text)
+        return if (m.find()) Match(m.toMatchResult(), search.input) else null
     }
 
-    fun allMatches(re: Pattern, input: String): List<Match> {
-        val m = matcher(re, input)
+    /**
+     * Every match, as Dart's `allMatches` steps: after an empty match the
+     * next search starts one unit on, but with `u`, when that match is at a
+     * high half before its low half, after the pair. The search itself still
+     * tries every unit, as Dart's does (`\B` with `u` finds the edge inside a
+     * pair). `find(int)` resets the matcher to the whole input, so `^` stays
+     * at 0 and a lookbehind sees all of it.
+     */
+    fun allMatches(search: Search): List<Match> {
+        val text = search.text
+        val m = matcher(search.re, text)
         val out = ArrayList<Match>()
-        while (m.find()) out.add(Match(m.toMatchResult()))
+        var found = m.find()
+        while (found) {
+            out.add(Match(m.toMatchResult(), search.input))
+            val end = m.end()
+            val pair = search.unicode && m.start() == end && end + 1 < text.length && text[end].isHighSurrogate() && text[end + 1].isLowSurrogate()
+            found = if (pair) m.find(end + 2) else m.find()
+        }
         return out
     }
 
