@@ -1,0 +1,1206 @@
+{
+  "name": "regex-utf16-units-backreferences",
+  "description": "Without `u`, Dart's RegExp (ECMAScript) reads a string as UTF-16 code units, so the emoji \ud83d\ude00 (U+1F600) is two units, a surrogate pair; with `u` it is one code point. With `g` on \ud83d\ude00: `.`, `[^a]` and `\\S` match each unit, giving \"##\"; `.{2}` takes both units as one match, so the replacement \"[{{value}}]\" gives \"[\ud83d\ude00]\"; in `^(..)$` the group holds both units, so \"<$1>\" gives \"<\ud83d\ude00>\"; the class `[\ud83d\ude00]` holds the two units and gives \"##\"; and `x*` with an empty replacement gives \ud83d\ude00 back whole. `\ud83d\ude00+` repeats only the second unit, so on \"\ud83d\ude00\ud83d\ude00\" it matches twice, \"##\". `(?<=.).` on \"a\ud83d\ude00b\" replaces each of the three units after the a, \"a###\". The `matches` BoolExpr op compiles its regex with no flags: `^.$` does not match \ud83d\ude00 (\"no\") and `^..$` does (\"yes\"). Without `u` a letter above U+FFFF does not fold: the Deseret capital long I \ud801\udc00 (U+10400) with `gi` on its small letter \ud801\udc28 (U+10428) matches nothing; with `giu` it gives \"#\". With `u`, after an empty match at a pair's high half the next search starts after the whole pair, so `x*` with `gu` on \ud83d\ude00 gives \"#\ud83d\ude00#\". Under `gi` a back reference compares letters as `i` does without `u`, by each letter's uppercase, keeping a letter as itself when its uppercase is not one character or is ASCII while the letter is not: `(s)\\1` on \"s\u017f\" (the long s U+017F, uppercase S), `(K)\\1` on \"K\u212a\" (the Kelvin sign U+212A, its own uppercase) and `(.)\\1` on \"\u00df\u1e9e\" (U+00DF, uppercase \"SS\", and U+1E9E) match nothing, while `(s)\\1` on \"sS\" gives \"#\". With `giu` simple case folding applies (U+017F to s, U+212A to k, U+1E9E to U+00DF) and those three give \"#\". No row's result splits a pair. Every replace-mode regex puts \"#\" for each match unless its replacement is named above. Every input reads page state, so the engine keeps the Values unresolved with `watches` and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "children": [
+      {
+        "type": "Text",
+        "key": "u_dot",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": ".",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u_not_a",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[^a]",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u_non_space",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\S",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u_two_value",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": ".{2}",
+                "flags": "g",
+                "replacement": "[{{value}}]"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u_pair_group",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "^(..)$",
+                "flags": "g",
+                "replacement": "<$1>"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u_class_emoji",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\ud83d\ude00]",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u_emoji_plus",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "two"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\ud83d\ude00+",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u_lookbehind",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "around"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?<=.).",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u_empty_join",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "x*",
+                "flags": "g",
+                "replacement": ""
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "m_one_unit",
+        "props": {
+          "data": {
+            "type": "conditional",
+            "branches": [
+              {
+                "when": {
+                  "op": "matches",
+                  "str": {
+                    "type": "state",
+                    "scope": "page",
+                    "key": "emoji"
+                  },
+                  "regex": "^.$"
+                },
+                "then": {
+                  "type": "static",
+                  "value": "yes"
+                }
+              }
+            ],
+            "else": {
+              "type": "static",
+              "value": "no"
+            }
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "m_two_units",
+        "props": {
+          "data": {
+            "type": "conditional",
+            "branches": [
+              {
+                "when": {
+                  "op": "matches",
+                  "str": {
+                    "type": "state",
+                    "scope": "page",
+                    "key": "emoji"
+                  },
+                  "regex": "^..$"
+                },
+                "then": {
+                  "type": "static",
+                  "value": "yes"
+                }
+              }
+            ],
+            "else": {
+              "type": "static",
+              "value": "no"
+            }
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u2_deseret",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\ud801\udc00",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "u2_deseret_u",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\ud801\udc00",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "k_empty_u",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "x*",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "b_long_s",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "long_s"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(s)\\1",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "b_kelvin",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "kelvin"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(K)\\1",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "b_sharp_s",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "sharp"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(.)\\1",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "b_ascii",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "ascii"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(s)\\1",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "b_long_s_u",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "long_s"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(s)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "b_kelvin_u",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "kelvin"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(K)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "b_sharp_s_u",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "sharp"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(.)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "emoji": "\ud83d\ude00",
+      "around": "a\ud83d\ude00b",
+      "two": "\ud83d\ude00\ud83d\ude00",
+      "deseret": "\ud801\udc28",
+      "long_s": "s\u017f",
+      "kelvin": "K\u212a",
+      "sharp": "\u00df\u1e9e",
+      "ascii": "sS"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "u_dot",
+        "u_not_a",
+        "u_non_space",
+        "u_two_value",
+        "u_pair_group",
+        "u_class_emoji",
+        "u_emoji_plus",
+        "u_lookbehind",
+        "u_empty_join",
+        "m_one_unit",
+        "m_two_units",
+        "u2_deseret",
+        "u2_deseret_u",
+        "k_empty_u",
+        "b_long_s",
+        "b_kelvin",
+        "b_sharp_s",
+        "b_ascii",
+        "b_long_s_u",
+        "b_kelvin_u",
+        "b_sharp_s_u"
+      ],
+      "watches": []
+    },
+    {
+      "id": "b_sharp_s_u",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "sharp"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(.)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "sharp"
+      ]
+    },
+    {
+      "id": "b_kelvin_u",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "kelvin"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(K)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "kelvin"
+      ]
+    },
+    {
+      "id": "b_long_s_u",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "long_s"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(s)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "long_s"
+      ]
+    },
+    {
+      "id": "b_ascii",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "ascii"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(s)\\1",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "ascii"
+      ]
+    },
+    {
+      "id": "b_sharp_s",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "sharp"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(.)\\1",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "sharp"
+      ]
+    },
+    {
+      "id": "b_kelvin",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "kelvin"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(K)\\1",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "kelvin"
+      ]
+    },
+    {
+      "id": "b_long_s",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "long_s"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(s)\\1",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "long_s"
+      ]
+    },
+    {
+      "id": "k_empty_u",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "x*",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "u2_deseret_u",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\ud801\udc00",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret"
+      ]
+    },
+    {
+      "id": "u2_deseret",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\ud801\udc00",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret"
+      ]
+    },
+    {
+      "id": "m_two_units",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "matches",
+                "str": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "emoji"
+                },
+                "regex": "^..$"
+              },
+              "then": {
+                "type": "static",
+                "value": "yes"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "no"
+          }
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "m_one_unit",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "matches",
+                "str": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "emoji"
+                },
+                "regex": "^.$"
+              },
+              "then": {
+                "type": "static",
+                "value": "yes"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "no"
+          }
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "u_empty_join",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "x*",
+              "flags": "g",
+              "replacement": ""
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "u_lookbehind",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "around"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?<=.).",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "around"
+      ]
+    },
+    {
+      "id": "u_emoji_plus",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "two"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\ud83d\ude00+",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "two"
+      ]
+    },
+    {
+      "id": "u_class_emoji",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\ud83d\ude00]",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "u_pair_group",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "^(..)$",
+              "flags": "g",
+              "replacement": "<$1>"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "u_two_value",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": ".{2}",
+              "flags": "g",
+              "replacement": "[{{value}}]"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "u_non_space",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\S",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "u_not_a",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[^a]",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "u_dot",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": ".",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    }
+  ],
+  "resolved": {
+    "u_dot": {
+      "data": "##"
+    },
+    "u_not_a": {
+      "data": "##"
+    },
+    "u_non_space": {
+      "data": "##"
+    },
+    "u_two_value": {
+      "data": "[\ud83d\ude00]"
+    },
+    "u_pair_group": {
+      "data": "<\ud83d\ude00>"
+    },
+    "u_class_emoji": {
+      "data": "##"
+    },
+    "u_emoji_plus": {
+      "data": "##"
+    },
+    "u_lookbehind": {
+      "data": "a###"
+    },
+    "u_empty_join": {
+      "data": "\ud83d\ude00"
+    },
+    "m_one_unit": {
+      "data": "no"
+    },
+    "m_two_units": {
+      "data": "yes"
+    },
+    "u2_deseret": {
+      "data": "\ud801\udc28"
+    },
+    "u2_deseret_u": {
+      "data": "#"
+    },
+    "k_empty_u": {
+      "data": "#\ud83d\ude00#"
+    },
+    "b_long_s": {
+      "data": "s\u017f"
+    },
+    "b_kelvin": {
+      "data": "K\u212a"
+    },
+    "b_sharp_s": {
+      "data": "\u00df\u1e9e"
+    },
+    "b_ascii": {
+      "data": "#"
+    },
+    "b_long_s_u": {
+      "data": "#"
+    },
+    "b_kelvin_u": {
+      "data": "#"
+    },
+    "b_sharp_s_u": {
+      "data": "#"
+    }
+  }
+}
