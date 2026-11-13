@@ -8,6 +8,7 @@ import com.orcagateway.core.support.j
 import com.orcagateway.core.support.obj
 import com.orcagateway.core.support.props
 import java.util.regex.Pattern
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -2655,5 +2656,221 @@ class TransformTest {
                 Step("$kelvin$kelvin", obj("type" to "regex", "pattern" to "(.)\\1", "flags" to "gi"), "$kelvin$kelvin"),
             ),
         )
+    }
+
+    // MARK: S17 — letters the platform's Unicode lacks (row 23b.40)
+    // Expected values from Dart 3.14.0. Under `i` the JVM folds only the case pairs its own Unicode
+    // has: JDK 21 (Unicode 15) lacks 27 of Dart's fold classes, 5 in the BMP and Garay's 22, and
+    // JDK 17 (Unicode 13) 67, 5 more in the BMP and Vithkuqi's 35 too. The SDK learns them on first
+    // use and writes their letters as Dart's sets. JDK 24 and later lack none: there the seam sets
+    // them, so that the same paths run.
+
+    @AfterTest
+    fun learnTheLaggingClassesAgain() {
+        DartFoldClasses.laggingForTests = null
+    }
+
+    /** Sets the SDK's lagging classes to [classes], by their index in [DartFoldClasses.classes]. */
+    private fun lagging(classes: List<IntArray>) {
+        DartFoldClasses.laggingForTests = classes.map { DartFoldClasses.classOf[DartFoldClasses.letters.binarySearch(it[0])] }.toIntArray()
+    }
+
+    private fun hex(k: IntArray): String = k.joinToString(" ") { "%04X".format(it) }
+
+    /**
+     * [rows] as the SDK writes each pattern, run with the engine's own folding off: where the engine
+     * folds a pair itself, only the SDK's writing then matches the letters as Dart does.
+     */
+    private fun assertWritten(rows: List<Rx>) {
+        fun shown(s: String?): String = s?.map { if (it in ' '..'~') "$it" else "\\u%04X".format(it.code) }?.joinToString("") ?: "null"
+        val failures = rows.mapNotNull { r ->
+            val written = RegexSupport.asciiClasses(r.pattern, ignoreCase = 'i' in r.flags, unicode = 'u' in r.flags)
+            val got = written?.let { Pattern.compile(it).matcher(r.input).replaceAll("#") }
+            if (got == r.expected) null else "${shown(r.pattern)} /${r.flags} on ${shown(r.input)}: written ${shown(written)}, got ${shown(got)}"
+        }
+        if (failures.isNotEmpty()) fail(failures.joinToString("\n"))
+    }
+
+    /** The BMP classes of Unicode 16, which JDK 21 lacks, and of Unicode 14, which JDK 17 lacks too, in hex. */
+    private val unicode16 = listOf("019B A7DC", "0264 A7CB", "1C89 1C8A", "A7CC A7CD", "A7DA A7DB")
+    private val unicode14 = listOf("2C2F 2C5F", "A7C0 A7C1", "A7D0 A7D1", "A7D6 A7D7", "A7D8 A7D9")
+
+    /** Dart's fold classes whose first letter is in [range]: Vithkuqi's 35 in U+10570-105BC, Garay's 22 in U+10D50-10D85. */
+    private fun classesIn(range: IntRange): List<IntArray> = DartFoldClasses.classes.filter { it[0] in range }
+
+    private fun codePoints(hex: String): IntArray = hex.split(' ').map { it.toInt(16) }.toIntArray()
+
+    /** The classes JDK 21 does not fold in full, and those JDK 17 does not. */
+    private val lacks21: List<IntArray> by lazy { unicode16.map(::codePoints) + classesIn(0x10D50..0x10D85) }
+    private val lacks17: List<IntArray> by lazy {
+        (unicode16 + unicode14).map(::codePoints) + classesIn(0x10570..0x105BC) + classesIn(0x10D50..0x10D85)
+    }
+
+    /** Each ordered pair of two letters of one of [classes], as strings. */
+    private fun pairsOf(classes: List<IntArray>): List<Pair<String, String>> = classes.flatMap { k ->
+        k.flatMap { a -> k.filter { it != a }.map { b -> String(Character.toChars(a)) to String(Character.toChars(b)) } }
+    }
+
+    /** ƛ U+019B and its capital U+A7DC (Unicode 16); 𐵐 U+10D50 and its small letter 𐵰 U+10D70 (Garay). */
+    private val lambda = cps("019B")
+    private val lambdaCap = cps("A7DC")
+    private val garayA = cps("10D50")
+    private val garaySmallA = cps("10D70")
+
+    /** [s] as the `\uHHHH` escapes of its units: a letter above U+FFFF as a high half's then a low half's. */
+    private fun escapes(s: String): String = s.map { esc("%04X".format(it.code)) }.joinToString("")
+
+    /**
+     * L1: a letter of a class the JVM lacks, as a letter, an escape or in `(?i:`, matches under `i`
+     * each other letter of its class, one above U+FFFF only with `u` (without it two units, as at
+     * S16), there as a letter, `\u{…}` or a pair of `\uHHHH` escapes, a high half's then a low
+     * half's. The 724 rows over the classes JDK 17 lacks were each printed by Dart as this rule.
+     */
+    private val l1Rows: List<Rx> by lazy {
+        listOf(
+            Rx(lambda, "gi", lambdaCap, "#"),
+            Rx(lambda, "giu", lambdaCap, "#"),
+            Rx(lambdaCap, "gi", lambda, "#"),
+            Rx(esc("019B"), "gi", lambdaCap, "#"),
+            Rx(esc("019B"), "giu", lambdaCap, "#"),
+            Rx(esc("A7DC"), "gi", lambda, "#"),
+            Rx("(?i:$lambda)", "g", lambdaCap, "#"),
+            Rx("(?-i:$lambda)", "gi", lambdaCap, lambdaCap),
+            Rx("(?-i:$lambda)", "giu", lambdaCap, lambdaCap),
+            Rx("$lambda+", "gi", lambdaCap + lambda + lambdaCap, "#"),
+            Rx("$lambda+", "giu", lambdaCap + lambda + lambdaCap, "#"),
+            Rx(garayA, "giu", garaySmallA, "#"),
+            Rx("(?i:$garayA)", "gu", garaySmallA, "#"),
+            Rx(garayA, "gi", garaySmallA, garaySmallA),
+            Rx("\\u{10D50}", "giu", garaySmallA, "#"),
+            Rx("\\u{10D70}", "giu", garayA, "#"),
+            Rx("\\u{10570}", "giu", cps("10597"), "#"),
+            Rx("(?-i:$garayA)", "giu", garaySmallA, garaySmallA),
+            Rx("$garayA+", "giu", "$garaySmallA${garayA}b", "#b"),
+            // With `u` a high half's escape and a low half's after it are one letter, as `\u{…}` is.
+            Rx(escapes(garayA), "giu", garaySmallA, "#"),
+            Rx("(?i:${escapes(garayA)})", "gu", garaySmallA, "#"),
+            Rx("[${escapes(garayA)}]", "giu", garaySmallA, "#"),
+            Rx(escapes(garayA), "giu", garayA, "#"),
+            Rx("${escapes(garayA)}+", "giu", "$garaySmallA${garayA}b", "#b"),
+            Rx(escapes(garayA), "gu", garaySmallA, garaySmallA),
+            Rx("(?-i:${escapes(garayA)})", "giu", garaySmallA, garaySmallA),
+            Rx(escapes(garayA), "gi", garaySmallA, garaySmallA),
+            // A lone half, a low half before a high one, or a high half before `\u{…}` stays two halves.
+            Rx(esc("D803"), "giu", garaySmallA, garaySmallA),
+            Rx(esc("DD50") + esc("D803"), "giu", garaySmallA, garaySmallA),
+            Rx(esc("DD50") + esc("D803"), "giu", "${Char(0xDD50)}${Char(0xD803)}", "#"),
+            Rx(esc("D803") + "\\u{DD50}", "giu", garaySmallA, garaySmallA),
+        ) + pairsOf(lacks17).flatMap { (x, y) ->
+            if (x.length == 1) {
+                listOf(Rx(x, "gi", y, "#"), Rx(x, "giu", y, "#"))
+            } else {
+                listOf(
+                    Rx(x, "giu", y, "#"),
+                    Rx("(?i:$x)", "gu", y, "#"),
+                    Rx(x, "gi", y, y),
+                    Rx(escapes(x), "giu", y, "#"),
+                    Rx("(?i:${escapes(x)})", "gu", y, "#"),
+                    Rx(escapes(x), "gi", y, y),
+                )
+            }
+        }
+    }
+
+    /**
+     * C1: a class under `i` that holds a letter of a class the JVM lacks matches each letter of that
+     * class, a negated one none, a range the same. The 462 rows over the classes JDK 17 lacks were
+     * each printed by Dart as this rule (without `u` the classes above U+FFFF are S16's units).
+     */
+    private val c1Rows: List<Rx> by lazy {
+        val from = esc("0190")
+        val to = esc("01A0")
+        listOf(
+            Rx("[$lambda]", "gi", lambdaCap, "#"),
+            Rx("[$lambda]", "giu", lambdaCap, "#"),
+            Rx("[^$lambda]", "giu", lambdaCap, lambdaCap),
+            Rx("[$lambda-${cps("019C")}]", "giu", lambdaCap, "#"),
+            Rx("[a$lambda]", "gi", lambdaCap, "#"),
+            Rx("[a$lambda]", "giu", lambdaCap, "#"),
+            Rx("[^a$lambda]", "gi", lambdaCap, lambdaCap),
+            Rx("[^a$lambda]", "giu", "b", "#"),
+            Rx("(?-i:[$lambda])", "gi", lambdaCap, lambdaCap),
+            Rx("(?i:[$lambda])", "g", lambdaCap, "#"),
+            Rx("(?i:[^$lambda])", "g", lambdaCap, lambdaCap),
+            Rx("[$from-$to]", "gi", lambdaCap, "#"),
+            Rx("[^$from-$to]", "gi", "${lambdaCap}a", "$lambdaCap#"),
+            Rx("[$garayA]", "giu", garaySmallA, "#"),
+            Rx("[^$garayA]", "giu", garaySmallA, garaySmallA),
+            Rx("[$garayA-${cps("10D51")}]", "giu", garaySmallA, "#"),
+            Rx("[\\u{10D50}]", "giu", garaySmallA, "#"),
+            Rx("[^\\u{10D50}]", "giu", garaySmallA, garaySmallA),
+            Rx("[a$garayA]", "giu", garaySmallA, "#"),
+            Rx("[^a$garayA]", "giu", garaySmallA, garaySmallA),
+            Rx("[^$garayA]", "giu", "b$garaySmallA", "#$garaySmallA"),
+            Rx("(?i:[$garayA])", "gu", garaySmallA, "#"),
+            Rx("(?i:[^$garayA])", "gu", garaySmallA, garaySmallA),
+            Rx("[\\u{10D40}-\\u{10D5F}]", "giu", cps("10D7A"), "#"),
+            Rx("[^\\u{10D40}-\\u{10D5F}]", "giu", cps("10D7A 10D80"), "${cps("10D7A")}#"),
+        ) + pairsOf(lacks17).flatMap { (x, y) ->
+            val next = String(Character.toChars(x.codePointAt(0) + 1))
+            val flags = if (x.length == 1) listOf("gi", "giu") else listOf("giu")
+            flags.flatMap { f -> listOf(Rx("[$x]", f, y, "#"), Rx("[^$x]", f, y, y), Rx("[$x-$next]", f, y, "#")) }
+        }
+    }
+
+    @Test
+    fun l1_theSdkLearnsTheClassesItsJvmDoesNotFoldInFull() {
+        // Of Dart's classes, those with a letter the JVM's case-insensitive one-letter match does not
+        // join to another of its class, less the table's: the JVM never joins U+0390 and U+1FD3, U+03B0
+        // and U+1FE3, U+FB05 and U+FB06, whose letters the table writes as Dart's sets already.
+        val learned = DartFoldClasses.lagging.map { hex(DartFoldClasses.classes[it]) }.sorted()
+        val feature = Runtime.version().feature()
+        when {
+            feature == 17 -> assertEquals(lacks17.map(::hex).sorted(), learned)
+            feature == 21 -> assertEquals(lacks21.map(::hex).sorted(), learned)
+            feature >= 24 -> assertEquals(emptyList(), learned)
+            else -> assertTrue(lacks17.map(::hex).containsAll(learned), learned.toString())
+        }
+    }
+
+    @Test
+    fun l1_lettersOfALaggingClassFoldAsInDart() {
+        assertDart(l1Rows)
+    }
+
+    @Test
+    fun l1_seam_theLettersOfTheClassesSetAreWrittenAsDartsSets() {
+        // With the classes JDK 17 lacks set, every JVM runs the lagging paths, and the rows hold with
+        // the engine's own folding off too.
+        lagging(lacks17)
+        assertDart(l1Rows)
+        assertWritten(l1Rows)
+    }
+
+    @Test
+    fun c1_aClassTakesTheLettersOfTheLaggingClassesItMeets() {
+        assertDart(c1Rows)
+    }
+
+    @Test
+    fun c1_seam_aClassTakesTheLettersOfTheClassesSet() {
+        lagging(lacks17)
+        assertDart(c1Rows)
+        assertWritten(c1Rows)
+    }
+
+    @Test
+    fun c1_seam_whatMeetsNoLaggingClassIsWrittenAsToday() {
+        // A letter or class that meets no lagging class, and any pattern without `i`, is written the
+        // same with the classes set as with none.
+        val patterns = listOf("a", "ß", d, "[a]", "[^a-z]", "[\\d\\s]", "[ß]", "[^ß]", "[${esc("0100")}-${esc("017F")}]", "[$d]", "[^$d]", "\\p{Lu}", "[\\p{Ll}z]")
+        val withoutI = listOf(lambda, "[$lambda]", "[^$lambda]", garayA, "[$garayA]", "[^$garayA]")
+        fun written() = listOf(false, true).flatMap { u ->
+            patterns.map { RegexSupport.asciiClasses(it, ignoreCase = true, unicode = u) } + withoutI.map { RegexSupport.asciiClasses(it, unicode = u) }
+        }
+        lagging(emptyList())
+        val today = written()
+        lagging(lacks17)
+        assertEquals(today, written())
     }
 }

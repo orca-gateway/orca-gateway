@@ -1,5 +1,7 @@
 package com.orcagateway.core.resolver
 
+import java.util.regex.Pattern
+
 /**
  * Dart's simple case-fold classes with `u`: Dart 3.12.2's `RegExp`, with
  * `caseSensitive: false` and `unicode`, matches a letter to every letter of
@@ -15,7 +17,9 @@ package com.orcagateway.core.resolver
  * exactly its class.
  *
  * [RegexSupport.asciiClasses] reads with these a class that holds `\p{…}`
- * or `\P{…}` under `i` and `u`, as Dart does. [DartFoldTable] holds the
+ * or `\P{…}` under `i` and `u`, as Dart does, and writes the letters of
+ * the classes the engine does not fold in full ([lagging]) as Dart's sets
+ * under `i`. [DartFoldTable] holds the
  * same sets for its 217 letters: each one's set with `u` is its class here,
  * or the letter alone for the 44 without a partner: ı, İ, ʼ and 41 that
  * fold only to strings (ŉ, ǰ, ẖ-ẚ, Greek ones such as ὐ and ᾶ, և, the
@@ -35,6 +39,34 @@ internal object DartFoldClasses {
         val index = HashMap<Int, Int>()
         classes.forEachIndexed { n, k -> k.forEach { index[it] = n } }
         IntArray(letters.size) { index.getValue(letters[it]) }
+    }
+
+    /**
+     * The classes the engine does not fold in full, by their index in [classes]: a letter of each
+     * fails to match another of its class under the engine's case-insensitive one-letter match, its
+     * Unicode lacking the pair. JDK 21 (Unicode 15) lacks 27, 5 in the BMP and Garay's 22, JDK 17
+     * (Unicode 13) 67, 5 more in the BMP and Vithkuqi's 35 too, JDK 24 and later none, Android
+     * those newer than its ICU's Unicode. Learned once per process, on first use. The classes [DartFoldTable] lists are left out: their letters are
+     * written as its sets already, and the JVM never joins three of them (U+0390 and U+1FD3, U+03B0
+     * and U+1FE3, U+FB05 and U+FB06). [laggingForTests], when set, stands in for the learned ones.
+     */
+    val lagging: IntArray get() = laggingForTests ?: learnedLagging
+
+    /** The classes [lagging] gives instead of the learned ones, by index, or null for those: a test seam. */
+    @Volatile
+    internal var laggingForTests: IntArray? = null
+
+    private val learnedLagging: IntArray by lazy {
+        val options = Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
+        fun text(c: Int) = String(Character.toChars(c))
+        classes.indices.filter { n ->
+            val k = classes[n]
+            k.none { it <= 0xFFFF && DartFoldTable.set(it.toChar(), unicode = true) != null } &&
+                k.any { a ->
+                    val m = RegexSupport.compileIcuLike(text(a), options)?.matcher("")
+                    m == null || k.any { b -> !m.reset(text(b)).matches() }
+                }
+        }.toIntArray()
     }
 
     // One class a line, its code points in hex.
