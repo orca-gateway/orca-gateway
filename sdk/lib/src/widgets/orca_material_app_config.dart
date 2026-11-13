@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' show ThemeData, ThemeMode;
+import 'package:material_ui/material_ui.dart' show ThemeData, ThemeMode;
 import 'package:flutter/widgets.dart';
 
 /// Developer-facing passthrough configuration for the [MaterialApp] /

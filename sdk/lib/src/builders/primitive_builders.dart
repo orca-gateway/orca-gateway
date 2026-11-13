@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart' show SelectableText, ImageIcon;
+import 'package:material_ui/material_ui.dart' show SelectableText, ImageIcon;
 import 'package:flutter/widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../rendering/component_context.dart';

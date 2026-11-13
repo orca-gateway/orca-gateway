@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- The SDK now uses the standalone `material_ui` package instead of the framework's own Material library (`material.dart`), which Flutter 3.50 deprecates. Its Material types are distinct from the framework's, so `OrcaMaterialAppConfig.theme`, `darkTheme`, `highContrastTheme`, `highContrastDarkTheme`, `themeMode` and the deprecated `OrcaApp.theme` now take material_ui's `ThemeData` and `ThemeMode`. A `ThemeData` from the old library no longer fits there.
+- The SDK now needs Dart 3.13 and Flutter 3.47 or later, the floor that `material_ui` 1.11.0 sets.
+- To upgrade a host app, run `dart fix --apply --code=migrate_design_widgets`. It rewrites the imports to `package:material_ui/material_ui.dart`. If it does not add the dependency, add `material_ui: ^1.11.0` to your pubspec yourself.
+- If your app passes `GlobalMaterialLocalizations` or `GlobalCupertinoLocalizations` from `flutter_localizations` in `localizationsDelegates`, take them from `material_ui` and `cupertino_ui` instead. `GlobalMaterialLocalizations.delegates` covers the Flutter, Material and Cupertino strings.
+- Widgets that still import the old library, in a plugin or a package, no longer get the app's theme or its Material localizations: they see the default theme. Until they migrate, wrap them in `MaterialUiCompatibilityBridge` from `material_ui`. For the whole app, set `OrcaMaterialAppConfig.builder` to `(context, child) => MaterialUiCompatibilityBridge(child: child!)`, and OrcaApp applies it to every screen. The SDK does not add the bridge itself: `material_ui` marks it deprecated, as a temporary migration aid, and it carries over only the color scheme, text theme, platform and visual density.
+
 ## 0.3.3 - 2026-11-06
 
 ### Added

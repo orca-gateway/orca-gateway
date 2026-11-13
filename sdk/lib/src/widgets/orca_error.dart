@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' show Icon, Icons;
+import 'package:material_ui/material_ui.dart' show Icon, Icons;
 import 'package:flutter/widgets.dart';
 import '../client/orca_client.dart';
 
