@@ -3,25 +3,22 @@
 ## Front page
 
 ### In one breath
-group 3 of 4 · tasks: 1 green, 0 blocked · cases: 5 of 6 green (all but X1) · 6 runners green
-T5 Kotlin: on JDK 17, `i` with a backreference over a character above U+FFFF is written exact,
-every fold-class letter masked; `\w \W \b \B` take the masked word letters' stand-ins.
-G1: the U2 guard runs every row on every JDK; the lagging set is empty on JDK 24+ (asserted).
-Probe, JDK 17: 2 923 rows fixed, 0 throws (were 1 754); left: properties, Dart's quirk row.
-Swift, JDK 21 and 25 unchanged; both reviews passed on the first pass.
+group 4 of 4 · tasks: 1 green, 0 blocked · cases: 6 of 6 green · 6 runners green
+T6: render fixture 38, 30 rows Dart, bun and both SDKs agree on everywhere; counts pinned at 38.
+Before S17 its rows fail: 29 of 30 on JDK 17, 21 on Linux Swift 5.10, 9 on Linux 6.2 and JDK 21.
+S17 in all, rows ≠ Dart: Linux 5.10 1 645 → 345; JDK 17 3 996 → 342, throws 1 412 → 0;
+Linux 6.2 655 → 135, JDK 21 653 → 133; macOS 3, JDK 25 1 as before.
+Left: properties of letters the platform lacks (not planned), Dart's quirk row, S16's `\B`.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 from memory: inside `(?-i:` the word stand-ins count too (your gate 08 limit, question 6).
-3 auto-decided by the task (how a class tests a masked letter; ı and İ stay unmasked; a flag).
+1 auto-decided: the fixture takes only rows Dart, bun and every SDK runner agree on.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 4, T6: render fixture 38, the count pins 37 → 38. (default: go)
-3. Your gate 08 limit shows on 6 JDK 17 rows outside the probe (`a(?i:(.)\1)` gu on "A" + two
-   emoji → "#"; Dart: no match). Not pinned; written into row 23b.40 at close. (default: yes)
+2. A approves the stage: ship pushes feat/native-sdk-s17 and opens the PR. (default: go)
 
 ## Appendix
 
@@ -178,8 +175,49 @@ Once after the group, on the final code (logs `s17/g3/*.log`):
   `(?-i:\w)(.)\1` giu on "ſ😀😀", `(?-i:A)(.)\1` giu on "a😀😀"; "#😀" in `(?i:(.)\1)a` gu on "bBA😀"
   and `(?i:(.)\1)|a` gu on "A😀". None pinned.
 
+### Group 4
+Commits: T6 fe3e5ce (staged by path). Nothing pushed. Card round 5 rendered group 3's front page
+again by mistake (a script stopped before writing group 4); round 6 is group 4's. Group 3's card (round 4) approved under your
+standing rule (every default; the six JDK 17 limit rows go into row 23b.40 at close).
+
+#### Task T6 · Fixture 38, counts pinned at 38
+Files: `schema/fixtures/render/38_regex_case_pairs_jdk17_backreferences.json` (new) · `…/ModelRoundTripTests.swift` ·
+`…/models/ModelRoundTripTest.kt` · `…/core/FixturePathsTest.kt`
+Cases: X1 → green (engine 705 pass, 1 fail EADDRINUSE as baseline; Flutter +245; Swift 225 on macOS, 6.2,
+5.10; iOS 54 + 225; Kotlin core 226 on JDK 17, 21, 25; only core reads render fixtures) · red first: the
+pins at 38 without the fixture (`("37") is not equal to ("38")`).
+Rows: 30 (L1 9: the 5 Unicode 14 BMP pairs both ways, Garay, Vithkuqi, Garay without `u` unchanged;
+C1 4; R1 9 incl. two `<$1>`; J1 8: `(.)\1` giu over two emoji, `(?<n>.)\k<n>`, `\w(.)\1`, 𐐀𐐨 …), each
+agreed on by Dart 3.14, bun (the engine's resolver) and the six SDK runs. Pre-S17 sources (e56bd4b): 29
+fail on JDK 17, 21 on Linux 5.10, the 9 folding Garay rows on 6.2 and JDK 21, none on macOS or JDK 25.
+Decisions: 1. bun's value from the engine's ValueResolver over the fixture (its conformance test checks
+`expected` only); `expected` is the encoder's output · 2. `(.)\1` giu mid-input left out (bun differs);
+`(😀)\1` and `(?i:(.)\1)` cover it · 3. four rows outside the probe, printed by Dart 3.14.
+Review fit: pass
+Review quality: pass
+
+#### Group 4 test run
+Once after the group, on the final code (logs `s17/g4/*.log`):
+- `cd engine && bun test` · 705 pass, 1 fail (EADDRINUSE on :8080, Docker: as the baseline) (704 before).
+- `cd sdk && flutter test` · +245: All tests passed (244 before) · `flutter analyze` · No issues found.
+- `cd sdk-swift && swift build` · 0 warnings · `swift test` · 225 tests, 0 failures.
+- iOS simulator · 54 + 225 tests, 0 failures · TEST SUCCEEDED.
+- swift:6.2-noble and swift:5.10-jammy containers · 0 warnings · 225 tests, 0 failures each.
+- `cd sdk-kotlin && ./gradlew build --rerun-tasks` on JDK 17, 21 and 25 · BUILD SUCCESSFUL · core 226,
+  sdk 128, 0 failures each · lint "No issues found".
+- Probe (`s17/oracle/runs/*-g4.tsv`): byte-identical to group 3 on all six runners (no SDK source changed).
+
+### S17 against the baseline (2026-11-13)
+Suites: engine 704 → 705 · Flutter +244 → +245 · Swift 217 → 225 (macOS, Linux 6.2, 5.10) · iOS 54 + 217
+→ 54 + 225 · Kotlin core 215 → 226, sdk 128 (JDK 17, 21, 25) · warnings and lint: none, as before.
+Probe, rows ≠ Dart of 31 677: macOS 3 → 3 · JDK 25 1 → 1 · Linux 6.2 655 → 135 · JDK 21 653 → 133 ·
+Linux 5.10 1 645 → 345 · JDK 17 3 996 → 342, throws 1 412 → 0. Left: properties (`\p{Lu}`, `\p{Ll}` over
+letters the platform's Unicode lacks: 44 × 3 rows on 6.2 and JDK 21, 114 × 3 on 5.10 and JDK 17; not
+planned), Dart's quirk row `(?i:(.)\1|x)` gu (all runners), S16's approved `\B` rows (Swift, 2).
+Code commits: T2 bea0d78, T1 17e2887, T3 80bf0f0, T4 66f297e, T5 9bc3774, T6 fe3e5ce.
+
 ### Blocked
-none (group 3) · group 2: T4 was blocked at round 2 on its second fit finding (the U2 guard edit);
+none (groups 3 and 4) · group 2: T4 was blocked at round 2 on its second fit finding (the U2 guard edit);
 retried once on your standing rule with the reviewer's fix, then fit and quality passed
 
 ### Not done
@@ -192,4 +230,9 @@ none
   matches ("#"), 114 of 114 on macOS, 70 of 114 on 6.2. Kotlin's row: Dart's value (T2's probe).
 
 ### For ship (stage 10) to know
-nothing
+- Branch feat/native-sdk-s17 holds S16's close note (c161fbb), not yet on main: the PR carries it.
+- Expected CI by path (`sdk-swift/`, `sdk-kotlin/`, `schema/`, `.pipeline/`): SDK Swift (5.10-jammy and
+  6.2-noble), SDK Swift UI (iOS), SDK Kotlin (JDK 17 and 21), engine and Flutter (they read `schema/`).
+  Fixture 38 and the U2 guards run every row there now: the platform filters are gone.
+- At close: row 23b.40 done; its known differences gain the six JDK 17 limit rows (group 3); follow-ups:
+  Dart's quirk, the two older escape corners (group 1).

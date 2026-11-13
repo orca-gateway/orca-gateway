@@ -4,9 +4,9 @@
   "idea": "Epic 23b row 23b.40: native SDKs fold letters above U+FFFF with u as Dart does. With u both SDKs hand these letters to the platform's engine, which folds them by its own Unicode: Linux's Foundation ICU, JDK 21, JDK 17 and Android's ICU by API level miss case pairs Dart has (Vithkuqi, Garay); and JDK 17's case-insensitive backreference never repeats a capture above U+FFFF and throws at the input's end. Fold astral letters from Dart's fold classes, as the BMP already is, and keep JDK 17's backreference off astral captures. In sdk-swift and sdk-kotlin",
   "kind": "feature",
   "created_at": "2026-11-13T20:29:11Z",
-  "updated_at": "2026-11-13T23:03:26Z",
+  "updated_at": "2026-11-13T23:25:21Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "09",
+  "current": "10",
   "stages": {
     "01": {
       "status": "skipped",
@@ -44,12 +44,15 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 08's seven questions are minor (4: the BMP pairs, same cause and fix; 6: S16's approved limit, JDK 17 only), all defaults"
     },
     "09": {
-      "status": "in_review",
-      "rounds": 4,
-      "card": "cards/09-r4.md"
+      "status": "approved",
+      "rounds": 6,
+      "card": "cards/09-r6.md",
+      "approved_at": "2026-11-13T23:24:49Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 4 (round 6): no task blocked; approve the stage, ship pushes feat/native-sdk-s17 and opens the PR; all defaults"
     },
     "10": {
-      "status": "pending"
+      "status": "draft",
+      "rounds": 1
     },
     "11": {
       "status": "pending"
