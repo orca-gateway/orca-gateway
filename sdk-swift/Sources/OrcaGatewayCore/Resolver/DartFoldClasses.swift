@@ -1,4 +1,47 @@
+import Foundation
+
 extension Regex {
+    /// The letters of the fold classes the platform's ICU does not fold in
+    /// full under `i`, or the set a test put in their place
+    /// (`laggingOverride`). The ICU folds only the case pairs its own Unicode
+    /// has: Apple's has every class here, Linux's Foundation lacks those newer
+    /// than its Unicode (ƛ and U+A7DC, Garay's, …).
+    static var laggingLetters: Set<Unicode.Scalar> { laggingOverride ?? icuLagging }
+
+    /// The test seam: a set to take in place of the ICU's, nil for the ICU's.
+    static var laggingOverride: Set<Unicode.Scalar>? {
+        get {
+            laggingLock.lock()
+            defer { laggingLock.unlock() }
+            return laggingSeam
+        }
+        set {
+            laggingLock.lock()
+            laggingSeam = newValue
+            laggingLock.unlock()
+        }
+    }
+    private static let laggingLock = NSLock()
+    private static var laggingSeam: Set<Unicode.Scalar>?
+
+    /// Learned once, on first use: each class in which some letter does not
+    /// match another under NSRegularExpression's `.caseInsensitive`, but for
+    /// the classes the fold table (`foldTable`) holds, whose letters are
+    /// written as Dart's set already. `dartFolded` keeps their `Kept` built
+    /// once too (`icuLaggingKept`).
+    static let icuLagging: Set<Unicode.Scalar> = {
+        var lagging: Set<Unicode.Scalar> = []
+        for (c, members) in foldClasses where !lagging.contains(c) && members.allSatisfy({ foldTable[$0] == nil }) {
+            let letter = try? NSRegularExpression(
+                pattern: NSRegularExpression.escapedPattern(for: String(c)), options: [.caseInsensitive])
+            let folds = members.allSatisfy { m in
+                m == c || letter?.firstMatch(in: String(m), range: NSRange(location: 0, length: m.utf16.count)) != nil
+            }
+            if !folds { lagging.formUnion(members) }
+        }
+        return lagging
+    }()
+
     /// Dart's simple case folding under `i` with `u`, printed by Dart 3.12.2:
     /// one row per fold class, the letters `RegExp(c, caseSensitive: false,
     /// unicode: true)` matches for a member c, in code point order. A code
@@ -9,9 +52,10 @@ extension Regex {
     /// each member of each class matches exactly its class.
     ///
     /// Under `i` with `u` a class holding a property reads them
-    /// (`dartFolded`). The fold table (`foldTable`) holds, with `u`, the same
-    /// set for each of its letters: the letter's class here, or the letter
-    /// alone (ﬀ, ŉ, ǰ, …).
+    /// (`dartFolded`), as, under `i`, do the letters of a class the ICU lags
+    /// on (`laggingLetters`, `dartSet`). The fold table (`foldTable`) holds,
+    /// with `u`, the same set for each of its letters: the letter's class
+    /// here, or the letter alone (ﬀ, ŉ, ǰ, …).
     static let foldClasses: [Unicode.Scalar: [Unicode.Scalar]] = {
         var classes: [Unicode.Scalar: [Unicode.Scalar]] = [:]
         for row in foldClassRows.split(separator: "\n") {
