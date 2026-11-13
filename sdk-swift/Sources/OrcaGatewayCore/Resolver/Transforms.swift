@@ -200,29 +200,31 @@ enum Transforms {
         let pattern = def["pattern"]?.stringValue ?? ""
         guard pattern.utf16.count <= Regex.maxPatternLength else { return .null }
         let flags = def["flags"]?.stringValue
-        guard let re = Regex.compile(pattern, flags: flags) else { return .null }
         let input = Regex.clip(current.isNull ? "" : DartFormat.string(current))
+        guard let run = Regex.run(pattern, flags: flags, input: input) else { return .null }
 
         guard let replacement = def["replacement"]?.stringValue else {
-            guard let m = Regex.firstMatch(re, in: input) else { return .null }
+            guard let m = Regex.firstMatch(run) else { return .null }
             return .string(m.group(0) ?? "")
         }
         let params = def["params"]?.objectValue
         let global = flags?.contains("g") ?? false
-        let matches = global ? Regex.allMatches(re, in: input) : Regex.firstMatch(re, in: input).map { [$0] } ?? []
+        let matches = global ? Regex.allMatches(run) : Regex.firstMatch(run).map { [$0] } ?? []
 
-        let source = input as NSString
-        var out = ""
+        // In UTF-16 units, decoded once: without `u` a match may end between the halves of a pair (`x*` on 😀), and
+        // the text on either side joins them again.
+        let units = Array(input.utf16)
+        var out: [UInt16] = []
         var cursor = 0
         for m in matches {
-            out += source.substring(with: NSRange(location: cursor, length: m.range.location - cursor))
+            out += units[cursor..<m.range.location]
             let matched = m.group(0) ?? ""
             let backreffed = Regex.expandBackrefs(replacement, m)
-            out += Placeholders.expand(backreffed, .string(matched), params, resolver)
+            out += Placeholders.expand(backreffed, .string(matched), params, resolver).utf16
             cursor = m.range.location + m.range.length
         }
-        out += source.substring(from: cursor)
-        return .string(out)
+        out += units[cursor...]
+        return .string(String(decoding: out, as: UTF16.self))
     }
 
     /// `formatDate` exists in the engine but not in the Dart SDK (which skips
@@ -385,20 +387,29 @@ enum Regex {
     static let maxPatternLength = 200
     static let maxInputLength = 10_000
 
+    /// A match, its groups read from `source`, the input (not the masked copy
+    /// searched, `RegexMask`).
     struct Match {
         let result: NSTextCheckingResult
         let source: NSString
         var range: NSRange { result.range }
         var groupCount: Int { result.numberOfRanges - 1 }
 
+        /// The group's UTF-16 units decoded: a lone half of a pair, where a
+        /// match without `u` ends inside one, is U+FFFD.
         func group(_ i: Int) -> String? {
             guard i < result.numberOfRanges else { return nil }
             let r = result.range(at: i)
-            return r.location == NSNotFound ? nil : source.substring(with: r)
+            guard r.location != NSNotFound else { return nil }
+            var units = [UInt16](repeating: 0, count: r.length)
+            source.getCharacters(&units, range: r)
+            return String(decoding: units, as: UTF16.self)
         }
     }
 
-    static func compile(_ pattern: String, flags: String?) -> NSRegularExpression? {
+    /// The pattern for ICU, or nil where Dart refuses it; `mask` is the
+    /// masked run's (`RegexMask`), nil for one searching the input itself.
+    static func compile(_ pattern: String, flags: String?, mask: RegexMask? = nil) -> NSRegularExpression? {
         let flags = flags ?? ""
         var options: NSRegularExpression.Options = []
         if flags.contains("i") { options.insert(.caseInsensitive) }
@@ -406,7 +417,8 @@ enum Regex {
         if flags.contains("s") { options.insert(.dotMatchesLineSeparators) }
         // ICU refuses "", which Dart accepts (it matches "" everywhere).
         guard let source = pattern.isEmpty
-            ? "(?:)" : asciiClasses(pattern, ignoreCase: flags.contains("i"), unicode: flags.contains("u"))
+            ? "(?:)"
+            : asciiClasses(pattern, ignoreCase: flags.contains("i"), unicode: flags.contains("u"), mask: mask)
         else { return nil }
         return try? NSRegularExpression(pattern: source, options: options)
     }
@@ -535,7 +547,15 @@ enum Regex {
     ///   (`(a)(?<=\1)`). Left to fail, as ICU has it, where Dart's reference
     ///   matches empty: a group set or not only at run time (`(?:(a)|b)\1`,
     ///   `(a)?b\1`).
-    static func asciiClasses(_ pattern: String, ignoreCase: Bool, unicode: Bool) -> String? {
+    /// - With `mask`, a masked run's (`RegexMask`, never with `u`), the
+    ///   pattern reads code units as the input does: a character above U+FFFF
+    ///   is its halves' two stand-ins, but in a group name; an escape that
+    ///   spells a half is its stand-in, in a class too; a class range is
+    ///   ordered by Dart's units (`[😀-🙁]` is D83D, then DE00-D83D: nil), and
+    ///   one over surrogates or reaching a stand-in is written as its parts
+    ///   outside the surrogate block without the stand-ins, plus the
+    ///   stand-ins of the halves it covers.
+    static func asciiClasses(_ pattern: String, ignoreCase: Bool, unicode: Bool, mask: RegexMask? = nil) -> String? {
         // ECMAScript's WhiteSpace and LineTerminator, which `\s` matches under every flag.
         let space = "\\u0009-\\u000D\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF"
         // The sets and edges under a group whose `i` is `fold`.
@@ -567,7 +587,7 @@ enum Regex {
         // What a quantifier at this point would repeat.
         enum Last { case nothing, assertion, quantified, atom }
 
-        let p = Array(pattern.unicodeScalars)
+        let p = mask?.scalars(of: pattern) ?? Array(pattern.unicodeScalars)
         var i = 0
         var out = ""
         var scope: [Group] = []  // each open group, innermost last
@@ -808,7 +828,8 @@ enum Regex {
             if next(0) == "\\", next(1) == "k", !names.isEmpty { return nil }  // `(?<a>x)[\k]`, without `u` too
             if let escape = hexEscape() {
                 guard let value = escape.value else { return nil }  // a `\u{…}` Dart refuses
-                let text = next(2) == "{" ? braced(value) : String(String.UnicodeScalarView(p[i..<(i + escape.length)]))
+                let text = mask?.standIn(forUnit: value).map { braced(UInt32($0)) }  // a half, masked
+                    ?? (next(2) == "{" ? braced(value) : String(String.UnicodeScalarView(p[i..<(i + escape.length)])))
                 i += escape.length
                 return (text, value)
             }
@@ -859,9 +880,21 @@ enum Regex {
                 }
                 i += 1
                 guard let high = classMember(sets) else { return nil }
-                if let a = low.value, let b = high.value {
+                // In a masked run a stand-in's order is that of the half it stands for.
+                let order = { (value: UInt32) in mask?.dartUnit(value) ?? value }
+                if let a = low.value.map(order), let b = high.value.map(order) {
                     guard a <= b else { return nil }  // `[z-a]`, `[a--b]`, with `u` too
-                    body += low.text + "-" + high.text
+                    if let (parts, standIns) = mask?.range(a, b) {
+                        // Over surrogates or reaching a stand-in: the parts outside the surrogate block, without the
+                        // stand-ins, then the stand-ins of the halves it covers.
+                        for part in parts {
+                            body += braced(part.lowerBound)
+                            if part.upperBound > part.lowerBound { body += "-" + braced(part.upperBound) }
+                        }
+                        body += spelled(standIns.compactMap(Unicode.Scalar.init))
+                    } else {
+                        body += low.text + "-" + high.text
+                    }
                 } else {
                     guard !unicode else { return nil }  // with `u` Dart refuses `[\d-z]`, `[a-\p{L}]`
                     body += low.text + "\\-" + high.text  // without `u` a union: `[\d-z]`
@@ -932,7 +965,10 @@ enum Regex {
                 } else if let escape = hexEscape() {
                     // `\x73`, `\u017F`, `\u{17F}`: a letter of the table is that letter
                     guard let value = escape.value else { return nil }
-                    if fold, let set = Unicode.Scalar(value).flatMap({ dartFold($0, unicode: unicode) }) {
+                    if let standIn = mask?.standIn(forUnit: value) {
+                        out += braced(UInt32(standIn))  // a half, masked
+                        i += escape.length
+                    } else if fold, let set = Unicode.Scalar(value).flatMap({ dartFold($0, unicode: unicode) }) {
                         out += "(?-i:[\(spelled(set))])"
                         i += escape.length
                     } else if next(2) == "{" {
@@ -1131,18 +1167,19 @@ enum Regex {
         return String(units[..<end]) ?? String(decoding: Array(units[..<end]), as: UTF16.self)
     }
 
-    private static func wrap(_ r: NSTextCheckingResult, _ input: String) -> Match {
-        Match(result: r, source: input as NSString)
+    /// A match in the copy searched, read from the input, of the same length.
+    private static func wrap(_ r: NSTextCheckingResult, _ run: Run) -> Match {
+        Match(result: r, source: run.original)
     }
 
-    static func firstMatch(_ re: NSRegularExpression, in input: String) -> Match? {
-        let range = NSRange(location: 0, length: (input as NSString).length)
-        return re.firstMatch(in: input, range: range).map { wrap($0, input) }
+    static func firstMatch(_ run: Run) -> Match? {
+        let range = NSRange(location: 0, length: run.original.length)
+        return run.regex.firstMatch(in: run.searched, range: range).map { wrap($0, run) }
     }
 
-    static func allMatches(_ re: NSRegularExpression, in input: String) -> [Match] {
-        let range = NSRange(location: 0, length: (input as NSString).length)
-        return re.matches(in: input, range: range).map { wrap($0, input) }
+    static func allMatches(_ run: Run) -> [Match] {
+        let range = NSRange(location: 0, length: run.original.length)
+        return run.regex.matches(in: run.searched, range: range).map { wrap($0, run) }
     }
 
     /// Dart: `replacement.replaceAllMapped(RegExp(r'\$([1-9])'), ...)`; a group

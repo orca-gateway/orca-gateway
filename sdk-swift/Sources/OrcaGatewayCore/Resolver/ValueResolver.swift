@@ -240,11 +240,11 @@ public struct ValueResolver {
             return DartString.hasPrefix(DartFormat.string(operand("str")), DartFormat.string(operand("prefix")))
         case "matches":
             let pattern = expr["regex"]?.stringValue ?? ""
-            guard pattern.utf16.count <= Regex.maxPatternLength,
-                let re = Regex.compile(pattern, flags: nil)
-            else { return false }
+            guard pattern.utf16.count <= Regex.maxPatternLength else { return false }
             let input = Regex.clip(DartFormat.string(operand("str")))
-            return Regex.firstMatch(re, in: input) != nil
+            // No flags, as in Dart, so without `u`: a pair is two code units (a masked run, `RegexMask`).
+            guard let run = Regex.run(pattern, flags: nil, input: input) else { return false }
+            return Regex.firstMatch(run) != nil
         default:
             return false
         }
