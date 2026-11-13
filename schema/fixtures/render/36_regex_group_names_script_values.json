@@ -1,0 +1,1012 @@
+{
+  "name": "regex-group-names-script-values",
+  "description": "Group names and script values follow Dart's RegExp (ECMAScript), and a pattern Dart refuses makes the `regex` transform resolve to null (the client catches the error). The transform reads groups by number, so names ICU and the JVM refuse still work: `(?<$a>x)` with `g` and `(?<\u00e9>x)` with `gu` on \"x\" give \"#\", and one name in two alternatives with its reference, `(?:(?<a>x)|(?<a>y))\\k<a>` on \"xx yy xy\", gives \"# # xy\" (the reference matches the group that took part). Dart refuses a name twice in one alternative (`(?<a>x)(?<a>y)`) and a reference to a name no group has (`(?<a>x)\\k<b>`): null. A back reference that can only see its group unset matches empty: before its group closes (`(a\\1)` on \"aa\" gives \"##\"), in another alternative (`(a)|\\1b` on \"ab b\" gives \"## #\") and after a negative lookahead that holds the group (`(?!(a))\\1b` on \"b ab aa ba bb abb aab xy y x\" gives \"# a# aa #a ## a## aa# xy y x\"). With `gu` a script value must be a name in ECMAScript's table, matched exactly: Unicode's long names and four-letter codes, less Katakana_Or_Hiragana and Hrkt, plus the aliases Qaai (Inherited) and Qaac (Coptic). So `\\p{Script=latin}` (case), `\\p{Script=Hrkt}` and `\\p{Script=OldItalic}` (not in the table) and `\\p{Script=}` resolve to null. On \"a\", U+03B1 (Greek), U+0300 (Inherited), U+2C81 (Coptic), U+309B (Common) and U+0951 (Inherited), `\\p{Script=Latn}` replaces the \"a\"; `\\p{Script=Old_Italic}`, `\\p{Script=Zzzz}` and `\\p{Script=Unknown}` match nothing; `\\p{Script=Qaai}` (Inherited) replaces U+0300 and U+0951; and `\\p{Script=Qaac}` (Coptic) replaces U+2C81. Every replace-mode regex puts \"#\" for each match. Every input reads page state, so the engine keeps the Values unresolved with `watches` and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "children": [
+      {
+        "type": "Text",
+        "key": "name_dollar",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "x"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?<$a>x)",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "name_accent",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "x"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?<\u00e9>x)",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "name_two_alts_ref",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "xxyy"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?:(?<a>x)|(?<a>y))\\k<a>",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "name_twice",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "xy"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?<a>x)(?<a>y)",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "name_no_group",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "xx"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?<a>x)\\k<b>",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "ref_inside",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "aa"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(a\\1)",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "ref_other_alt",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "abb"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(a)|\\1b",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "ref_neg_ahead",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "mix"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?!(a))\\1b",
+                "flags": "g",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sc_lower",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "scripts"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Script=latin}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sc_hrkt",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "scripts"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Script=Hrkt}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sc_old_italic_run",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "scripts"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Script=OldItalic}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sc_empty",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "scripts"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Script=}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sc_latn",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "scripts"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Script=Latn}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sc_old_italic",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "scripts"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Script=Old_Italic}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sc_zzzz",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "scripts"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Script=Zzzz}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sc_unknown",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "scripts"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Script=Unknown}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sc_qaai",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "scripts"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Script=Qaai}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "sc_qaac",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "scripts"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\p{Script=Qaac}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "x": "x",
+      "xxyy": "xx yy xy",
+      "xy": "xy",
+      "xx": "xx",
+      "aa": "aa",
+      "abb": "ab b",
+      "mix": "b ab aa ba bb abb aab xy y x",
+      "scripts": "a\u03b1\u0300\u2c81\u309b\u0951"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "name_dollar",
+        "name_accent",
+        "name_two_alts_ref",
+        "name_twice",
+        "name_no_group",
+        "ref_inside",
+        "ref_other_alt",
+        "ref_neg_ahead",
+        "sc_lower",
+        "sc_hrkt",
+        "sc_old_italic_run",
+        "sc_empty",
+        "sc_latn",
+        "sc_old_italic",
+        "sc_zzzz",
+        "sc_unknown",
+        "sc_qaai",
+        "sc_qaac"
+      ],
+      "watches": []
+    },
+    {
+      "id": "sc_qaac",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "scripts"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Script=Qaac}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "scripts"
+      ]
+    },
+    {
+      "id": "sc_qaai",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "scripts"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Script=Qaai}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "scripts"
+      ]
+    },
+    {
+      "id": "sc_unknown",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "scripts"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Script=Unknown}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "scripts"
+      ]
+    },
+    {
+      "id": "sc_zzzz",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "scripts"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Script=Zzzz}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "scripts"
+      ]
+    },
+    {
+      "id": "sc_old_italic",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "scripts"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Script=Old_Italic}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "scripts"
+      ]
+    },
+    {
+      "id": "sc_latn",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "scripts"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Script=Latn}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "scripts"
+      ]
+    },
+    {
+      "id": "sc_empty",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "scripts"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Script=}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "scripts"
+      ]
+    },
+    {
+      "id": "sc_old_italic_run",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "scripts"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Script=OldItalic}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "scripts"
+      ]
+    },
+    {
+      "id": "sc_hrkt",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "scripts"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Script=Hrkt}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "scripts"
+      ]
+    },
+    {
+      "id": "sc_lower",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "scripts"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\p{Script=latin}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "scripts"
+      ]
+    },
+    {
+      "id": "ref_neg_ahead",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "mix"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?!(a))\\1b",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "mix"
+      ]
+    },
+    {
+      "id": "ref_other_alt",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "abb"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(a)|\\1b",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "abb"
+      ]
+    },
+    {
+      "id": "ref_inside",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "aa"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(a\\1)",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "aa"
+      ]
+    },
+    {
+      "id": "name_no_group",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "xx"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?<a>x)\\k<b>",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "xx"
+      ]
+    },
+    {
+      "id": "name_twice",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "xy"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?<a>x)(?<a>y)",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "xy"
+      ]
+    },
+    {
+      "id": "name_two_alts_ref",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "xxyy"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?:(?<a>x)|(?<a>y))\\k<a>",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "xxyy"
+      ]
+    },
+    {
+      "id": "name_accent",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "x"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?<\u00e9>x)",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "x"
+      ]
+    },
+    {
+      "id": "name_dollar",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "x"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?<$a>x)",
+              "flags": "g",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "x"
+      ]
+    }
+  ],
+  "resolved": {
+    "name_dollar": {
+      "data": "#"
+    },
+    "name_accent": {
+      "data": "#"
+    },
+    "name_two_alts_ref": {
+      "data": "# # xy"
+    },
+    "name_twice": {
+      "data": null
+    },
+    "name_no_group": {
+      "data": null
+    },
+    "ref_inside": {
+      "data": "##"
+    },
+    "ref_other_alt": {
+      "data": "## #"
+    },
+    "ref_neg_ahead": {
+      "data": "# a# aa #a ## a## aa# xy y x"
+    },
+    "sc_lower": {
+      "data": null
+    },
+    "sc_hrkt": {
+      "data": null
+    },
+    "sc_old_italic_run": {
+      "data": null
+    },
+    "sc_empty": {
+      "data": null
+    },
+    "sc_latn": {
+      "data": "#\u03b1\u0300\u2c81\u309b\u0951"
+    },
+    "sc_old_italic": {
+      "data": "a\u03b1\u0300\u2c81\u309b\u0951"
+    },
+    "sc_zzzz": {
+      "data": "a\u03b1\u0300\u2c81\u309b\u0951"
+    },
+    "sc_unknown": {
+      "data": "a\u03b1\u0300\u2c81\u309b\u0951"
+    },
+    "sc_qaai": {
+      "data": "a\u03b1#\u2c81\u309b#"
+    },
+    "sc_qaac": {
+      "data": "a\u03b1\u0300#\u309b\u0951"
+    }
+  }
+}

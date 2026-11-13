@@ -5,19 +5,26 @@ on:
     paths:
       - "sdk/**"
       - "schema/**"
+      - ".github/workflows/sdk.yml"
   pull_request:
     paths:
       - "sdk/**"
       - "schema/**"
+      - ".github/workflows/sdk.yml"
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Pinned to the last stable this job passed on. Flutter 3.50 deprecates
+      # package:flutter/material.dart in favour of package:material_ui, and
+      # flutter analyze fails on those infos (18 imports in lib/ and test/).
+      # Moving the SDK to material_ui is its own change; bump this with it.
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.9
       - run: flutter pub get
         working-directory: sdk
       - run: flutter analyze

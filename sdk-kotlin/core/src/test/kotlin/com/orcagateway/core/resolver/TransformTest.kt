@@ -1072,4 +1072,1000 @@ class TransformTest {
             ),
         )
     }
+
+    // MARK: S15 \u2014 quantifiers (row 23b.37)
+    // Expected values from Dart 3.12.2. A quantifier repeats the atom before it:
+    // after another quantifier (but for one lazy `?`), after an assertion, or
+    // with nothing before it, Dart refuses the pattern, with `u` and without.
+
+    /** Each pattern under `g` and `gu` on "aaa", where Dart throws. */
+    private fun refused(vararg patterns: String): List<Rx> =
+        patterns.flatMap { p -> listOf(Rx(p, "g", "aaa", null), Rx(p, "gu", "aaa", null)) }
+
+    @Test
+    fun a3_aQuantifierOnAQuantifierIsInvalid() {
+        assertDart(
+            refused("a++", "a*+", "a?+", "a{1,2}+", "a{1}{2}", "a**", "a{2,1}", "a+?+", "a+??") +
+                listOf(
+                    Rx("a{1,}+", "g", "aaa", null),
+                    Rx("(?=a)**", "g", "aaa", null),
+                    Rx("a{1,2}+", "gi", "aaa", null),
+                    Rx("s++", "gi", "sss", null),
+                ),
+        )
+    }
+
+    @Test
+    fun a3_aQuantifierOnAnAssertionIsInvalid() {
+        assertDart(
+            refused("^*", "$+", "\\b*", "\\B+", "(?<=a)*", "(?<!a)+", "(?<=a){2}", "\\b{2}", "^?", "$*") +
+                listOf(
+                    Rx("(?<!a)?", "g", "aaa", null),
+                    Rx("\\b+a", "g", "aaa", null),
+                    Rx("\\B+", "gi", "aaa", null),
+                ),
+        )
+    }
+
+    @Test
+    fun a3_aQuantifierWithNothingToRepeatIsInvalid() {
+        assertDart(
+            refused("{3}", "*a", "+a", "?a") +
+                listOf("(?:*a)", "(*a)", "a|*b", "(?<n>*a)").map { Rx(it, "g", "aaa", null) },
+        )
+    }
+
+    @Test
+    fun a3_aLazyQuestionMarkAndAQuantifiedGroupStayValid() {
+        assertDart(
+            listOf(
+                Rx("a+?", "g", "aaa", "###"),
+                Rx("a??", "g", "aaa", "#a#a#a#"),
+                Rx("a{1,2}?", "g", "aaa", "###"),
+                Rx("a{0}?", "g", "aaa", "#a#a#a#"),
+                Rx("a{1,}?", "g", "aaa", "###"),
+                Rx("(?:)*", "g", "aaa", "#a#a#a#"),
+                Rx("()+", "g", "aaa", "#a#a#a#"),
+            ),
+        )
+    }
+
+    @Test
+    fun a3_guard_quantifiersAndAssertionsDartAcceptsKeepTheirMatches() {
+        assertDart(
+            listOf(
+                Rx("a{1,2}", "g", "aaa", "##"),
+                Rx("a{2}", "g", "aaa", "#a"),
+                Rx("(a)+", "g", "aaa", "#"),
+                Rx("(?:ab)*", "g", "abab", "##"),
+                Rx("(?:a|)*", "g", "aaa", "##"),
+                Rx("(?i:a)+", "gi", "aAa", "#"),
+                Rx("[a]+", "g", "aaa", "#"),
+                Rx("\\d+", "g", "a12", "a#"),
+                Rx("\\b", "g", "a b", "#a# #b#"),
+                Rx("^a", "g", "aaa", "#aa"),
+                Rx("a$", "g", "aaa", "aa#"),
+                Rx("(?<=a)a+", "g", "aaa", "a#"),
+                Rx("(?=a)a", "g", "aaa", "###"),
+                // A quantified lookahead without `u` is Annex B's, and the engine already reads it so.
+                Rx("(?=a)*", "g", "ab", "#a#b#"),
+            ),
+        )
+    }
+
+    // MARK: S15 — Annex B without u (row 23b.37)
+    // Expected values from Dart 3.12.2. Without `u` Dart reads Annex B's
+    // lenient grammar: an escape with no meaning is its character, a brace
+    // that starts no quantifier is a literal, a decimal escape past the group
+    // count is a legacy octal one. Classes follow ECMAScript in both modes.
+
+    @Test
+    fun a1_anEscapedLetterWithNoMeaningIsThatLetterWithoutU() {
+        assertDart(
+            listOf(
+                Rx("\\A", "g", "aA", "a#"),
+                Rx("\\Qa\\E", "g", "QaE a", "# a"),
+                Rx("\\z", "g", "z", "#"),
+                Rx("\\h", "g", "h", "#"),
+                Rx("\\e", "g", "e", "#"),
+                Rx("\\a", "g", "a", "#"),
+                Rx("\\K", "g", "kK\u212A", "k#\u212A"),
+                Rx("\\K", "gi", "kK\u212A", "##\u212A"),
+                Rx("\\K+", "gi", "kKkK\u212A", "#\u212A"),
+                Rx("\\o{2}", "g", "oo", "#"),
+                Rx("\\N{LATIN SMALL LETTER A}", "g", "N{LATIN SMALL LETTER A}", "#"),
+                // \p and \P are letters, and what follows them is ordinary text.
+                Rx("\\p{L}", "g", "p{L} a", "# a"),
+                Rx("\\P{L}", "g", "P{L} a", "# a"),
+                Rx("\\p{L}", "gi", "p{L} P{l}", "# #"),
+                // \k is the letter k when the pattern has no named group.
+                Rx("\\k", "g", "k", "#"),
+                Rx("\\k<a>", "g", "k<a>", "#"),
+                Rx("\\ka", "g", "ka", "#"),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_aBraceThatStartsNoQuantifierIsALiteralWithoutU() {
+        assertDart(
+            listOf(
+                Rx("{", "g", "{x}", "#x}"),
+                Rx("}", "g", "{x}", "{x#"),
+                Rx("x{,3}", "g", "x{,3} x", "# x"),
+                Rx("a{1", "g", "a{1 a", "# a"),
+                Rx("a{1,", "g", "a{1, a", "# a"),
+                Rx("]", "g", "a]", "a#"),
+                Rx("p{L}", "g", "p{L}", "#"),
+                Rx("x{1}{", "g", "x{", "#"),
+                Rx("{*", "g", "{{a", "##a#"),
+                Rx("]+", "g", "]]a", "#a"),
+                Rx("{1,2}", "g", "a", null),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_hexAndUnicodeEscapesWithoutTheirDigitsAreLettersWithoutU() {
+        assertDart(
+            listOf(
+                Rx("\\u61", "g", "u61 a", "# a"),
+                Rx("\\u{3}", "g", "uuu u", "# u"),
+                Rx("\\u{61}", "g", "u{61} a", "u{61} a"),
+                Rx("\\x6", "g", "x6", "#"),
+                Rx("\\x{2}", "g", "xx x", "# x"),
+                Rx("\\xG1", "g", "xG1", "#"),
+                Rx("\\x*", "g", "xa", "##a#"),
+                Rx("[\\x6]", "g", "x6", "##"),
+                Rx("[\\u{61}]", "g", "u{61}", "#####"),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_aControlEscapeWithoutALetterIsABackslashWithoutU() {
+        assertDart(
+            listOf(
+                Rx("\\c1", "g", "\\c1", "#"),
+                Rx("\\c", "g", "\\c", "#"),
+                Rx("\\c!", "g", "\\c!", "#"),
+                Rx("\\c*", "g", "\\ccc \\", "# #"),
+                Rx("\\c1", "gi", "\\C1 \\c1", "# #"),
+                Rx("\\ca", "g", "\u0001a!", "#a!"),
+                // In a class \c and a digit or _ is the control character, anything else the members \ and c.
+                Rx("[\\c1]", "g", "\u0011 c 1", "# c 1"),
+                Rx("[\\c_]", "g", "\u001F_c", "#_c"),
+                Rx("[\\c]", "g", "\\c", "##"),
+                Rx("[\\c-e]", "g", "\\cde-", "####-"),
+                Rx("[\\ca]", "g", "\u0001a!", "#a!"),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_aDecimalEscapePastTheGroupCountIsLegacyOctalWithoutU() {
+        assertDart(
+            listOf(
+                Rx("\\0", "g", "a\u0000", "a#"),
+                Rx("\\01", "g", "\u0001 1", "# 1"),
+                Rx("\\377", "g", "\u00FF", "#"),
+                Rx("\\400", "g", " 0", "#"),
+                Rx("\\8", "g", "8", "#"),
+                Rx("\\18", "g", "\u00018", "#"),
+                Rx("\\08", "g", "\u00008", "#"),
+                Rx("\\012", "g", "\n", "#"),
+                Rx("\\163", "gi", "sS\u017F", "##\u017F"),
+                Rx("(a)\\8", "g", "a8", "#"),
+                Rx("(a)\\2", "g", "a\u0002", "#"),
+                Rx("(a)\\10", "g", "a\u0008", "#"),
+                Rx("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)\\10", "g", "abcdefghijj abcdefghija0", "# abcdefghija0"),
+                // Groups are counted over the whole pattern, not in a class or after an escaped (.
+                Rx("[(]\\1", "g", "(\u0001", "#"),
+                Rx("\\(\\1", "g", "(\u0001", "#"),
+                Rx("(?:a)\\1", "g", "a\u0001", "#"),
+                Rx("(?<n>a)\\1", "g", "aa", "#"),
+                Rx("[^]](a)\\1", "g", "x]aa", "#"),
+            ),
+        )
+    }
+
+    @Test
+    fun a2_backslashZeroIsNulWithU() {
+        assertDart(
+            listOf(
+                Rx("\\0", "gu", "a\u0000", "a#"),
+                Rx("[\\0]", "gu", "a\u0000", "a#"),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_aClassEndsAtItsFirstBracketAndHoldsNoSetSyntax() {
+        assertDart(
+            listOf(
+                Rx("[]", "g", "ab", "ab"),
+                Rx("[^]", "g", "a\nb", "###"),
+                Rx("[]a]", "g", "a]", "a]"),
+                Rx("[^]a]", "g", "a]", "a]"),
+                Rx("[]*", "g", "ab", "#a#b#"),
+                Rx("[^]", "gi", "aB", "##"),
+                Rx("[[:alpha:]]", "g", "a:] a", "a# a"),
+                Rx("[a&&b]", "g", "a&b", "###"),
+                Rx("[a~~b]", "g", "~", "#"),
+                Rx("[a-z&&[aeiou]]", "g", "a&[]", "a&#"),
+                Rx("[a--b]", "g", "a-b", null),
+                Rx("[--0]", "g", "-./0a", "####a"),
+                Rx("[a-z-0]", "g", "a-0z1", "####1"),
+                Rx("[\\x5a-\\x41]", "g", "A", null),
+                Rx("[a-\\c]", "g", "a", null),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_classEscapesFollowAnnexBWithoutU() {
+        assertDart(
+            listOf(
+                // A range with a class escape on either side is a union.
+                Rx("[a-\\d]", "g", "a-1b", "###b"),
+                Rx("[\\d-z]", "g", "1-z y", "### y"),
+                Rx("[\\w-\\d]", "g", "a-1%", "###%"),
+                Rx("[a-\\s]", "g", "a- b", "###b"),
+                Rx("[a-\\d]", "gi", "A-1b", "###b"),
+                // An identity escape is the character, a decimal one octal.
+                Rx("[\\B]", "g", "Bb", "#b"),
+                Rx("[\\1]", "g", "\u0001 1", "# 1"),
+                Rx("[\\8]", "g", "8", "#"),
+                Rx("[\\k]", "g", "k", "#"),
+                Rx("[\\a]", "g", "a", "#"),
+                Rx("[\\K]", "gi", "kK\u212A", "##\u212A"),
+                Rx("[\\18]", "g", "\u00018", "##"),
+                Rx("[\\0-\\x1f]", "g", "\u0000\u001F ", "## "),
+                Rx("[\\p{L}-z]", "g", "a", null),
+                Rx("[a-\\p{L}]", "g", "a-p{L}b", "#-#####"),
+            ),
+        )
+    }
+
+    @Test
+    fun a1_guard_aLookaheadMayBeQuantifiedWithoutU() {
+        assertDart(
+            listOf(
+                Rx("(?=a)*", "g", "ab", "#a#b#"),
+                Rx("(?!a)+", "g", "ab", "a#b#"),
+                Rx("(?=a){2}", "g", "ab", "#ab"),
+            ),
+        )
+    }
+
+    // MARK: S15 — strict u (row 23b.37)
+    // Expected values from Dart 3.12.2. With `u` Dart reads ECMAScript's strict
+    // grammar and refuses what Annex B lets through: an identity escape of
+    // anything but a syntax character, a lone brace or bracket, a decimal
+    // escape past the group count, `\c`, `\x` or `\u` without their argument,
+    // a class range on a class escape, a quantified lookahead, `\k` naming no
+    // group. In both modes `\v` is U+000B alone and `\s` ECMAScript's set.
+
+    /** The A2 rows' input. */
+    private val strictInput = "a-%_{}]"
+
+    /** Each pattern under [flags] on [strictInput], where Dart throws. */
+    private fun refusedWithU(flags: String, vararg patterns: String): List<Rx> = patterns.map { Rx(it, flags, strictInput, null) }
+
+    @Test
+    fun a2_anIdentityEscapeOfAnythingButASyntaxCharacterIsInvalidWithU() {
+        assertDart(
+            refusedWithU(
+                "gu", "\\A", "\\z", "\\-", "\\%", "\\_", "\\a", "\\V", "\\h", "\\H", "\\R", "\\G", "\\Z", "\\Q", "\\X",
+                "\\e", "\\N", "\\ ", "\\,", "\\é", "a\\", "[\\_]", "[\\a]", "[\\B]", "[\\k]", "[\\ ]", "[\\é]",
+            ) + refusedWithU("giu", "\\A", "\\-", "\\a", "[\\_]", "[\\B]"),
+        )
+    }
+
+    @Test
+    fun a2_aLoneBraceOrBracketIsInvalidWithU() {
+        assertDart(
+            refusedWithU("gu", "{", "}", "]", "a{1", "a{1,", "x{,3}", "[]a]", "[[a]]") +
+                refusedWithU("giu", "{", "}", "]", "a{1"),
+        )
+    }
+
+    @Test
+    fun a2_aDecimalEscapePastTheGroupCountIsInvalidWithU() {
+        assertDart(
+            refusedWithU(
+                "gu", "\\00", "\\01", "\\1", "\\8", "\\9", "\\10", "(a)\\2", "(a)\\8", "(a)\\10", "(a)\\01",
+                "[\\00]", "[\\01]", "[\\1]", "[\\8]", "[\\9]",
+            ) + refusedWithU("giu", "\\8", "\\00"),
+        )
+    }
+
+    @Test
+    fun a2_controlHexAndUnicodeEscapesWithoutTheirArgumentAreInvalidWithU() {
+        assertDart(
+            refusedWithU("gu", "\\c", "\\c1", "\\c!", "[\\c_]", "[\\c1]", "[\\c]", "\\x", "\\x6", "\\x{73}", "\\u", "\\u61", "\\u{", "\\u{}") +
+                refusedWithU("giu", "\\c1", "[\\c_]") +
+                listOf(Rx("[\\c_]", "gu", "\u001F", null)),
+        )
+    }
+
+    @Test
+    fun a2_aClassRangeOnAClassEscapeOrAPropertyIsInvalidWithU() {
+        assertDart(
+            refusedWithU(
+                "gu", "[a-\\d]", "[\\d-z]", "[\\w-a]", "[\\p{L}-z]", "[a-\\p{L}]", "[\\s-a]", "[\\w-\\d]", "[a-\\s]",
+                "[\\D-z]", "[a-\\P{L}]", "[\\S-z]", "[\\W-a]",
+            ) + refusedWithU("giu", "[a-\\d]"),
+        )
+    }
+
+    @Test
+    fun a2_aQuantifiedLookaheadIsInvalidWithU() {
+        assertDart(refusedWithU("gu", "(?=a)*", "(?!a)?", "(?=a){2}", "(?!a)+", "(?=a)?") + refusedWithU("giu", "(?=a)*"))
+    }
+
+    @Test
+    fun a2_backslashKNamingNoGroupIsInvalidWithU() {
+        assertDart(
+            refusedWithU("gu", "\\k", "\\k<a>", "\\ka", "(?<a>x)\\k<b>", "(?<a>x)\\k", "(?<a>x)\\k<a", "(?<a>x)[\\k]") +
+                refusedWithU("giu", "\\k"),
+        )
+    }
+
+    @Test
+    fun a2_theRewriterItselfRefusesWhatDartRefusesWithU() {
+        // Not the engine: the desktop JVM reads `\A`, `\x{73}` or `[\c_]`, and which of the rest it refuses is its own business.
+        val refused = listOf(
+            "\\A", "\\z", "\\-", "\\%", "\\_", "\\a", "\\V", "\\h", "\\H", "\\R", "{", "}", "]", "a{1", "x{,3}", "[]a]",
+            "\\00", "\\01", "\\8", "(a)\\2", "(a)\\10", "\\c1", "\\c", "[\\c_]", "\\x6", "\\x{73}", "\\u61", "\\u{}",
+            "[a-\\d]", "[\\d-z]", "[\\p{L}-z]", "[a-\\p{L}]", "[\\w-a]", "(?=a)*", "(?!a)?", "\\k", "\\k<a>", "(?<a>x)\\k<b>",
+            "[\\k]", "[\\B]", "[\\a]", "[\\_]", "\\p", "\\pL", "[\\8]", "[\\1]", "[\\00]",
+        )
+        assertEquals(emptyList(), refused.filter { RegexSupport.asciiClasses(it, unicode = true) != null })
+    }
+
+    @Test
+    fun a2_guard_syntaxAndCharacterEscapesStayValidWithU() {
+        val syntax = ".*+?()[]{}|\\/^$-"
+        assertDart(
+            listOf(
+                Rx("\\/", "gu", "a/", "a#"),
+                Rx("\\^", "gu", "^", "#"),
+                Rx("[\\-]", "gu", "-a", "#a"),
+                Rx("\\$", "gu", "$", "#"),
+                Rx("[\\^]", "gu", "^", "#"),
+                Rx("[\\/]", "gu", "/", "#"),
+                Rx("\\0", "gu", "a\u0000", "a#"),
+                Rx("[\\0]", "gu", "a\u0000", "a#"),
+                Rx("[\\b]", "gu", "\bb", "#b"),
+                Rx("\\cA", "gu", "\u0001", "#"),
+                Rx("\\cA", "giu", "\u0001", "#"),
+                Rx("\\0a", "gu", "\u0000a", "#"),
+                Rx("\\ca", "gu", "\u0001a", "#a"),
+                Rx("\\cZ", "gu", "\u001AZ", "#Z"),
+                Rx("[\\cZ]", "gu", "\u001AZ", "#Z"),
+                Rx("\\f\\n\\r\\t", "gu", "a\u000C\n\r\tb", "a#b"),
+                Rx("\\x41", "gu", "aA", "a#"),
+                Rx("\\u0041", "gu", "aA", "a#"),
+                Rx("[\\x41-\\x43]", "gu", "ABCD", "###D"),
+                Rx("[\\-a]", "gu", "-ab", "##b"),
+                Rx("[a\\-z]", "gu", "a-mz", "##m#"),
+                Rx("\\.", "gu", syntax, "#*+?()[]{}|\\/^$-"),
+                Rx("\\*", "gu", syntax, ".#+?()[]{}|\\/^$-"),
+                Rx("\\+", "gu", syntax, ".*#?()[]{}|\\/^$-"),
+                Rx("\\?", "gu", syntax, ".*+#()[]{}|\\/^$-"),
+                Rx("\\(", "gu", syntax, ".*+?#)[]{}|\\/^$-"),
+                Rx("\\)", "gu", syntax, ".*+?(#[]{}|\\/^$-"),
+                Rx("\\[", "gu", syntax, ".*+?()#]{}|\\/^$-"),
+                Rx("\\]", "gu", syntax, ".*+?()[#{}|\\/^$-"),
+                Rx("\\{", "gu", syntax, ".*+?()[]#}|\\/^$-"),
+                Rx("\\}", "gu", syntax, ".*+?()[]{#|\\/^$-"),
+                Rx("\\|", "gu", syntax, ".*+?()[]{}#\\/^$-"),
+                Rx("\\\\", "gu", syntax, ".*+?()[]{}|#/^$-"),
+                Rx("[\\]]", "gu", syntax, ".*+?()[#{}|\\/^$-"),
+                Rx("[\\[]", "gu", syntax, ".*+?()#]{}|\\/^$-"),
+                Rx("[\\{]", "gu", syntax, ".*+?()[]#}|\\/^$-"),
+                Rx("[\\}]", "gu", syntax, ".*+?()[]{#|\\/^$-"),
+                Rx("[\\.]", "gu", syntax, "#*+?()[]{}|\\/^$-"),
+                Rx("[\\$]", "gu", syntax, ".*+?()[]{}|\\/^#-"),
+                Rx("[\\|]", "gu", syntax, ".*+?()[]{}#\\/^$-"),
+                Rx("[\\\\]", "gu", syntax, ".*+?()[]{}|#/^$-"),
+                // A backreference to a group that exists, by number or by name.
+                Rx("(a)\\1", "gu", "aa a", "# a"),
+                Rx("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)\\10", "gu", "abcdefghijj abcdefghija0", "# abcdefghija0"),
+                Rx("(?<a>x)\\k<a>", "gu", "xx x", "# x"),
+                // Without `u` the same escapes are Annex B's characters.
+                Rx("\\-", "g", "a-b", "a#b"),
+                Rx("\\%", "g", "a%b", "a#b"),
+                Rx("\\8", "g", "8", "#"),
+            ),
+        )
+    }
+
+    /** ECMAScript's WhiteSpace and LineTerminator, after the five controls U+0009-000D. */
+    private val spaces = " \u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF"
+
+    /** The whole set, 25 characters. */
+    private val white = "\t\n\u000B\u000C\r$spaces"
+
+    /** NEL, the Mongolian vowel separator and the zero-width space are not in it. */
+    private val notWhite = "\u0085\u180E\u200Ba"
+
+    @Test
+    fun a2_backslashVIsTheLineTabulationAloneInBothModes() {
+        val ctl = "a\u000B\n\u000C\r\t\u0085\u2028\u2029 b"
+        assertDart(
+            listOf("g", "gu", "gi", "giu").flatMap { f ->
+                listOf(
+                    Rx("\\v", f, white + notWhite, "\t\n#\u000C\r$spaces$notWhite"),
+                    Rx("[\\v]", f, white + notWhite, "\t\n#\u000C\r$spaces$notWhite"),
+                    Rx("[^\\v]", f, white + notWhite, "##\u000B##########################"),
+                    Rx("[\\v-\\r]", f, white + notWhite, "\t\n###$spaces$notWhite"),
+                )
+            } + listOf("g", "gu").flatMap { f ->
+                listOf(
+                    Rx("\\v", f, ctl, "a#\n\u000C\r\t\u0085\u2028\u2029 b"),
+                    Rx("[\\v]", f, ctl, "a#\n\u000C\r\t\u0085\u2028\u2029 b"),
+                    Rx("[^\\v]", f, ctl, "#\u000B#########"),
+                )
+            } + Rx("\\V", "g", white + notWhite, white + notWhite),
+        )
+    }
+
+    @Test
+    fun a2_backslashSIsEcmaScriptsWhiteSpaceInBothModes() {
+        val all = white + notWhite
+        assertDart(
+            listOf("g", "gu", "gi", "giu").flatMap { f ->
+                listOf(
+                    Rx("\\s", f, all, "#########################$notWhite"),
+                    Rx("[\\s]", f, all, "#########################$notWhite"),
+                    Rx("[^\\S]", f, all, "#########################$notWhite"),
+                    Rx("[\\s\\d]", f, all, "#########################$notWhite"),
+                    Rx("\\s+", f, all, "#$notWhite"),
+                    Rx("\\S", f, all, "$white####"),
+                    Rx("[\\S]", f, all, "$white####"),
+                    Rx("[^\\s]", f, all, "$white####"),
+                    Rx("[^\\s\\d]", f, all, "$white####"),
+                    Rx("[a\\S]", f, all, "$white####"),
+                )
+            } + listOf("g", "gu").flatMap { f ->
+                listOf(
+                    Rx("\\s", f, "a\uFEFFb\u180E\u200Bc\u00A0d", "a#b\u180E\u200Bc#d"),
+                    Rx("[\\S]", f, "a\uFEFF\u0085", "#\uFEFF#"),
+                    Rx("\\S", f, "\uFEFF\u0085", "\uFEFF#"),
+                    Rx("\\s", f, "a\u000B\n\u000C\r\t\u0085\u2028\u2029 b", "a#####\u0085###b"),
+                    Rx("[\\s]", f, "a\u000B\n\u000C\r\t\u0085\u2028\u2029 b", "a#####\u0085###b"),
+                )
+            },
+        )
+    }
+
+    @Test
+    fun a2_anEmptyClassTakesAQuantifierInBothModes() {
+        assertDart(
+            listOf("g", "gu").flatMap { f ->
+                listOf(
+                    Rx("[]*", f, "ab", "#a#b#"),
+                    Rx("[]+", f, "ab", "ab"),
+                    Rx("[]?", f, "ab", "#a#b#"),
+                    Rx("[]{2}", f, "ab", "ab"),
+                    Rx("[]{0}", f, "ab", "#a#b#"),
+                    Rx("[]*?", f, "ab", "#a#b#"),
+                    Rx("(?:[])*", f, "ab", "#a#b#"),
+                    Rx("a[]?b", f, "ab", "#"),
+                    Rx("a[]*b", f, "ab", "#"),
+                    Rx("[^]*", f, "ab", "##"),
+                    Rx("[]|a", f, "ab", "#b"),
+                )
+            },
+        )
+    }
+
+    @Test
+    fun a2_guard_aQuantifiedLookaheadWithoutUKeepsAnnexBsMatches() {
+        assertDart(
+            listOf(
+                Rx("(?=a)*", "g", "xab", "#x#a#b#"),
+                Rx("(?=a)+", "g", "xab", "x#ab"),
+                Rx("(?!a)*", "g", "xab", "#x#a#b#"),
+                Rx("(?=a){0}", "g", "xab", "#x#a#b#"),
+                Rx("(?=a)*?", "g", "xab", "#x#a#b#"),
+                Rx("x(?=a)*", "g", "xab", "#ab"),
+                Rx("(?=a)?b", "g", "xab", "xa#"),
+                Rx("(?=a)*a", "g", "xab", "x#b"),
+                Rx("((?=a))*", "g", "xab", "#x#a#b#"),
+                Rx("(?:(?=a))*", "g", "xab", "#x#a#b#"),
+            ),
+        )
+    }
+
+    @Test
+    fun a2_anEmptyClassAndAQuantifiedLookaheadAreWrittenAsGroupsAQuantifierTakesOnIcu() {
+        // Android's java.util.regex is ICU, which refuses `(?!)*` and `(?=a)*`; the desktop JVM takes either.
+        assertEquals("(?:(?!))", RegexSupport.asciiClasses("[]"))
+        assertEquals("(?:(?!))*", RegexSupport.asciiClasses("[]*"))
+        assertEquals("(?:(?!))*", RegexSupport.asciiClasses("[]*", unicode = true))
+        assertEquals("(?:(?=a))*", RegexSupport.asciiClasses("(?=a)*"))
+        assertEquals("(?:(?!a)){2}", RegexSupport.asciiClasses("(?!a){2}"))
+        assertEquals("x(?:(?=a))+?y", RegexSupport.asciiClasses("x(?=a)+?y"))
+        assertEquals("((?:(?=a))*)", RegexSupport.asciiClasses("((?=a)*)"))
+        assertEquals("(?=a)b", RegexSupport.asciiClasses("(?=a)b"))
+        assertEquals(null, RegexSupport.asciiClasses("(?=a)*", unicode = true))
+    }
+
+    // MARK: S15 — group names, unset references (row 23b.37)
+    // Expected values from Dart 3.12.2, the same with `u` and without. Group
+    // names are dropped, so names the engine refuses work and a name may stand
+    // in two alternatives; `\k<name>` is its groups' numbers. A reference that
+    // can only see its group unset matches empty in Dart, where both engines
+    // fail it. Not reached: a group unset only at run time (`(?:(a)|b)\1`).
+
+    /** The pattern under `g` and `gu` on [input]. */
+    private fun named(pattern: String, input: String, expected: String?): List<Rx> =
+        listOf(Rx(pattern, "g", input, expected), Rx(pattern, "gu", input, expected))
+
+    /** Group names Dart refuses, and each `\k` it refuses where the pattern has a named group. */
+    private val refusedNames = listOf(
+        "(?<1a>x)", "(?<a-b>x)", "(?<>x)", "(?<😀>x)", "(?<a😀>x)", "(?<a b>x)", "(?<a", "(?<a\\>x)", "(?<a\\x62>x)",
+        "(?<١>x)", "(?<\u0301>x)", "(?<\u200Cx>x)", "(?<a\u00AD>x)", "(?<a\u0001>x)", "(?<ⸯ>x)", "(?<aⸯ>x)", "(?<‿>x)",
+        "(?<a\u2028>x)", "(?<a\\u{}>x)", "(?<a\\u{110000}>x)", "(?<a\\u62>x)", "(?<\\u0031>x)", "(?<a\\u002d>x)",
+        "(?<\\u{1F600}>x)", "(?<a\\U0062>x)", "(?<a\\uD835>x)",
+        "(?<a>x)(?<a>y)", "(?:(?<a>x)|y)(?<a>z)", "(?<a>(?<a>x))", "(?<a>x|(?<a>y))", "(?:(?<a>x)|(?<a>y))(?<a>z)",
+        "(?<=(?<a>x)(?<a>y))", "(?<a>x)\\k<b>", "(?<a>x)\\k", "(?<a>x)\\k<a", "(?<a>x)[\\k]", "(?<a>x)[\\k<a>]",
+        "(?<A>x)\\k<a>", "(?<a>x)\\ka", "(?<a>x)\\k<>", "(?<a>x)\\k<1>", "(?<a>x)\\k<a\\u{62}>",
+    )
+
+    @Test
+    fun g3_groupNamesAreDroppedSoNamesTheEngineRefusesWork() {
+        assertDart(
+            listOf(
+                "(?<\$a>x)", "(?<é>x)", "(?<a>x)", "(?<_a>x)", "(?<a\$>x)", "(?<\$>x)", "(?<_>x)", "(?<a1>x)", "(?<ª>x)",
+                "(?<a·>x)", "(?<a١>x)", "(?<a\u0301>x)", "(?<a\u200C>x)", "(?<a\u200D>x)", "(?<𝐀>x)", "(?<\u212A>x)",
+                "(?<℘>x)", "(?<a\\u{62}>x)", "(?<a\\u0062>x)", "(?<\\u0024>x)", "(?<a\\u{0062}>x)", "(?<a\\u{000000062}>x)",
+                "(?<\\u{1D400}>x)", "(?<a\\u200C>x)", "(?<a\\u{200c}>x)", "(?<a\\u00e9>x)",
+            ).flatMap { named(it, "x", "#") } +
+                named("(?<a\\u0062>x)\\k<ab>", "xx x", "# x") +
+                named("(?<ab>x)\\k<a\\u{62}>", "xx x", "# x") +
+                named("(?<𝐀>x)\\k<\\u{1D400}>", "xx x", "# x"),
+        )
+    }
+
+    @Test
+    fun g3_aNameInTwoAlternativesNamesTheGroupThatTookPart() {
+        assertDart(
+            named("(?<a>x)|(?<a>y)", "xy", "##") +
+                named("(?:(?<a>x)|(?<a>y))\\k<a>", "xx yy xy", "# # xy") +
+                named("(?:(?<a>x)|(?<a>y))+\\k<a>", "xyy yxx xx", "# # #") +
+                named("(?<a>x)|(?:(?<a>y)|(?<a>z))\\k<a>", "x yy zz yz", "# # # yz") +
+                named("(?:(?<a>x)\\k<a>|(?<a>y))", "xx y yy", "# # ##") +
+                named("(?:(?<a>x)|(?<a>y))(?:(?<b>x)|(?<b>y))\\k<a>\\k<b>", "xyxy yyyy", "# #") +
+                named("(?<a>x)|(?<a>y)\\k<a>", "x yy yx", "# # y#") +
+                named("(?:(?<a>x)|(?<a>y)|(?<a>z))\\k<a>", "xx yy zz xy", "# # # xy") +
+                named("(?<a>x)|(?<b>y)|(?<a>z)", "xyz", "###") +
+                named("(?<a>x)(?:(?<b>y)|(?<b>z))", "xy xz", "# #") +
+                named("(?<a>x)\\k<a>0", "xx0 x0", "# x0") +
+                named("(?<a>x)\\k<a>1", "xx1", "#"),
+        )
+    }
+
+    @Test
+    fun g3_namesDartRefusesAreInvalid() {
+        assertDart(refusedNames.flatMap { named(it, "xy", null) })
+    }
+
+    @Test
+    fun g3_theRewriterItselfRefusesTheNamesDartRefuses() {
+        // Not the engine: names are dropped, so it never sees one.
+        val accepted = listOf(false, true).flatMap { u -> refusedNames.filter { RegexSupport.asciiClasses(it, unicode = u) != null }.map { "$it u=$u" } }
+        assertEquals(emptyList(), accepted)
+    }
+
+    @Test
+    fun g3_aReferenceThatCanOnlySeeItsGroupUnsetMatchesEmpty() {
+        val fwd = "a ab aab b ba aba abab"
+        assertDart(
+            named("\\1(a)", "aa", "##") +
+                named("(a\\1)", "aa", "##") +
+                named("(\\1a)", fwd, "# #b ##b b b# #b# #b#b") +
+                named("(?:\\1b|(a))+", "ab", "#") +
+                named("\\2(a)(b)", "ab", "#") +
+                named("(a)(?:\\2(b))", "ab", "#") +
+                named("\\k<a>(?<a>x)", "xx", "##") +
+                named("\\k<a>(?:(?<a>x)|(?<a>y))", "x y", "# #") +
+                named("(a)|\\1b", "ab b", "## #") +
+                named("(a)|b\\1", "ab b", "## #") +
+                named("(?:(a)|\\1b)+", "ab b aab", "# # #") +
+                named("(?:\\1(a))+", "aa a", "# #") +
+                named("((a)|b\\2)", "ab b", "## #") +
+                named("(a)|(?:b|\\1)c", "ac c bc", "## # #") +
+                named("(?:(a)|b)|\\1c", "ac c", "## #") +
+                named("(a)\\1|\\1b", "aa b ab", "# # a#") +
+                named("(?=\\1(a))a", "aa a", "## #") +
+                named("(a)(b)(c)(d)(e)(f)(g)(h)(i)\\10(j)", "abcdefghij", "#") +
+                named("\\1*(a)", "aa", "##") +
+                named("\\k<a>*(?<a>x)", "xx", "##") +
+                named("(a)|\\1*b", "ab b", "## #") +
+                named("\\1(?<=(a))", "aa", "a#a#"),
+        )
+    }
+
+    @Test
+    fun g3_guard_referencesThatCanSeeTheirGroupKeepTheirMatches() {
+        assertDart(
+            named("(?<a>x)\\1", "xx", "#") +
+                named("(?<a>x)(?<b>y)\\k<b>\\k<a>", "xyyx", "#") +
+                named("(?<a>.)\\k<a>(?<b>.)\\2", "aabb", "#") +
+                named("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)\\10", "abcdefghijj", "#") +
+                named("(a)(?:\\1)+", "aaa", "#") +
+                named("(?<=(a))\\1", "aa", "a#") +
+                listOf(
+                    Rx("(a)\\2", "g", "a\u0002", "#"),
+                    Rx("(a)\\2", "gu", "a\u0002", null),
+                    Rx("(a)\\10", "g", "a\b", "#"),
+                    Rx("(a)\\10", "gu", "a\b", null),
+                    Rx("(a)\\8", "g", "a8", "#"),
+                    Rx("(a)\\8", "gu", "a8", null),
+                ),
+        )
+    }
+
+    @Test
+    fun g3_referencesAreWrittenAsTheirGroupsNumbersOrAsAnEmptyGroup() {
+        assertEquals("(x)(?:\\1)", RegexSupport.asciiClasses("(?<a>x)\\k<a>"))
+        assertEquals("(x)(?:\\1)", RegexSupport.asciiClasses("(?<a>x)\\k<a>", unicode = true))
+        assertEquals("(?:(x)|(y))(?:\\1|\\2)", RegexSupport.asciiClasses("(?:(?<a>x)|(?<a>y))\\k<a>"))
+        // An alternative that can only be unset is left out, and with none left the group is empty.
+        assertEquals("(x)|(?:(y)|(z))(?:\\2|\\3)", RegexSupport.asciiClasses("(?<a>x)|(?:(?<a>y)|(?<a>z))\\k<a>"))
+        assertEquals("(?:)(x)", RegexSupport.asciiClasses("\\k<a>(?<a>x)"))
+        assertEquals("(?:)(a)", RegexSupport.asciiClasses("\\1(a)"))
+        assertEquals("(a|(?:))", RegexSupport.asciiClasses("(a|\\1)", unicode = true))
+        assertEquals("(a)|(?:)b", RegexSupport.asciiClasses("(a)|\\1b"))
+        // A reference that can see its group set is copied, and so is one in a lookbehind.
+        assertEquals("(a)\\1", RegexSupport.asciiClasses("(a)\\1"))
+        assertEquals("(?<=\\1(a))b", RegexSupport.asciiClasses("(?<=\\1(a))b"))
+        assertEquals("(x)(?<=(?:\\1))", RegexSupport.asciiClasses("(?<a>x)(?<=\\k<a>)"))
+    }
+
+    @Test
+    fun g3_aGroupInANegativeLookaroundIsUnsetAfterIt() {
+        // A negative lookaround succeeds only when its body fails, so after it
+        // Dart sees each of its groups unset, through any enclosing group too.
+        // Inside it a reference sees its group as usual, a positive lookaround
+        // leaves its groups set, and a name stays taken by a group inside one.
+        val neg = "b ab aa ba bb abb aab c ac bc abc aac xy y x"
+        assertDart(
+            named("(?!(a))\\1b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?!(a))\\1", neg, "#b# a#b# aa# #ba# #b#b# a#b#b# aa#b# #c# a#c# #b#c# a#b#c# aa#c# #x#y# #y# #x#") +
+                named("(?!(?=(a)))\\1", neg, "#b# a#b# aa# #ba# #b#b# a#b#b# aa#b# #c# a#c# #b#c# a#b#c# aa#c# #x#y# #y# #x#") +
+                named("(?=(?!(a)))\\1b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?<=(?!(a)))\\1b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?!(?!(a)))\\1", neg, "b #ab #a#a b#a bb #abb #a#ab c #ac bc #abc #a#ac xy y x") +
+                named("(?!(a)|(b))\\1\\2c", neg, "b ab aa ba bb abb aab # a# b# ab# aa# xy y x") +
+                named("(a)(?!(b))\\1\\2", neg, "b ab # ba bb abb #b c ac bc abc #c xy y x") +
+                named("((?!(a)))\\2b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?:(?!(a)))\\1b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?:(?!(a))|(a))\\1", neg, "#b# ##b# ### #b## #b#b# ##b#b# ###b# #c# ##c# #b#c# ##b#c# ###c# #x#y# #y# #x#") +
+                named("(?:(?!(a))\\1b)+", neg, "# a# aa #a # a# aa# c ac #c a#c aac xy y x") +
+                named("(?:(?!(a))b)+\\1", neg, "# a# aa #a # a# aa# c ac #c a#c aac xy y x") +
+                named("(?!(a))(?:\\1)b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?!(a))(?=\\1b)", neg, "#b a#b aa #ba #b#b a#b#b aa#b c ac #bc a#bc aac xy y x") +
+                named("(?!(?!(a))\\1b)c", neg, "b ab aa ba bb abb aab # a# b# ab# aa# xy y x") +
+                named("(?<!(a))\\1b", neg, "# ab aa #a ## ab# aab c ac #c abc aac xy y x") +
+                named("(?!(?<n>a))\\k<n>b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?!(a)(?<n>b))\\k<n>c", neg, "b ab aa ba bb abb aab # a# b# ab# aa# xy y x") +
+                named("(?=(a))\\1", neg, "b #b ## b# bb #bb ##b c #c bc #bc ##c xy y x") +
+                named("(?!(a)\\1)b", neg, "# a# aa #a ## a## aa# c ac #c a#c aac xy y x") +
+                named("(?!(?<n>a))|(?<n>b)\\k<n>", neg, "#b# a#b# aa# #ba# #b#b# a#b#b# aa#b# #c# a#c# #b#c# a#b#c# aa#c# #x#y# #y# #x#") +
+                named("(?!(?<n>a)|(?<n>b))c", neg, "b ab aa ba bb abb aab # a# b# ab# aa# xy y x") +
+                named("(?!(?<n>a))(?<n>b)", neg, null) +
+                named("(?<n>a)(?!(?<n>b))", neg, null) +
+                named("(?<!(?<n>a))(?<n>b)", neg, null),
+        )
+        assertEquals("(?!(a))(?:)b", RegexSupport.asciiClasses("(?!(a))\\1b"))
+        assertEquals("(?!(a)\\1)b", RegexSupport.asciiClasses("(?!(a)\\1)b"))
+        // A `\k<name>` drops only the groups a negative lookaround holds.
+        assertEquals("(?:(a)|(?!(b)))(?:\\1)c", RegexSupport.asciiClasses("(?:(?<n>a)|(?!(?<n>b)))\\k<n>c"))
+    }
+
+    // MARK: S15 — iu properties, script values (row 23b.37)
+    // Expected values from Dart 3.12.2. Under `i` with `u` Dart builds a
+    // class's set first and folds after: a character matches a class when a
+    // member of its simple case-fold class (DartFoldClasses) is in the set,
+    // and a negated class when none is. So `\P{Ll}` matches s, whose partner
+    // S is not Ll, and `[^\P{Ll}]` no letter with a partner; both engines
+    // fold the property first and negate after. Script values are ECMA-262's,
+    // case-sensitive, under every key.
+
+    /** The G4 rows' input: s S ſ, k K and the Kelvin sign, punctuation, é É, ǅ Ǆ ǆ, ß ẞ. */
+    private val iuLetters = "sS\u017FkK\u212A_!\u00E9\u00C9\u01C5\u01C4\u01C6\u00DF\u1E9E"
+
+    /** The probe's: a digit, ſ and K after the ASCII pairs, Σ σ ς, ẞ ß. */
+    private val iuMore = "sSkK_!\u00E9\u00C91\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"
+
+    /** Capital and small letters above U+FFFF, Deseret, Osage and Adlam, then a and 1. */
+    private val iuAstral = "\uD801\uDC00\uD801\uDC28\uD801\uDCB0\uD801\uDCD8\uD83A\uDD00\uD83A\uDD22a1"
+
+    /** Latin a, Greek α, a combining grave (Inherited), Coptic ⲁ, the voiced sound mark (Common), Devanagari's stress sign (Inherited). */
+    private val scriptLetters = "a\u03B1\u0300\u2C81\u309B\u0951"
+
+    /** The 336 script values Dart 3.12.2 accepts after `Script=`: four-letter codes and long names (Unicode 16), Qaai and Qaac. */
+    private val dartScriptValues = """
+        Adlam Adlm Aghb Ahom Anatolian_Hieroglyphs Arab Arabic Armenian Armi Armn Avestan Avst Bali Balinese
+        Bamu Bamum Bass Bassa_Vah Batak Batk Beng Bengali Bhaiksuki Bhks Bopo Bopomofo Brah Brahmi Brai Braille
+        Bugi Buginese Buhd Buhid Cakm Canadian_Aboriginal Cans Cari Carian Caucasian_Albanian Chakma Cham Cher
+        Cherokee Chorasmian Chrs Common Copt Coptic Cpmn Cprt Cuneiform Cypriot Cypro_Minoan Cyrillic Cyrl
+        Deseret Deva Devanagari Diak Dives_Akuru Dogr Dogra Dsrt Dupl Duployan Egyp Egyptian_Hieroglyphs Elba
+        Elbasan Elym Elymaic Ethi Ethiopic Gara Garay Geor Georgian Glag Glagolitic Gong Gonm Goth Gothic Gran
+        Grantha Greek Grek Gujarati Gujr Gukh Gunjala_Gondi Gurmukhi Guru Gurung_Khema Han Hang Hangul Hani
+        Hanifi_Rohingya Hano Hanunoo Hatr Hatran Hebr Hebrew Hira Hiragana Hluw Hmng Hmnp Hung Imperial_Aramaic
+        Inherited Inscriptional_Pahlavi Inscriptional_Parthian Ital Java Javanese Kaithi Kali Kana Kannada
+        Katakana Kawi Kayah_Li Khar Kharoshthi Khitan_Small_Script Khmer Khmr Khoj Khojki Khudawadi Kirat_Rai
+        Kits Knda Krai Kthi Lana Lao Laoo Latin Latn Lepc Lepcha Limb Limbu Lina Linb Linear_A Linear_B Lisu
+        Lyci Lycian Lydi Lydian Mahajani Mahj Maka Makasar Malayalam Mand Mandaic Mani Manichaean Marc Marchen
+        Masaram_Gondi Medefaidrin Medf Meetei_Mayek Mend Mende_Kikakui Merc Mero Meroitic_Cursive
+        Meroitic_Hieroglyphs Miao Mlym Modi Mong Mongolian Mro Mroo Mtei Mult Multani Myanmar Mymr Nabataean
+        Nag_Mundari Nagm Nand Nandinagari Narb Nbat New_Tai_Lue Newa Nko Nkoo Nshu Nushu Nyiakeng_Puachue_Hmong
+        Ogam Ogham Ol_Chiki Ol_Onal Olck Old_Hungarian Old_Italic Old_North_Arabian Old_Permic Old_Persian
+        Old_Sogdian Old_South_Arabian Old_Turkic Old_Uyghur Onao Oriya Orkh Orya Osage Osge Osma Osmanya Ougr
+        Pahawh_Hmong Palm Palmyrene Pau_Cin_Hau Pauc Perm Phag Phags_Pa Phli Phlp Phnx Phoenician Plrd Prti
+        Psalter_Pahlavi Qaac Qaai Rejang Rjng Rohg Runic Runr Samaritan Samr Sarb Saur Saurashtra Sgnw Sharada
+        Shavian Shaw Shrd Sidd Siddham SignWriting Sind Sinh Sinhala Sogd Sogdian Sogo Sora Sora_Sompeng Soyo
+        Soyombo Sund Sundanese Sunu Sunuwar Sylo Syloti_Nagri Syrc Syriac Tagalog Tagb Tagbanwa Tai_Le Tai_Tham
+        Tai_Viet Takr Takri Tale Talu Tamil Taml Tang Tangsa Tangut Tavt Telu Telugu Tfng Tglg Thaa Thaana Thai
+        Tibetan Tibt Tifinagh Tirh Tirhuta Tnsa Todhri Todr Toto Tulu_Tigalari Tutg Ugar Ugaritic Unknown Vai
+        Vaii Vith Vithkuqi Wancho Wara Warang_Citi Wcho Xpeo Xsux Yezi Yezidi Yi Yiii Zanabazar_Square Zanb Zinh
+        Zyyy Zzzz
+    """.trim().split(' ', '\n').filter(String::isNotEmpty)
+
+    @Test
+    fun g4_aNegatedPropertyUnderIuMatchesEveryLetterWithAPartnerOutsideIt() {
+        assertDart(
+            listOf(
+                Rx("\\P{Ll}", "giu", iuLetters, "###############"),
+                Rx("\\P{Lu}", "giu", iuLetters, "###############"),
+                Rx("\\P{Lt}", "giu", iuLetters, "###############"),
+                Rx("[\\P{Ll}]", "giu", iuLetters, "###############"),
+                Rx("[^\\P{Ll}]", "giu", iuLetters, iuLetters),
+                Rx("[\\P{Ll}\\d]", "giu", iuLetters, "###############"),
+                Rx("\\P{Lowercase}", "giu", iuLetters, "###############"),
+                Rx("\\P{ASCII}", "giu", iuLetters, "######_!#######"),
+                Rx("\\P{Ll}", "giu", iuMore, "###################"),
+                Rx("\\P{Lu}", "giu", iuMore, "###################"),
+                Rx("[\\P{Ll}]", "giu", iuMore, "###################"),
+                Rx("[^\\P{Ll}]", "giu", iuMore, iuMore),
+                Rx("\\P{Lt}", "giu", iuMore, "###################"),
+                Rx("\\P{Lowercase}", "giu", iuMore, "###################"),
+                Rx("\\P{Uppercase}", "giu", iuMore, "###################"),
+                Rx("[^\\P{Lu}]", "giu", iuMore, iuMore),
+                Rx("[\\P{Ll}\\d]", "giu", iuMore, "###################"),
+                Rx("[^\\P{Ll}\\d]", "giu", iuMore, iuMore),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_onTheJvmLtAndAsciiUnderIuMatchAsDart() {
+        // The JVM folds `\p{Lt}` into every cased letter and leaves ſ and K out of `\p{ASCII}`.
+        assertDart(
+            listOf(
+                Rx("\\p{Lt}", "giu", iuLetters, "sS\u017FkK\u212A_!\u00E9\u00C9###\u00DF\u1E9E"),
+                Rx("\\p{ASCII}", "giu", iuLetters, "########\u00E9\u00C9\u01C5\u01C4\u01C6\u00DF\u1E9E"),
+                Rx("[\\p{Lt}x]", "giu", iuLetters, "sS\u017FkK\u212A_!\u00E9\u00C9###\u00DF\u1E9E"),
+                Rx("\\p{Lt}", "giu", iuMore, "sSkK_!\u00E9\u00C91###\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_aLetterAboveTheBmpMatchesByItsFoldClass() {
+        assertDart(
+            listOf(
+                Rx("\\P{Ll}", "giu", iuAstral, "########"),
+                Rx("\\P{Lu}", "giu", iuAstral, "########"),
+                Rx("[\\P{Ll}]", "giu", iuAstral, "########"),
+                Rx("[^\\P{Ll}]", "giu", iuAstral, iuAstral),
+                Rx("\\p{Lu}", "giu", iuAstral, "#######1"),
+                Rx("\\p{Ll}", "giu", iuAstral, "#######1"),
+                Rx("\\p{Lt}", "giu", iuAstral, iuAstral),
+                Rx("[^\\p{Lu}]", "giu", iuAstral, "\uD801\uDC00\uD801\uDC28\uD801\uDCB0\uD801\uDCD8\uD83A\uDD00\uD83A\uDD22a#"),
+                Rx("\\P{Script=Deseret}", "giu", iuAstral, "\uD801\uDC00\uD801\uDC28######"),
+                Rx("\\p{Script=Osage}", "giu", iuAstral, "\uD801\uDC00\uD801\uDC28##\uD83A\uDD00\uD83A\uDD22a1"),
+                Rx("\\p{sc=Dsrt}", "giu", iuAstral, "##\uD801\uDCB0\uD801\uDCD8\uD83A\uDD00\uD83A\uDD22a1"),
+                Rx("[\\p{sc=Dsrt}a]", "giu", iuAstral, "##\uD801\uDCB0\uD801\uDCD8\uD83A\uDD00\uD83A\uDD22#1"),
+                Rx("[^\\p{sc=Adlm}\\d]", "giu", iuAstral, "####\uD83A\uDD00\uD83A\uDD22#1"),
+                Rx("\\p{ASCII}", "giu", iuAstral, "\uD801\uDC00\uD801\uDC28\uD801\uDCB0\uD801\uDCD8\uD83A\uDD00\uD83A\uDD22##"),
+                Rx("\\P{ASCII}", "giu", iuAstral, "######a1"),
+                Rx("\\P{Ll}+", "giu", iuAstral, "#"),
+                Rx("\\p{Lu}{2}", "giu", iuAstral, "###a1"),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_everyFoldClassMatchesAsDartUnderIu() {
+        // Every letter with a partner, each one's class tried: Dart matches all of them
+        // to `\P{Lu}` and `\p{Any}`, and to `\P{Ll}` all but the three classes whose letters are all Ll.
+        val letters = DartFoldClasses.letters.joinToString("") { String(Character.toChars(it)) }
+        val allLl = setOf(0x0390, 0x1FD3, 0x03B0, 0x1FE3, 0xFB05, 0xFB06) // ΐ ΐ, ΰ ΰ, ﬅ ﬆ
+        fun marked(match: (Int) -> Boolean) = DartFoldClasses.letters.joinToString("") { if (match(it)) "#" else String(Character.toChars(it)) }
+        assertDart(
+            listOf(
+                Rx("\\P{Lu}", "giu", letters, marked { true }),
+                Rx("[^\\P{Lu}]", "giu", letters, letters),
+                Rx("\\P{Ll}", "giu", letters, marked { it !in allLl }),
+                Rx("[^\\P{Ll}]", "giu", letters, marked { it in allLl }),
+                Rx("\\p{Any}", "giu", letters, marked { true }),
+                Rx("[^\\p{Any}]", "giu", letters, letters),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_theFoldClassesHoldTheTablesSetsWithU() {
+        val classes = DartFoldClasses.classes
+        assertEquals(1454, classes.size)
+        assertEquals(2938, DartFoldClasses.letters.size)
+        assertEquals(2938, DartFoldClasses.letters.toSet().size)
+        assertEquals(282, classes.count { k -> k.any { it > 0xFFFF } })
+        assertEquals(564, DartFoldClasses.letters.count { it > 0xFFFF })
+        // Each of DartFoldTable's letters matches with `u` its fold class, or itself
+        // alone where it has no partner (ı, İ, ŉ, ʼ, the ligatures, …): 44 of them.
+        val classOf = classes.flatMap { k -> k.map { it to k.toSet() } }.toMap()
+        val differ = DartFoldTable.letters.filter { c -> DartFoldTable.set(c, unicode = true)!!.map(Char::code).toSet() != (classOf[c.code] ?: setOf(c.code)) }
+        assertEquals("", differ)
+        assertEquals(44, DartFoldTable.letters.count { it.code !in classOf })
+    }
+
+    @Test
+    fun g4_guard_propertiesTheEngineFoldsAsDartKeepTheirMatches() {
+        assertDart(
+            listOf(
+                Rx("\\P{Script=Latin}", "giu", iuLetters, "sS\u017FkK\u212A##\u00E9\u00C9\u01C5\u01C4\u01C6\u00DF\u1E9E"),
+                Rx("\\p{Lu}", "giu", iuLetters, "######_!#######"),
+                Rx("[^\\p{Ll}]", "giu", iuLetters, "sS\u017FkK\u212A##\u00E9\u00C9\u01C5\u01C4\u01C6\u00DF\u1E9E"),
+                Rx("\\p{Lowercase_Letter}", "giu", iuLetters, "######_!#######"),
+                Rx("\\p{LC}", "giu", iuLetters, "######_!#######"),
+                Rx("[^\\p{Ll}]", "giu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("\\P{Script=Latin}", "giu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A###\u1E9E\u00DF"),
+                Rx("[^\\p{Lu}a]", "giu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("\\p{Ll}", "giu", iuMore, "####_!##1##########"),
+                Rx("\\p{Lu}", "giu", iuMore, "####_!##1##########"),
+                Rx("[^a-z]", "giu", iuMore, "sSkK########\u017F\u212A#####"),
+                Rx("[^\\p{L}]", "giu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("\\P{L}", "giu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("\\P{Ll}", "gu", iuMore, "s#k###\u00E9####\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("\\P{Lu}", "gu", iuMore, "#S#K###\u00C9##\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("[^\\p{Ll}]", "gu", iuMore, "s#k###\u00E9####\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("[\\P{Ll}]", "gu", iuMore, "s#k###\u00E9####\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("[^\\P{Ll}]", "gu", iuMore, "#S#K_!#\u00C91\u01C5\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("\\P{Lt}", "gu", iuMore, "#########\u01C5#########"),
+                Rx("\\P{Lowercase}", "gu", iuMore, "s#k###\u00E9####\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("\\P{Uppercase}", "gu", iuMore, "#S#K###\u00C9##\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("\\P{Script=Latin}", "gu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A###\u1E9E\u00DF"),
+                Rx("[^\\p{Lu}a]", "gu", iuMore, "#S#K###\u00C9##\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("\\p{Ll}", "gu", iuMore, "#S#K_!#\u00C91\u01C5\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("\\p{Lu}", "gu", iuMore, "s#k#_!\u00E9#1\u01C5#\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("\\p{Lt}", "gu", iuMore, "sSkK_!\u00E9\u00C91#\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("[^a-z]", "gu", iuMore, "s#k################"),
+                Rx("[^\\p{L}]", "gu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("\\P{L}", "gu", iuMore, "sSkK##\u00E9\u00C9#\u01C5\u01C4\u01C6\u017F\u212A\u03A3\u03C3\u03C2\u1E9E\u00DF"),
+                Rx("[^\\P{Lu}]", "gu", iuMore, "s#k#_!\u00E9#1\u01C5#\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("[\\P{Ll}\\d]", "gu", iuMore, "s#k###\u00E9####\u01C6\u017F##\u03C3\u03C2#\u00DF"),
+                Rx("[^\\P{Ll}\\d]", "gu", iuMore, "#S#K_!#\u00C91\u01C5\u01C4##\u212A\u03A3##\u1E9E#"),
+                Rx("\\P{Ll}", "gu", iuAstral, "#\uD801\uDC28#\uD801\uDCD8#\uD83A\uDD22a#"),
+                Rx("[^\\P{Ll}]", "gu", iuAstral, "\uD801\uDC00#\uD801\uDCB0#\uD83A\uDD00##1"),
+                Rx("\\p{Lu}", "gu", iuAstral, "#\uD801\uDC28#\uD801\uDCD8#\uD83A\uDD22a1"),
+                Rx("[^\\p{Lu}]", "gu", iuAstral, "\uD801\uDC00#\uD801\uDCB0#\uD83A\uDD00###"),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_scriptValuesAreDartsExactly() {
+        // Case-sensitive, no spaces, the long name's underscores, and Hrkt is not one.
+        assertDart(
+            listOf(
+                Rx("\\p{Script=latin}", "gu", scriptLetters, null),
+                Rx("\\p{Script=latin}", "giu", scriptLetters, null),
+                Rx("\\p{sc=latn}", "gu", scriptLetters, null),
+                Rx("\\p{sc=latn}", "giu", scriptLetters, null),
+                Rx("\\p{Script=Latin }", "gu", scriptLetters, null),
+                Rx("\\p{Script=Latin }", "giu", scriptLetters, null),
+                Rx("\\p{Script= Latin}", "gu", scriptLetters, null),
+                Rx("\\p{Script= Latin}", "giu", scriptLetters, null),
+                Rx("\\p{Script=OldItalic}", "gu", scriptLetters, null),
+                Rx("\\p{Script=OldItalic}", "giu", scriptLetters, null),
+                Rx("\\p{Script=Hrkt}", "gu", scriptLetters, null),
+                Rx("\\p{Script=Hrkt}", "giu", scriptLetters, null),
+                Rx("\\p{Script=Katakana_Or_Hiragana}", "gu", scriptLetters, null),
+                Rx("\\p{Script=Katakana_Or_Hiragana}", "giu", scriptLetters, null),
+                Rx("\\p{scx=latin}", "gu", scriptLetters, null),
+                Rx("\\p{scx=latin}", "giu", scriptLetters, null),
+                Rx("\\p{Script=}", "gu", scriptLetters, null),
+                Rx("\\p{Script=}", "giu", scriptLetters, null),
+                Rx("\\p{Script=LATIN}", "gu", scriptLetters, null),
+                Rx("\\p{Script=LATIN}", "giu", scriptLetters, null),
+                Rx("\\p{Script=old_italic}", "gu", scriptLetters, null),
+                Rx("\\p{Script=old_italic}", "giu", scriptLetters, null),
+                Rx("\\p{Script_Extensions=latin}", "gu", scriptLetters, null),
+                Rx("\\p{Script_Extensions=latin}", "giu", scriptLetters, null),
+                Rx("\\p{Script=Qaaa}", "gu", scriptLetters, null),
+                Rx("\\p{Script=Qaaa}", "giu", scriptLetters, null),
+                Rx("\\p{Script=Latn}", "gu", scriptLetters, "#\u03B1\u0300\u2C81\u309B\u0951"),
+                Rx("\\p{Script=Latn}", "giu", scriptLetters, "#\u03B1\u0300\u2C81\u309B\u0951"),
+                Rx("\\p{Script=Old_Italic}", "gu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Old_Italic}", "giu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Ital}", "gu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Ital}", "giu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Zzzz}", "gu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Zzzz}", "giu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Unknown}", "gu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Unknown}", "giu", scriptLetters, scriptLetters),
+                Rx("\\p{Script=Zyyy}", "gu", scriptLetters, "a\u03B1\u0300\u2C81#\u0951"),
+                Rx("\\p{Script=Zyyy}", "giu", scriptLetters, "a\u03B1\u0300\u2C81#\u0951"),
+                Rx("\\p{sc=Common}", "gu", scriptLetters, "a\u03B1\u0300\u2C81#\u0951"),
+                Rx("\\p{sc=Common}", "giu", scriptLetters, "a\u03B1\u0300\u2C81#\u0951"),
+                Rx("\\p{Script=Greek}", "gu", scriptLetters, "a#\u0300\u2C81\u309B\u0951"),
+                Rx("\\p{Script=Greek}", "giu", scriptLetters, "a#\u0300\u2C81\u309B\u0951"),
+                Rx("\\P{sc=Latn}", "gu", scriptLetters, "a#####"),
+                Rx("\\P{sc=Latn}", "giu", scriptLetters, "a#####"),
+                Rx("[\\p{sc=Grek}a]", "gu", scriptLetters, "##\u0300\u2C81\u309B\u0951"),
+                Rx("[\\p{sc=Grek}a]", "giu", scriptLetters, "##\u0300\u2C81\u309B\u0951"),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_onTheJvmQaaiAndQaacReadAsInheritedAndCoptic() {
+        assertDart(
+            listOf(
+                Rx("\\p{Script=Qaai}", "gu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{Script=Qaai}", "giu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{sc=Qaai}", "gu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{sc=Qaai}", "giu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{Script=Zinh}", "gu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{Script=Zinh}", "giu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{sc=Inherited}", "gu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\p{sc=Inherited}", "giu", scriptLetters, "a\u03B1#\u2C81\u309B#"),
+                Rx("\\P{Script=Qaai}", "gu", scriptLetters, "##\u0300##\u0951"),
+                Rx("\\P{Script=Qaai}", "giu", scriptLetters, "##\u0300##\u0951"),
+                Rx("[\\p{Script=Qaai}a]", "gu", scriptLetters, "#\u03B1#\u2C81\u309B#"),
+                Rx("[\\p{Script=Qaai}a]", "giu", scriptLetters, "#\u03B1#\u2C81\u309B#"),
+                Rx("\\p{Script=Qaac}", "gu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{Script=Qaac}", "giu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{sc=Qaac}", "gu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{sc=Qaac}", "giu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\P{sc=Qaac}", "gu", scriptLetters, "###\u2C81##"),
+                Rx("\\P{sc=Qaac}", "giu", scriptLetters, "###\u2C81##"),
+                Rx("[^\\p{Script=Qaac}]", "gu", scriptLetters, "###\u2C81##"),
+                Rx("[^\\p{Script=Qaac}]", "giu", scriptLetters, "###\u2C81##"),
+                Rx("\\p{sc=Copt}", "gu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{sc=Copt}", "giu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{Script=Coptic}", "gu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+                Rx("\\p{Script=Coptic}", "giu", scriptLetters, "a\u03B1\u0300#\u309B\u0951"),
+            ),
+        )
+    }
+
+    @Test
+    fun g4_theScriptValuesAreEcma262sUnderEveryKey() {
+        assertEquals(336, dartScriptValues.size)
+        val keys = listOf("Script", "sc", "Script_Extensions", "scx")
+        assertEquals(emptyList(), keys.flatMap { k -> dartScriptValues.map { "$k=$it" } }.filterNot(RegexPropertyNames::accepts))
+        // Another case, a space, no underscore, and codes ECMA-262 leaves out.
+        val others = dartScriptValues.flatMap { listOf(it.lowercase(), it.uppercase(), " $it", "$it ", it.replace("_", "")) } +
+            listOf("Hrkt", "Katakana_Or_Hiragana", "Qaaa", "Qabx", "Zxxx", "Zsym", "Zmth", "")
+        val refused = others.filter { it !in dartScriptValues }
+        assertEquals(emptyList(), keys.flatMap { k -> refused.map { "$k=$it" } }.filter(RegexPropertyNames::accepts))
+    }
+
+    @Test
+    fun g4_everyScriptValueTheRuntimeKnowsCompiles() {
+        // java.util.regex reads the scripts of its Unicode version, so a newer one stays
+        // invalid; Qaai and Qaac, which it lacks, are read as Inherited and Coptic.
+        val known = dartScriptValues.filter { runCatching { Character.UnicodeScript.forName(it) }.isSuccess } + listOf("Qaai", "Qaac")
+        val patterns = known.flatMap { listOf("\\p{Script=$it}", "[\\P{sc=$it}]") }
+        assertEquals(emptyList(), listOf("gu", "giu").flatMap { f -> patterns.filter { RegexSupport.compile(it, f) == null }.map { "$it /$f" } })
+    }
 }

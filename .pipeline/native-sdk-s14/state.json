@@ -4,9 +4,9 @@
   "idea": "Epic 23b row 23b.36: native SDKs match Dart in the regex corners S12 left — letters inside a modifier group follow that group's flags; no ICU full case folding under i for the sharp s and ligatures; escaped letters and backreferences fold as Dart does; Kotlin's \\p{…} with long property names; patterns Dart rejects are rejected in Kotlin too. In sdk-swift and sdk-kotlin",
   "kind": "feature",
   "created_at": "2026-11-11T09:18:35Z",
-  "updated_at": "2026-11-11T11:57:48Z",
+  "updated_at": "2026-11-11T12:04:03Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "10",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -51,27 +51,38 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09's last question (approve the stage; stage 10 pushes the branch and opens the PR) is minor"
     },
     "10": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/10-r1.md"
+      "card": "cards/10-r1.md",
+      "approved_at": "2026-11-11T12:03:30Z",
+      "approved_with": "Merged, go on"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-11T12:04:03Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 12's two questions (close S14 with 13-16 skipped; wait for Start S15) are minor, both defaults"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S14 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S14 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S14 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "S14 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     }
   },
   "gates": {
