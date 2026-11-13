@@ -4,7 +4,7 @@
   "idea": "Epic 23b row 23b.40: native SDKs fold letters above U+FFFF with u as Dart does. With u both SDKs hand these letters to the platform's engine, which folds them by its own Unicode: Linux's Foundation ICU, JDK 21, JDK 17 and Android's ICU by API level miss case pairs Dart has (Vithkuqi, Garay); and JDK 17's case-insensitive backreference never repeats a capture above U+FFFF and throws at the input's end. Fold astral letters from Dart's fold classes, as the BMP already is, and keep JDK 17's backreference off astral captures. In sdk-swift and sdk-kotlin",
   "kind": "feature",
   "created_at": "2026-11-13T20:29:11Z",
-  "updated_at": "2026-11-13T22:33:31Z",
+  "updated_at": "2026-11-13T23:03:26Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "in_review",
-      "rounds": 3,
-      "card": "cards/09-r3.md"
+      "rounds": 4,
+      "card": "cards/09-r4.md"
     },
     "10": {
       "status": "pending"

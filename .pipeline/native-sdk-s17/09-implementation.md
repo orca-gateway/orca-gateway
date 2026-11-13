@@ -3,25 +3,25 @@
 ## Front page
 
 ### In one breath
-group 2 of 4 · tasks: 2 green, 0 blocked · cases: 3 of 6 green (L1, C1, R1) · 6 runners green
-T3 Swift: under `i` a backreference folds lagging pairs as Dart; above U+FFFF, 2-unit stand-ins.
-T3 also runs every U2 guard row on Linux (its filter is gone) and pins 405 J rows as guards.
-T4 Kotlin: the same on the JVM; on JDK 17 rows over characters above U+FFFF wait for T5.
-T4 was blocked once: it edited the U2 guard, which 08 gives to T5; retried with the guard as it was.
-Probe: 260 rows fixed on Linux 6.2 and JDK 21, 650 on Linux 5.10, 80 on JDK 17; none worse.
-JDK 17 for now: 342 rows that were wrong now throw, until T5 (your standing rule, minor).
+group 3 of 4 · tasks: 1 green, 0 blocked · cases: 5 of 6 green (all but X1) · 6 runners green
+T5 Kotlin: on JDK 17, `i` with a backreference over a character above U+FFFF is written exact,
+every fold-class letter masked; `\w \W \b \B` take the masked word letters' stand-ins.
+G1: the U2 guard runs every row on every JDK; the lagging set is empty on JDK 24+ (asserted).
+Probe, JDK 17: 2 923 rows fixed, 0 throws (were 1 754); left: properties, Dart's quirk row.
+Swift, JDK 21 and 25 unchanged; both reviews passed on the first pass.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 auto-decided: JDK 17's interim throws stay until T5 (standing rule, minor). 1 from memory.
-3 findings fixed by one rework each: T3's copied test helper; T4's pool missing an escaped pair's
-character; T4 building a class's set per letter, now once per class.
+1 from memory: inside `(?-i:` the word stand-ins count too (your gate 08 limit, question 6).
+3 auto-decided by the task (how a class tests a masked letter; ı and İ stay unmasked; a flag).
 
 ### Questions for you
-1. Blocked tasks: none (T4 retried once on your standing rule; green). (default: nothing to retry)
-2. Next: group 3, T5 Kotlin: JDK 17 exact backreferences, J1, G1. (default: go)
+1. Blocked tasks: none. (default: nothing to retry)
+2. Next: group 4, T6: render fixture 38, the count pins 37 → 38. (default: go)
+3. Your gate 08 limit shows on 6 JDK 17 rows outside the probe (`a(?i:(.)\1)` gu on "A" + two
+   emoji → "#"; Dart: no match). Not pinned; written into row 23b.40 at close. (default: yes)
 
 ## Appendix
 
@@ -137,9 +137,50 @@ run, `s17/g2/`, on the first passes, gave the same counts and the same probe row
   (80 fixed, 342 now throw, 1 754 throws). Worse: none. Left: properties (not planned), Dart's quirk,
   S16's `\B`, and on JDK 17 the rows over characters above U+FFFF (CIBackRef: group 3).
 
+### Group 3
+Commits: T5 9bc3774 (staged by path). Nothing pushed. Group 2's card (round 3) approved under your
+standing rule (every default).
+
+#### Task T5 · Kotlin: JDK 17 exact backreferences, guards
+Files: `…/resolver/Transforms.kt` · `…/resolver/RegexMask.kt` · `…/resolver/TransformTest.kt`
+Cases: J1, G1 → green (JDK 25 `./gradlew build`: core 226, sdk 128, lint no issues, no warnings;
+`:core:test` JDK 17 and 21: 226, 0 failures) · red first: on JDK 17 the 3 new J1 tests, the U2 guard and
+both R1 tests threw StringIndexOutOfBoundsException; on JDK 25 the J1 seam test (`(.)\1` written as is).
+Probe: JDK 17 only properties and Dart's quirk row left, 0 throws; JDK 21, 25 byte-identical to group 2.
+Changed: Transforms.kt: `repeatsAboveFfff`, learned once (seam `repeatsAboveFfffForTests`); `search` takes
+the JDK 17 path (a reference under `i`, `u`, a pair in the input, the probe false): the all-letters mask
+and `compile(…, exactReferences = true)`, also when the mask is null; the reader writes `(?-i:\N)` and
+`(?-i:(?:\1|\2))`; outside a class `\w \W \b \B` take the masked ASCII letters' stand-ins (`wordStandIns`);
+`dartClass` under `i` matches a stand-in by its whole set; S16's word-rule docs updated. RegexMask.kt:
+`withAllLetters`, one stand-in per class, sets built once per class per call. Tests: G1 (`u2GuardRows` on
+every JDK, lagging empty on 24+), T4's R1 filter gone, J1 404 probe rows, 28 word rows (F13), 30 class,
+property and name rows, two seam tests.
+Decisions: 1. `dartClass` tests a masked letter by every letter sharing its stand-in · 2. the all-letters
+mask leaves ı/İ unmasked (the exact reference compares them as Dart) · 3. inside `(?-i:` the word stand-ins
+count (memory "regex-jdk17-exact-backreferences", gate 08 question 6) · 4. its own exact-references flag (F11).
+Review fit: pass
+Review quality: pass
+
+#### Group 3 test run
+Once after the group, on the final code (logs `s17/g3/*.log`):
+- `cd engine && bun test` · 704 pass, 1 fail (EADDRINUSE on :8080, Docker: as the baseline).
+- `cd sdk && flutter test` · +244: All tests passed · `flutter analyze` · No issues found.
+- `cd sdk-swift && swift build` · 0 warnings · `swift test` · 225 tests, 0 failures (unchanged).
+- iOS simulator · 54 + 225 tests, 0 failures · TEST SUCCEEDED.
+- swift:6.2-noble and swift:5.10-jammy containers · 0 warnings · 225 tests, 0 failures each.
+- `cd sdk-kotlin && ./gradlew build --rerun-tasks` on JDK 17, 21 and 25 · BUILD SUCCESSFUL · core 226,
+  sdk 128, 0 failures each (core 223 before) · lint "No issues found" · no Kotlin warnings.
+- Probe (`s17/oracle/runs/*-g3.tsv`), rows ≠ Dart of 31 677, row by row against group 2: JDK 17 342 (fixed
+  2 923, worse 0, 0 throws; were 3 266 and 1 754); Swift (macOS 3, 6.2 135, 5.10 345), JDK 21 133 and
+  JDK 25 1 byte-identical. Left on every runner: properties (not planned), Dart's quirk row, S16's `\B` (Swift).
+- The gate 08 limit (question 6), JDK 17 only, outside the probe (T5's own check, Dart 3.14's values):
+  "#" where Dart leaves the input in `a(?i:(.)\1)` gu on "A😀😀", `(?-i:a)(.)\1` giu on "A😀😀",
+  `(?-i:\w)(.)\1` giu on "ſ😀😀", `(?-i:A)(.)\1` giu on "a😀😀"; "#😀" in `(?i:(.)\1)a` gu on "bBA😀"
+  and `(?i:(.)\1)|a` gu on "A😀". None pinned.
+
 ### Blocked
-none (T4 was blocked at round 2 on its second fit finding, the U2 guard edit; retried once on your
-standing rule with the reviewer's fix, then fit and quality passed)
+none (group 3) · group 2: T4 was blocked at round 2 on its second fit finding (the U2 guard edit);
+retried once on your standing rule with the reviewer's fix, then fit and quality passed
 
 ### Not done
 none
