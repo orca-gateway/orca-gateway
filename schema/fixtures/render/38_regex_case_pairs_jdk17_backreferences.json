@@ -1,0 +1,1673 @@
+{
+  "name": "regex-case-pairs-jdk17-backreferences",
+  "description": "Dart's RegExp folds a letter under `i` by its own Unicode 16 case classes. Platforms with an older Unicode lack some of them: Linux Swift 5.10's ICU and JDK 17 lack the Unicode 14 pairs (the Glagolitic caudate chrivi U+2C2F/U+2C5F, the Latin old Polish o U+A7C0/U+A7C1, closed insular g U+A7D0/U+A7D1, middle Scots s U+A7D6/U+A7D7 and sigmoid s U+A7D8/U+A7D9, and the Vithkuqi a \ud801\udd70 U+10570/\ud801\udd97 U+10597), and Linux Swift 5.10 and 6.2 and JDK 17 and 21 lack Garay (the a \ud803\udd50 U+10D50/\ud803\udd70 U+10D70, Unicode 16); the SDKs fold these by Dart's classes there too. A literal letter matches its other case with `gi` and `giu`, either way round: U+2C2F with `gi` on U+2C5F, U+2C5F with `giu` on U+2C2F, U+A7C1 with `gi` on U+A7C0, U+A7D0 with `giu` on U+A7D1 and U+A7D9 with `gi` on U+A7D8 each give \"#\". Above U+FFFF a letter folds only with `u`: \ud803\udd50 with `giu`, and `(?i:\ud803\udd50)` with `gu`, on \ud803\udd70 give \"#\", as does \ud801\udd97 with `giu` on \ud801\udd70, while \ud803\udd50 with `gi` leaves \ud803\udd70 unchanged. A class folds the same way: `[\ua7d6]` with `gi` on U+A7D7, `[\ud803\udd70]` with `giu` on \ud803\udd50 and the range `[\ud803\udd50-\ud803\udd51]` with `giu` on \ud803\udd70 give \"#\", and the negated class `[^\ud803\udd50]` with `giu` leaves \ud803\udd70 unchanged. So does a backreference: `(\u2c2f)\\1` with `gi` on U+2C2F U+2C5F, `(.)\\1` with `giu` on U+A7C0 U+A7C1 and with `gi` on U+A7D9 U+A7D8, `(.)\\1` with `giu` on \ud803\udd70\ud803\udd50, `(?i:(\ud803\udd50)\\1)` with `gu` on \ud803\udd50\ud803\udd70 and `(\ud801\udd70)\\1` with `giu` on \ud801\udd70\ud801\udd97 give \"#\", and `(\ud803\udd50)\\1` with `giu` on \ud803\udd50\ud803\udd70z gives \"#z\". With the replacement \"<$1>\" the group reads the input's own letter back: `(\u2c5f)\\1` with `giu` on U+2C2F U+2C5F gives \"<\u2c2f>\" and `(.)\\1` with `giu` on \ud803\udd70\ud803\udd50 gives \"<\ud803\udd70>\". JDK 17's case-insensitive backreference never repeats a capture above U+FFFF, so on JDK 17 the SDK writes such a backreference exact, after giving the letters of each of Dart's case classes in the input one shared stand-in. With `giu`, `(.)\\1` on \ud83d\ude00\ud83d\ude00 gives \"#\", on \ud83d\ude00\ud83d\ude00x \"#x\" and with \"<$1>\" \"<\ud83d\ude00>\"; `(\ud83d\ude00)\\1` on x\ud83d\ude00\ud83d\ude00 gives \"x#\"; `(?<n>.)\\k<n>` on \ud83d\ude00\ud83d\ude00 and `\\w(.)\\1` on a\ud83d\ude00\ud83d\ude00 give \"#\"; `(.)\\1` on the Deseret long I \ud801\udc00\ud801\udc28 (U+10400 U+10428), capital then small, still gives \"#\"; and `(?i:(.)\\1)` with `gu` on x\ud83d\ude00\ud83d\ude00 gives \"x#\". Every replace-mode regex puts \"#\" for each match unless its replacement is named above. Every input reads page state, so the engine keeps the Values unresolved with `watches` and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "children": [
+      {
+        "type": "Text",
+        "key": "l_glagolitic_gi",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "glagolitic_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\u2c2f",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "l_glagolitic_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "glagolitic_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\u2c5f",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "l_old_polish_gi",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "old_polish_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\ua7c1",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "l_insular_g_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "insular_g_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\ua7d0",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "l_sigmoid_s_gi",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "sigmoid_s_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\ua7d9",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "l_garay_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "garay_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\ud803\udd50",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "l_garay_scoped",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "garay_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?i:\ud803\udd50)",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "l_garay_no_u",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "garay_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\ud803\udd50",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "l_vithkuqi_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "vithkuqi_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\ud801\udd97",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "c_middle_scots_s_gi",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "middle_scots_s_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\ua7d6]",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "c_garay_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "garay_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\ud803\udd70]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "c_garay_negated",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "garay_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[^\ud803\udd50]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "c_garay_range",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "garay_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\ud803\udd50-\ud803\udd51]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_glagolitic_gi",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "glagolitic_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(\u2c2f)\\1",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_old_polish_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "old_polish_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(.)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_sigmoid_s_gi",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "sigmoid_s_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(.)\\1",
+                "flags": "gi",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_glagolitic_group",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "glagolitic_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(\u2c5f)\\1",
+                "flags": "giu",
+                "replacement": "<$1>"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_garay_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "garay_pair_back"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(.)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_garay_tail",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "garay_pair_z"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(\ud803\udd50)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_garay_scoped",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "garay_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?i:(\ud803\udd50)\\1)",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_garay_group",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "garay_pair_back"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(.)\\1",
+                "flags": "giu",
+                "replacement": "<$1>"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_vithkuqi_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "vithkuqi_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(\ud801\udd70)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "j_emoji",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(.)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "j_emoji_tail",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji_pair_x"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(.)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "j_emoji_literal_mid",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "x_emoji_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(\ud83d\ude00)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "j_emoji_named",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?<n>.)\\k<n>",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "j_emoji_scoped_mid",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "x_emoji_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?i:(.)\\1)",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "j_emoji_word",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "a_emoji_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\w(.)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "j_emoji_group",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(.)\\1",
+                "flags": "giu",
+                "replacement": "<$1>"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "j_deseret",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_pair"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(.)\\1",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "glagolitic_small": "\u2c5f",
+      "glagolitic_capital": "\u2c2f",
+      "glagolitic_pair": "\u2c2f\u2c5f",
+      "old_polish_capital": "\ua7c0",
+      "old_polish_pair": "\ua7c0\ua7c1",
+      "insular_g_small": "\ua7d1",
+      "middle_scots_s_small": "\ua7d7",
+      "sigmoid_s_capital": "\ua7d8",
+      "sigmoid_s_pair": "\ua7d9\ua7d8",
+      "garay_capital": "\ud803\udd50",
+      "garay_small": "\ud803\udd70",
+      "garay_pair": "\ud803\udd50\ud803\udd70",
+      "garay_pair_back": "\ud803\udd70\ud803\udd50",
+      "garay_pair_z": "\ud803\udd50\ud803\udd70z",
+      "vithkuqi_capital": "\ud801\udd70",
+      "vithkuqi_pair": "\ud801\udd70\ud801\udd97",
+      "emoji_pair": "\ud83d\ude00\ud83d\ude00",
+      "emoji_pair_x": "\ud83d\ude00\ud83d\ude00x",
+      "x_emoji_pair": "x\ud83d\ude00\ud83d\ude00",
+      "a_emoji_pair": "a\ud83d\ude00\ud83d\ude00",
+      "deseret_pair": "\ud801\udc00\ud801\udc28"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "l_glagolitic_gi",
+        "l_glagolitic_giu",
+        "l_old_polish_gi",
+        "l_insular_g_giu",
+        "l_sigmoid_s_gi",
+        "l_garay_giu",
+        "l_garay_scoped",
+        "l_garay_no_u",
+        "l_vithkuqi_giu",
+        "c_middle_scots_s_gi",
+        "c_garay_giu",
+        "c_garay_negated",
+        "c_garay_range",
+        "r_glagolitic_gi",
+        "r_old_polish_giu",
+        "r_sigmoid_s_gi",
+        "r_glagolitic_group",
+        "r_garay_giu",
+        "r_garay_tail",
+        "r_garay_scoped",
+        "r_garay_group",
+        "r_vithkuqi_giu",
+        "j_emoji",
+        "j_emoji_tail",
+        "j_emoji_literal_mid",
+        "j_emoji_named",
+        "j_emoji_scoped_mid",
+        "j_emoji_word",
+        "j_emoji_group",
+        "j_deseret"
+      ],
+      "watches": []
+    },
+    {
+      "id": "j_deseret",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(.)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_pair"
+      ]
+    },
+    {
+      "id": "j_emoji_group",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(.)\\1",
+              "flags": "giu",
+              "replacement": "<$1>"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji_pair"
+      ]
+    },
+    {
+      "id": "j_emoji_word",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "a_emoji_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\w(.)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "a_emoji_pair"
+      ]
+    },
+    {
+      "id": "j_emoji_scoped_mid",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "x_emoji_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?i:(.)\\1)",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "x_emoji_pair"
+      ]
+    },
+    {
+      "id": "j_emoji_named",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?<n>.)\\k<n>",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji_pair"
+      ]
+    },
+    {
+      "id": "j_emoji_literal_mid",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "x_emoji_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(\ud83d\ude00)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "x_emoji_pair"
+      ]
+    },
+    {
+      "id": "j_emoji_tail",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji_pair_x"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(.)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji_pair_x"
+      ]
+    },
+    {
+      "id": "j_emoji",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(.)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji_pair"
+      ]
+    },
+    {
+      "id": "r_vithkuqi_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "vithkuqi_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(\ud801\udd70)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "vithkuqi_pair"
+      ]
+    },
+    {
+      "id": "r_garay_group",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "garay_pair_back"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(.)\\1",
+              "flags": "giu",
+              "replacement": "<$1>"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "garay_pair_back"
+      ]
+    },
+    {
+      "id": "r_garay_scoped",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "garay_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?i:(\ud803\udd50)\\1)",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "garay_pair"
+      ]
+    },
+    {
+      "id": "r_garay_tail",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "garay_pair_z"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(\ud803\udd50)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "garay_pair_z"
+      ]
+    },
+    {
+      "id": "r_garay_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "garay_pair_back"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(.)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "garay_pair_back"
+      ]
+    },
+    {
+      "id": "r_glagolitic_group",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "glagolitic_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(\u2c5f)\\1",
+              "flags": "giu",
+              "replacement": "<$1>"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "glagolitic_pair"
+      ]
+    },
+    {
+      "id": "r_sigmoid_s_gi",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "sigmoid_s_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(.)\\1",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "sigmoid_s_pair"
+      ]
+    },
+    {
+      "id": "r_old_polish_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "old_polish_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(.)\\1",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "old_polish_pair"
+      ]
+    },
+    {
+      "id": "r_glagolitic_gi",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "glagolitic_pair"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(\u2c2f)\\1",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "glagolitic_pair"
+      ]
+    },
+    {
+      "id": "c_garay_range",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "garay_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\ud803\udd50-\ud803\udd51]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "garay_small"
+      ]
+    },
+    {
+      "id": "c_garay_negated",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "garay_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[^\ud803\udd50]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "garay_small"
+      ]
+    },
+    {
+      "id": "c_garay_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "garay_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\ud803\udd70]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "garay_capital"
+      ]
+    },
+    {
+      "id": "c_middle_scots_s_gi",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "middle_scots_s_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\ua7d6]",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "middle_scots_s_small"
+      ]
+    },
+    {
+      "id": "l_vithkuqi_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "vithkuqi_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\ud801\udd97",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "vithkuqi_capital"
+      ]
+    },
+    {
+      "id": "l_garay_no_u",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "garay_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\ud803\udd50",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "garay_small"
+      ]
+    },
+    {
+      "id": "l_garay_scoped",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "garay_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?i:\ud803\udd50)",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "garay_small"
+      ]
+    },
+    {
+      "id": "l_garay_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "garay_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\ud803\udd50",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "garay_small"
+      ]
+    },
+    {
+      "id": "l_sigmoid_s_gi",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "sigmoid_s_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\ua7d9",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "sigmoid_s_capital"
+      ]
+    },
+    {
+      "id": "l_insular_g_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "insular_g_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\ua7d0",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "insular_g_small"
+      ]
+    },
+    {
+      "id": "l_old_polish_gi",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "old_polish_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\ua7c1",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "old_polish_capital"
+      ]
+    },
+    {
+      "id": "l_glagolitic_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "glagolitic_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\u2c5f",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "glagolitic_capital"
+      ]
+    },
+    {
+      "id": "l_glagolitic_gi",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "glagolitic_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\u2c2f",
+              "flags": "gi",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "glagolitic_small"
+      ]
+    }
+  ],
+  "resolved": {
+    "l_glagolitic_gi": {
+      "data": "#"
+    },
+    "l_glagolitic_giu": {
+      "data": "#"
+    },
+    "l_old_polish_gi": {
+      "data": "#"
+    },
+    "l_insular_g_giu": {
+      "data": "#"
+    },
+    "l_sigmoid_s_gi": {
+      "data": "#"
+    },
+    "l_garay_giu": {
+      "data": "#"
+    },
+    "l_garay_scoped": {
+      "data": "#"
+    },
+    "l_garay_no_u": {
+      "data": "\ud803\udd70"
+    },
+    "l_vithkuqi_giu": {
+      "data": "#"
+    },
+    "c_middle_scots_s_gi": {
+      "data": "#"
+    },
+    "c_garay_giu": {
+      "data": "#"
+    },
+    "c_garay_negated": {
+      "data": "\ud803\udd70"
+    },
+    "c_garay_range": {
+      "data": "#"
+    },
+    "r_glagolitic_gi": {
+      "data": "#"
+    },
+    "r_old_polish_giu": {
+      "data": "#"
+    },
+    "r_sigmoid_s_gi": {
+      "data": "#"
+    },
+    "r_glagolitic_group": {
+      "data": "<\u2c2f>"
+    },
+    "r_garay_giu": {
+      "data": "#"
+    },
+    "r_garay_tail": {
+      "data": "#z"
+    },
+    "r_garay_scoped": {
+      "data": "#"
+    },
+    "r_garay_group": {
+      "data": "<\ud803\udd70>"
+    },
+    "r_vithkuqi_giu": {
+      "data": "#"
+    },
+    "j_emoji": {
+      "data": "#"
+    },
+    "j_emoji_tail": {
+      "data": "#x"
+    },
+    "j_emoji_literal_mid": {
+      "data": "x#"
+    },
+    "j_emoji_named": {
+      "data": "#"
+    },
+    "j_emoji_scoped_mid": {
+      "data": "x#"
+    },
+    "j_emoji_word": {
+      "data": "#"
+    },
+    "j_emoji_group": {
+      "data": "<\ud83d\ude00>"
+    },
+    "j_deseret": {
+      "data": "#"
+    }
+  }
+}
