@@ -474,7 +474,7 @@ enum Regex {
     ///   is its fold class outside a class (`dartSet`), as a table letter is
     ///   its set: `ƛ` is `(?-i:[\x{19B}\x{A7DC}])`. A class C meeting one
     ///   adds the letters of the classes it meets to T, and M takes them by
-    ///   the same rule.
+    ///   the same rule. A backreference compares them in a masked run (below).
     /// - With `u`, Dart builds a class holding `\p{…}` or `\P{…}` first and
     ///   folds after: a character matches when a letter of its simple-fold
     ///   class is in the class, a negated class when none is (`\P{Ll}`
@@ -567,8 +567,9 @@ enum Regex {
     ///   the stand-ins of the halves it covers.
     /// - With `mask` holding letters (a run masked for a backreference under
     ///   `i`, with `u` too), its copy holds each such letter as the stand-in
-    ///   of its Dart fold class. A masked letter, literal or escaped (`\xDF`,
-    ///   `\337`, `\ß`), is its stand-in, under `i` or not. In a class it
+    ///   of its Dart fold class (`dartSet`), above U+FFFF one of two units. A
+    ///   masked letter, literal or escaped (`\xDF`, `\337`, `\ß`, with `u`
+    ///   `\u{10D50}`), is its stand-in, under `i` or not. In a class it
     ///   stays a letter, and each class or property C (`[…]`, `[^…]`, `\p{…}`)
     ///   becomes `(?:(?!S)X|(?-i:[M]))`: S every letter's stand-in, X C as
     ///   written above, M the stand-ins of the fold classes C, read
@@ -595,7 +596,7 @@ enum Regex {
             mask.letters.isEmpty
                 ? nil
                 : (
-                    mask, Kept(mask.letters) { dartFold($0, unicode: unicode) ?? [$0] },
+                    mask, Kept(mask.letters) { dartSet($0, unicode: unicode) ?? [$0] },
                     "(?!(?-i:[\(spelled(mask.lettersStandIns))]))"
                 )
         }
@@ -1018,7 +1019,7 @@ enum Regex {
                 } else if let escape = letterEscape() {
                     // `\x73`, `\u017F`, `\u{17F}`: a letter of the table or a lagging class is that letter
                     guard let value = escape.value else { return nil }
-                    if let standIn = mask?.standIn(forUnit: value) ?? mask?.standIn(forLetter: value) {
+                    if let standIn = mask?.standIn(forUnit: value).map(UInt32.init) ?? mask?.standIn(forLetter: value) {
                         out += braced(UInt32(standIn))  // a half or a letter, masked
                         i += escape.length
                     } else if fold, let set = Unicode.Scalar(value).flatMap({ dartSet($0, unicode: unicode) }) {

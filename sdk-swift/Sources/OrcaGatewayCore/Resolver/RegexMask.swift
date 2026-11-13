@@ -26,11 +26,15 @@ import Foundation
 /// Under `i` a backreference compares the text its group took with the input,
 /// both folded: Dart without `u` canonicalizes by upper case and never maps a
 /// non-ASCII letter to ASCII, with `u` it folds simply, and ICU compares by full
-/// case folding (ß with "ss"). So where `i` is in force anywhere and the reader
-/// writes a backreference (`foldsReference`), each letter of the input whose
-/// folding there ICU does not share with Dart (`foldsApart`) becomes the
-/// stand-in of its Dart fold class (`dartFold`, the flags' `u`): one per class,
-/// taken from the same pool after the halves', in code point order. A stand-in
+/// case folding (ß with "ss"), only by the case pairs its own Unicode has. So
+/// where `i` is in force anywhere and the reader writes a backreference
+/// (`foldsReference`), each letter of the input whose folding there ICU does
+/// not share with Dart (`foldsApart`, or a letter of a class the ICU lags on,
+/// `Regex.laggingLetters`, above U+FFFF only with `u`) becomes the stand-in of
+/// its Dart fold class (`Regex.dartSet`, the flags' `u`): one per class, taken
+/// from the same pool after the halves', in code point order. A letter above
+/// U+FFFF takes a stand-in of two units (`Pool.takeWide`), and no class mixes
+/// such letters with others, so the copy keeps the input's length. A stand-in
 /// matches only itself, as the class's letters match each other in Dart, and
 /// in the pattern such a letter is its stand-in too (`standIn(forLetter:)`);
 /// a class or property Dart matches it with takes the stand-in (the reader).
@@ -44,27 +48,44 @@ struct RegexMask {
     private let units: [UInt16: UInt16]
     /// The halves' stand-ins, ascending.
     private let sortedStandIns: [UInt16]
-    /// Each letter masked for a backreference under `i`, to its class's stand-in.
-    private let letterStandIns: [UInt16: UInt16]
+    /// Each letter masked for a backreference under `i`, to its class's stand-in,
+    /// by code point.
+    private let letterStandIns: [UInt32: UInt32]
     /// Those letters, every member of each class with a stand-in, ascending.
     let letters: [Unicode.Scalar]
     /// Their stand-ins, ascending.
     let lettersStandIns: [Unicode.Scalar]
 
-    /// The private-use units free for stand-ins, lowest first: those neither
-    /// the input nor the pattern holds. One per call, which every stand-in
-    /// comes from.
+    /// The private-use characters free for stand-ins, lowest first: those
+    /// neither the input nor the pattern holds. One per call, which every
+    /// stand-in comes from: units (U+E000-F8FF), and for a letter above
+    /// U+FFFF characters of two units (U+F0000-FFFFD, then U+100000-10FFFD).
     struct Pool {
         private var next: UInt32 = 0xE000
+        private var nextWide: UInt32 = 0xF0000
         private let held: Set<UInt16>
+        private let heldWide: Set<UInt32>
 
-        init(held: Set<UInt16>) { self.held = held }
+        init(held: Set<UInt16>, heldWide: Set<UInt32> = []) {
+            self.held = held
+            self.heldWide = heldWide
+        }
 
         mutating func take() -> UInt16? {
             while next <= 0xF8FF {
                 let unit = UInt16(next)
                 next += 1
                 if !held.contains(unit) { return unit }
+            }
+            return nil
+        }
+
+        /// A free character of two units, nil when none is left.
+        mutating func takeWide() -> UInt32? {
+            while nextWide <= 0x10FFFD {
+                let value = nextWide
+                nextWide = value == 0xFFFFD ? 0x100000 : value + 1
+                if !heldWide.contains(value) { return value }
             }
             return nil
         }
@@ -79,36 +100,54 @@ struct RegexMask {
         let unicode = flags.contains("u")
         var halves: Set<UInt16> = []
         var held: Set<UInt16> = []
+        var heldWide: Set<UInt32> = []
         func note(_ value: UInt32) {
             if (0xD800...0xDFFF).contains(value) {
                 if !unicode { halves.insert(UInt16(value)) }  // with `u` Dart reads code points, as ICU does
             } else if (0xE000...0xF8FF).contains(value) {
                 held.insert(UInt16(value))
+            } else if value >= 0xF0000 {
+                heldWide.insert(value)
             }
         }
-        for unit in input.utf16 { note(UInt32(unit)) }
+        // A character, and above U+FFFF its halves.
+        func note(character c: Unicode.Scalar) {
+            if c.value > 0xFFFF {
+                note(UInt32(UTF16.leadSurrogate(c)))
+                note(UInt32(UTF16.trailSurrogate(c)))
+            }
+            note(c.value)
+        }
+        for c in input.unicodeScalars { note(character: c) }
         let p = Array(pattern.unicodeScalars)
         var k = 0
-        // Read conservatively: a character, or the value a `\uHHHH` or `\u{H…}` escape spells.
+        // Read conservatively: a character, or the value a `\uHHHH` or `\u{H…}` escape spells, and a high half's
+        // escape then a low half's as the one character ICU reads them as.
         while k < p.count {
             if p[k] == "\\", k + 1 < p.count, p[k + 1] == "u", let (value, length) = Self.escape(p, at: k) {
                 note(value)
                 k += length
+                if (0xD800...0xDBFF).contains(value), k + 1 < p.count, p[k] == "\\", p[k + 1] == "u",
+                    let (low, _) = Self.escape(p, at: k), (0xDC00...0xDFFF).contains(low)
+                {
+                    note(0x10000 + ((value - 0xD800) << 10) + (low - 0xDC00))
+                }
                 continue
             }
-            let c = p[k]
-            if c.value > 0xFFFF {
-                note(UInt32(UTF16.leadSurrogate(c)))
-                note(UInt32(UTF16.trailSurrogate(c)))
-            } else {
-                note(c.value)
-            }
+            note(character: p[k])
             k += 1
         }
-        let folding = Self.foldsReference(p, ignoreCase: flags.contains("i"), unicode: unicode)
-            ? Set(input.utf16.filter { Self.foldsApart($0, unicode: unicode) }) : []
+        var folding: Set<Unicode.Scalar> = []
+        if Self.foldsReference(p, ignoreCase: flags.contains("i"), unicode: unicode) {
+            let lagging = Regex.laggingLetters
+            folding = Set(input.unicodeScalars.filter { c in
+                c.value > 0xFFFF
+                    ? unicode && lagging.contains(c)
+                    : Self.foldsApart(UInt16(c.value), unicode: unicode) || lagging.contains(c)
+            })
+        }
         guard !halves.isEmpty || !folding.isEmpty else { return nil }
-        var pool = Pool(held: held)
+        var pool = Pool(held: held, heldWide: heldWide)
         var standIns: [UInt16: UInt16] = [:]
         var units: [UInt16: UInt16] = [:]
         var sorted: [UInt16] = []
@@ -118,11 +157,13 @@ struct RegexMask {
             units[standIn] = half
             sorted.append(standIn)
         }
-        var letterStandIns: [UInt16: UInt16] = [:]
-        for letter in folding.sorted() where letterStandIns[letter] == nil {
-            guard let standIn = pool.take() else { return nil }
-            let members = Unicode.Scalar(letter).flatMap { Regex.dartFold($0, unicode: unicode) } ?? []
-            for member in members.map({ UInt16($0.value) }) + [letter] { letterStandIns[member] = standIn }
+        var letterStandIns: [UInt32: UInt32] = [:]
+        for letter in folding.sorted(by: { $0.value < $1.value }) where letterStandIns[letter.value] == nil {
+            guard let standIn = letter.value > 0xFFFF ? pool.takeWide() : pool.take().map(UInt32.init) else {
+                return nil
+            }
+            let members = Regex.dartSet(letter, unicode: unicode) ?? []
+            for member in members + [letter] { letterStandIns[member.value] = standIn }
         }
         self.standIns = standIns
         self.units = units
@@ -238,9 +279,7 @@ struct RegexMask {
 
     /// The stand-in of the masked letter `value`'s class, nil for a letter or
     /// value the run does not mask.
-    func standIn(forLetter value: UInt32) -> UInt16? {
-        value <= 0xFFFF ? letterStandIns[UInt16(value)] : nil
-    }
+    func standIn(forLetter value: UInt32) -> UInt32? { letterStandIns[value] }
 
     /// The code unit Dart reads where the pattern holds `value`: the unit a
     /// half's stand-in stands for, any other value itself.
@@ -251,7 +290,13 @@ struct RegexMask {
     /// The input with every surrogate unit without `u`, and every masked
     /// letter, as its stand-in: valid Unicode of the same UTF-16 length.
     func copy(of input: String) -> String {
-        String(decoding: input.utf16.map { standIns[$0] ?? letterStandIns[$0] ?? $0 }, as: UTF16.self)
+        var units: [UInt16] = []
+        units.reserveCapacity(input.utf16.count)
+        for c in input.unicodeScalars {
+            let letter = letterStandIns[c.value].flatMap(Unicode.Scalar.init) ?? c
+            for unit in letter.utf16 { units.append(standIns[unit] ?? unit) }
+        }
+        return String(decoding: units, as: UTF16.self)
     }
 
     /// The pattern's characters, each above U+FFFF as its halves' two
