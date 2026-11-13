@@ -1818,6 +1818,13 @@ final class TransformTests: XCTestCase {
     /// Whether the platform's ICU compiles `pattern` as written, the SDK's rewriter bypassed.
     private static func icuKnows(_ pattern: String) -> Bool { (try? NSRegularExpression(pattern: pattern)) != nil }
 
+    /// Whether the platform's ICU, the SDK bypassed, finds the letter `a` in `b` under `i`.
+    private static func icuFolds(_ a: String, _ b: String) -> Bool {
+        let pattern = NSRegularExpression.escapedPattern(for: a)
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return false }
+        return regex.firstMatch(in: b, range: NSRange(location: 0, length: b.utf16.count)) != nil
+    }
+
     func testG4_guard_everyScriptValueTheICUKnowsStaysValid() {
         // Under each of the four keys, every value the platform's ICU knows: all 1 344 on Apple's; a script newer
         // than its Unicode is refused as written (Linux's Foundation), so the SDK's null there is the known difference.
@@ -2202,20 +2209,30 @@ final class TransformTests: XCTestCase {
 
     func testU2_withoutULettersAboveFFFFNeverFold() {
         // Without `u` Dart folds code units, so under `i` a letter above U+FFFF matches only itself, and `[𐐀]` takes
-        // the high half 𐐀 and 𐐨 share; with `u` each folds to its partner. Every pair of a fold class above U+FFFF,
-        // the pattern's letter a, the input's b (all 282 classes share a high half).
+        // the high half 𐐀 and 𐐨 share; with `u` the ICU folds each to its partner. Every pair of a fold class above
+        // U+FFFF, the pattern's letter a, the input's b (all 282 classes share a high half). Linux's Foundation (in CI,
+        // before Unicode 14 with Swift 5.10, before 16 with 6.2) folds only the pairs its Unicode has, so with `u` the
+        // others are left out there: the platform's difference, not the SDK's. Apple's ICU has Unicode 16.
         let (big, small, h) = ("\u{10400}", "\u{10428}", "\u{FFFD}")
         let letters = Regex.foldClassLetters.filter { $0.value > 0xFFFF }
         XCTAssertEqual(letters.count, 564)
         var differ: [String] = []
+        var skipped = 0
         for a in letters {
             for b in Regex.foldClasses[a] ?? [] where b != a {
                 let (x, y) = (String(a), String(b))
-                let rows: [(String, String, String, String)] = [
+                var rows: [(String, String, String, String)] = [
                     (x, "gi", y, y), ("[\(x)]", "gi", y, "#\(h)"), ("(\(x))\\1", "gi", x + y, x + y),
-                    ("(.)\\1", "gi", x + y, x + y), (x, "giu", y, "#"), ("[\(x)]", "giu", y, "#"),
-                    ("(\(x))\\1", "giu", x + y, "#"), ("(.)\\1", "giu", x + y, "#"),
+                    ("(.)\\1", "gi", x + y, x + y),
                 ]
+                if Self.icuFolds(x, y) {
+                    rows += [
+                        (x, "giu", y, "#"), ("[\(x)]", "giu", y, "#"), ("(\(x))\\1", "giu", x + y, "#"),
+                        ("(.)\\1", "giu", x + y, "#"),
+                    ]
+                } else {
+                    skipped += 1
+                }
                 for (pattern, flags, input, expected) in rows {
                     let step: JSONValue = [
                         "type": "regex", "pattern": .string(pattern), "flags": .string(flags), "replacement": "#",
@@ -2228,6 +2245,9 @@ final class TransformTests: XCTestCase {
             }
         }
         XCTAssert(differ.isEmpty, "\(differ.count) differ: " + differ.prefix(8).joined(separator: "; "))
+        #if canImport(Darwin)
+            XCTAssertEqual(skipped, 0, "Apple's ICU has Unicode 16, so all 564 pairs are checked with `u`")
+        #endif
         // Deseret 𐐀 (U+10400) and 𐐨 under each flag set; `[𐐀-𐐧]` is D801, then DC00-D801, out of order.
         let rows: [(String, [String], String, String?, UInt)] = [
             (big, ["gi", "g", "gu", "gim", "gis"], small, small, #line),
