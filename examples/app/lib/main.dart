@@ -62,6 +62,13 @@ const _examples = [
     path: 'home',
   ),
   _Example(
+    title: 'Todo',
+    subtitle: 'Add, tick and delete items, kept in server memory',
+    icon: Icons.checklist,
+    appId: 'todo',
+    path: 'home',
+  ),
+  _Example(
     title: 'Basic Actions',
     subtitle: 'Navigation, snackbars, transforms, conditionals',
     icon: Icons.touch_app,
