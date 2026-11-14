@@ -1,7 +1,8 @@
 // The demo server entry (examples/server/index.ts), cases I1-I4 of the
 // launch-builds pipeline. Each test spawns the server as its own process on a
 // free port (never 8080: Engine.start falls back to it when PORT is 0), waits
-// for its startup line, and kills whatever is still running in afterEach.
+// for its startup line (once more on a fresh port if another process took the
+// first one), and kills whatever is still running in afterEach.
 
 import { describe, expect, test, afterEach } from "bun:test";
 import type { Subprocess } from "bun";
@@ -18,8 +19,6 @@ const TODO_ROUTE = "/api/v1/app/todo/page/home";
 const KEY = { "x-api-key": "demo-key" };
 const STARTUP_MS = 15_000;
 const EXIT_MS = 5_000;
-// Ports other local processes hold; a free-port pick never returns them.
-const TAKEN = new Set([8080, 8091, 6363]);
 
 interface Running {
   proc: Subprocess<"ignore", "pipe", "pipe">;
@@ -43,12 +42,10 @@ afterEach(async () => {
 // ── Helpers ────────────────────────────────────────────────
 
 function freePort(): number {
-  for (;;) {
-    const probe = Bun.serve({ port: 0, fetch: () => new Response("") });
-    const port = probe.port!;
-    probe.stop(true);
-    if (!TAKEN.has(port)) return port;
-  }
+  const probe = Bun.serve({ port: 0, fetch: () => new Response("") });
+  const port = probe.port!;
+  probe.stop(true);
+  return port;
 }
 
 function collect(stream: ReadableStream<Uint8Array>): () => string {
@@ -84,10 +81,6 @@ function spawnServer(cmd: string[], cwd: string): Running {
   return r;
 }
 
-function spawnDemo(): Running {
-  return spawnServer([process.execPath, ENTRY], OSS_ROOT);
-}
-
 function startupLine(port: number): string {
   return `Orca demo server ${VERSION} on http://localhost:${port}`;
 }
@@ -115,6 +108,27 @@ async function waitForStartup(r: Running): Promise<void> {
   await waitForOutput(r, `startup line "${line}"`, (out) => hasLine(out, line));
 }
 
+/**
+ * Spawns the server and waits for its startup line. Another process can take
+ * the probed port before the server binds it: then one retry on a fresh port.
+ */
+async function startServer(cmd: string[], cwd: string): Promise<Running> {
+  const r = spawnServer(cmd, cwd);
+  try {
+    await waitForStartup(r);
+    return r;
+  } catch (err) {
+    if (!/EADDRINUSE|in use/.test(r.stderr())) throw err;
+    const retry = spawnServer(cmd, cwd);
+    await waitForStartup(retry);
+    return retry;
+  }
+}
+
+function startDemo(): Promise<Running> {
+  return startServer([process.execPath, ENTRY], OSS_ROOT);
+}
+
 /** Sends `signal` and expects a clean exit (code 0, not killed) within 5 s. */
 async function stopWith(r: Running, signal: "SIGINT" | "SIGTERM"): Promise<void> {
   r.proc.kill(signal);
@@ -132,8 +146,7 @@ async function getTodoPage(r: Running, headers?: Record<string, string>): Promis
 
 describe("demo server (examples/server/index.ts)", () => {
   test("I1 prints the versioned startup line and the app list with todo; todo needs demo-key; counter answers", async () => {
-    const r = spawnDemo();
-    await waitForStartup(r);
+    const r = await startDemo();
     await waitForOutput(r, "todo route line", (out) => out.includes(TODO_ROUTE));
 
     const out = r.stdout();
@@ -155,18 +168,15 @@ describe("demo server (examples/server/index.ts)", () => {
   }, 30_000);
 
   test("I2 SIGINT and SIGTERM each stop the server with exit code 0 within 5 s", async () => {
-    const first = spawnDemo();
-    await waitForStartup(first);
+    const first = await startDemo();
     await stopWith(first, "SIGINT");
 
-    const second = spawnDemo();
-    await waitForStartup(second);
+    const second = await startDemo();
     await stopWith(second, "SIGTERM");
   }, 30_000);
 
   test("I3 a todo added before a restart is gone after it", async () => {
-    const first = spawnDemo();
-    await waitForStartup(first);
+    const first = await startDemo();
 
     const add = await fetch(`${first.base}/api/v1/app/todo/action`, {
       method: "POST",
@@ -184,8 +194,7 @@ describe("demo server (examples/server/index.ts)", () => {
 
     await stopWith(first, "SIGTERM");
 
-    const second = spawnDemo();
-    await waitForStartup(second);
+    const second = await startDemo();
     const after = await getTodoPage(second, KEY);
     expect(after.status).toBe(200);
     const afterText = await after.text();
@@ -205,8 +214,7 @@ describe("demo server (examples/server/index.ts)", () => {
         throw new Error(`bun build --compile failed (${build.exitCode})\n${build.stdout}\n${build.stderr}`);
       }
 
-      const r = spawnServer([binary], dir);
-      await waitForStartup(r);
+      const r = await startServer([binary], dir);
 
       const page = await getTodoPage(r, KEY);
       expect(page.status).toBe(200);
