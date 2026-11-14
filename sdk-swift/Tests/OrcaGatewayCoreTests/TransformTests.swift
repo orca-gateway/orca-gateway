@@ -1818,13 +1818,6 @@ final class TransformTests: XCTestCase {
     /// Whether the platform's ICU compiles `pattern` as written, the SDK's rewriter bypassed.
     private static func icuKnows(_ pattern: String) -> Bool { (try? NSRegularExpression(pattern: pattern)) != nil }
 
-    /// Whether the platform's ICU, the SDK bypassed, finds the letter `a` in `b` under `i`.
-    private static func icuFolds(_ a: String, _ b: String) -> Bool {
-        let pattern = NSRegularExpression.escapedPattern(for: a)
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return false }
-        return regex.firstMatch(in: b, range: NSRange(location: 0, length: b.utf16.count)) != nil
-    }
-
     func testG4_guard_everyScriptValueTheICUKnowsStaysValid() {
         // Under each of the four keys, every value the platform's ICU knows: all 1 344 on Apple's; a script newer
         // than its Unicode is refused as written (Linux's Foundation), so the SDK's null there is the known difference.
@@ -2209,30 +2202,25 @@ final class TransformTests: XCTestCase {
 
     func testU2_withoutULettersAboveFFFFNeverFold() {
         // Without `u` Dart folds code units, so under `i` a letter above U+FFFF matches only itself, and `[𐐀]` takes
-        // the high half 𐐀 and 𐐨 share; with `u` the ICU folds each to its partner. Every pair of a fold class above
-        // U+FFFF, the pattern's letter a, the input's b (all 282 classes share a high half). Linux's Foundation (in CI,
-        // before Unicode 14 with Swift 5.10, before 16 with 6.2) folds only the pairs its Unicode has, so with `u` the
-        // others are left out there: the platform's difference, not the SDK's. Apple's ICU has Unicode 16.
+        // the high half 𐐀 and 𐐨 share; with `u` each folds to its partner. Every pair of a fold class above U+FFFF,
+        // the pattern's letter a, the input's b (all 282 classes share a high half), on every platform: where the
+        // ICU's Unicode lacks a pair (Linux's Foundation, row 23b.40) the SDK folds it as Dart does. Apple's ICU lacks
+        // none.
+        #if canImport(Darwin)
+            XCTAssert(Regex.icuLagging.isEmpty, "Apple's ICU folds every class: \(Regex.icuLagging.map(\.value).sorted())")
+        #endif
         let (big, small, h) = ("\u{10400}", "\u{10428}", "\u{FFFD}")
         let letters = Regex.foldClassLetters.filter { $0.value > 0xFFFF }
         XCTAssertEqual(letters.count, 564)
         var differ: [String] = []
-        var skipped = 0
         for a in letters {
             for b in Regex.foldClasses[a] ?? [] where b != a {
                 let (x, y) = (String(a), String(b))
-                var rows: [(String, String, String, String)] = [
+                let rows: [(String, String, String, String)] = [
                     (x, "gi", y, y), ("[\(x)]", "gi", y, "#\(h)"), ("(\(x))\\1", "gi", x + y, x + y),
-                    ("(.)\\1", "gi", x + y, x + y),
+                    ("(.)\\1", "gi", x + y, x + y), (x, "giu", y, "#"), ("[\(x)]", "giu", y, "#"),
+                    ("(\(x))\\1", "giu", x + y, "#"), ("(.)\\1", "giu", x + y, "#"),
                 ]
-                if Self.icuFolds(x, y) {
-                    rows += [
-                        (x, "giu", y, "#"), ("[\(x)]", "giu", y, "#"), ("(\(x))\\1", "giu", x + y, "#"),
-                        ("(.)\\1", "giu", x + y, "#"),
-                    ]
-                } else {
-                    skipped += 1
-                }
                 for (pattern, flags, input, expected) in rows {
                     let step: JSONValue = [
                         "type": "regex", "pattern": .string(pattern), "flags": .string(flags), "replacement": "#",
@@ -2245,9 +2233,6 @@ final class TransformTests: XCTestCase {
             }
         }
         XCTAssert(differ.isEmpty, "\(differ.count) differ: " + differ.prefix(8).joined(separator: "; "))
-        #if canImport(Darwin)
-            XCTAssertEqual(skipped, 0, "Apple's ICU has Unicode 16, so all 564 pairs are checked with `u`")
-        #endif
         // Deseret 𐐀 (U+10400) and 𐐨 under each flag set; `[𐐀-𐐧]` is D801, then DC00-D801, out of order.
         let rows: [(String, [String], String, String?, UInt)] = [
             (big, ["gi", "g", "gu", "gim", "gis"], small, small, #line),
@@ -2626,6 +2611,370 @@ final class TransformTests: XCTestCase {
             ("(?-i:\u{DF})|(.)\\1", "gi", "\u{1E9E}", "\u{1E9E}", #line),
         ]
         for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+    }
+
+    // MARK: S17 — letters the platform's Unicode lacks (row 23b.40)
+
+    // Under `i` the ICU folds only the case pairs its own Unicode has: Linux's Foundation lacks 27 of Dart's fold
+    // classes with Swift 6.2 (Unicode 15) and 67 with 5.10 (Unicode 13), Apple's ICU none. The SDK learns them from
+    // the ICU (`Regex.laggingLetters`) and writes their letters as Dart's set; for a backreference under `i` it masks
+    // them (`RegexMask`). The seam (`Regex.laggingOverride`) sets all 67, so every platform runs those paths. Dart
+    // 3.14.0 printed every value.
+
+    override func tearDown() {
+        Regex.laggingOverride = nil
+        super.tearDown()
+    }
+
+    /// The 67 classes Swift 5.10's Foundation lacks, each a pair: 10 up to U+FFFF (ƛ and U+A7DC, ɤ and U+A7CB,
+    /// …), Vithkuqi's 35 (U+10570-10595 and their partners) and Garay's 22 (U+10D50-10D65 and theirs). Swift 6.2's
+    /// are the five Unicode 16 ones up to U+FFFF (U+019B, 0264, 1C89, A7CC, A7DA) and Garay's.
+    private static let laggingClasses: [[Unicode.Scalar]] = {
+        let bmp: Set<UInt32> = [0x19B, 0x264, 0x1C89, 0x2C2F, 0xA7C0, 0xA7CC, 0xA7D0, 0xA7D6, 0xA7D8, 0xA7DA]
+        return Regex.foldClassLetters.filter {
+            bmp.contains($0.value) || (0x10570...0x10595).contains($0.value) || (0x10D50...0x10D65).contains($0.value)
+        }.compactMap { Regex.foldClasses[$0] }
+    }()
+
+    /// Each lagging pair both ways, the pattern's letter and the input's, and the letter after the pattern's.
+    private static var laggingRows: [(x: Unicode.Scalar, y: Unicode.Scalar, next: Unicode.Scalar)] {
+        laggingClasses.flatMap { [($0[0], $0[1]), ($0[1], $0[0])] }.compactMap { x, y in
+            Unicode.Scalar(x.value + 1).map { (x, y, $0) }
+        }
+    }
+
+    /// `\uHHHH` and `\u{H}` for `c`; above U+FFFF the first is its halves' escapes, the high half's then the low's.
+    private static func escapes(_ c: Unicode.Scalar) -> (four: String, braced: String) {
+        func hex(_ value: UInt32) -> String { String(value, radix: 16, uppercase: true) }
+        let four = String(c).utf16.map { unit -> String in
+            let digits = hex(UInt32(unit))
+            return "\\u" + String(repeating: "0", count: max(0, 4 - digits.count)) + digits
+        }
+        return (four.joined(), "\\u{\(hex(c.value))}")
+    }
+
+    /// The row and the SDK's value where it is not Dart's `expected` (nil: refused), else nil.
+    private func differs(
+        _ pattern: String, _ flags: String, _ input: String, _ expected: String?, replacement: String = "#"
+    ) -> String? {
+        let step: JSONValue = [
+            "type": "regex", "pattern": .string(pattern), "flags": .string(flags), "replacement": .string(replacement),
+        ]
+        let (got, want) = (run(.string(input), step), expected.map(JSONValue.string) ?? .null)
+        guard got != want || units(got) != units(want) else { return nil }
+        return "\(pattern.debugDescription) /\(flags) on \(input.debugDescription): \(got)"
+    }
+
+    func testL1_thePlatformsLaggingClassesAreWholeClassesOutsideTheTable() {
+        // What the platform's ICU lacks: whole classes, none the fold table holds, none on Apple's ICU (Unicode 16).
+        XCTAssertEqual(Self.laggingClasses.count, 67)
+        XCTAssert(Self.laggingClasses.allSatisfy { $0.count == 2 })
+        let lagging = Regex.laggingLetters
+        XCTAssert(lagging.isSubset(of: Set(Self.laggingClasses.joined())), "\(lagging.map(\.value).sorted())")
+        for c in lagging {
+            XCTAssert((Regex.foldClasses[c] ?? []).allSatisfy(lagging.contains), "\(c.value)")
+            XCTAssertNil(Regex.foldTable[c], "\(c.value)")
+        }
+        #if canImport(Darwin)
+            XCTAssert(lagging.isEmpty, "Apple's ICU folds every class: \(lagging.map(\.value).sorted())")
+        #endif
+        Regex.laggingOverride = []
+        XCTAssert(Regex.laggingLetters.isEmpty)
+        Regex.laggingOverride = Set(Self.laggingClasses.joined())
+        XCTAssertEqual(Regex.laggingLetters.count, 134)
+    }
+
+    func testL1_aLetterOfALaggingClassMatchesDartsSetUnderI() {
+        // The pattern's letter x on the input's y, under the platform's own set and the seam's: x, `\uHHHH` and
+        // `\u{H}` with `u` match y under `i`, as `(?i:x)` does; above U+FFFF without `u` a letter is two units and
+        // never folds (S16); without `i` nothing folds. Above U+FFFF `\uHHHH` is the halves' two escapes, which with
+        // `u` spell x, in `(?i:…)` too; a half's escape alone, or the low half's before the high's, is no letter.
+        let letters = Set(Self.laggingClasses.joined())
+        var differ: [String] = []
+        for seam in [nil, letters] {
+            Regex.laggingOverride = seam
+            for (a, b, _) in Self.laggingRows {
+                let (x, y, escape) = (String(a), String(b), Self.escapes(a))
+                var rows: [(String, String, String)] = [
+                    (x, "giu", "#"), (escape.braced, "giu", "#"), ("(?i:\(x))", "gu", "#"), (x, "gu", y),
+                ]
+                let (high, low) = (String(escape.four.prefix(6)), String(escape.four.dropFirst(6)))
+                rows += a.value > 0xFFFF
+                    ? [
+                        (x, "gi", y), (escape.four, "giu", "#"), ("(?i:\(escape.four))", "gu", "#"),
+                        (escape.four, "gu", y), (escape.four, "gi", y), ("(?-i:\(escape.four))", "giu", y),
+                        (high, "giu", y), (low + high, "giu", y),
+                    ]
+                    : [(x, "gi", "#"), (escape.four, "gi", "#"), (escape.four, "giu", "#")]
+                for (pattern, flags, expected) in rows {
+                    guard let row = differs(pattern, flags, y, expected) else { continue }
+                    differ.append((seam == nil ? "" : "seam ") + row)
+                }
+            }
+        }
+        XCTAssert(differ.isEmpty, "\(differ.count) differ: " + differ.prefix(8).joined(separator: "; "))
+    }
+
+    func testL1_withTheSeamALaggingLetterIsWrittenAsDartsSet() {
+        // Outside a class, exact: `ƛ`, `\u019B`, with `u` `\u{19B}` and 𐵐 (U+10D50); without `u` 𐵐 stays as
+        // written, as without `i` ƛ does, and with no lagging class every letter is written as today. With `u` the
+        // halves' escapes of 𐵐, the high's then the low's, are 𐵐; without `u`, alone or the other way round, halves.
+        Regex.laggingOverride = Set(Self.laggingClasses.joined())
+        let (lambda, garay) = ("(?-i:[\\x{19B}\\x{A7DC}])", "(?-i:[\\x{10D50}\\x{10D70}])")
+        let halves = Self.escapes("\u{10D50}").four
+        let (high, low) = (String(halves.prefix(6)), String(halves.dropFirst(6)))
+        let rows: [(String, Bool, Bool, String, UInt)] = [
+            ("\u{19B}", true, false, lambda, #line),
+            ("\u{19B}", true, true, lambda, #line),
+            ("\u{A7DC}", true, false, lambda, #line),
+            (Self.escapes("\u{19B}").four, true, false, lambda, #line),
+            (Self.escapes("\u{19B}").braced, true, true, lambda, #line),
+            ("\u{10D50}", true, true, garay, #line),
+            (Self.escapes("\u{10D70}").braced, true, true, garay, #line),
+            ("(?i:\u{10D50})", false, true, "(?i:\(garay))", #line),
+            ("(?-i:\u{10D50})", true, true, "(?-i:\u{10D50})", #line),
+            ("\u{10D50}", true, false, "\u{10D50}", #line),
+            ("\u{19B}", false, false, "\u{19B}", #line),
+            ("\u{19B}", false, true, "\u{19B}", #line),
+            (halves, true, true, garay, #line),
+            (Self.escapes("\u{10D70}").four, true, true, garay, #line),
+            ("(?i:\(halves))", false, true, "(?i:\(garay))", #line),
+            ("(?-i:\(halves))", true, true, "(?-i:\(halves))", #line),
+            (halves, false, true, halves, #line),
+            (halves, true, false, halves, #line),
+            (high, true, true, high, #line),
+            (low + high, true, true, low + high, #line),
+        ]
+        for (pattern, ignoreCase, unicode, written, line) in rows {
+            XCTAssertEqual(Regex.asciiClasses(pattern, ignoreCase: ignoreCase, unicode: unicode), written, line: line)
+        }
+        Regex.laggingOverride = []
+        XCTAssertEqual(Regex.asciiClasses("\u{19B}", ignoreCase: true, unicode: true), "\u{19B}")
+        XCTAssertEqual(Regex.asciiClasses("\u{10D50}", ignoreCase: true, unicode: true), "\u{10D50}")
+    }
+
+    func testC1_aClassTakesEachLetterOfALaggingClassItMeets() {
+        // `[x]`, `[\uHHHH]`, with `u` `[\u{H}]`, and the range `[x-z]`, z the code point after x, match y under `i`;
+        // `[^x]` does not. Above U+FFFF without `u` the class reads units (S16): Dart's lone half is U+FFFD here.
+        let letters = Set(Self.laggingClasses.joined())
+        var differ: [String] = []
+        for seam in [nil, letters] {
+            Regex.laggingOverride = seam
+            for (a, b, after) in Self.laggingRows {
+                let (x, y, z, escape) = (String(a), String(b), String(after), Self.escapes(a))
+                var rows: [(String, String, String)] = [
+                    ("[\(x)]", "giu", "#"), ("[\(escape.braced)]", "giu", "#"), ("[^\(x)]", "giu", y),
+                    ("[\(x)-\(z)]", "giu", "#"), ("[\(x)]", "gu", y),
+                ]
+                rows += a.value > 0xFFFF
+                    ? [("[\(x)]", "gi", "#\u{FFFD}"), ("[^\(x)]", "gi", "\u{FFFD}#")]
+                    : [
+                        ("[\(x)]", "gi", "#"), ("[\(escape.four)]", "gi", "#"), ("[\(escape.four)]", "giu", "#"),
+                        ("[^\(x)]", "gi", y), ("[\(x)-\(z)]", "gi", "#"), ("[\(escape.four)-\(z)]", "gi", "#"),
+                    ]
+                for (pattern, flags, expected) in rows {
+                    guard let row = differs(pattern, flags, y, expected) else { continue }
+                    differ.append((seam == nil ? "" : "seam ") + row)
+                }
+            }
+        }
+        XCTAssert(differ.isEmpty, "\(differ.count) differ: " + differ.prefix(8).joined(separator: "; "))
+    }
+
+    func testC1_withTheSeamOnlyAClassMeetingALaggingClassIsWrittenAnotherWay() {
+        // A class meeting a lagging class takes its letters, exact, and keeps them off the ICU's folding; negated, it
+        // leaves them out. A class meeting none is written as with no lagging class.
+        let letters = Set(Self.laggingClasses.joined())
+        let rows: [(String, Bool, [String], UInt)] = [
+            ("[\u{19B}]", false, ["\\x{19B}", "\\x{A7DC}"], #line),
+            ("[\u{A7DC}]", true, ["\\x{19B}", "\\x{A7DC}"], #line),
+            ("[\u{10D50}]", true, ["\\x{10D50}", "\\x{10D70}"], #line),
+            ("[\u{10D50}-\u{10D51}]", true, ["\\x{10D50}", "\\x{10D51}", "\\x{10D70}", "\\x{10D71}"], #line),
+        ]
+        Regex.laggingOverride = letters
+        for (pattern, unicode, exact, line) in rows {
+            let written = Regex.asciiClasses(pattern, ignoreCase: true, unicode: unicode) ?? ""
+            let lookahead = written.components(separatedBy: pattern)[0]
+            XCTAssert(written.hasSuffix(pattern + "|(?-i:[" + exact.joined() + "]))"), written, line: line)
+            XCTAssert(exact.allSatisfy { lookahead.contains($0) }, written, line: line)
+        }
+        for (pattern, unicode, lagging, line) in [
+            ("[^\u{19B}]", false, ["\\x{19B}", "\\x{A7DC}"], #line),
+            ("[^\u{10D70}]", true, ["\\x{10D50}", "\\x{10D70}"], #line),
+        ] as [(String, Bool, [String], UInt)] {
+            let written = Regex.asciiClasses(pattern, ignoreCase: true, unicode: unicode) ?? ""
+            let parts = written.components(separatedBy: pattern)
+            XCTAssertEqual(parts.count, 2, written, line: line)
+            XCTAssert(lagging.allSatisfy { parts[0].contains($0) && !parts[1].contains($0) }, written, line: line)
+        }
+        let today: [(String, Bool)] = [
+            ("[a-z]", false), ("[^a-z]", true), ("[\u{E9}\u{19C}]", false), ("[^\u{10400}]", true),
+            ("[\u{10D50}]", false), ("[\u{1C88}\u{A7DD}]", true),
+        ]
+        for (pattern, unicode) in today {
+            Regex.laggingOverride = []
+            let written = Regex.asciiClasses(pattern, ignoreCase: true, unicode: unicode)
+            Regex.laggingOverride = letters
+            XCTAssertEqual(Regex.asciiClasses(pattern, ignoreCase: true, unicode: unicode), written, pattern)
+        }
+    }
+
+    func testR1_aBackreferenceUnderIFoldsALaggingPairAsDart() {
+        // `(x)\1` and `(.)\1` on x + y under `i`, mid-input too, inside `(?i:…)`, with x escaped, in a class or a
+        // named group, and `$1`, which reads the input's letter back; `([^x])\1` on y + y is unchanged. Under the
+        // platform's own set and the seam's. Above U+FFFF without `u` a letter is two halves (S16) and never folds;
+        // without `i` nothing folds. Dart 3.14.0 gave each row's value on all 134 pairs both ways.
+        let letters = Set(Self.laggingClasses.joined())
+        var differ: [String] = []
+        for seam in [nil, letters] {
+            Regex.laggingOverride = seam
+            for (a, b, _) in Self.laggingRows {
+                let (x, y, escape) = (String(a), String(b), Self.escapes(a))
+                // The pattern, the flags, the input, the replacement and Dart's value.
+                var rows: [(String, String, String, String, String)] = [
+                    ("(\(x))\\1", "giu", x + y, "#", "#"), ("(.)\\1", "giu", x + y, "#", "#"),
+                    ("(\(x))\\1", "giu", x + y + "z", "#", "#z"), ("(.)\\1", "giu", "z" + x + y + "z", "#", "z#z"),
+                    ("(?i:(\(x))\\1)", "gu", x + y, "#", "#"), ("(\(x))\\1", "gu", x + y, "#", x + y),
+                    ("(.)\\1", "gu", x + y, "#", x + y), ("(\(escape.braced))\\1", "giu", x + y, "#", "#"),
+                    ("(\(escape.four))\\1", "giu", x + y, "#", "#"), ("([\(x)])\\1", "giu", x + y, "#", "#"),
+                    ("([^\(x)])\\1", "giu", y + y, "#", y + y), ("(?<n>\(x))\\k<n>", "giu", x + y, "#", "#"),
+                    ("(.)\\1", "giu", "z" + x + y + "z", "[$1]", "z[\(x)]z"),
+                    ("(.)\\1", "giu", y + x, "[$1]", "[\(y)]"),
+                ]
+                rows += a.value > 0xFFFF
+                    ? [("(\(x))\\1", "gi", x + y, "#", x + y), ("(.)\\1", "gi", x + y, "#", x + y)]
+                    : [
+                        ("(\(x))\\1", "gi", x + y, "#", "#"), ("(.)\\1", "gi", x + y, "#", "#"),
+                        ("(\(x))\\1", "gi", x + y + "z", "#", "#z"), ("(.)\\1", "gi", "z" + x + y + "z", "#", "z#z"),
+                        ("(?i:(\(x))\\1)", "g", x + y, "#", "#"), ("(\(escape.four))\\1", "gi", x + y, "#", "#"),
+                        ("([\(x)])\\1", "gi", x + y, "#", "#"), ("([^\(x)])\\1", "gi", y + y, "#", y + y),
+                        ("(.)\\1", "gi", "z" + x + y + "z", "[$1]", "z[\(x)]z"),
+                    ]
+                for (pattern, flags, input, by, expected) in rows {
+                    guard let row = differs(pattern, flags, input, expected, replacement: by) else { continue }
+                    differ.append((seam == nil ? "" : "seam ") + row)
+                }
+            }
+        }
+        XCTAssert(differ.isEmpty, "\(differ.count) differ: " + differ.prefix(8).joined(separator: "; "))
+    }
+
+    func testR1_withTheSeamALaggingPairSharesAStandInAsLongAsItsLetters() {
+        // The copy searched holds x and y as their class's one stand-in: up to U+FFFF a private-use unit, above it,
+        // with `u`, a supplementary private-use character, U+F0000 first, that neither the input nor the pattern
+        // holds (a character, `\u{H}`, or the halves' `\uHHHH` escapes of one), so the copy is as long as the input.
+        // Without `u` above U+FFFF the halves are masked (S16), not the letters; without `i` nothing is.
+        Regex.laggingOverride = Set(Self.laggingClasses.joined())
+        let (lambda, garay) = ("\u{19B}\u{A7DC}", "\u{10D50}\u{10D70}")
+        let held = "\\u{F0001}|\u{F0002}|" + Self.escapes("\u{F0003}").four + "|(.)\\1"
+        let copies: [(String, String, String, [UInt32], UInt)] = [
+            (#"(.)\1"#, "gi", lambda, [0xE000, 0xE000], #line),
+            (#"(.)\1"#, "giu", lambda, [0xE000, 0xE000], #line),
+            ("(\u{A7DC})\\1", "gi", "a" + lambda, [0x61, 0xE000, 0xE000], #line),
+            (#"(.)\1"#, "giu", garay, [0xF0000, 0xF0000], #line),
+            (#"(?i:(.)\1)"#, "gu", "z" + garay + lambda, [0x7A, 0xF0000, 0xF0000, 0xE000, 0xE000], #line),
+            (held, "giu", "\u{F0000}" + garay, [0xF0000, 0xF0004, 0xF0004], #line),
+            (
+                #"(.)\1"#, "giu", "\u{E000}\u{F0000}" + lambda + garay,
+                [0xE000, 0xF0000, 0xE001, 0xE001, 0xF0001, 0xF0001], #line
+            ),
+            (#"(.)\1"#, "gu", garay, [0x10D50, 0x10D70], #line),
+        ]
+        for (pattern, flags, input, copy, line) in copies {
+            let searched = Regex.run(pattern, flags: flags, input: input)?.searched
+            XCTAssertEqual(searched?.unicodeScalars.map(\.value), copy, line: line)
+            XCTAssertEqual(searched?.utf16.count, input.utf16.count, line: line)
+        }
+        XCTAssertEqual(RegexMask(pattern: #"(.)\1"#, flags: "gi", input: garay)?.letters, [])
+        XCTAssertEqual(RegexMask(pattern: #"(.)\1"#, flags: "giu", input: garay)?.letters, ["\u{10D50}", "\u{10D70}"])
+        // What Dart gives where the input or the pattern holds such characters, and a class over all of them; where
+        // `i` is off, x and y share their stand-in (S16's limit, pinned: Dart leaves 𐵰).
+        let rows: [(String, String, String, String?, UInt)] = [
+            (held, "giu", "\u{F0000}" + garay, "\u{F0000}#", #line),
+            (held, "giu", garay + garay, "##", #line),
+            (held, "giu", garay + "\u{F0004}" + garay, "#\u{F0004}#", #line),
+            (held, "giu", "\u{F0000}" + garay + garay, "\u{F0000}##", #line),
+            (#"(.)\1"#, "giu", "\u{F0000}" + garay + "\u{F0000}", "\u{F0000}#\u{F0000}", #line),
+            (#"(.)\1"#, "giu", "\u{E000}\u{F0000}" + lambda + garay, "\u{E000}\u{F0000}##", #line),
+            (#"[^\u{F0000}-\u{10FFFD}]|(.)\1"#, "giu", garay, "##", #line),
+            (#"([^\u{F0000}-\u{10FFFD}])\1"#, "giu", garay, "#", #line),
+            (#"([\u{F0000}-\u{10FFFD}])\1"#, "giu", garay, garay, #line),
+            (#"(?i:(.)\1)"#, "gu", "z" + garay + lambda, "z##", #line),
+            ("(?-i:\u{10D50})|(.)\\1", "giu", "\u{10D70}", "#", #line),  // Dart: "\u{10D70}"
+        ]
+        for (pattern, flags, input, expected, line) in rows { assertRegex(pattern, flags, input, expected, line: line) }
+        // After U+FFFFD the pool takes U+100000-10FFFD; with none left, none.
+        var pool = RegexMask.Pool(held: [], heldWide: Set(0xF0000...0xFFFFD))
+        XCTAssertEqual(pool.takeWide(), 0x100000)
+        XCTAssertEqual(pool.takeWide(), 0x100001)
+        var full = RegexMask.Pool(held: [], heldWide: Set(0xF0000...0xFFFFD).union(0x100000...0x10FFFD))
+        XCTAssertNil(full.takeWide())
+    }
+
+    func testJ1_guard_aBackreferenceOverCharactersAboveFFFFKeepsDartsValues() {
+        // JDK 17's case-insensitive backreference never repeats a capture above U+FFFF (Kotlin, row 23b.40); ICU's
+        // does, so here these are guards: each pattern on each input, Dart 3.14.0's values. In the rows E is 😀, F 🎉,
+        // D 𐐀 (U+10400) and d 𐐨. Left out: `(?i:(.)\1|x)` gu on 𐐀𐐨, where Dart compares the first alternative's
+        // reference case-sensitively (a known follow-up).
+        func text(_ s: String) -> String {
+            let letters: [Character: String] = ["E": "\u{1F600}", "F": "\u{1F389}", "D": "\u{10400}", "d": "\u{10428}"]
+            return s.map { letters[$0] ?? String($0) }.joined()
+        }
+        let inputs = ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"]
+        let rows: [(String, String, [String?], UInt)] = [
+            (#"(.)\1"#, "giu", ["#", "#x", "x#", "EF", "aEaE", "##", "#", "#x", "a#a"], #line),
+            (#"(.)\1"#, "gu", ["#", "#x", "x#", "EF", "aEaE", "##", "Dd", "#x", "a#a"], #line),
+            (#"(.)\1"#, "gi", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(.)\1"#, "g", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(?i:(.)\1)"#, "gu", ["#", "#x", "x#", "EF", "aEaE", "##", "#", "#x", "a#a"], #line),
+            (#"(E)\1"#, "giu", ["#", "#x", "x#", "EF", "aEaE", "##", "Dd", "DDx", "a#a"], #line),
+            (#"(E)\1"#, "gu", ["#", "#x", "x#", "EF", "aEaE", "##", "Dd", "DDx", "a#a"], #line),
+            (#"(E)\1"#, "gi", ["#", "#x", "x#", "EF", "aEaE", "##", "Dd", "DDx", "a#a"], #line),
+            (#"(E)\1"#, "g", ["#", "#x", "x#", "EF", "aEaE", "##", "Dd", "DDx", "a#a"], #line),
+            (#"(?i:(E)\1)"#, "gu", ["#", "#x", "x#", "EF", "aEaE", "##", "Dd", "DDx", "a#a"], #line),
+            (#"(\S)\1"#, "giu", ["#", "#x", "x#", "EF", "aEaE", "##", "#", "#x", "a#a"], #line),
+            (#"(\S)\1"#, "gu", ["#", "#x", "x#", "EF", "aEaE", "##", "Dd", "#x", "a#a"], #line),
+            (#"(\S)\1"#, "gi", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(\S)\1"#, "g", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(?i:(\S)\1)"#, "gu", ["#", "#x", "x#", "EF", "aEaE", "##", "#", "#x", "a#a"], #line),
+            (#"(?<n>.)\k<n>"#, "giu", ["#", "#x", "x#", "EF", "aEaE", "##", "#", "#x", "a#a"], #line),
+            (#"(?<n>.)\k<n>"#, "gu", ["#", "#x", "x#", "EF", "aEaE", "##", "Dd", "#x", "a#a"], #line),
+            (#"(?<n>.)\k<n>"#, "gi", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(?<n>.)\k<n>"#, "g", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(?i:(?<n>.)\k<n>)"#, "gu", ["#", "#x", "x#", "EF", "aEaE", "##", "#", "#x", "a#a"], #line),
+            (#"(.)(.)\2\1"#, "giu", ["EE", "EEx", "xEE", "EF", "aEaE", "#", "Dd", "DDx", "#"], #line),
+            (#"(.)(.)\2\1"#, "gu", ["EE", "EEx", "xEE", "EF", "aEaE", "#", "Dd", "DDx", "#"], #line),
+            (#"(.)(.)\2\1"#, "gi", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(.)(.)\2\1"#, "g", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(?i:(.)(.)\2\1)"#, "gu", ["EE", "EEx", "xEE", "EF", "aEaE", "#", "Dd", "DDx", "#"], #line),
+            (#"(a.)\1"#, "giu", ["EE", "EEx", "xEE", "EF", "#", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(a.)\1"#, "gu", ["EE", "EEx", "xEE", "EF", "#", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(a.)\1"#, "gi", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(a.)\1"#, "g", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(?i:(a.)\1)"#, "gu", ["EE", "EEx", "xEE", "EF", "#", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(.+)\1"#, "giu", ["#", "#x", "x#", "EF", "#", "#", "#", "#x", "a#a"], #line),
+            (#"(.+)\1"#, "gu", ["#", "#x", "x#", "EF", "#", "#", "Dd", "#x", "a#a"], #line),
+            (#"(.+)\1"#, "gi", ["#", "#x", "x#", "EF", "#", "#", "Dd", "#x", "a#a"], #line),
+            (#"(.+)\1"#, "g", ["#", "#x", "x#", "EF", "#", "#", "Dd", "#x", "a#a"], #line),
+            (#"(?i:(.+)\1)"#, "gu", ["#", "#x", "x#", "EF", "#", "#", "#", "#x", "a#a"], #line),
+            (#"(.)\1+"#, "giu", ["#", "#x", "x#", "EF", "aEaE", "#", "#", "#x", "a#a"], #line),
+            (#"(.)\1+"#, "gu", ["#", "#x", "x#", "EF", "aEaE", "#", "Dd", "#x", "a#a"], #line),
+            (#"(.)\1+"#, "gi", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(.)\1+"#, "g", ["EE", "EEx", "xEE", "EF", "aEaE", "EEEE", "Dd", "DDx", "aEEa"], #line),
+            (#"(?i:(.)\1+)"#, "gu", ["#", "#x", "x#", "EF", "aEaE", "#", "#", "#x", "a#a"], #line),
+            (#"(.)\1|x"#, "giu", ["#", "##", "##", "EF", "aEaE", "##", "#", "##", "a#a"], #line),
+            (#"(.)\1|x"#, "gu", ["#", "##", "##", "EF", "aEaE", "##", "Dd", "##", "a#a"], #line),
+            (#"(.)\1|x"#, "gi", ["EE", "EE#", "#EE", "EF", "aEaE", "EEEE", "Dd", "DD#", "aEEa"], #line),
+            (#"(.)\1|x"#, "g", ["EE", "EE#", "#EE", "EF", "aEaE", "EEEE", "Dd", "DD#", "aEEa"], #line),
+            (#"(?i:(.)\1|x)"#, "gu", ["#", "##", "##", "EF", "aEaE", "##", nil, "##", "a#a"], #line),
+        ]
+        for (pattern, flags, expected, line) in rows {
+            XCTAssertEqual(expected.count, inputs.count, line: line)
+            for (input, expected) in zip(inputs, expected) {
+                guard let expected else { continue }
+                assertRegex(text(pattern), flags, text(input), text(expected), line: line)
+            }
+        }
     }
 
     func testDoubleToStringMatchesDart() {
