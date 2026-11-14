@@ -4,9 +4,9 @@
   "idea": "Epic 23 build tasks (Examples + Launch): 23.3 a Todo example (CRUD: create, list, toggle, delete; demonstrates server actions); 23.6 Docker image publish (the engine image on GitHub Container Registry); 23.7 single binary build (bun build --compile, downloadable for Linux, macOS, Windows); 23.8 GitHub release (tag, release notes, binary assets, changelog). Publishing stays with the user (release.sh tags; images and releases go out on a tag).",
   "kind": "feature",
   "created_at": "2026-11-14T02:11:16Z",
-  "updated_at": "2026-11-14T02:33:53Z",
+  "updated_at": "2026-11-14T03:44:58Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "05",
+  "current": "08",
   "stages": {
     "01": {
       "status": "approved",
@@ -37,14 +37,25 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 04's five questions are minor or patch (Todo tile second under Counter; not done is a grey dot, no SDK change; download link to Releases filtered to engine tags; notes lead with the run block; README order Docker, download, Bun), all defaults"
     },
     "05": {
-      "status": "draft",
-      "rounds": 1
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/05-r1.md",
+      "approved_at": "2026-11-14T03:31:02Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 05's four questions are minor (a red first tag is re-run from Actions for that tag; the whole Todo page scrolls, footer follows the list; downloads listen on every interface, no engine change; verify pulls the image logged in), all defaults"
     },
     "06": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/06-r1.md",
+      "approved_at": "2026-11-14T03:36:16Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 06 had no questions (parts 20 -> 20; the one cut, folding verify into publish, kept apart by memory central-release-mode)"
     },
     "07": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/07-r1.md",
+      "approved_at": "2026-11-14T03:44:58Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 07's two questions are minor (examples/server, scripts/release.sh, Dockerfile, READMEs and engine-release.yml join engine.yml's triggers; the re-run path and the Windows first start stay untested), all defaults"
     },
     "08": {
       "status": "pending"
