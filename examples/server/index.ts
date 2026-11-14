@@ -8,15 +8,18 @@ import { animationsApp } from "./animations";
 import { customApp } from "./custom";
 import { capabilityDemoApp } from "./capability-demo";
 import { nativeWidgetsApp } from "./native-widgets";
+import { todoApp } from "./todo";
 import { recoveryMiddleware } from "../../engine/src/middlewares/recovery";
 import { loggingMiddleware } from "../../engine/src/middlewares/logging";
 import { corsMiddleware } from "../../engine/src/middlewares/cors";
 import { authMiddleware } from "../../engine/src/middlewares/auth";
 import { rateLimitMiddleware } from "../../engine/src/middlewares/rate-limit";
+// Imported, not read from disk, so `bun build --compile` embeds the version.
+import enginePackage from "../../engine/package.json";
 
 // ── Register middleware on each app ──────────────────────────
 
-const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp];
+const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp];
 
 for (const app of apps) {
   app
@@ -62,9 +65,18 @@ if (process.env.ORCA_MIN_SDK_VERSION) {
   engine.setMinSdkVersion({ appDefault: process.env.ORCA_MIN_SDK_VERSION });
 }
 
-engine.start();
+// Stop on SIGINT and SIGTERM and exit 0. The compiled binary runs as PID 1 in
+// the distroless image, where a signal without a handler is ignored.
+function shutdown(): void {
+  engine.stop();
+  process.exit(0);
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
-console.log("Orca Gateway Examples running on http://localhost:8080");
+const server = await engine.start();
+
+console.log(`Orca demo server ${enginePackage.version} on http://localhost:${server.port}`);
 console.log("  API Key: demo-key (pass via x-api-key header)");
 console.log("  - counter:        /api/v1/app/counter/page/home");
 console.log("  - basic-actions:  /api/v1/app/basic-actions/page/home");
@@ -80,3 +92,4 @@ console.log("  - capability:     /api/v1/app/capability-demo/page/blocked");
 console.log("  - capability:     /api/v1/app/capability-demo/page/negotiation  (Epic 25b slice 2 live filter)");
 console.log("  - capability:     /api/v1/app/capability-demo/page/degrade  (a Checkbox iOS lacks)");
 console.log("  - native-widgets: /api/v1/app/native-widgets/page/home");
+console.log("  - todo:           /api/v1/app/todo/page/home");
