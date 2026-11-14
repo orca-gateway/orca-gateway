@@ -7,11 +7,27 @@ published package instead; see "Install" in [`sdk-swift/README.md`](../../sdk-sw
 
 ## Run it
 
-1. Start the example server (it listens on `http://localhost:8080`):
+1. Start the demo server. Pick one:
+
+   a. Docker:
+
+   ```bash
+   docker run --rm -p 8080:8080 ghcr.io/orca-gateway/demo-server:latest
+   ```
+
+   b. Download it for Linux, Windows or macOS from
+   [the newest Engine release](https://github.com/orca-gateway/orca-gateway/releases?q=engine-v),
+   then open it. Linux: `chmod +x demo-server-linux-x64` first, then run `./demo-server-linux-x64`.
+   macOS: it comes as `demo-server-macos-arm64.zip`; unzip it in Finder. First start only, macOS:
+   System Settings › Privacy & Security › Open Anyway. Windows: More info › Run anyway.
+
+   c. From source, with Bun:
 
    ```bash
    task example:dev:server
    ```
+
+   Ready when it prints `Orca demo server <version> on http://localhost:8080`.
 
 2. Open `examples/app-ios/OrcaCounter.xcodeproj` in Xcode 16 or later, pick an iPhone simulator
    and press Run. The simulator reaches the Mac at `localhost`, so nothing else is needed.
@@ -37,6 +53,7 @@ scheme, or pass them to `simctl launch`:
 | Counter (default) | `counter` | `home` | state, a snackbar |
 | Basic actions | `basic-actions` | `home` | navigation, back, URL, clipboard, share, toasts |
 | Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
+| Todo | `todo` | `home` | add, tick, delete |
 
 ```bash
 SIMCTL_CHILD_ORCA_APP_ID=server-actions SIMCTL_CHILD_ORCA_PATH=shop xcrun simctl launch booted com.orcagateway.examples.counter

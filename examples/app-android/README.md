@@ -12,11 +12,27 @@ SDK change shows up on the next build. Your own app installs the published artif
 You need Android Studio (or the Android SDK command-line tools) with an emulator, and JDK 17 or
 later.
 
-1. Start the example server (it listens on `http://localhost:8080`):
+1. Start the demo server. Pick one:
+
+   a. Docker:
+
+   ```bash
+   docker run --rm -p 8080:8080 ghcr.io/orca-gateway/demo-server:latest
+   ```
+
+   b. Download it for Linux, Windows or macOS from
+   [the newest Engine release](https://github.com/orca-gateway/orca-gateway/releases?q=engine-v),
+   then open it. Linux: `chmod +x demo-server-linux-x64` first, then run `./demo-server-linux-x64`.
+   macOS: it comes as `demo-server-macos-arm64.zip`; unzip it in Finder. First start only, macOS:
+   System Settings › Privacy & Security › Open Anyway. Windows: More info › Run anyway.
+
+   c. From source, with Bun:
 
    ```bash
    task example:dev:server
    ```
+
+   Ready when it prints `Orca demo server <version> on http://localhost:8080`.
 
 2. Start an emulator, for example the Pixel 3a API 34 image, from Android Studio's Device Manager
    or with `emulator -avd <name>`.
@@ -52,12 +68,14 @@ The same app draws any app on the example server. Pass `APP` and `PAGE` to the r
 | Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
 | Capability demo | `capability-demo` | `degrade` | the three fallback policies, on a Checkbox this SDK does not draw: left out (`graceful`), a warning banner above the page (`warn`), or a blocking prompt instead of the page (`require`) |
 | Native widgets | `native-widgets` | `home` | the ten widgets of S9: Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector (the images come from picsum.photos) |
+| Todo | `todo` | `home` | add, tick, delete |
 
 ```bash
 task example:android:run APP=basic-actions PAGE=home
 task example:android:run APP=server-actions PAGE=shop
 task example:android:run APP=capability-demo PAGE=degrade
 task example:android:run APP=native-widgets PAGE=home
+task example:android:run APP=todo PAGE=home
 ```
 
 Basic actions starts at `home`, which opens the four other pages; `PAGE` starts the app on one of

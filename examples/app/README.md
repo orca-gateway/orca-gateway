@@ -4,13 +4,38 @@ A Flutter app that demonstrates the Orca Gateway SDK rendering server-driven UI.
 
 ## Running
 
-```bash
-# Start both the example server and the Flutter app
-task example:dev
+1. Start the demo server. Pick one:
 
-# Or start them separately:
-task example:dev:server   # Starts the engine on localhost:8080
-task example:dev:app      # Runs the Flutter app
+   a. Docker:
+
+   ```bash
+   docker run --rm -p 8080:8080 ghcr.io/orca-gateway/demo-server:latest
+   ```
+
+   b. Download it for Linux, Windows or macOS from
+   [the newest Engine release](https://github.com/orca-gateway/orca-gateway/releases?q=engine-v),
+   then open it. Linux: `chmod +x demo-server-linux-x64` first, then run `./demo-server-linux-x64`.
+   macOS: it comes as `demo-server-macos-arm64.zip`; unzip it in Finder. First start only, macOS:
+   System Settings › Privacy & Security › Open Anyway. Windows: More info › Run anyway.
+
+   c. From source, with Bun:
+
+   ```bash
+   task example:dev:server
+   ```
+
+   Ready when it prints `Orca demo server <version> on http://localhost:8080`.
+
+2. Run the Flutter app:
+
+   ```bash
+   task example:dev:app
+   ```
+
+Or start both from source in one go (with DevTools):
+
+```bash
+task example:dev
 ```
 
 ## Configuration

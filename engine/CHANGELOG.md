@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.5 - 2026-11-14
+
+### Added
+
+- A Todo example on the demo server (`examples/server`): add a todo, tick it done, delete it.
+- The demo server ships as a Docker image, `ghcr.io/orca-gateway/demo-server`, and as downloads for Linux x64, Windows x64 and macOS arm64 on each engine GitHub release.
+- The demo server stops on Ctrl+C and on SIGTERM (`docker stop`).
+
 ## 0.3.3 - 2026-11-06
 
 ### Added

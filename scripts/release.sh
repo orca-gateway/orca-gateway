@@ -327,6 +327,23 @@ if [[ $NEED_PUB -eq 1 ]]; then check_pub_login; fi
 check_git_push
 
 # --- 2. Per-package bump level ---------------------------------------------
+# An engine tag makes a GitHub release whose notes are the "## X.Y.Z" section
+# of engine/CHANGELOG.md (.github/workflows/engine-release.yml). Without that
+# section the release would ship empty notes, so stop here, before any change.
+# "( |$)" keeps "## 0.3.50" from passing for 0.3.5.
+check_engine_notes() {
+  local name=$1 ver=$2
+  [[ "$name" == "engine" ]] || return 0
+  if grep -qE "^## ${ver//./[.]}( |\$)" engine/CHANGELOG.md 2>/dev/null; then
+    printf "  %s notes, engine/CHANGELOG.md \"## %s\"\n" "$(c_green ok)" "$ver"
+  else
+    printf "  %s engine/CHANGELOG.md has no \"## %s\"\n" "$(c_red stop:)" "$ver" >&2
+    printf "        section. Write it, merge it, run again.\n" >&2
+    printf "        Nothing was changed.\n" >&2
+    exit 1
+  fi
+}
+
 echo
 NEW_VERS=()
 for idx in "${SELECTED[@]}"; do
@@ -357,6 +374,7 @@ for idx in "${SELECTED[@]}"; do
       esac
     done
     NEW_VERS+=("$new")
+    check_engine_notes "${PKG_NAMES[$idx]}" "$new"
     continue
   fi
   while true; do
@@ -372,6 +390,7 @@ for idx in "${SELECTED[@]}"; do
   done
   new=$(bump_version "$cur" "$lvl")
   NEW_VERS+=("$new")
+  check_engine_notes "${PKG_NAMES[$idx]}" "$new"
 done
 
 # A tag that already exists would make `git tag -a` fail after the commit.
@@ -389,6 +408,9 @@ for k in "${!SELECTED[@]}"; do
   idx=${SELECTED[$k]}
   printf "  %-10s %-12s -> %s\n" \
     "${PKG_NAMES[$idx]}" "${PKG_VERS[$idx]}" "${NEW_VERS[$k]}"
+  if [[ "${PKG_NAMES[$idx]}" == "engine" ]]; then
+    printf "  %-10s then a GitHub release: notes, demo image, 3 downloads\n" ""
+  fi
 done
 echo
 printf "Proceed? [y/N]: "

@@ -4,12 +4,32 @@ Working server implementations demonstrating Orca Gateway engine features.
 
 ## Running
 
-```bash
-# Start all examples (server + Flutter app)
-task example:dev
+Start the demo server. Pick one:
 
-# Or just the server
+a. Docker:
+
+```bash
+docker run --rm -p 8080:8080 ghcr.io/orca-gateway/demo-server:latest
+```
+
+b. Download it for Linux, Windows or macOS from
+[the newest Engine release](https://github.com/orca-gateway/orca-gateway/releases?q=engine-v),
+then open it. Linux: `chmod +x demo-server-linux-x64` first, then run `./demo-server-linux-x64`.
+macOS: it comes as `demo-server-macos-arm64.zip`; unzip it in Finder. First start only, macOS:
+System Settings › Privacy & Security › Open Anyway. Windows: More info › Run anyway.
+
+c. From source, with Bun:
+
+```bash
 task example:dev:server
+```
+
+Ready when it prints `Orca demo server <version> on http://localhost:8080`.
+
+To start all examples from source (server + Flutter app):
+
+```bash
+task example:dev
 ```
 
 The server runs on `http://localhost:8080` by default.
