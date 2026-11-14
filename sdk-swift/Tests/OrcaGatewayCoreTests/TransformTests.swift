@@ -2718,7 +2718,8 @@ final class TransformTests: XCTestCase {
     func testL1_withTheSeamALaggingLetterIsWrittenAsDartsSet() {
         // Outside a class, exact: `ƛ`, `\u019B`, with `u` `\u{19B}` and 𐵐 (U+10D50); without `u` 𐵐 stays as
         // written, as without `i` ƛ does, and with no lagging class every letter is written as today. With `u` the
-        // halves' escapes of 𐵐, the high's then the low's, are 𐵐; without `u`, alone or the other way round, halves.
+        // halves' escapes of 𐵐, the high's then the low's, are 𐵐; alone or the other way round each is a lone half,
+        // which matches nothing (S18); without `u` they are halves.
         Regex.laggingOverride = Set(Self.laggingClasses.joined())
         let (lambda, garay) = ("(?-i:[\\x{19B}\\x{A7DC}])", "(?-i:[\\x{10D50}\\x{10D70}])")
         let halves = Self.escapes("\u{10D50}").four
@@ -2742,8 +2743,8 @@ final class TransformTests: XCTestCase {
             ("(?-i:\(halves))", true, true, "(?-i:\(halves))", #line),
             (halves, false, true, halves, #line),
             (halves, true, false, halves, #line),
-            (high, true, true, high, #line),
-            (low + high, true, true, low + high, #line),
+            (high, true, true, "(?:(?!))", #line),
+            (low + high, true, true, "(?:(?!))(?:(?!))", #line),
         ]
         for (pattern, ignoreCase, unicode, written, line) in rows {
             XCTAssertEqual(Regex.asciiClasses(pattern, ignoreCase: ignoreCase, unicode: unicode), written, line: line)
@@ -2915,7 +2916,9 @@ final class TransformTests: XCTestCase {
         // JDK 17's case-insensitive backreference never repeats a capture above U+FFFF (Kotlin, row 23b.40); ICU's
         // does, so here these are guards: each pattern on each input, Dart 3.14.0's values. In the rows E is 😀, F 🎉,
         // D 𐐀 (U+10400) and d 𐐨. Left out: `(?i:(.)\1|x)` gu on 𐐀𐐨, where Dart compares the first alternative's
-        // reference case-sensitively (a known follow-up).
+        // reference case-sensitively: Dart's bug, a known difference (row 23b.41). Dart reads every alternative but
+        // the last of a `|` inside a modifier group with the flags outside the group; both SDKs follow ECMAScript
+        // there, as the engine does.
         func text(_ s: String) -> String {
             let letters: [Character: String] = ["E": "\u{1F600}", "F": "\u{1F389}", "D": "\u{10400}", "d": "\u{10428}"]
             return s.map { letters[$0] ?? String($0) }.joined()
@@ -2974,6 +2977,218 @@ final class TransformTests: XCTestCase {
                 guard let expected else { continue }
                 assertRegex(text(pattern), flags, text(input), text(expected), line: line)
             }
+        }
+    }
+
+    // MARK: S18 — escaped pairs in a class (row 23b.41)
+
+    // Every expected value below was printed by Dart 3.14.0's RegExp on the Dart VM; nil: Dart refuses the pattern.
+
+    /// In the S18 rows A is 𐐀 (U+10400), L its lowercase 𐐨 (U+10428), Z 𐐧 (U+10427) and E 😀; in a pattern
+    /// (`pairs`) each of them, F (U+1F64F) and M (U+1044F) is its halves' two `\uHHHH` escapes, the high's first.
+    private static let pairLetters: [Character: Unicode.Scalar] = [
+        "A": "\u{10400}", "L": "\u{10428}", "Z": "\u{10427}", "E": "\u{1F600}", "F": "\u{1F64F}", "M": "\u{1044F}",
+    ]
+    private static func pairText(_ s: String) -> String {
+        s.map { pairLetters[$0].map(String.init) ?? String($0) }.joined()
+    }
+    private static func pairs(_ s: String) -> String {
+        s.map { pairLetters[$0].map { escapes($0).four } ?? String($0) }.joined()
+    }
+
+    func testE1_withUAnEscapedPairIsOneMemberInAClass() {
+        // With `u` Dart reads a high half's `\uHHHH` then a low half's as the one code point they spell, in a class
+        // as outside one, so a range with such an end compares code points (out of order it is refused); the other
+        // end may be one too, braced (`\u{10427}`) or literal (𐐧). `L` is only the class's under `i`.
+        let inputs = ["A", "L", "Ax", "x", "E", "aAb", "Z", "AZ", "xA"]
+        let rows: [(String, String, [String?], UInt)] = [
+            ("[A-Z]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[A-Z]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[^A-Z]", "giu", ["A", "L", "A#", "#", "#", "#A#", "Z", "AZ", "#A"], #line),
+            ("[^A-Z]", "gu", ["A", "#", "A#", "#", "#", "#A#", "Z", "AZ", "#A"], #line),
+            ("[A-\\u{10427}]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[A-\\u{10427}]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[\\u{10400}-Z]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[\\u{10400}-Z]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[\\u{10400}-\\u{10427}]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[\\u{10400}-\\u{10427}]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[\u{10400}-Z]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),  // literal 𐐀
+            ("[\u{10400}-Z]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[A-\u{10427}]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),  // literal 𐐧
+            ("[A-\u{10427}]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[aA-Zb]", "giu", ["#", "#", "#x", "x", "E", "###", "#", "##", "x#"], #line),
+            ("[aA-Zb]", "gu", ["#", "L", "#x", "x", "E", "###", "#", "##", "x#"], #line),
+            ("[Z-A]", "giu", [nil, nil, nil, nil, nil, nil, nil, nil, nil], #line),
+            ("[Z-A]", "gu", [nil, nil, nil, nil, nil, nil, nil, nil, nil], #line),
+            ("[E-F]", "giu", ["A", "L", "Ax", "x", "#", "aAb", "Z", "AZ", "xA"], #line),
+            ("[E-F]", "gu", ["A", "L", "Ax", "x", "#", "aAb", "Z", "AZ", "xA"], #line),
+            ("[L-M]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[L-M]", "gu", ["A", "#", "Ax", "x", "E", "aAb", "Z", "AZ", "xA"], #line),
+            ("[A-Z]+", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "#", "x#"], #line),
+            ("[A-Z]+", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "#", "x#"], #line),
+            ("[A-A]", "giu", ["#", "#", "#x", "x", "E", "a#b", "Z", "#Z", "x#"], #line),
+            ("[A-A]", "gu", ["#", "L", "#x", "x", "E", "a#b", "Z", "#Z", "x#"], #line),
+            ("[\\wA-Z]", "giu", ["#", "#", "##", "#", "E", "###", "#", "##", "##"], #line),
+            ("[\\wA-Z]", "gu", ["#", "L", "##", "#", "E", "###", "#", "##", "##"], #line),
+        ]
+        for (pattern, flags, expected, line) in rows {
+            XCTAssertEqual(expected.count, inputs.count, line: line)
+            let differ = zip(inputs, expected).compactMap { input, expected in
+                differs(Self.pairs(pattern), flags, Self.pairText(input), expected.map(Self.pairText))
+            }
+            XCTAssert(differ.isEmpty, "\(differ.count) differ: " + differ.prefix(3).joined(separator: "; "), line: line)
+        }
+    }
+
+    func testE1_guard_withoutUTheHalvesStayUnits() {
+        // Without `u` Dart reads the halves as units (S16), so each range runs from a low half down to a high half,
+        // or from `}` down to u, and Dart refuses every pattern above but `[\u{10400}-Z]`, whose lone halves left in
+        // the result Swift writes as U+FFFD (S16).
+        let patterns = [
+            "[A-Z]", "[^A-Z]", "[A-\\u{10427}]", "[\\u{10400}-\\u{10427}]", "[\u{10400}-Z]", "[A-\u{10427}]",
+            "[aA-Zb]", "[Z-A]", "[E-F]", "[L-M]", "[A-Z]+", "[A-A]", "[\\wA-Z]",
+        ]
+        for pattern in patterns {
+            for flags in ["g", "gi"] {
+                for input in ["A", "L", "Ax", "x", "E", "aAb", "Z", "AZ", "xA"] {
+                    if let row = differs(Self.pairs(pattern), flags, Self.pairText(input), nil) { XCTFail(row) }
+                }
+            }
+        }
+    }
+
+    func testE1_anEscapedPairInAClassIsWrittenBracedWithU() {
+        // With `u` the pair is one member written `\x{H}`, as a braced escape is; a literal end stays as written.
+        // Without `u` the class is copied as today: the halves' escapes, and the range between them refused.
+        let rows: [(String, Bool, String?, UInt)] = [
+            ("[A-Z]", true, #"[\x{10400}-\x{10427}]"#, #line),
+            ("[^A-Z]", true, #"[^\x{10400}-\x{10427}]"#, #line),
+            ("[A]", true, #"[\x{10400}]"#, #line),
+            ("[A-\u{10427}]", true, "[\\x{10400}-\u{10427}]", #line),
+            ("[\\u{10400}-Z]", true, #"[\x{10400}-\x{10427}]"#, #line),
+            ("[Z-A]", true, nil, #line),
+            ("[A]", false, Self.pairs("[A]"), #line),
+            ("[A-Z]", false, nil, #line),
+        ]
+        for (pattern, unicode, written, line) in rows {
+            let got = Regex.asciiClasses(Self.pairs(pattern), ignoreCase: false, unicode: unicode)
+            XCTAssertEqual(got, written, line: line)
+        }
+    }
+
+    /// In the E2 rows `~` in a pattern is `\u`: `~D801` is the 4-digit escape of 𐐀's high half, `~{DC00}` the
+    /// braced one of its low half. In the text P, Q, R and S are U+D000, U+D7FF, U+E000 and U+FFFF, around the
+    /// surrogate block, beside `pairText`'s letters.
+    private static func lone(_ s: String) -> String { s.replacingOccurrences(of: "~", with: "\\u") }
+    private static func loneText(_ s: String) -> String {
+        let around: [Character: Character] = ["P": "\u{D000}", "Q": "\u{D7FF}", "R": "\u{E000}", "S": "\u{FFFF}"]
+        return pairText(String(s.map { around[$0] ?? $0 }))
+    }
+    private static let loneInputs = ["A", "L", "Ax", "x", "E", "aAb", "Z", "AZ", "xA", "xxaPQRS"]
+    /// Two halves Dart does not read as a pair, one escape or both being braced (`~{0DC00}` too): alone, with a
+    /// quantifier after them, inside `(?i:…)`, after x, 😀's halves, and in a class.
+    private static let loneHalves = [
+        "~D801~{DC00}", "~{D801}~DC00", "~{D801}~{DC00}", "~D801~{0DC00}", "~D801~{DC00}+", "(?i:~D801~{DC00})",
+        "x~D801~{DC00}", "~D83D~{DE00}", "[~D801~{DC00}]",
+    ]
+
+    /// Each row's pattern (`lone`) under each of its flags on each of `loneInputs`, against Dart's values.
+    private func assertLone(_ rows: [(String, [String], [String?])], line: UInt = #line) {
+        for (pattern, flags, expected) in rows {
+            XCTAssertEqual(expected.count, Self.loneInputs.count, pattern, line: line)
+            for flags in flags {
+                let differ = zip(Self.loneInputs, expected).compactMap { input, expected in
+                    differs(Self.lone(pattern), flags, Self.loneText(input), expected.map(Self.loneText))
+                }
+                let shown = differ.prefix(3).joined(separator: "; ")
+                XCTAssert(differ.isEmpty, "\(differ.count) differ: " + shown, line: line)
+            }
+        }
+    }
+
+    func testE2_withUALoneHalfMatchesNothing() {
+        // With `u` each half is lone and a Swift string holds none, so Dart leaves every input as it is, under giu and
+        // gu; ICU joined the two halves into 𐐀 (or 😀). The pair's two 4-digit escapes are still the letter.
+        assertLone(Self.loneHalves.map { ($0, ["giu", "gu"], Self.loneInputs) })
+        assertLone([
+            ("~D801~DC00", ["giu"], ["#", "#", "#x", "x", "E", "a#b", "Z", "#Z", "x#", "xxaPQRS"]),
+            ("~D801~DC00", ["gu"], ["#", "L", "#x", "x", "E", "a#b", "Z", "#Z", "x#", "xxaPQRS"]),
+        ])
+    }
+
+    func testE2_withUALoneHalfAddsNothingToAClassAndARangeKeepsItsPartsOutsideTheBlock() {
+        // Outside a class a lone half matches nothing, a quantifier on it too; in a class it adds nothing, so a class
+        // left with no member matches nothing and, negated, every character; a range over the surrogate block keeps
+        // its parts outside it (`[a-~D801~{DC00}]` stops at U+D7FF, where ICU read a-𐐀), out of order it is refused.
+        let unchanged = [
+            "~D801+~DC00", "(?<=~{D801})x", "~{D801}{2}", "~{D801}+?", "(?i:~D801)", "~D801", "~{D801}", "~D801~D801",
+            "~DC00~D801", "~D801(?:~DC00)", "(~D801)~DC00", "[~{D801}]", "[~D800-~DFFF]", "[~{D801}-~{DC00}]",
+            "[~D801~{DC00}]+", "[~D801~{DC00}]{2}", "[~D801][~DC00]", "[^~D801][~DC00]",
+        ]
+        let everyCharacter = ["[^~D801~{DC00}]", "[^~D800-~DFFF]", "[^~{D801}]", "[^~D801]", "[^~D801-~DC00]"]
+        assertLone(unchanged.map { ($0, ["giu", "gu"], Self.loneInputs) })
+        let matched = Self.loneInputs.map { String(repeating: "#", count: $0.count) }  // each character
+        assertLone(everyCharacter.map { ($0, ["giu", "gu"], matched) })
+        assertLone([
+            ("[a-~D801~{DC00}]", ["giu", "gu"], ["A", "L", "A#", "#", "E", "#A#", "Z", "AZ", "#A", "#####RS"]),
+            ("[~D801~{DC00}a]", ["giu", "gu"], ["A", "L", "Ax", "x", "E", "#Ab", "Z", "AZ", "xA", "xx#PQRS"]),
+            ("[~{D000}-~{E000}]", ["giu", "gu"], ["A", "L", "Ax", "x", "E", "aAb", "Z", "AZ", "xA", "xxa###S"]),
+            ("[~{D7FF}-~{D800}]", ["giu", "gu"], ["A", "L", "Ax", "x", "E", "aAb", "Z", "AZ", "xA", "xxaP#RS"]),
+            ("[~{DFFF}-~{E000}]", ["giu", "gu"], ["A", "L", "Ax", "x", "E", "aAb", "Z", "AZ", "xA", "xxaPQ#S"]),
+            ("[~D801-~FFFF]", ["giu", "gu"], ["A", "L", "Ax", "x", "E", "aAb", "Z", "AZ", "xA", "xxaPQ##"]),
+            ("[~D800-~D801~DC00]", ["giu"], ["#", "#", "#x", "x", "E", "a#b", "Z", "#Z", "x#", "xxaPQ##"]),
+            ("[~D800-~D801~DC00]", ["gu"], ["#", "L", "#x", "x", "E", "a#b", "Z", "#Z", "x#", "xxaPQ##"]),
+            ("[~{D801}-~{10400}]", ["giu"], ["#", "#", "#x", "x", "E", "a#b", "Z", "#Z", "x#", "xxaPQ##"]),
+            ("[~{D801}-~{10400}]", ["gu"], ["#", "L", "#x", "x", "E", "a#b", "Z", "#Z", "x#", "xxaPQ##"]),
+            ("[\\w~D801]", ["giu", "gu"], ["A", "L", "A#", "#", "E", "#A#", "Z", "AZ", "#A", "###PQRS"]),
+            ("[~D801\\w]", ["giu", "gu"], ["A", "L", "A#", "#", "E", "#A#", "Z", "AZ", "#A", "###PQRS"]),
+            ("[~DC00-~D801]", ["giu", "gu"], [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil]),
+            ("~{D801}|a", ["giu", "gu"], ["A", "L", "Ax", "x", "E", "#Ab", "Z", "AZ", "xA", "xx#PQRS"]),
+            ("a~D801?", ["giu", "gu"], ["A", "L", "Ax", "x", "E", "#Ab", "Z", "AZ", "xA", "xx#PQRS"]),
+            ("x~DC00*x", ["giu", "gu"], ["A", "L", "Ax", "x", "E", "aAb", "Z", "AZ", "xA", "#aPQRS"]),
+            (
+                "~{D801}*", ["giu", "gu"],
+                ["#A#", "#L#", "#A#x#", "#x#", "#E#", "#a#A#b#", "#Z#", "#A#Z#", "#x#A#", "#x#x#a#P#Q#R#S#"]
+            ),
+        ])
+    }
+
+    func testE2_guard_withoutUTheBracedEscapeIsText() {
+        // Without `u` `\u{…}` is the letter u, then text, so no pattern of `loneHalves` matches but the class, which
+        // holds 𐐀's high half: Dart leaves the low half, U+FFFD here (S16).
+        let half = "#\u{FFFD}"
+        let inClass = [half, half, half + "x", "x", "E", "a\(half)b", half, half + half, "x" + half, "xxaPQRS"]
+        assertLone(Self.loneHalves.map { ($0, ["g", "gi"], $0.hasPrefix("[") ? inClass : Self.loneInputs) })
+    }
+
+    func testE2_aLoneHalfIsWrittenSoICUCannotJoinIt() {
+        // With `u` a lone half is `(?:(?!))` outside a class, as `[]` is, which a quantifier may follow, and nothing
+        // in one: a class left with no member is `(?:(?!))`, negated `[\s\S]`, and a range keeps its parts outside the
+        // surrogate block, braced. A pair's two 4-digit escapes stay as written; without `u` nothing changes (S16).
+        let never = "(?:(?!))"
+        let rows: [(String, Bool, String?, UInt)] = [
+            ("~D801~{DC00}", true, never + never, #line),
+            ("~{D801}~DC00", true, never + never, #line),
+            ("~D801~{DC00}+", true, never + never + "+", #line),
+            ("~{D801}{2}", true, never + "{2}", #line),
+            ("~{D801}+?", true, never + "+?", #line),
+            ("(?<=~{D801})x", true, "(?<=" + never + ")x", #line),
+            ("[~D801~{DC00}]", true, never, #line),
+            ("[~D801~{DC00}]+", true, never + "+", #line),
+            ("[^~D801~{DC00}]", true, #"[\s\S]"#, #line),
+            ("[~D801~{DC00}a]", true, "[a]", #line),
+            ("[a-~D801~{DC00}]", true, #"[\x{61}-\x{D7FF}]"#, #line),
+            ("[~{D000}-~{E000}]", true, #"[\x{D000}-\x{D7FF}\x{E000}]"#, #line),
+            ("[~D800-~DFFF]", true, never, #line),
+            ("[~D800-~D801~DC00]", true, #"[\x{E000}-\x{10400}]"#, #line),
+            ("[~DC00-~D801]", true, nil, #line),
+            ("~D801~DC00", true, Self.lone("~D801~DC00"), #line),
+            ("~D801", false, Self.lone("~D801"), #line),
+            ("[~D800-~DFFF]", false, Self.lone("[~D800-~DFFF]"), #line),
+        ]
+        for (pattern, unicode, written, line) in rows {
+            let got = Regex.asciiClasses(Self.lone(pattern), ignoreCase: false, unicode: unicode)
+            XCTAssertEqual(got, written, pattern, line: line)
         }
     }
 

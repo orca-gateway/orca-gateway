@@ -7,7 +7,7 @@ import XCTest
 final class ModelRoundTripTests: XCTestCase {
     func testAllRenderFixturesRoundTrip() throws {
         let files = try Fixtures.files("render")
-        XCTAssertEqual(files.count, 38, "render fixtures 01-38")
+        XCTAssertEqual(files.count, 39, "render fixtures 01-39")
         var nodes = 0
         for (name, fixture) in files {
             let expected = fixture["expected"]
@@ -148,7 +148,7 @@ final class ModelRoundTripTests: XCTestCase {
                 }
             }
         }
-        XCTAssertGreaterThanOrEqual(count, 9, "Value objects in fixtures 01-38")
+        XCTAssertGreaterThanOrEqual(count, 9, "Value objects in fixtures 01-39")
     }
 
     // MARK: helpers

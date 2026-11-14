@@ -3050,8 +3050,10 @@ class TransformTest {
      * J1: a reference under `i` on an input with a character above U+FFFF repeats it as Dart does,
      * with `u` and without, and in `(?i:` under `u`, and nothing throws. The probe's 405 rows, each
      * printed by Dart: `(?i:…)` under gu as the pattern under giu, but on 𐐀𐐨 `(?i:(.)\1|x)`, whose
-     * first alternative's reference Dart compares case-sensitively there (Dart's quirk, a known
-     * follow-up), so that row is left out.
+     * first alternative's reference Dart compares case-sensitively there, so that row is left out:
+     * Dart's bug, a known difference (row 23b.41). Dart reads every alternative but the last of a
+     * `|` inside a modifier group with the flags outside the group; both SDKs follow ECMAScript
+     * there, as the engine does.
      */
     private val j1Rows: List<Rx> by lazy {
         listOf(

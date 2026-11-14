@@ -1,0 +1,1552 @@
+{
+  "name": "regex-escaped-pairs-lone-halves",
+  "description": "With `u`, Dart reads two 4-digit escapes, a high half then a low half, as one code point, inside a class as outside one: `\\uD801\\uDC00` is the Deseret capital long I \ud801\udc00 (U+10400). So a class range with such an escaped pair at an end compares code points. Swift's SDK read a class's escapes one half at a time, so such a range came out of order and was refused, and it wrote two lone halves side by side, where ICU joined them into the letter; these rows pin Dart's reading on every client. The range `[\\uD801\\uDC00-\\uD801\\uDC27]` (\ud801\udc00 to \ud801\udc27, U+10427) with `giu` on the small \ud801\udc28 (U+10428) gives \"#\" and on a\ud801\udc00b \"a#b\", while with `gu` it leaves \ud801\udc28 unchanged; the negated `[^\\uD801\\uDC00-\\uD801\\uDC27]` with `giu` on \ud801\udc00x gives \"\ud801\udc00#\" and with `gu` on \ud801\udc28 \"#\". An end braced or literal reads the same: `[\\uD801\\uDC00-\\u{10427}]` with `giu` on \ud801\udc28 and `[\\u{10400}-\\uD801\\uDC27]` with `gu` on \ud801\udc27 give \"#\", `[\ud801\udc00-\\uD801\\uDC27]` with `giu` on \ud801\udc28 gives \"#\" and `[\\uD801\\uDC00-\ud801\udc27]` with `gu` on \ud801\udc00x \"#x\". Among other members: `[a\\uD801\\uDC00-\\uD801\\uDC27b]` with `giu` on a\ud801\udc00b gives \"###\" and `[\\w\\uD801\\uDC00-\\uD801\\uDC27]` with `gu` on x\ud801\udc00 \"##\". The pair-to-same-pair range `[\\uD801\\uDC00-\\uD801\\uDC00]` with `giu` on \ud801\udc28 gives \"#\" and with `gu` on \ud801\udc00\ud801\udc27 \"#\ud801\udc27\"; the emoji range `[\\uD83D\\uDE00-\\uD83D\\uDE4F]` with `giu` on \ud83d\ude00 gives \"#\"; and `[\\uD801\\uDC00-\\uD801\\uDC27]+` with `giu` on \ud801\udc00\ud801\udc27 gives \"#\" and with `gu` on x\ud801\udc00 \"x#\". Two halves spelled by escapes Dart does not read as a pair, one or both braced, are two lone halves, which match nothing in a string of whole characters: `\\uD801\\u{DC00}` with `giu` on \ud801\udc00 and with `gu` on \ud801\udc00x, `\\u{D801}\\uDC00` with `gu` on \ud801\udc00, `\\u{D801}\\u{DC00}` with `giu` on \ud801\udc00, `\\uD801\\u{0DC00}` with `gu` on \ud801\udc00, `\\uD801\\u{DC00}+` with `giu` on \ud801\udc00\ud801\udc27, `(?i:\\uD801\\u{DC00})` with `gu` on \ud801\udc28, `x\\uD801\\u{DC00}` with `giu` on x\ud801\udc00, \ud83d\ude00's halves `\\uD83D\\u{DE00}` with `gu` on \ud83d\ude00, and the class `[\\uD801\\u{DC00}]` with `giu` on \ud801\udc00 and with `gu` on a\ud801\udc00b each leave the input unchanged. The pair as two 4-digit escapes, `\\uD801\\uDC00` with `giu` on \ud801\udc00, still gives \"#\". Every regex puts \"#\" for each match. Every input reads page state, so the engine keeps the Values unresolved with `watches` and the client resolves them.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "children": [
+      {
+        "type": "Text",
+        "key": "r_range_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\uDC00-\\uD801\\uDC27]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_range_gu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\uDC00-\\uD801\\uDC27]",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_range_mid",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "a_deseret_b"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\uDC00-\\uD801\\uDC27]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_negated_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capital_x"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[^\\uD801\\uDC00-\\uD801\\uDC27]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_negated_gu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[^\\uD801\\uDC00-\\uD801\\uDC27]",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_braced_end",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\uDC00-\\u{10427}]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_braced_start",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capital_ew"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\u{10400}-\\uD801\\uDC27]",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_literal_start",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\ud801\udc00-\\uD801\\uDC27]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_literal_end",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capital_x"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\uDC00-\ud801\udc27]",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_letters",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "a_deseret_b"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[a\\uD801\\uDC00-\\uD801\\uDC27b]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_word",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "x_deseret"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\w\\uD801\\uDC00-\\uD801\\uDC27]",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_same_pair_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\uDC00-\\uD801\\uDC00]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_same_pair_gu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capitals"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\uDC00-\\uD801\\uDC00]",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_emoji",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD83D\\uDE00-\\uD83D\\uDE4F]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_plus_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capitals"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\uDC00-\\uD801\\uDC27]+",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "r_plus_gu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "x_deseret"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\uDC00-\\uD801\\uDC27]+",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_braced_low_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\uD801\\u{DC00}",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_braced_low_gu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capital_x"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\uD801\\u{DC00}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_braced_high",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\u{D801}\\uDC00",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_both_braced",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\u{D801}\\u{DC00}",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_padded",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\uD801\\u{0DC00}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_plus",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capitals"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\uD801\\u{DC00}+",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_scoped",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_small"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "(?i:\\uD801\\u{DC00})",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_after_x",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "x_deseret"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "x\\uD801\\u{DC00}",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_emoji",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "emoji"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\uD83D\\u{DE00}",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_class_giu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\u{DC00}]",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "h_class_gu",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "a_deseret_b"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "[\\uD801\\u{DC00}]",
+                "flags": "gu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Text",
+        "key": "p_pair",
+        "props": {
+          "data": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "deseret_capital"
+            },
+            "by": [
+              {
+                "type": "regex",
+                "pattern": "\\uD801\\uDC00",
+                "flags": "giu",
+                "replacement": "#"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "deseret_capital": "\ud801\udc00",
+      "deseret_small": "\ud801\udc28",
+      "deseret_capital_ew": "\ud801\udc27",
+      "deseret_capital_x": "\ud801\udc00x",
+      "x_deseret": "x\ud801\udc00",
+      "a_deseret_b": "a\ud801\udc00b",
+      "deseret_capitals": "\ud801\udc00\ud801\udc27",
+      "emoji": "\ud83d\ude00"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "r_range_giu",
+        "r_range_gu",
+        "r_range_mid",
+        "r_negated_giu",
+        "r_negated_gu",
+        "r_braced_end",
+        "r_braced_start",
+        "r_literal_start",
+        "r_literal_end",
+        "r_letters",
+        "r_word",
+        "r_same_pair_giu",
+        "r_same_pair_gu",
+        "r_emoji",
+        "r_plus_giu",
+        "r_plus_gu",
+        "h_braced_low_giu",
+        "h_braced_low_gu",
+        "h_braced_high",
+        "h_both_braced",
+        "h_padded",
+        "h_plus",
+        "h_scoped",
+        "h_after_x",
+        "h_emoji",
+        "h_class_giu",
+        "h_class_gu",
+        "p_pair"
+      ],
+      "watches": []
+    },
+    {
+      "id": "p_pair",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\uD801\\uDC00",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capital"
+      ]
+    },
+    {
+      "id": "h_class_gu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "a_deseret_b"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\u{DC00}]",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "a_deseret_b"
+      ]
+    },
+    {
+      "id": "h_class_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\u{DC00}]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capital"
+      ]
+    },
+    {
+      "id": "h_emoji",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\uD83D\\u{DE00}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "h_after_x",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "x_deseret"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "x\\uD801\\u{DC00}",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "x_deseret"
+      ]
+    },
+    {
+      "id": "h_scoped",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "(?i:\\uD801\\u{DC00})",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_small"
+      ]
+    },
+    {
+      "id": "h_plus",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capitals"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\uD801\\u{DC00}+",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capitals"
+      ]
+    },
+    {
+      "id": "h_padded",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\uD801\\u{0DC00}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capital"
+      ]
+    },
+    {
+      "id": "h_both_braced",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\u{D801}\\u{DC00}",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capital"
+      ]
+    },
+    {
+      "id": "h_braced_high",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\u{D801}\\uDC00",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capital"
+      ]
+    },
+    {
+      "id": "h_braced_low_gu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capital_x"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\uD801\\u{DC00}",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capital_x"
+      ]
+    },
+    {
+      "id": "h_braced_low_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capital"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "\\uD801\\u{DC00}",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capital"
+      ]
+    },
+    {
+      "id": "r_plus_gu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "x_deseret"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\uDC00-\\uD801\\uDC27]+",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "x_deseret"
+      ]
+    },
+    {
+      "id": "r_plus_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capitals"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\uDC00-\\uD801\\uDC27]+",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capitals"
+      ]
+    },
+    {
+      "id": "r_emoji",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "emoji"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD83D\\uDE00-\\uD83D\\uDE4F]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "emoji"
+      ]
+    },
+    {
+      "id": "r_same_pair_gu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capitals"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\uDC00-\\uD801\\uDC00]",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capitals"
+      ]
+    },
+    {
+      "id": "r_same_pair_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\uDC00-\\uD801\\uDC00]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_small"
+      ]
+    },
+    {
+      "id": "r_word",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "x_deseret"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\w\\uD801\\uDC00-\\uD801\\uDC27]",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "x_deseret"
+      ]
+    },
+    {
+      "id": "r_letters",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "a_deseret_b"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[a\\uD801\\uDC00-\\uD801\\uDC27b]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "a_deseret_b"
+      ]
+    },
+    {
+      "id": "r_literal_end",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capital_x"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\uDC00-\ud801\udc27]",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capital_x"
+      ]
+    },
+    {
+      "id": "r_literal_start",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\ud801\udc00-\\uD801\\uDC27]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_small"
+      ]
+    },
+    {
+      "id": "r_braced_start",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capital_ew"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\u{10400}-\\uD801\\uDC27]",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capital_ew"
+      ]
+    },
+    {
+      "id": "r_braced_end",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\uDC00-\\u{10427}]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_small"
+      ]
+    },
+    {
+      "id": "r_negated_gu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[^\\uD801\\uDC00-\\uD801\\uDC27]",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_small"
+      ]
+    },
+    {
+      "id": "r_negated_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_capital_x"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[^\\uD801\\uDC00-\\uD801\\uDC27]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_capital_x"
+      ]
+    },
+    {
+      "id": "r_range_mid",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "a_deseret_b"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\uDC00-\\uD801\\uDC27]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "a_deseret_b"
+      ]
+    },
+    {
+      "id": "r_range_gu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\uDC00-\\uD801\\uDC27]",
+              "flags": "gu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_small"
+      ]
+    },
+    {
+      "id": "r_range_giu",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "deseret_small"
+          },
+          "by": [
+            {
+              "type": "regex",
+              "pattern": "[\\uD801\\uDC00-\\uD801\\uDC27]",
+              "flags": "giu",
+              "replacement": "#"
+            }
+          ]
+        }
+      },
+      "children": [],
+      "watches": [
+        "deseret_small"
+      ]
+    }
+  ],
+  "resolved": {
+    "r_range_giu": {
+      "data": "#"
+    },
+    "r_range_gu": {
+      "data": "\ud801\udc28"
+    },
+    "r_range_mid": {
+      "data": "a#b"
+    },
+    "r_negated_giu": {
+      "data": "\ud801\udc00#"
+    },
+    "r_negated_gu": {
+      "data": "#"
+    },
+    "r_braced_end": {
+      "data": "#"
+    },
+    "r_braced_start": {
+      "data": "#"
+    },
+    "r_literal_start": {
+      "data": "#"
+    },
+    "r_literal_end": {
+      "data": "#x"
+    },
+    "r_letters": {
+      "data": "###"
+    },
+    "r_word": {
+      "data": "##"
+    },
+    "r_same_pair_giu": {
+      "data": "#"
+    },
+    "r_same_pair_gu": {
+      "data": "#\ud801\udc27"
+    },
+    "r_emoji": {
+      "data": "#"
+    },
+    "r_plus_giu": {
+      "data": "#"
+    },
+    "r_plus_gu": {
+      "data": "x#"
+    },
+    "h_braced_low_giu": {
+      "data": "\ud801\udc00"
+    },
+    "h_braced_low_gu": {
+      "data": "\ud801\udc00x"
+    },
+    "h_braced_high": {
+      "data": "\ud801\udc00"
+    },
+    "h_both_braced": {
+      "data": "\ud801\udc00"
+    },
+    "h_padded": {
+      "data": "\ud801\udc00"
+    },
+    "h_plus": {
+      "data": "\ud801\udc00\ud801\udc27"
+    },
+    "h_scoped": {
+      "data": "\ud801\udc28"
+    },
+    "h_after_x": {
+      "data": "x\ud801\udc00"
+    },
+    "h_emoji": {
+      "data": "\ud83d\ude00"
+    },
+    "h_class_giu": {
+      "data": "\ud801\udc00"
+    },
+    "h_class_gu": {
+      "data": "a\ud801\udc00b"
+    },
+    "p_pair": {
+      "data": "#"
+    }
+  }
+}
