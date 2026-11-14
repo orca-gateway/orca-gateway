@@ -3,21 +3,21 @@
 ## Front page
 
 ### In one breath
-group 2 of 3 · tasks: 1 green, 0 blocked · cases: 3 of 4 green · Swift 232, 4 runners green
-T2: with `u`, a lone half is written `(?:(?!))`: ICU can no longer join it to the half beside it.
-`\uD801\u{DC00}` giu on 𐐀 is unchanged now, as in Dart (Swift gave "#").
-Probe: no escape row differs from Dart on macOS, Linux 6.2 or 5.10; nothing without `u` moved.
-Swift is done. Left: fixture 39 and the count pins (T3), then every suite on every runner.
+group 3 of 3 · tasks: 1 green, 0 blocked · cases: 4 of 4 green · every suite green on 9 runners
+T3: render fixture 39, 28 rows Dart, bun and both SDKs agree on everywhere; counts pinned at 39.
+S18 in all, escape rows ≠ Dart: Swift macOS 262 → 0, Linux 6.2 262 → 0, Linux 5.10 251 → 0.
+Kotlin had none and has no code change. Nothing without `u` and no quirk row changed.
+Dart's modifier-group bug stays a known difference of the Flutter SDK (gate 08, question 4).
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 auto-decided: F7 rows that already matched Dart stay as guards.
+1 auto-decided: the fixture takes only rows every runner agrees on (memory, S17).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 3, T3 (fixture 39, counts pinned at 39)? (default: go)
+2. A approves the stage: ship pushes feat/native-sdk-s18 and opens the PR. (default: go)
 
 ## Appendix
 
@@ -83,11 +83,65 @@ Not done: nothing. Its probe inputs, Dart outputs and logs: `s18/t2/`.
   quirk (Q) row and no row without `u` changed.
 - Files changed: the task's two only, plus pipeline notes.
 
+### Group 3
+Commit: T3 47b4914 (staged by path). Nothing pushed. Group 2's card approved under your standing rule.
+
+#### Task T3 · Fixture 39, counts pinned at 39 (+ Kotlin's quirk comment, added by hand)
+Files: `schema/fixtures/render/39_regex_escaped_pairs_lone_halves.json` (new) · `sdk-swift/Tests/OrcaGatewayCoreTests/ModelRoundTripTests.swift` · `sdk-kotlin/core/src/test/kotlin/com/orcagateway/core/models/ModelRoundTripTest.kt` · `sdk-kotlin/core/src/test/kotlin/com/orcagateway/core/FixturePathsTest.kt` · `sdk-kotlin/core/src/test/kotlin/com/orcagateway/core/resolver/TransformTest.kt`
+Cases: X1 → green (red first: the count tests said 38 where 39 was expected, Swift and both Kotlin). bun test 706
+pass and the known EADDRINUSE fail; conformance 39 pass; flutter +246, analyze clean; swift 232; gradlew build green.
+Changed: fixture 39, 28 rows from the candidates every runner agrees on: 16 E1 (the range giu and gu, negated,
+braced / literal / mixed ends, `[a…b]`, `[\w…]`, pair to the same pair, the emoji range, `+`), 11 E2 (each lone-half
+spelling, with `+`, in `(?i:…)`, after `x`, the emoji halves, the class), 1 control row (the pair as two `\uHHHH`
+is "#" on 𐐀). Every pattern holds a real backslash-u; a deliberately wrong value made Swift's ResolverFixtureTests
+fail (restored byte-identical). Pins 39 / "01-39" at the five places. TransformTest.kt's J1 KDoc reads "Dart's bug,
+a known difference (row 23b.41)", in T2's words, comment only.
+Decisions: 1. Laid out like 38 (2-space indent, ASCII with JSON escapes, `col` then the children reversed),
+`expected` from the engine's encodeJsonTree · 2. Candidate kinds not on the plan's list left out (halves split by
+`(?:…)`, a lone high-to-low range, the lowercase range, a class with one pair) · 3. The description writes letters as
+characters and patterns as written, with Dart's values.
+Review fit: pass
+Review quality: pass
+Not done: nothing. Generator scripts in the scratchpad (`s18/gen39.py`, `s18/expected39.ts`).
+
+#### Group 3 test run (every suite, every runner, on the final tree)
+- engine `bun test`: 706 pass, 1 fail (EADDRINUSE on :8080, a local Docker container; as baseline).
+- Flutter `flutter test`: +246, all passed. `flutter analyze`: no issues.
+- Swift macOS: 0 build warnings, 232 tests, 0 failures. iOS simulator (iPhone 16 Pro): UI 54, core 232, TEST
+  SUCCEEDED. swift:6.2-noble and swift:5.10-jammy: 232, 0 failures, 0 warnings.
+- Kotlin `./gradlew build --rerun-tasks` on JDK 25, 17 and 21: core 226, sdk 128, 0 failures; lint "No issues found".
+- Probe (`s18/g3-*.tsv`), rows ≠ Dart of 3 108, before S18 → after:
+| Runner | E rows (escape corners) | E rows, U+FFFD without `u` (S16) | Q rows (Dart's bug) |
+|---|---|---|---|
+| Swift macOS | 262 → 0 | 40 → 40 | 277 → 277 |
+| Swift Linux 6.2 | 262 → 0 | 40 → 40 | 277 → 277 |
+| Swift Linux 5.10 | 251 → 0 | 40 → 40 | 277 → 277 |
+| Kotlin JDK 17 / 21 / 25 | 0 → 0 | 0 → 0 | 273 → 273 |
+  The Q rows are Dart's modifier-group bug (both SDKs give bun's value, ECMAScript's), plus the run-time unset
+  backreference known since S15 and, in Swift, S16's U+FFFD.
+
+### S18 against the baseline (2026-11-14)
+Swift 225 → 232 tests (T1 3, T2 4); Kotlin unchanged in code, tests 226 / 128 as before; engine 705 → 706 pass
+(fixture 39); Flutter +245 → +246. No baseline test loosened; T2 changed two S17 written-text pins (question 5).
+
 ### Blocked
 none
 
 ### Not done
 none
 
+### Found in passing (for the close)
+- Dart's modifier-group bug (question 4): a row for the Flutter SDK to read `|` inside `(?i:…)`, `(?s:…)` and
+  `(?m:…)` as ECMAScript does (a pattern rewrite that moves the group's flags onto each alternative, since Dart reads
+  `(?:(?i:a)|(?i:x))` right), or a bug report to Dart: yours to choose (question 6 of gate 08).
+- The run-time unset backreference (`(?:(a)|b)\1` on "b": Dart and bun "#", both SDKs unchanged), a known difference
+  since S15: an empty marker group inside the group and `(?:\M\N|(?!\M))` for the reference may close it on ICU and
+  the JVM (not tried; renumbering groups and Dart's per-iteration reset are the hard parts).
+
 ### For ship (stage 10) to know
-nothing yet
+- Branch feat/native-sdk-s18 holds S17's close note (from chore/native-sdk-s17-close), not yet on main: the PR
+  carries it.
+- Expected CI by path (`sdk-swift/`, `sdk-kotlin/`, `schema/`, `.pipeline/`): SDK Swift (5.10-jammy and 6.2-noble),
+  SDK Swift UI (iOS), SDK Kotlin (JDK 17 and 21), engine and Flutter (they read `schema/`), codegen drift.
+- At close: row 23b.41 done; its text records Dart's bug as a known difference of the Flutter SDK; the two
+  follow-ups above proposed at gate 12.
