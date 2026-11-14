@@ -2977,6 +2977,102 @@ final class TransformTests: XCTestCase {
         }
     }
 
+    // MARK: S18 — escaped pairs in a class (row 23b.41)
+
+    // Every expected value below was printed by Dart 3.14.0's RegExp on the Dart VM; nil: Dart refuses the pattern.
+
+    /// In the S18 rows A is 𐐀 (U+10400), L its lowercase 𐐨 (U+10428), Z 𐐧 (U+10427) and E 😀; in a pattern
+    /// (`pairs`) each of them, F (U+1F64F) and M (U+1044F) is its halves' two `\uHHHH` escapes, the high's first.
+    private static let pairLetters: [Character: Unicode.Scalar] = [
+        "A": "\u{10400}", "L": "\u{10428}", "Z": "\u{10427}", "E": "\u{1F600}", "F": "\u{1F64F}", "M": "\u{1044F}",
+    ]
+    private static func pairText(_ s: String) -> String {
+        s.map { pairLetters[$0].map(String.init) ?? String($0) }.joined()
+    }
+    private static func pairs(_ s: String) -> String {
+        s.map { pairLetters[$0].map { escapes($0).four } ?? String($0) }.joined()
+    }
+
+    func testE1_withUAnEscapedPairIsOneMemberInAClass() {
+        // With `u` Dart reads a high half's `\uHHHH` then a low half's as the one code point they spell, in a class
+        // as outside one, so a range with such an end compares code points (out of order it is refused); the other
+        // end may be one too, braced (`\u{10427}`) or literal (𐐧). `L` is only the class's under `i`.
+        let inputs = ["A", "L", "Ax", "x", "E", "aAb", "Z", "AZ", "xA"]
+        let rows: [(String, String, [String?], UInt)] = [
+            ("[A-Z]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[A-Z]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[^A-Z]", "giu", ["A", "L", "A#", "#", "#", "#A#", "Z", "AZ", "#A"], #line),
+            ("[^A-Z]", "gu", ["A", "#", "A#", "#", "#", "#A#", "Z", "AZ", "#A"], #line),
+            ("[A-\\u{10427}]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[A-\\u{10427}]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[\\u{10400}-Z]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[\\u{10400}-Z]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[\\u{10400}-\\u{10427}]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[\\u{10400}-\\u{10427}]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[\u{10400}-Z]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),  // literal 𐐀
+            ("[\u{10400}-Z]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[A-\u{10427}]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),  // literal 𐐧
+            ("[A-\u{10427}]", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[aA-Zb]", "giu", ["#", "#", "#x", "x", "E", "###", "#", "##", "x#"], #line),
+            ("[aA-Zb]", "gu", ["#", "L", "#x", "x", "E", "###", "#", "##", "x#"], #line),
+            ("[Z-A]", "giu", [nil, nil, nil, nil, nil, nil, nil, nil, nil], #line),
+            ("[Z-A]", "gu", [nil, nil, nil, nil, nil, nil, nil, nil, nil], #line),
+            ("[E-F]", "giu", ["A", "L", "Ax", "x", "#", "aAb", "Z", "AZ", "xA"], #line),
+            ("[E-F]", "gu", ["A", "L", "Ax", "x", "#", "aAb", "Z", "AZ", "xA"], #line),
+            ("[L-M]", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "##", "x#"], #line),
+            ("[L-M]", "gu", ["A", "#", "Ax", "x", "E", "aAb", "Z", "AZ", "xA"], #line),
+            ("[A-Z]+", "giu", ["#", "#", "#x", "x", "E", "a#b", "#", "#", "x#"], #line),
+            ("[A-Z]+", "gu", ["#", "L", "#x", "x", "E", "a#b", "#", "#", "x#"], #line),
+            ("[A-A]", "giu", ["#", "#", "#x", "x", "E", "a#b", "Z", "#Z", "x#"], #line),
+            ("[A-A]", "gu", ["#", "L", "#x", "x", "E", "a#b", "Z", "#Z", "x#"], #line),
+            ("[\\wA-Z]", "giu", ["#", "#", "##", "#", "E", "###", "#", "##", "##"], #line),
+            ("[\\wA-Z]", "gu", ["#", "L", "##", "#", "E", "###", "#", "##", "##"], #line),
+        ]
+        for (pattern, flags, expected, line) in rows {
+            XCTAssertEqual(expected.count, inputs.count, line: line)
+            let differ = zip(inputs, expected).compactMap { input, expected in
+                differs(Self.pairs(pattern), flags, Self.pairText(input), expected.map(Self.pairText))
+            }
+            XCTAssert(differ.isEmpty, "\(differ.count) differ: " + differ.prefix(3).joined(separator: "; "), line: line)
+        }
+    }
+
+    func testE1_guard_withoutUTheHalvesStayUnits() {
+        // Without `u` Dart reads the halves as units (S16), so each range runs from a low half down to a high half,
+        // or from `}` down to u, and Dart refuses every pattern above but `[\u{10400}-Z]`, whose lone halves left in
+        // the result Swift writes as U+FFFD (S16).
+        let patterns = [
+            "[A-Z]", "[^A-Z]", "[A-\\u{10427}]", "[\\u{10400}-\\u{10427}]", "[\u{10400}-Z]", "[A-\u{10427}]",
+            "[aA-Zb]", "[Z-A]", "[E-F]", "[L-M]", "[A-Z]+", "[A-A]", "[\\wA-Z]",
+        ]
+        for pattern in patterns {
+            for flags in ["g", "gi"] {
+                for input in ["A", "L", "Ax", "x", "E", "aAb", "Z", "AZ", "xA"] {
+                    if let row = differs(Self.pairs(pattern), flags, Self.pairText(input), nil) { XCTFail(row) }
+                }
+            }
+        }
+    }
+
+    func testE1_anEscapedPairInAClassIsWrittenBracedWithU() {
+        // With `u` the pair is one member written `\x{H}`, as a braced escape is; a literal end stays as written.
+        // Without `u` the class is copied as today: the halves' escapes, and the range between them refused.
+        let rows: [(String, Bool, String?, UInt)] = [
+            ("[A-Z]", true, #"[\x{10400}-\x{10427}]"#, #line),
+            ("[^A-Z]", true, #"[^\x{10400}-\x{10427}]"#, #line),
+            ("[A]", true, #"[\x{10400}]"#, #line),
+            ("[A-\u{10427}]", true, "[\\x{10400}-\u{10427}]", #line),
+            ("[\\u{10400}-Z]", true, #"[\x{10400}-\x{10427}]"#, #line),
+            ("[Z-A]", true, nil, #line),
+            ("[A]", false, Self.pairs("[A]"), #line),
+            ("[A-Z]", false, nil, #line),
+        ]
+        for (pattern, unicode, written, line) in rows {
+            let got = Regex.asciiClasses(Self.pairs(pattern), ignoreCase: false, unicode: unicode)
+            XCTAssertEqual(got, written, line: line)
+        }
+    }
+
     func testDoubleToStringMatchesDart() {
         let cases: [(Double, String)] = [
             (0, "0.0"), (-0.0, "-0.0"), (1, "1.0"), (-2.5, "-2.5"), (0.1, "0.1"), (100, "100.0"),

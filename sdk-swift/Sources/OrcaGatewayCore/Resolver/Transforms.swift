@@ -488,6 +488,11 @@ enum Regex {
     ///   `\x{H…}`, in a class too, without leading zeros: ICU refuses `\u{`
     ///   and reads at most six digits. Any other `\u{…}` Dart refuses, so it
     ///   is nil. Without `u` it is the letter u, then `{…}` (below).
+    /// - With `u`, a high half's `\uHHHH` then a low half's are the one code
+    ///   point they spell, as Dart reads them, outside a class and in one,
+    ///   where the pair is one member written `\x{H…}`, so a range compares
+    ///   code points: the pairs of 𐐀 and 𐐧 are `[\x{10400}-\x{10427}]`, the
+    ///   other way round nil. Without `u` they are two units (S16, `mask`).
     /// - With `u`, Dart reads the name in `\p{…}` and `\P{…}` by ECMA-262's
     ///   tables (`dartAcceptsProperty`), in a class too: a name it refuses
     ///   (`IsLatin`, `Latin`, `L&`, `script=Latin`, `Script=latin`), which ICU
@@ -769,8 +774,8 @@ enum Regex {
             }
             return (value, k)
         }
-        // At `\` outside a class: `hexEscape`'s reading, but with `u` a high half's `\uHHHH` then a low half's are
-        // the one code point they spell, as Dart reads them, the two escapes long.
+        // At `\`, in a class as outside one: `hexEscape`'s reading, but with `u` a high half's `\uHHHH` then a low
+        // half's are the one code point they spell, as Dart reads them, the two escapes long.
         func letterEscape() -> (value: UInt32?, length: Int)? {
             guard let escape = hexEscape() else { return nil }
             guard unicode, next(1) == "u", next(2) != "{", let high = escape.value, (0xD800...0xDBFF).contains(high)
@@ -875,14 +880,17 @@ enum Regex {
         // At a class member: its text and the code point it stands for, or no
         // code point for a set (`\d`, `\s`, with `u` `\p{…}`); nil where Dart
         // refuses a `\u{…}`, `\k` once a group has a name or, with `u`, a
-        // property name.
+        // property name. With `u` a high half's `\uHHHH` then a low half's are
+        // one member (`letterEscape`), written `\x{H…}` as a `\u{…}` is: the
+        // pair of 𐐀 is `\x{10400}`, so a range compares code points.
         func classMember(_ sets: [Unicode.Scalar: String]) -> (text: String, value: UInt32?)? {
             if unicode, next(0) == "\\", !strict(inClass: true) { return nil }  // `[\_]`, `[\B]`, `[\1]`, `[\c_]`
             if next(0) == "\\", next(1) == "k", !names.isEmpty { return nil }  // `(?<a>x)[\k]`, without `u` too
-            if let escape = hexEscape() {
+            if let escape = letterEscape() {
                 guard let value = escape.value else { return nil }  // a `\u{…}` Dart refuses
                 let text = mask?.standIn(forUnit: value).map { braced(UInt32($0)) }  // a half, masked
-                    ?? (next(2) == "{" ? braced(value) : String(String.UnicodeScalarView(p[i..<(i + escape.length)])))
+                    ?? (next(2) == "{" || value > 0xFFFF  // `\u{…}`, or with `u` a pair's two escapes
+                        ? braced(value) : String(String.UnicodeScalarView(p[i..<(i + escape.length)])))
                 i += escape.length
                 return (text, value)
             }
