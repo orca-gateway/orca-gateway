@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "slug": "native-sdk-s18",
+  "idea": "Epic 23b row 23b.41: native SDKs match Dart in three regex corners older than S17. Dart's own quirk: inside (?i:A|B) a backreference in the first alternative compares case-sensitively ((?i:(.)\\1|x) gu on Aa: Dart leaves it, both SDKs fold). With u, Swift refuses a class range whose two ends are escaped surrogate pairs, where Dart matches. With u, Swift reads a 4-digit high-half escape followed by a braced low-half escape as one letter, where Dart reads two halves. A fix is pattern-side, in each SDK's translator. In sdk-swift and sdk-kotlin",
+  "kind": "feature",
+  "created_at": "2026-11-14T00:45:16Z",
+  "updated_at": "2026-11-14T01:06:33Z",
+  "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
+  "current": "09",
+  "stages": {
+    "01": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S18 started on your 'Start 23b.41' after native-sdk-s17 gate 12 (standing rule)"
+    },
+    "02": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S18 started on your 'Start 23b.41' after native-sdk-s17 gate 12 (standing rule)"
+    },
+    "03": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S18 started on your 'Start 23b.41' after native-sdk-s17 gate 12 (standing rule)"
+    },
+    "04": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S18 started on your 'Start 23b.41' after native-sdk-s17 gate 12 (standing rule)"
+    },
+    "05": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S18 started on your 'Start 23b.41' after native-sdk-s17 gate 12 (standing rule)"
+    },
+    "06": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S18 started on your 'Start 23b.41' after native-sdk-s17 gate 12 (standing rule)"
+    },
+    "07": {
+      "status": "skipped",
+      "reason": "covered by native-sdk (stages 01-08 approved 2026-11-05/06); per the slice-cadence decision approved at native-sdk gate 10; S18 started on your 'Start 23b.41' after native-sdk-s17 gate 12 (standing rule)"
+    },
+    "08": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-14T01:06:33Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 08's six questions are minor (4: both SDKs stay on the spec, no code change, Dart's modifier bug recorded as a known difference of the Flutter SDK; 5: written-text pins only), all defaults"
+    },
+    "09": {
+      "status": "pending"
+    },
+    "10": {
+      "status": "pending"
+    },
+    "11": {
+      "status": "pending"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": true
+  }
+}
