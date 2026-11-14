@@ -3,21 +3,21 @@
 ## Front page
 
 ### In one breath
-group 1 of 3 · tasks: 1 green, 0 blocked · cases: 1 of 4 green · Swift 228, 4 runners green
-T1: with `u`, an escaped pair in a class is one member, its code point, so a range compares them.
-`[`pair(𐐀)`-`pair(𐐧)`]` giu on 𐐨 gives "#" as in Dart; Swift refused it before.
-Probe: every class-range row now gives Dart's value on macOS, Linux 6.2 and 5.10.
-Left for group 2: lone halves that ICU joins into a letter (T2); then fixture 39 (T3).
+group 2 of 3 · tasks: 1 green, 0 blocked · cases: 3 of 4 green · Swift 232, 4 runners green
+T2: with `u`, a lone half is written `(?:(?!))`: ICU can no longer join it to the half beside it.
+`\uD801\u{DC00}` giu on 𐐀 is unchanged now, as in Dart (Swift gave "#").
+Probe: no escape row differs from Dart on macOS, Linux 6.2 or 5.10; nothing without `u` moved.
+Swift is done. Left: fixture 39 and the count pins (T3), then every suite on every runner.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided: a pair member written braced; one guard row left out (S16's U+FFFD).
+1 auto-decided: F7 rows that already matched Dart stay as guards.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 2, T2 (lone halves match nothing with `u`)? (default: go)
+2. Next: group 3, T3 (fixture 39, counts pinned at 39)? (default: go)
 
 ## Appendix
 
@@ -51,6 +51,37 @@ Not done: lone halves left for T2; helpers `pairLetters`, `pairText`, `pairs` ke
 - Probe after group 1 (`s18/g1-*.tsv`): no class-range (E1) row differs from Dart on macOS, Linux 6.2 or 5.10.
   E2's lone-half rows still differ (T2), as do S16's U+FFFD rows without `u`.
 - Files changed: the task's two only (`git status`), plus pipeline notes; `sdk-kotlin/core/bin/` untracked, nobody's.
+
+### Group 2
+Commit: T2 032955d (staged by path). Nothing pushed. Group 1's card approved under your standing rule.
+
+#### Task T2 · Swift: with `u` a lone half matches nothing
+Files: `sdk-swift/Sources/OrcaGatewayCore/Resolver/Transforms.swift` · `sdk-swift/Tests/OrcaGatewayCoreTests/TransformTests.swift`
+Cases: E2, G1 → green (`swift test`: 232 tests, 0 failures, 0 warnings on macOS, Linux 6.2 and 5.10) · baseline
+unchanged (228 pass). Red first: 3 new E2 tests and the S17 written-text pin; the G1 guard and some F7 rows passed before.
+Changed: Transforms.swift: with `u`, a half `letterEscape` did not pair is written `(?:(?!))` outside a class (`now`
+stays `.atom`, so a quantifier may follow); in a class `classMember` gives it no text; `classSet` writes a range
+over D800-DFFF as its parts outside the block, braced (`[a-\u{D801}]` → `[\x{61}-\x{D7FF}]`); T1's doc bullet and
+`classMember`'s comment state the rule with an example. TransformTests.swift: four `testE2_…` tests (helpers `lone`,
+`loneText`, `loneInputs`, `loneHalves`): the 9 probe patterns and the F7 rows, Dart 3.14.0's values; the two S17
+written-text pins (question 5) now expect `(?:(?!))` and `(?:(?!))(?:(?!))`; the J1 comment reads "Dart's bug, a
+known difference (row 23b.41)".
+Decisions: 1. Only those two written-text pins changed; no value row loosened or deleted; K1 rows pin values only,
+untouched · 2. F7's Dart values from a new Dart run on 10 inputs; rerun over 400 E2 and 1 560 F7 rows on macOS: every
+`u` row equals Dart, no row without `u` changed · 3. F7 rows that matched Dart before stay as guards.
+Review fit: pass
+Review quality: pass
+Not done: nothing. Its probe inputs, Dart outputs and logs: `s18/t2/`.
+
+#### Group 2 test run
+- Swift macOS: `swift build --build-tests` 0 warnings; `swift test` 232 tests, 0 failures.
+- iOS simulator (iPhone 16 Pro, FDE5D612): UI 54 and core 232, 0 failures, TEST SUCCEEDED.
+- swift:6.2-noble and swift:5.10-jammy: 232 tests, 0 failures, 0 warnings.
+- Engine, Flutter, Kotlin: not run (no file of theirs changed); they run in group 3.
+- Probe after group 2 (`s18/g2-*.tsv`): no E row differs from Dart on macOS, Linux 6.2 or 5.10 (S16's U+FFFD rows
+  without `u` aside). Since before S18: 262 rows changed on macOS and 6.2, 251 on 5.10, all E rows with `u`; no
+  quirk (Q) row and no row without `u` changed.
+- Files changed: the task's two only, plus pipeline notes.
 
 ### Blocked
 none

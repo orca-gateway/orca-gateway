@@ -4,7 +4,7 @@
   "idea": "Epic 23b row 23b.41: native SDKs match Dart in three regex corners older than S17. Dart's own quirk: inside (?i:A|B) a backreference in the first alternative compares case-sensitively ((?i:(.)\\1|x) gu on Aa: Dart leaves it, both SDKs fold). With u, Swift refuses a class range whose two ends are escaped surrogate pairs, where Dart matches. With u, Swift reads a 4-digit high-half escape followed by a braced low-half escape as one letter, where Dart reads two halves. A fix is pattern-side, in each SDK's translator. In sdk-swift and sdk-kotlin",
   "kind": "feature",
   "created_at": "2026-11-14T00:45:16Z",
-  "updated_at": "2026-11-14T01:20:00Z",
+  "updated_at": "2026-11-14T01:36:22Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "draft",
-      "rounds": 2,
-      "card": "cards/09-r1.md"
+      "rounds": 3,
+      "card": "cards/09-r2.md"
     },
     "10": {
       "status": "pending"
