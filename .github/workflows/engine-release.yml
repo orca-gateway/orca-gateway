@@ -2,16 +2,25 @@ name: Engine release
 
 # Ships the demo server for each engine-v<X> tag (pushed by scripts/release.sh
 # after npm has @orca-gateway/engine <X>). The publish job compiles
-# examples/server/index.ts for Linux x64, Windows x64 and macOS arm64, builds
-# ghcr.io/orca-gateway/demo-server:<X> and :latest from the root Dockerfile and
-# a context holding only the Linux binary, and publishes the GitHub release
-# "Engine <X>": a "Run the demo server" block, then engine/CHANGELOG.md's
-# "## <X>" section, with the three binaries. The verify job then asks, on a
-# fresh runner, the image and the Linux download for the Todo page.
+# examples/server/index.ts for Linux x64 and Windows x64 (baseline builds, which
+# need no AVX2, so emulated amd64 Docker on Apple silicon runs them too) and
+# macOS arm64, builds ghcr.io/orca-gateway/demo-server:<X> from the root
+# Dockerfile and a context holding only the Linux binary, and publishes the
+# GitHub release "Engine <X>": a "Run the demo server" block, then
+# engine/CHANGELOG.md's "## <X>" section, with the three binaries. A stable <X>
+# also moves :latest; a pre-release <X> (X.Y.Z-<suffix>) leaves :latest alone
+# and its GitHub release is a pre-release. Then, on fresh runners, the verify
+# job asks the image and the Linux download for the Todo page, and verify-macos
+# does the same with the macOS download on Apple silicon.
 #
-# A red tag run is fixed on main, then re-run from Actions › Engine release ›
-# Run workflow with the tag: the jobs use the tag's tree, and a release that
-# already exists gets its assets uploaded with --clobber and its notes rewritten.
+# Re-running a tag (Actions › Engine release › Run workflow, with the tag):
+# GitHub takes this workflow file from the branch picked in "Use workflow from"
+# (main by default), while every step checks out refs/tags/<tag>. So a re-run
+# picks up a fix to this file merged to main, but not a fix to anything in the
+# tag's tree (examples/server/**, engine/** including engine/package.json and
+# engine/CHANGELOG.md, the root Dockerfile): that needs a new patch release made
+# with scripts/release.sh. A release that already exists gets its assets
+# uploaded again with --clobber and its notes rewritten.
 on:
   push:
     tags:
@@ -19,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish again, e.g. engine-v0.3.5; the run checks it out"
+        description: "Release tag to publish again, e.g. engine-v0.3.5. The steps check it out: this workflow file comes from the branch picked above, everything else from the tag"
         required: true
 
 permissions:
@@ -77,19 +86,23 @@ jobs:
         working-directory: engine
         run: bun install
 
+      # x64 baseline builds: plain bun-linux-x64 needs AVX2, which emulated
+      # amd64 (Docker on Apple silicon) and older CPUs lack.
       - name: Compile the demo server
         env:
           ASSETS: ${{ runner.temp }}/assets
         run: |
           mkdir -p "$ASSETS/macos"
-          bun build --compile examples/server/index.ts --target=bun-linux-x64 --outfile "$ASSETS/demo-server-linux-x64"
-          bun build --compile examples/server/index.ts --target=bun-windows-x64 --outfile "$ASSETS/demo-server-windows-x64.exe"
+          bun build --compile examples/server/index.ts --target=bun-linux-x64-baseline --outfile "$ASSETS/demo-server-linux-x64"
+          bun build --compile examples/server/index.ts --target=bun-windows-x64-baseline --outfile "$ASSETS/demo-server-windows-x64.exe"
           bun build --compile examples/server/index.ts --target=bun-darwin-arm64 --outfile "$ASSETS/macos/demo-server"
           (cd "$ASSETS/macos" && zip -q ../demo-server-macos-arm64.zip demo-server)
           ls -l "$ASSETS"
 
       # The context holds only the Linux binary, so the image is the binary on
-      # distroless and nothing else from the repo.
+      # distroless and nothing else from the repo. A pre-release version
+      # (X.Y.Z-<suffix>) is pushed under its version only: :latest stays on the
+      # last stable release.
       - name: Build and push the image
         env:
           VERSION: ${{ steps.tag.outputs.version }}
@@ -104,10 +117,16 @@ jobs:
           cp "$ASSETS/demo-server-linux-x64" "$CONTEXT/"
           docker build -f Dockerfile \
             --label "org.opencontainers.image.source=https://github.com/$REPO" \
-            -t "$image:$VERSION" -t "$image:latest" "$CONTEXT"
+            -t "$image:$VERSION" "$CONTEXT"
           printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
           docker push "$image:$VERSION"
-          docker push "$image:latest"
+          case "$VERSION" in
+            *-*) echo "$VERSION is a pre-release: not moving the latest tag" ;;
+            *)
+              docker tag "$image:$VERSION" "$image:latest"
+              docker push "$image:latest"
+              ;;
+          esac
 
       # One script, driven by VERSION, CHANGELOG and NOTES only:
       # engine/test/engine-release-notes.test.ts runs it against a fixture.
@@ -126,7 +145,7 @@ jobs:
             $0 == heading || index($0, heading " ") == 1 { found = 1 }
             END { if (!found) exit 1 }
           ' "$CHANGELOG")"; then
-            echo "::error::$CHANGELOG has no \"## $VERSION\" section; write it, merge it, and run this workflow again with the tag"
+            echo "::error::$CHANGELOG at tag engine-v$VERSION has no \"## $VERSION\" section. The changelog is read from the tag, so merging a fix cannot help; scripts/release.sh checks for the section before tagging, so make a new patch release with it"
             exit 1
           fi
           {
@@ -148,7 +167,8 @@ jobs:
           } > "$NOTES"
           cat "$NOTES"
 
-      # Published, not a draft. A re-run finds the release and completes it.
+      # Published, not a draft; a pre-release version (X.Y.Z-<suffix>) is a
+      # GitHub pre-release. A re-run finds the release and completes it.
       - name: Publish the release
         env:
           TAG: ${{ steps.tag.outputs.tag }}
@@ -163,12 +183,14 @@ jobs:
             "$ASSETS/demo-server-windows-x64.exe"
             "$ASSETS/demo-server-macos-arm64.zip"
           )
+          prerelease=()
+          case "$VERSION" in *-*) prerelease=(--prerelease) ;; esac
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Release $TAG exists: uploading the assets again and rewriting its notes"
             gh release upload "$TAG" "${assets[@]}" --clobber
-            gh release edit "$TAG" --notes-file "$NOTES"
+            gh release edit "$TAG" --notes-file "$NOTES" "${prerelease[@]}"
           else
-            gh release create "$TAG" "${assets[@]}" --title "Engine $VERSION" --notes-file "$NOTES"
+            gh release create "$TAG" "${assets[@]}" --title "Engine $VERSION" --notes-file "$NOTES" "${prerelease[@]}"
           fi
 
   verify:
@@ -226,3 +248,41 @@ jobs:
             sleep 2
           done
           echo "demo-server-linux-x64 from release $TAG serves the Todo page"
+
+  # Apple silicon starts only signed arm64 code (ad hoc counts), so the macOS
+  # download is unzipped and started as a user would, from an empty folder.
+  verify-macos:
+    name: Start the macOS download on Apple silicon and ask it for the Todo page
+    needs: publish
+    runs-on: macos-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ needs.publish.outputs.tag }}
+    steps:
+      - name: The macOS download serves the Todo page
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          dir="$(mktemp -d)"
+          gh release download "$TAG" -p demo-server-macos-arm64.zip -D "$dir"
+          unzip -q "$dir/demo-server-macos-arm64.zip" -d "$dir"
+          if ! codesign --verify --verbose "$dir/demo-server"; then
+            echo "::error::demo-server in demo-server-macos-arm64.zip from release $TAG has no valid code signature (codesign --verify); Apple silicon will not start it"
+            exit 1
+          fi
+          log="$RUNNER_TEMP/demo-server-macos.log"
+          (cd "$dir" && PORT=8081 ./demo-server > "$log" 2>&1 &)
+          deadline=$(( $(date +%s) + 60 ))
+          until body="$(curl -fsS -H "x-api-key: demo-key" http://localhost:8081/api/v1/app/todo/page/home 2>/dev/null)" \
+            && printf '%s' "$body" | grep -q "Nothing to do yet"; do
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              cat "$log" || true
+              echo "::error::demo-server from demo-server-macos-arm64.zip in release $TAG did not answer GET /api/v1/app/todo/page/home on port 8081 with 200 and \"Nothing to do yet\" within 60 s"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "demo-server from demo-server-macos-arm64.zip in release $TAG serves the Todo page"
