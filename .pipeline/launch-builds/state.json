@@ -4,9 +4,9 @@
   "idea": "Epic 23 build tasks (Examples + Launch): 23.3 a Todo example (CRUD: create, list, toggle, delete; demonstrates server actions); 23.6 Docker image publish (the engine image on GitHub Container Registry); 23.7 single binary build (bun build --compile, downloadable for Linux, macOS, Windows); 23.8 GitHub release (tag, release notes, binary assets, changelog). Publishing stays with the user (release.sh tags; images and releases go out on a tag).",
   "kind": "feature",
   "created_at": "2026-11-14T02:11:16Z",
-  "updated_at": "2026-11-14T04:11:21Z",
+  "updated_at": "2026-11-14T23:21:25Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "10",
+  "current": "16",
   "stages": {
     "01": {
       "status": "approved",
@@ -72,25 +72,38 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09's last group had no open question (T5 green, 19 of 19 cases, none blocked), approved"
     },
     "10": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 2,
+      "card": "cards/10-r2.md",
+      "approved_at": "2026-11-14T13:39:24Z",
+      "approved_with": "merged"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-14T23:21:25Z",
+      "approved_with": "released (E1 green: run 43601844026 all 3 jobs; release Engine 0.3.5 with 3 assets; :0.3.5 = :latest, public) + standing rule (2026-11-11): questions 2-4 minor, all defaults (13-16 skipped, rows 23.3/23.6/23.7/23.8 done, close note in a small PR; E2-E4 and day-14 counts yours)"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "launch-builds has no deployed service; the engine 0.3.5 release is the ship; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "launch-builds has no deployed service; the engine 0.3.5 release is the ship; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "launch-builds has no deployed service; the engine 0.3.5 release is the ship; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "launch-builds has no deployed service; the engine 0.3.5 release is the ship; skipped by the default accepted at gate 12 (standing rule, minor)"
     }
   },
   "gates": {
