@@ -1,4 +1,4 @@
-// The Todo example app (examples/server/todo.ts), cases U1-U10 of the
+// The Todo example app (examples/server/todo.ts), cases U1-U10 and U20 of the
 // launch-builds pipeline. The list is module state in todo.ts, so every test
 // starts from resetTodos() and builds the list it needs through the actions.
 
@@ -379,5 +379,28 @@ describe("Todo example app", () => {
     for (const banned of ["Checkbox", "InkWell", "FloatingActionButton", "SnackBar"]) {
       expect(widgets.has(banned)).toBe(false);
     }
+  });
+
+  test("U20 a todo typed as {{requestInfo.platform}} stays literal in the addTodo reply and on a fresh GET", async () => {
+    const typed = "{{requestInfo.platform}}";
+    const reply = await act("addTodo", { text: typed });
+    expect(reply[0]!.type).toBe("replaceComponent");
+    const replied = tree(reply[0]!.components!, LIST);
+    // The GET names its platform, so an expanded template would read "Android".
+    const fresh = tree(await getPage(base, { "x-orca-platform": "Android" }), LIST);
+    for (const [where, list] of [
+      ["reply", replied],
+      ["GET", fresh],
+    ] as const) {
+      const [item] = items(list);
+      expect({ where, text: item!.text }).toEqual({ where, text: typed });
+      const row = JSON.stringify(item!.row);
+      expect({ where, android: row.includes("Android"), ios: row.includes("iOS") }).toEqual({
+        where,
+        android: false,
+        ios: false,
+      });
+    }
+    expect(fresh).toEqual(replied);
   });
 });

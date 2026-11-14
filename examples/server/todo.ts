@@ -54,7 +54,7 @@ function todoRow(todo: Todo) {
       }),
       Expanded.new({
         child: Text.new({
-          data: todo.text,
+          data: V.static(todo.text),
           style: todo.done ? { fontSize: 16, color: grey, decoration: "lineThrough" } : { fontSize: 16 },
         }),
       }),
