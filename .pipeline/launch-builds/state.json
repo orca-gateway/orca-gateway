@@ -4,9 +4,9 @@
   "idea": "Epic 23 build tasks (Examples + Launch): 23.3 a Todo example (CRUD: create, list, toggle, delete; demonstrates server actions); 23.6 Docker image publish (the engine image on GitHub Container Registry); 23.7 single binary build (bun build --compile, downloadable for Linux, macOS, Windows); 23.8 GitHub release (tag, release notes, binary assets, changelog). Publishing stays with the user (release.sh tags; images and releases go out on a tag).",
   "kind": "feature",
   "created_at": "2026-11-14T02:11:16Z",
-  "updated_at": "2026-11-14T03:44:58Z",
+  "updated_at": "2026-11-14T04:11:21Z",
   "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
-  "current": "08",
+  "current": "10",
   "stages": {
     "01": {
       "status": "approved",
@@ -58,10 +58,18 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 07's two questions are minor (examples/server, scripts/release.sh, Dockerfile, READMEs and engine-release.yml join engine.yml's triggers; the re-run path and the Windows first start stay untested), all defaults"
     },
     "08": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-14T03:49:52Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 08's four questions are minor or patch (commands as found; commits: none; one gate per group; T3 writes the 0.3.5 changelog section in this PR), all defaults"
     },
     "09": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 2,
+      "card": "cards/09-r2.md",
+      "approved_at": "2026-11-14T04:11:21Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09's last group had no open question (T5 green, 19 of 19 cases, none blocked), approved"
     },
     "10": {
       "status": "pending"
@@ -86,6 +94,6 @@
     }
   },
   "gates": {
-    "code_unlocked": false
+    "code_unlocked": true
   }
 }
