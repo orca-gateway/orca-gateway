@@ -1,0 +1,228 @@
+name: Engine release
+
+# Ships the demo server for each engine-v<X> tag (pushed by scripts/release.sh
+# after npm has @orca-gateway/engine <X>). The publish job compiles
+# examples/server/index.ts for Linux x64, Windows x64 and macOS arm64, builds
+# ghcr.io/orca-gateway/demo-server:<X> and :latest from the root Dockerfile and
+# a context holding only the Linux binary, and publishes the GitHub release
+# "Engine <X>": a "Run the demo server" block, then engine/CHANGELOG.md's
+# "## <X>" section, with the three binaries. The verify job then asks, on a
+# fresh runner, the image and the Linux download for the Todo page.
+#
+# A red tag run is fixed on main, then re-run from Actions › Engine release ›
+# Run workflow with the tag: the jobs use the tag's tree, and a release that
+# already exists gets its assets uploaded with --clobber and its notes rewritten.
+on:
+  push:
+    tags:
+      - "engine-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish again, e.g. engine-v0.3.5; the run checks it out"
+        required: true
+
+permissions:
+  contents: read
+
+# One run per release at a time; a second run for the same tag waits.
+concurrency:
+  group: engine-release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build the demo server, push the image, publish the release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - name: Resolve the tag
+        id: tag
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^engine-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::not an engine release tag: $TAG"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#engine-v}" >> "$GITHUB_OUTPUT"
+
+      # The release is the tag's tree, on a push and on a manual run alike.
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Check the version
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          pkg_version="$(bun -p 'require("./engine/package.json").version')"
+          if [ "$pkg_version" != "$VERSION" ]; then
+            echo "::error::engine/package.json at $TAG is '$pkg_version', not '$VERSION' (scripts/release.sh writes both)"
+            exit 1
+          fi
+          echo "Releasing the demo server $VERSION"
+
+      - name: Install the engine's dependencies
+        working-directory: engine
+        run: bun install
+
+      - name: Compile the demo server
+        env:
+          ASSETS: ${{ runner.temp }}/assets
+        run: |
+          mkdir -p "$ASSETS/macos"
+          bun build --compile examples/server/index.ts --target=bun-linux-x64 --outfile "$ASSETS/demo-server-linux-x64"
+          bun build --compile examples/server/index.ts --target=bun-windows-x64 --outfile "$ASSETS/demo-server-windows-x64.exe"
+          bun build --compile examples/server/index.ts --target=bun-darwin-arm64 --outfile "$ASSETS/macos/demo-server"
+          (cd "$ASSETS/macos" && zip -q ../demo-server-macos-arm64.zip demo-server)
+          ls -l "$ASSETS"
+
+      # The context holds only the Linux binary, so the image is the binary on
+      # distroless and nothing else from the repo.
+      - name: Build and push the image
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          ASSETS: ${{ runner.temp }}/assets
+          CONTEXT: ${{ runner.temp }}/image
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          image=ghcr.io/orca-gateway/demo-server
+          mkdir -p "$CONTEXT"
+          cp "$ASSETS/demo-server-linux-x64" "$CONTEXT/"
+          docker build -f Dockerfile \
+            --label "org.opencontainers.image.source=https://github.com/$REPO" \
+            -t "$image:$VERSION" -t "$image:latest" "$CONTEXT"
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker push "$image:$VERSION"
+          docker push "$image:latest"
+
+      # One script, driven by VERSION, CHANGELOG and NOTES only:
+      # engine/test/engine-release-notes.test.ts runs it against a fixture.
+      - name: Write the release notes
+        id: notes
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          CHANGELOG: engine/CHANGELOG.md
+          NOTES: ${{ runner.temp }}/release-notes.md
+        run: |
+          # The "## <version>" section's body: heading "## <version>" alone or
+          # followed by a space, body up to the next "## " heading.
+          if ! section="$(awk -v heading="## $VERSION" '
+            found && /^## / { exit }
+            found { if (NF) started = 1; if (started) print; next }
+            $0 == heading || index($0, heading " ") == 1 { found = 1 }
+            END { if (!found) exit 1 }
+          ' "$CHANGELOG")"; then
+            echo "::error::$CHANGELOG has no \"## $VERSION\" section; write it, merge it, and run this workflow again with the tag"
+            exit 1
+          fi
+          {
+            printf '%s\n' \
+              '### Run the demo server' \
+              '' \
+              '```sh' \
+              "docker run --rm -p 8080:8080 ghcr.io/orca-gateway/demo-server:$VERSION" \
+              '```' \
+              '' \
+              'or download yours below and open it. First start:' \
+              '' \
+              '- macOS: Privacy & Security › Open Anyway.' \
+              '- Windows: More info › Run anyway.' \
+              '' \
+              '---' \
+              ''
+            printf '%s\n' "$section"
+          } > "$NOTES"
+          cat "$NOTES"
+
+      # Published, not a draft. A re-run finds the release and completes it.
+      - name: Publish the release
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+          ASSETS: ${{ runner.temp }}/assets
+          NOTES: ${{ runner.temp }}/release-notes.md
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          assets=(
+            "$ASSETS/demo-server-linux-x64"
+            "$ASSETS/demo-server-windows-x64.exe"
+            "$ASSETS/demo-server-macos-arm64.zip"
+          )
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG exists: uploading the assets again and rewriting its notes"
+            gh release upload "$TAG" "${assets[@]}" --clobber
+            gh release edit "$TAG" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" "${assets[@]}" --title "Engine $VERSION" --notes-file "$NOTES"
+          fi
+
+  verify:
+    name: Ask the image and the Linux download for the Todo page
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    env:
+      TAG: ${{ needs.publish.outputs.tag }}
+      VERSION: ${{ needs.publish.outputs.version }}
+    steps:
+      - name: Log in to ghcr.io
+        env:
+          ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+
+      - name: The image serves the Todo page
+        run: |
+          docker run -d --name demo-server -p 8080:8080 "ghcr.io/orca-gateway/demo-server:$VERSION"
+          deadline=$(( $(date +%s) + 60 ))
+          until body="$(curl -fsS -H "x-api-key: demo-key" http://localhost:8080/api/v1/app/todo/page/home 2>/dev/null)" \
+            && printf '%s' "$body" | grep -q "Nothing to do yet"; do
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              docker logs demo-server || true
+              echo "::error::ghcr.io/orca-gateway/demo-server:$VERSION did not answer GET /api/v1/app/todo/page/home with 200 and \"Nothing to do yet\" within 60 s"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "ghcr.io/orca-gateway/demo-server:$VERSION serves the Todo page"
+
+      # From an empty folder: the download must start with nothing from the repo.
+      - name: The Linux download serves the Todo page
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          dir="$(mktemp -d)"
+          gh release download "$TAG" -p demo-server-linux-x64 -D "$dir"
+          chmod +x "$dir/demo-server-linux-x64"
+          log="$RUNNER_TEMP/demo-server.log"
+          (cd "$dir" && PORT=8081 ./demo-server-linux-x64 > "$log" 2>&1 &)
+          deadline=$(( $(date +%s) + 60 ))
+          until body="$(curl -fsS -H "x-api-key: demo-key" http://localhost:8081/api/v1/app/todo/page/home 2>/dev/null)" \
+            && printf '%s' "$body" | grep -q "Nothing to do yet"; do
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              cat "$log" || true
+              echo "::error::demo-server-linux-x64 from release $TAG did not answer GET /api/v1/app/todo/page/home on port 8081 with 200 and \"Nothing to do yet\" within 60 s"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "demo-server-linux-x64 from release $TAG serves the Todo page"

@@ -1,13 +1,10 @@
-FROM oven/bun:1.2.5 AS builder
-WORKDIR /app
-COPY package.json bun.lockb* ./
-RUN bun install --frozen-lockfile
-COPY . .
-RUN bun build src/server.ts --compile --outfile orcagateway
-
+# The demo server image, ghcr.io/orca-gateway/demo-server. Built by
+# .github/workflows/engine-release.yml from a context holding only the Linux
+# binary, demo-server-linux-x64 (bun build --compile examples/server/index.ts).
 FROM gcr.io/distroless/cc-debian12
 WORKDIR /app
-COPY --from=builder /app/orcagateway .
+COPY demo-server-linux-x64 /app/demo-server
 USER nonroot
 EXPOSE 8080
-CMD ["./orcagateway"]
+ENV PORT=8080
+CMD ["/app/demo-server"]
