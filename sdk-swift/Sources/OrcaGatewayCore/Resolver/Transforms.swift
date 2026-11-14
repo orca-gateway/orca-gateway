@@ -492,7 +492,15 @@ enum Regex {
     ///   point they spell, as Dart reads them, outside a class and in one,
     ///   where the pair is one member written `\x{H…}`, so a range compares
     ///   code points: the pairs of 𐐀 and 𐐧 are `[\x{10400}-\x{10427}]`, the
-    ///   other way round nil. Without `u` they are two units (S16, `mask`).
+    ///   other way round nil. Any other escape that spells a half is a lone
+    ///   half, which matches nothing, as a Swift string holds none, written
+    ///   so that ICU cannot join it to a half beside it: outside a class
+    ///   `(?:(?!))`, as `[]` is, which a quantifier may follow
+    ///   (`\u{D801}\u{DC00}+` is `(?:(?!))(?:(?!))+`); in a class nothing, a
+    ///   class left with no member being `[]` (negated `[^]`), and a range
+    ///   over the surrogate block keeps its parts outside it, braced:
+    ///   `[a-\u{D801}]` is `[\x{61}-\x{D7FF}]`. Without `u` the halves are
+    ///   two units (S16, `mask`).
     /// - With `u`, Dart reads the name in `\p{…}` and `\P{…}` by ECMA-262's
     ///   tables (`dartAcceptsProperty`), in a class too: a name it refuses
     ///   (`IsLatin`, `Latin`, `L&`, `script=Latin`, `Script=latin`), which ICU
@@ -882,12 +890,17 @@ enum Regex {
         // refuses a `\u{…}`, `\k` once a group has a name or, with `u`, a
         // property name. With `u` a high half's `\uHHHH` then a low half's are
         // one member (`letterEscape`), written `\x{H…}` as a `\u{…}` is: the
-        // pair of 𐐀 is `\x{10400}`, so a range compares code points.
+        // pair of 𐐀 is `\x{10400}`, so a range compares code points; a lone
+        // half's text is empty, as it matches nothing (`classSet` reads a range).
         func classMember(_ sets: [Unicode.Scalar: String]) -> (text: String, value: UInt32?)? {
             if unicode, next(0) == "\\", !strict(inClass: true) { return nil }  // `[\_]`, `[\B]`, `[\1]`, `[\c_]`
             if next(0) == "\\", next(1) == "k", !names.isEmpty { return nil }  // `(?<a>x)[\k]`, without `u` too
             if let escape = letterEscape() {
                 guard let value = escape.value else { return nil }  // a `\u{…}` Dart refuses
+                if unicode, (0xD800...0xDFFF).contains(value) {  // a lone half adds nothing; ICU would join it
+                    i += escape.length
+                    return ("", value)
+                }
                 let text = mask?.standIn(forUnit: value).map { braced(UInt32($0)) }  // a half, masked
                     ?? (next(2) == "{" || value > 0xFFFF  // `\u{…}`, or with `u` a pair's two escapes
                         ? braced(value) : String(String.UnicodeScalarView(p[i..<(i + escape.length)])))
@@ -953,6 +966,12 @@ enum Regex {
                             if part.upperBound > part.lowerBound { body += "-" + braced(part.upperBound) }
                         }
                         body += spelled(standIns.compactMap(Unicode.Scalar.init))
+                    } else if unicode, a <= 0xDFFF, b >= 0xD800 {
+                        // With `u` over the surrogate block, whose halves a Swift string never holds: its parts
+                        // outside it, so that ICU joins no end to a half (`[a-\u{D801}]` is `[\x{61}-\x{D7FF}]`).
+                        for (lower, upper) in [(a, min(b, 0xD7FF)), (max(a, 0xE000), b)] where lower <= upper {
+                            body += braced(lower) + (upper > lower ? "-" + braced(upper) : "")
+                        }
                     } else {
                         body += low.text + "-" + high.text
                     }
@@ -1027,7 +1046,12 @@ enum Regex {
                 } else if let escape = letterEscape() {
                     // `\x73`, `\u017F`, `\u{17F}`: a letter of the table or a lagging class is that letter
                     guard let value = escape.value else { return nil }
-                    if let standIn = mask?.standIn(forUnit: value).map(UInt32.init) ?? mask?.standIn(forLetter: value) {
+                    if unicode, (0xD800...0xDFFF).contains(value) {
+                        out += "(?:(?!))"  // a lone half matches nothing; ICU would join it to a half beside it
+                        i += escape.length
+                    } else if let standIn = mask?.standIn(forUnit: value).map(UInt32.init)
+                        ?? mask?.standIn(forLetter: value)
+                    {
                         out += braced(UInt32(standIn))  // a half or a letter, masked
                         i += escape.length
                     } else if fold, let set = Unicode.Scalar(value).flatMap({ dartSet($0, unicode: unicode) }) {
