@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "slug": "launch-builds",
+  "idea": "Epic 23 build tasks (Examples + Launch): 23.3 a Todo example (CRUD: create, list, toggle, delete; demonstrates server actions); 23.6 Docker image publish (the engine image on GitHub Container Registry); 23.7 single binary build (bun build --compile, downloadable for Linux, macOS, Windows); 23.8 GitHub release (tag, release notes, binary assets, changelog). Publishing stays with the user (release.sh tags; images and releases go out on a tag).",
+  "kind": "feature",
+  "created_at": "2026-11-14T02:11:16Z",
+  "updated_at": "2026-11-14T02:33:53Z",
+  "active_session": "89f1a544-a9c8-4749-a84f-4dbbb61fc572",
+  "current": "05",
+  "stages": {
+    "01": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/01-r1.md",
+      "approved_at": "2026-11-14T02:13:09Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 01's four questions and its trade-off are minor (the image and binaries are the examples demo server; nothing cut), all defaults"
+    },
+    "02": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/02-r1.md",
+      "approved_at": "2026-11-14T02:20:22Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 02's five questions are minor (25-download bar, a guess; Todo scope as plan 23.3 with a Flutter tile; image ghcr.io/orca-gateway/demo-server; Linux x64, Windows x64, macOS arm64; notes from engine/CHANGELOG.md), all defaults"
+    },
+    "03": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/03-r1.md",
+      "approved_at": "2026-11-14T02:25:17Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 03's four questions are minor (the Todo uses only what all three apps draw; a tag with no notes section stops the release; unsigned downloads get the Open Anyway step; stage 04 draws the screens), all defaults"
+    },
+    "04": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/04-r1.md",
+      "approved_at": "2026-11-14T02:33:39Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 04's five questions are minor or patch (Todo tile second under Counter; not done is a grey dot, no SDK change; download link to Releases filtered to engine tags; notes lead with the run block; README order Docker, download, Bun), all defaults"
+    },
+    "05": {
+      "status": "draft",
+      "rounds": 1
+    },
+    "06": {
+      "status": "pending"
+    },
+    "07": {
+      "status": "pending"
+    },
+    "08": {
+      "status": "pending"
+    },
+    "09": {
+      "status": "pending"
+    },
+    "10": {
+      "status": "pending"
+    },
+    "11": {
+      "status": "pending"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": false
+  }
+}
