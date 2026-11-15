@@ -3,22 +3,22 @@
 ## Front page
 
 ### In one breath
-group 5 of 7 · tasks: 9 green, 0 blocked · cases: 20 of 26 green · every suite green
-S-bar: Swift AppBar puts the title at the leading edge, a leading slot replaces the back button,
-which can be hidden; sizes leadingWidth, draws a shadow; 56 high standalone; Card tint and clip.
-K-bar: Kotlin AppBar shows a back arrow on pushed pages, 56 high, Flutter's leading geometry and
-shadow; Card tint and clip. Three Kotlin goldens re-recorded: only the bar height moved.
+group 6 of 7 · tasks: 11 green, 0 blocked · cells: 20 of 26 green (recounted per SDK cell)
+S-button: Swift buttons keep the native iOS look; padding inside, elevation shadow, splash and
+highlight overlay and autofocus apply only when sent. Every Stack fit takes forced axes (Flutter).
+K-button: Kotlin ripple colours and autofocus; every Image at one dp per image pixel, repeat tiles.
+Group 7: K-field committed (de91c6d); S-media running. Android hand checks A1.9, A1.13 pass.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided: no AppBar shadow without shadowColor on both (Flutter M3; Kotlin fixed after commit)
-Swift hides swipe-back with the back button (hand check); the M3 AppBar elevation tint is not drawn.
+4 auto-decided: Swift buttons stay native (your gate-03 call) not a Material face; Kotlin autofocus
+only outside touch mode; a loose Swift Stack fills a tight parent (Flutter); host theme still wins.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: finish group 6 (S-button running, K-button in review) then group 7? (default: go)
+2. Next: finish group 7 (S-media), then the step's full run and iOS hand checks? (default: go)
 
 ## Appendix
 
@@ -249,6 +249,52 @@ swipe-back (doc comment; hand check).
 engine 739 pass 0 fail (no engine file changed) · Swift macOS `swift test` 78 UI + 234 core green · iOS (DA7254F5)
 UI 91 + core 234, 0 failures, goldens unchanged · Kotlin `./gradlew build` successful (sdk 180, core 228, lint
 clean; K-button's uncommitted files were in the tree and green). Flutter: no file changed.
+
+
+### Group 6
+Commits: K-button 207e143, S-button 4d05802 (staged by path). Nothing pushed. Group 5's card approved under the
+standing rule. Group 7's K-field (de91c6d) started after K-button's commit; S-media after S-button's.
+
+#### Task K-button · Kotlin button ripple, autofocus, Image repeat
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Buttons.kt` · `…/widgets/Image.kt` · `sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/widgets/ButtonTest.kt` (new) · `…/widgets/ImageTest.kt`
+Cases: A1.5 kt, A1.7 kt, A1.11 kt (autofocus) → green (ButtonTest 4, ImageTest 10; `./gradlew build` sdk 181, core
+228, lint clean). Red first: autofocus, splash/highlight, repeat, the xhdpi fit test; padding, elevation and the
+mdpi fits passed before (pins).
+Changed: own interaction source per button; splash/highlight as a LocalRippleConfiguration (splash pressed,
+highlight otherwise); autofocus FocusRequester + LaunchedEffect once; every Image drawn by one `TiledImage` painter
+(applyBoxFit, aligned, one dp per image pixel; noRepeat = one clipped tile; repeat/repeatX/repeatY tile as
+Flutter's _generateImageTileRects).
+Decisions: 1. autofocus only outside touch mode (Compose's rule; Flutter shows no highlight on touch; KDoc) · 2.
+one ripple carries both colours (press ripple capped at 50% alpha; overlay over the label) · 3. repeat as a drawn
+grid · 4. source rects cut to whole image pixels.
+Review fit: the touch-mode limit was not in the KDoc, fixed
+Review quality: non-tiled images drew at one device pixel per image pixel (wrong above mdpi), fixed (one painter,
+xhdpi test)
+Not done: nothing
+
+#### Task S-button · Swift buttons and Stack passthrough
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Buttons.swift` · `…/Widgets/Stack.swift` · `sdk-swift/Tests/OrcaGatewayTests/ButtonTests.swift` (new) · `…/StackTests.swift` (golden counter-home unchanged)
+Cases: A1.5 sw, A1.6 sw, A1.11 sw (autofocus) → green (macOS `swift test` 84 + 234; iOS UI 98/0, core 234/0, goldens
+unchanged, 0 warnings). All red first.
+Changed: a button with no style props keeps HEAD's native look (borderedProminent + tint / OutlinedStyle /
+borderless; OrcaTheme host style wins); padding pads the label inside (absolute sides; the system's own insets
+remain, documented); elevation → shadow (none when absent or disabled); splash/highlight → `OverlayFace` copying
+the native metrics (prominentInsets, prominentShape) with the overlay under the label; autofocus once on appear
+(iOS 17 / macOS 14). Stack: every fit takes the parent's forced axes; passthrough hands them to ordinary children.
+Decisions: 1. native look kept (the user's native-sdk gate 03 call, decisions.jsonl:26); the first attempt's
+Material 3 face for every button, 64x40 minimum and default elevation-1 shadow were removed · 2. a disabled button
+never takes OverlayFace · 3. every Stack fit takes forced axes (Flutter stack.dart:628-629) · 4. a host OrcaTheme
+style still wins over elevation/splash/highlight (serverStyleProps unchanged; for later).
+Review fit: first attempt redrew every button in Material 3, reversing the user's platform-idiom call, fixed
+(native look); the Stack sizing beyond passthrough was kept as a decision (Flutter's RenderStack)
+Review quality: an unnamed copied corner radius with a bounds-only test, fixed (named static, corner pixel check);
+the macOS TextButton comparison matched ImageRenderer's yellow placeholder by luck, fixed (exact predicate)
+Not done: CI's Xcode 16.4 golden needs no re-record (no golden moved). For later: OrcaTheme.serverStyleProps.
+
+#### Group 6 test run
+engine 739 pass 0 fail (no engine file changed) · Swift macOS `swift test` 84 UI + 234 core green · iOS (DA7254F5)
+UI 98 + core 234, 0 failures, goldens unchanged · Kotlin `./gradlew build` successful (sdk 181, core 228; then sdk
+187 with K-field). Flutter: no file changed.
 
 ### Test run
 engine 739 pass 0 fail · Flutter +248 all passed · Swift macOS 234 tests 0 failures · Kotlin core 228, sdk 132,
