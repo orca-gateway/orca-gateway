@@ -90,8 +90,9 @@ public class OrcaRoute(
  * write of `_tabIndex`) closes and requests nothing. The router keeps app
  * state `_tabIndex` at the current tab's index.
  *
- * [OrcaApp][com.orcagateway.sdk.OrcaApp] draws it on a `NavHost` that
- * follows [root] and [stack] (Compose state). Use it from the main thread.
+ * [OrcaApp][com.orcagateway.sdk.OrcaApp] draws it (the stacks are Compose
+ * state): a single stack on a `NavHost` that follows [root] and [stack], a
+ * config with tabs on the tab shell. Use it from the main thread.
  *
  * [system] performs `openUrl`, `copyToClipboard` and `share`; without one
  * they are only reported to [onEffect]. While `OrcaApp` shows a router that
@@ -132,7 +133,25 @@ public class OrcaRouter private constructor(
 
     /** The shared app scope, as the latest page or [setAppState] left it. */
     public var appState: Map<String, JsonValue> = table?.config?.initialAppState.orEmpty()
-        private set
+        // Named apart from the host's `setAppState(Map)`.
+        @JvmName("writeAppState")
+        private set(value) {
+            field = value
+            for (listener in appStateListeners.toList()) listener(value)
+        }
+
+    private val appStateListeners = ArrayList<(Map<String, JsonValue>) -> Unit>()
+
+    /**
+     * Calls [listener] with the app scope after every write of it (a page's
+     * commit, the host's, the router's `_tabIndex`), until the returned
+     * handle is closed: the tab shell's server trees are drawn against app
+     * state, and belong to no page the router commits into.
+     */
+    internal fun onAppStateChange(listener: (Map<String, JsonValue>) -> Unit): AutoCloseable {
+        appStateListeners.add(listener)
+        return AutoCloseable { appStateListeners.remove(listener) }
+    }
 
     /** The page under every pushed route. */
     public var root: OrcaRoute by mutableStateOf(OrcaRoute(start))

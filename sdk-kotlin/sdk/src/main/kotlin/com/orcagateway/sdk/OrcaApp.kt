@@ -47,6 +47,7 @@ import com.orcagateway.core.state.StoreState
 import com.orcagateway.sdk.client.current
 import com.orcagateway.sdk.navigation.OrcaRoute
 import com.orcagateway.sdk.navigation.OrcaRouter
+import com.orcagateway.sdk.navigation.TabShellScreen
 import com.orcagateway.sdk.system.SystemActions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -208,8 +209,9 @@ public class OrcaAppBoot(
  *
  * a spinner while `/config` is fetched (once), then the config's
  * `initialRoute` with its `initialAppState`, every location going through
- * the config's routes; a failed fetch shows an error with a retry. Tabs and
- * the drawer of a config are not drawn yet: the app runs as one stack.
+ * the config's routes; a failed fetch shows an error with a retry. A config
+ * with tabs is drawn as a tab shell ([TabShellScreen]): a bottom bar, and
+ * one stack per tab.
  *
  * [onRouteChanged] is called once per change of the location on top (see
  * [OrcaRouter.onRouteChanged]); the one given at the first composition is
@@ -257,7 +259,9 @@ public fun OrcaApp(
  * activity.
  *
  * The router is the one source of truth: the system back gesture pops the
- * router, and the [NavHost] follows the router's stack.
+ * router, and the [NavHost] follows the router's stack. While the router
+ * has a tab shell ([OrcaRouter.hasShell]) the [TabShellScreen] is drawn
+ * instead.
  */
 @Composable
 public fun OrcaApp(router: OrcaRouter, modifier: Modifier = Modifier) {
@@ -268,6 +272,16 @@ public fun OrcaApp(router: OrcaRouter, modifier: Modifier = Modifier) {
         // Only the ones set here: a host may have set its own since.
         onDispose { if (filled != null && router.system === filled) router.system = null }
     }
+    if (router.hasShell) {
+        TabShellScreen(router, modifier)
+    } else {
+        StackScreen(router, modifier)
+    }
+}
+
+/** The router as one stack, on a [NavHost]: a config without tabs, a host path, a route shown outside the tabs. */
+@Composable
+private fun StackScreen(router: OrcaRouter, modifier: Modifier) {
     val navController = rememberNavController()
     NavHost(navController, startDestination = ROOT_ROUTE, modifier = modifier) {
         composable(ROOT_ROUTE) {
@@ -316,7 +330,7 @@ private fun NavHostController.follow(shown: List<OrcaRoute>, stack: List<OrcaRou
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RoutePage(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoader?) {
+internal fun RoutePage(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoader?) {
     val fallback = route.scaffoldTitle
     if (fallback == null) {
         RouteBody(route, loader)

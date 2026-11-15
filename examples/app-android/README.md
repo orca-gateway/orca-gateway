@@ -109,7 +109,11 @@ adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
 
 It starts logged out on its welcome page; the protected route sends you to the login page until
 you log in. A route that is not one of the tabs is drawn under a top bar with a back arrow and
-the page's title. The tab bar itself is not drawn yet: the app runs as one stack.
+the page's title. A config with tabs is drawn with its tab bar, one page stack per tab; the
+drawer follows in the same release.
+
+The `tabs` app in `examples/server/tabs.ts` shows the tab bar: extras `ORCA_APP_ID=tabs`,
+`ORCA_BOOT=config` (`--es ORCA_APP_ID tabs --es ORCA_BOOT config`).
 
 | Extra | Type | Default | What |
 |---|---|---|---|

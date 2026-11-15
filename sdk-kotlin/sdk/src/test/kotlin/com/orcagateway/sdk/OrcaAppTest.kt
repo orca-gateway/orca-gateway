@@ -202,6 +202,30 @@ class OrcaAppTest {
         assertEquals(listOf("home", "settings"), engine.pageRequests)
     }
 
+    // MARK: Tabs (B10.1)
+
+    /** B10.1-K: a config boot whose initial route is a tab lands in the tab shell, with its bar. */
+    @Test
+    fun b10_1_bootingIntoATabShowsTheShell() {
+        val tabs = """[{"id":"home","label":"Home","icon":"home","initialRoute":"/home"},""" +
+            """{"id":"welcome","label":"Welcome","icon":"star","initialRoute":"/welcome"}]"""
+        val engine = ConfigEngine(config(initialRoute = "/home", tabs = tabs))
+        compose.setContent { OrcaApp(engine.client, path = null) }
+
+        compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("home page") > 0 }
+        compose.onNodeWithTag("orca-tab-0").assertIsDisplayed()
+        compose.onNodeWithTag("orca-tab-1").assertIsDisplayed()
+        compose.onNodeWithText("Welcome").assertIsDisplayed()
+        // Only the tab on screen was asked for.
+        assertEquals(listOf("home"), engine.pageRequests)
+
+        compose.onNodeWithTag("orca-tab-1").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("welcome page") > 0 }
+        compose.onNodeWithText("welcome page").assertIsDisplayed()
+        assertEquals(1, engine.configRequests.size)
+        assertEquals(listOf("home", "welcome"), engine.pageRequests)
+    }
+
     @Test
     fun aNotFoundRouteRequestsNoPage() {
         val engine = ConfigEngine(config(initialRoute = "/nowhere"))
