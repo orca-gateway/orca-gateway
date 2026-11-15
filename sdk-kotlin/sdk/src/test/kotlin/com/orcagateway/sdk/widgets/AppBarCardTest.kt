@@ -184,6 +184,21 @@ class AppBarCardTest {
     }
 
     /**
+     * Flutter's M3 AppBar's default shadowColor is transparent
+     * (`_AppBarDefaultsM3.shadowColor`): an elevation without a shadowColor
+     * casts no shadow.
+     */
+    @Test
+    fun a1_9_anElevationWithoutShadowColorCastsNoShadow() {
+        structurePage(
+            400.dp, 300.dp,
+            appBar("raised", mapOf("title" to "t"), mapOf("elevation" to 4)),
+            text("t", "Raised"),
+        )
+        assertNull(shadowOf("raised"))
+    }
+
+    /**
      * A pushed page's AppBar shows a back arrow that goes back, unless
      * automaticallyImplyLeading is false or a leading slot takes its place;
      * with the arrow the title starts 16 past its 56 box.

@@ -131,8 +131,10 @@ private fun Modifier.boundedBy(window: IntSize): Modifier = layout { measurable,
  * goes back, unless `automaticallyImplyLeading` is false. A title not
  * centred starts 16 past the leading box. The bar is `toolbarHeight` high
  * (Flutter's 56 when absent), in `backgroundColor`, and casts a shadow in
- * `shadowColor` (black when absent) at `elevation` (none when absent). It
- * pads itself for the status bar unless a Scaffold above already did.
+ * `shadowColor` at `elevation` (none when absent). Without a `shadowColor`
+ * it casts none: Flutter's Material 3 AppBar shadow is transparent by
+ * default. It pads itself for the status bar unless a Scaffold above
+ * already did.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -140,7 +142,7 @@ internal fun AppBarWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
     val background = Props.color(node["backgroundColor"])
     val height = Props.length(node["toolbarHeight"]) ?: 56.dp
     val elevation = Props.length(node["elevation"]) ?: 0.dp
-    val shadowColor = Props.color(node["shadowColor"]) ?: DefaultShadowColor
+    val shadowColor = Props.color(node["shadowColor"])
     val leadingWidth = Props.length(node["leadingWidth"]) ?: 56.dp
     val navigation = LocalOrcaNavigation.current
     val leadingId = node.slots["leading"]
@@ -174,7 +176,11 @@ internal fun AppBarWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
         TopAppBarDefaults.topAppBarColors()
     }
     // TopAppBar takes no elevation; the shadow is drawn under the bar's box.
-    val bar = modifier.shadow(elevation, RectangleShape, clip = false, ambientColor = shadowColor, spotColor = shadowColor)
+    val bar = if (shadowColor != null) {
+        modifier.shadow(elevation, RectangleShape, clip = false, ambientColor = shadowColor, spotColor = shadowColor)
+    } else {
+        modifier
+    }
     if (node["centerTitle"]?.boolValue == true) {
         CenterAlignedTopAppBar(
             title = title,
