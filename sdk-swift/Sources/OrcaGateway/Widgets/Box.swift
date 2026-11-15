@@ -86,6 +86,10 @@ struct BoxDecorationProps {
     var color: Color?
     var radii: CornerRadii?
     var border: Border?
+    /// Flutter `BoxDecoration.padding`, the border's width on every side,
+    /// which a Container adds to its `padding`. Flutter's `Border.dimensions`
+    /// ignore the style, so a border with style none still insets.
+    var borderInset: CGFloat = 0
     var shadows: [Shadow] = []
     var gradient: GradientProps?
 
@@ -93,9 +97,11 @@ struct BoxDecorationProps {
         guard case .object(let d)? = value else { return nil }
         color = Props.color(d["color"])
         radii = Props.radii(d["borderRadius"])
-        if case .object(let b)? = d["border"], b["style"]?.stringValue != "none" {
-            border = Border(color: Props.color(b["color"]) ?? .black,
-                            width: Props.number(b["width"]) ?? 1)
+        if case .object(let b)? = d["border"] {
+            borderInset = Props.number(b["width"]) ?? 1
+            if b["style"]?.stringValue != "none" {
+                border = Border(color: Props.color(b["color"]) ?? .black, width: borderInset)
+            }
         }
         if case .array(let list)? = d["boxShadow"] {
             shadows = list.compactMap { item in
@@ -175,7 +181,11 @@ struct DecorationBackground: View {
 /// is no decoration) behind the padding, a fixed `width` and `height` that
 /// include the padding, and `alignment`, which makes the box fill its parent
 /// and places the child in it. With no child the box takes the space it is
-/// offered. `clipBehavior` other than `none` clips to the decoration's shape.
+/// offered. The border's width is added to the padding (Flutter's
+/// decoration padding). `clipBehavior` other than `none` clips the padded
+/// child to the decoration's shape; the decoration behind it, shadows
+/// included, is not clipped. `padding` and `margin` are absolute: `left`
+/// stays on the left in right-to-left (D4).
 ///
 /// Where the parent forces its size (TightAxes: a stretched Column, an
 /// Expanded), the box fills that axis, decoration included, as Flutter's
@@ -195,10 +205,12 @@ struct ContainerView: View {
         let fillsHeight = height == nil && tight.contains(.vertical)
 
         aligned
-            .padding(Props.insets(node["padding"]) ?? EdgeInsets())
+            .padding(decoration?.borderInset ?? 0)
+            .orcaPadding(node["padding"])
             .frame(maxWidth: fillsWidth ? .infinity : nil, maxHeight: fillsHeight ? .infinity : nil,
                    alignment: .topLeading)
             .frame(width: width, height: height, alignment: .topLeading)
+            .modifier(ClipIf(shape: Props.clips(node["clipBehavior"]) ? shape : nil))
             .background {
                 if let decoration {
                     DecorationBackground(decoration: decoration)
@@ -206,8 +218,7 @@ struct ContainerView: View {
                     color
                 }
             }
-            .modifier(ClipIf(shape: Props.clips(node["clipBehavior"]) ? shape : nil))
-            .padding(Props.insets(node["margin"]) ?? EdgeInsets())
+            .orcaPadding(node["margin"])
     }
 
     @ViewBuilder

@@ -7,7 +7,7 @@ import XCTest
 final class ModelRoundTripTests: XCTestCase {
     func testAllRenderFixturesRoundTrip() throws {
         let files = try Fixtures.files("render")
-        XCTAssertEqual(files.count, 41, "render fixtures 01-39, 60-61")
+        XCTAssertEqual(files.count, 43, "render fixtures 01-41, 60-61")
         var nodes = 0
         for (name, fixture) in files {
             let expected = fixture["expected"]
@@ -148,7 +148,7 @@ final class ModelRoundTripTests: XCTestCase {
                 }
             }
         }
-        XCTAssertGreaterThanOrEqual(count, 9, "Value objects in fixtures 01-39")
+        XCTAssertGreaterThanOrEqual(count, 9, "Value objects in fixtures 01-41")
     }
 
     // MARK: B9.1-CS the navigation fixtures' configs are /config bodies

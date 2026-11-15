@@ -24,6 +24,7 @@ import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.WidgetBuilders
+import com.orcagateway.sdk.support.column
 import com.orcagateway.sdk.support.page
 import com.orcagateway.sdk.support.sizedBox
 import com.orcagateway.sdk.support.text
@@ -33,6 +34,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Stack and Positioned against Flutter's `RenderStack` numbers (Swift's
@@ -130,6 +132,34 @@ class StackTest {
         // The ordinary child is held to all the space; the corner shows the Stack's own size.
         assertEquals(DpRect(0.dp, 0.dp, 320.dp, 200.dp), boundsOfText("small"))
         assertEquals(DpRect(300.dp, 180.dp, 320.dp, 200.dp), boundsOfText("corner"))
+    }
+
+    /**
+     * A1.6: `fit: passthrough` hands its children the Stack's own
+     * constraints unchanged: in a tight 200x100 parent (a SizedBox) the
+     * child is 200x100; `loose` drops the minimum, so the same child keeps
+     * its own size.
+     */
+    @Test
+    fun a1_6_passthroughHandsTheParentsConstraintsToItsChildren() {
+        val passthrough = mapOf("fit" to JsonValue.String("passthrough"))
+        stackPage(
+            400.dp, 400.dp,
+            column("0", "1", "2"),
+            sizedBox("1", 200, 100).copy(children = listOf("3")),
+            sizedBox("2", 200, 100).copy(children = listOf("4")),
+            stack("3", "5", props = passthrough),
+            stack("4", "6", props = mapOf("fit" to JsonValue.String("loose"))),
+            text("5", "through"),
+            text("6", "loose"),
+        )
+
+        val through = boundsOfText("through")
+        assertEquals(200.dp, through.right - through.left)
+        assertEquals(100.dp, through.bottom - through.top)
+        val loose = boundsOfText("loose")
+        assertTrue(loose.right - loose.left < 100.dp, "loose width ${loose.right - loose.left}")
+        assertTrue(loose.bottom - loose.top < 50.dp, "loose height ${loose.bottom - loose.top}")
     }
 
     @Test

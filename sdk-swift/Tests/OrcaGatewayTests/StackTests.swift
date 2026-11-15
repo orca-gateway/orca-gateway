@@ -72,6 +72,39 @@ final class StackTests: XCTestCase {
         XCTAssertEqual(model.store.value("fav_pizza"), false)
     }
 
+    /// A1.6 and D9: fit passthrough hands the Stack's own constraints to its
+    /// ordinary children. In a 200x100 Container (tight on both axes) the red
+    /// Container fills 200x100, as Flutter's tight constraints make it; under
+    /// loose it keeps its 40x20 child's size, centred. In a Container that
+    /// only sets a width, the child is tight across and loose down.
+    func testA1_6PassthroughHandsTheParentsConstraintsToTheChildren() throws {
+        let both: [String: JSONValue] = ["width": 200, "height": 100]
+        let through = try drawStack(fit: "passthrough", parent: both)
+        cards.assertRect(try XCTUnwrap(through.bounds(of: Pixels.isRed), "child not drawn"),
+                         CGRect(x: 0, y: 0, width: 200, height: 100))
+        let loose = try drawStack(fit: "loose", parent: both)
+        cards.assertRect(try XCTUnwrap(loose.bounds(of: Pixels.isRed), "child not drawn"),
+                         CGRect(x: 80, y: 40, width: 40, height: 20))
+        let across = try drawStack(fit: "passthrough", parent: ["width": 200])
+        cards.assertRect(try XCTUnwrap(across.bounds(of: Pixels.isRed), "child not drawn"),
+                         CGRect(x: 0, y: 0, width: 200, height: 20))
+    }
+
+    let cards = AppBarCardTests()
+
+    /// A Container with `parent` props holding a Stack with `fit` whose one
+    /// child is a red Container around a 40x20 SizedBox, in a 300x200 canvas.
+    func drawStack(fit: String, parent: [String: JSONValue]) throws -> Pixels {
+        let model = try cards.model([
+            AppBarCardTests.node("box", "Container", props: parent, children: ["stack"]),
+            AppBarCardTests.node("stack", "Stack", childMode: "multi", props: ["fit": .string(fit)],
+                                 children: ["red"]),
+            AppBarCardTests.node("red", "Container", props: ["color": "#FF0000"], children: ["size"]),
+            AppBarCardTests.node("size", "SizedBox", props: ["width": 40, "height": 20]),
+        ])
+        return try cards.render(NodeView(id: "box", model: model), width: 300, height: 200, direction: .leftToRight)
+    }
+
     func testPositionedSpecFollowsFlutter() {
         let both = PositionedSpec(right: 10, left: 10)
         XCTAssertEqual(both.width(in: 100), 80)

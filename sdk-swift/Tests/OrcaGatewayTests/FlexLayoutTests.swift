@@ -81,6 +81,59 @@ final class FlexLayoutTests: XCTestCase {
         assertStarts(rtlBaseline.map(\.minX), rtlStart.map(\.minX))
     }
 
+    // MARK: A1.10 textDirection and verticalDirection (Flutter LB:119-158)
+    // Each case runs twice: the stacked path and FlexLayout (a trailing Spacer).
+
+    /// A1.10: a Row with textDirection rtl starts its main axis at the right,
+    /// whatever the ambient direction; ltr starts at the left in RTL.
+    func testA1_10RowTextDirectionRtlPlacesTheFirstChildAtTheRight() throws {
+        let children = [CGSize(width: 20, height: 10), CGSize(width: 30, height: 10)]
+        for spacer in [false, true] {
+            let rtl = try draw("Row", ["textDirection": "rtl"], children: children, width: 200, height: 20,
+                               spacer: spacer)
+            assertStarts(rtl.map(\.maxX), [200, 180])
+            let ltr = try draw("Row", ["textDirection": "ltr"], children: children, width: 200, height: 20,
+                               direction: .rightToLeft, spacer: spacer)
+            assertStarts(ltr.map(\.minX), [0, 20])
+        }
+    }
+
+    /// A1.10: a Column with verticalDirection up lays its children out
+    /// bottom-to-top, start at the bottom (so `end` is the top).
+    func testA1_10ColumnVerticalDirectionUpPlacesTheFirstChildAtTheBottom() throws {
+        let children = [CGSize(width: 10, height: 20), CGSize(width: 10, height: 30)]
+        for spacer in [false, true] {
+            let up = try draw("Column", ["verticalDirection": "up"], children: children, width: 20, height: 200,
+                              spacer: spacer)
+            assertStarts(up.map(\.maxY), [200, 180])
+        }
+        let end = try draw("Column", ["verticalDirection": "up", "mainAxisAlignment": "end"], children: children,
+                           width: 20, height: 200)
+        assertStarts(end.map(\.minY), [30, 0])
+    }
+
+    /// A1.10: verticalDirection up flips a Row's cross start and end;
+    /// textDirection rtl flips a Column's. A second child spans the cross
+    /// axis, so the first has room to move.
+    func testA1_10RowUpAndColumnRtlFlipCrossStartAndEnd() throws {
+        let rowChildren = [CGSize(width: 20, height: 10), CGSize(width: 20, height: 50)]
+        let columnChildren = [CGSize(width: 40, height: 10), CGSize(width: 200, height: 10)]
+        for spacer in [false, true] {
+            let rowStart = try draw("Row", ["verticalDirection": "up", "crossAxisAlignment": "start"],
+                                    children: rowChildren, width: 200, height: 50, spacer: spacer)
+            XCTAssertEqual(rowStart[0].maxY, 50, accuracy: Self.accuracy, "spacer \(spacer)")
+            let rowEnd = try draw("Row", ["verticalDirection": "up", "crossAxisAlignment": "end"],
+                                  children: rowChildren, width: 200, height: 50, spacer: spacer)
+            XCTAssertEqual(rowEnd[0].minY, 0, accuracy: Self.accuracy, "spacer \(spacer)")
+            let columnStart = try draw("Column", ["textDirection": "rtl", "crossAxisAlignment": "start"],
+                                       children: columnChildren, width: 200, height: 100, spacer: spacer)
+            XCTAssertEqual(columnStart[0].maxX, 200, accuracy: Self.accuracy, "spacer \(spacer)")
+            let columnEnd = try draw("Column", ["textDirection": "rtl", "crossAxisAlignment": "end"],
+                                     children: columnChildren, width: 200, height: 100, spacer: spacer)
+            XCTAssertEqual(columnEnd[0].minX, 0, accuracy: Self.accuracy, "spacer \(spacer)")
+        }
+    }
+
     // MARK: helpers
 
     static let colours: [(hex: String, rgb: (UInt8, UInt8, UInt8))] = [
@@ -96,13 +149,22 @@ final class FlexLayoutTests: XCTestCase {
 
     /// Draws a `type` node (Row or Column) with `props`, holding one sized
     /// Container per entry of `children`, in a box of `width` by `height`,
-    /// and returns each child's frame in that box.
+    /// and returns each child's frame in that box. With `spacer` a Spacer
+    /// follows the children, so FlexLayout draws the node.
     func draw(_ type: String, _ props: [String: JSONValue], children: [CGSize],
-              width: CGFloat, height: CGFloat, direction: LayoutDirection = .leftToRight) throws -> [CGRect] {
+              width: CGFloat, height: CGFloat, direction: LayoutDirection = .leftToRight,
+              spacer: Bool = false) throws -> [CGRect] {
+        let ids: [JSONValue] = children.indices.map { .string("c\($0)") } + (spacer ? ["spacer"] : [])
         var components: [JSONValue] = [[
             "id": "flex", "type": .string(type), "kind": "layout", "childMode": "multi",
-            "props": .object(props), "children": .array(children.indices.map { .string("c\($0)") }), "watches": [],
+            "props": .object(props), "children": .array(ids), "watches": [],
         ]]
+        if spacer {
+            components.append([
+                "id": "spacer", "type": "Spacer", "kind": "layout", "childMode": "none",
+                "props": [:], "children": [], "watches": [],
+            ])
+        }
         for (index, size) in children.enumerated() {
             components.append([
                 "id": .string("c\(index)"), "type": "Container", "kind": "layout", "childMode": "single",

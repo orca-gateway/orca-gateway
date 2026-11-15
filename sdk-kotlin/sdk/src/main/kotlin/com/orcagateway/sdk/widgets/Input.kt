@@ -4,6 +4,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
@@ -24,6 +26,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -31,6 +34,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.render.ResolvedNode
@@ -47,14 +51,20 @@ import com.orcagateway.sdk.style.TextStyleProps
  * The page's value is the store at `stateKey`, else the resolved `value`;
  * when it changes from elsewhere (a reset, another action) the field takes
  * it without firing and keeps the cursor if it still fits
- * (`didUpdateWidget`). A disabled or read-only field takes no edits.
+ * (`didUpdateWidget`). A disabled or read-only field takes no edits; a
+ * read-only one still takes focus and lets its text be selected. `maxLines`
+ * N > 1 is a field N lines tall even when empty (Flutter sets no
+ * `minLines`, and its EditableText is then `maxLines` lines tall).
  *
  * Without `decoration` the field is bare, Flutter's EditableText path
  * (16 sp black text, grey placeholder). With one it is Material 3's text
  * field decoration (the outlined one for `border: outline`, no line for
  * `none`): label, hint, prefix and suffix, helper or error text, fill,
  * content padding, and the `n/max` counter when `maxLength` is set. The
- * field fills the width it is given, as Flutter's does.
+ * field fills the width it is given, as Flutter's does. The field's own
+ * `style` reaches neither word spacing nor the decorations the Text draws
+ * by hand (overline, dashed and the like): Compose's text field lays out
+ * plain [TextStyle]s.
  * `enableSuggestions` has no Compose switch.
  */
 @Composable
@@ -94,6 +104,7 @@ internal fun TextFieldWidget(node: ResolvedNode, model: OrcaPageModel, modifier:
         ),
         singleLine = maxLines == 1,
         maxLines = maxLines,
+        minLines = maxLines,
         visualTransformation = visual,
         interactionSource = interaction,
         cursorBrush = SolidColor(if (decoration == null) Props.hex("#2196F3") else MaterialTheme.colorScheme.primary),
@@ -199,7 +210,11 @@ private class FieldState(
  * Flutter `InputDecoration` (`parseInputDecoration`) as Material 3's text
  * field decoration: `border` `outline` is the outlined one, `underline`
  * (the default) the filled one's line, `none` no line; the fill only when
- * `filled` (`fillColor`, else #F5F5F5).
+ * `filled` (`fillColor`, else #F5F5F5). `labelStyle`, `hintStyle`,
+ * `helperStyle` and `errorStyle` are merged over Material's own. `isDense`
+ * takes 4 off the default content padding's top and bottom, as Flutter's
+ * InputDecorator does for every border (M3: outlined 20/12 to 16/8, filled
+ * and underlined 8/8 to 4/4); a `contentPadding` sent wins over both.
  */
 @Composable
 private fun Decorated(decoration: Map<String, JsonValue>, field: FieldState, inner: @Composable () -> Unit) {
@@ -207,6 +222,9 @@ private fun Decorated(decoration: Map<String, JsonValue>, field: FieldState, inn
     val helper = decoration["helperText"]?.stringValue
     val labelText = decoration["labelText"]?.stringValue
     val labelStyle = TextStyleProps(decoration["labelStyle"]).textStyle()
+    val hintStyle = TextStyleProps(decoration["hintStyle"]).textStyle()
+    val supportingStyle = TextStyleProps(decoration[if (error != null) "errorStyle" else "helperStyle"]).textStyle()
+    val dense = decoration["isDense"]?.boolValue == true
     val border = decoration["border"]?.stringValue
     val fill = if (decoration["filled"]?.boolValue == true) {
         Props.color(decoration["fillColor"]) ?: Props.hex("#F5F5F5")
@@ -216,13 +234,14 @@ private fun Decorated(decoration: Map<String, JsonValue>, field: FieldState, inn
     val padding: PaddingValues? = Props.insets(decoration["contentPadding"])?.paddingValues()
 
     val label: (@Composable () -> Unit)? = labelText?.let { { Text(it, style = LocalTextStyle.current.merge(labelStyle)) } }
-    val hint: (@Composable () -> Unit)? = field.placeholder.takeIf { it.isNotEmpty() }?.let { { Text(it) } }
+    val hint: (@Composable () -> Unit)? =
+        field.placeholder.takeIf { it.isNotEmpty() }?.let { { Text(it, style = LocalTextStyle.current.merge(hintStyle)) } }
     val prefix: (@Composable () -> Unit)? = decoration["prefixText"]?.stringValue?.let { { Text(it) } }
     val suffix: (@Composable () -> Unit)? = decoration["suffixText"]?.stringValue?.let { { Text(it) } }
     val supporting: (@Composable () -> Unit)? = if (error != null || helper != null || field.maxLength != null) {
         {
             Row {
-                Text(error ?: helper ?: "", Modifier.weight(1f))
+                Text(error ?: helper ?: "", Modifier.weight(1f), style = LocalTextStyle.current.merge(supportingStyle))
                 if (field.maxLength != null) Text("${field.text.length}/${field.maxLength}")
             }
         }
@@ -250,7 +269,7 @@ private fun Decorated(decoration: Map<String, JsonValue>, field: FieldState, inn
                 disabledContainerColor = fill,
                 errorContainerColor = fill,
             ),
-            contentPadding = padding ?: OutlinedTextFieldDefaults.contentPadding(),
+            contentPadding = padding ?: OutlinedTextFieldDefaults.contentPadding().dense(dense),
         )
     } else {
         val line = if (border == "none") Color.Transparent else Color.Unspecified
@@ -278,10 +297,23 @@ private fun Decorated(decoration: Map<String, JsonValue>, field: FieldState, inn
                 errorIndicatorColor = line,
             ),
             contentPadding = padding ?: if (label == null) {
-                TextFieldDefaults.contentPaddingWithoutLabel()
+                TextFieldDefaults.contentPaddingWithoutLabel().dense(dense)
             } else {
-                TextFieldDefaults.contentPaddingWithLabel()
+                TextFieldDefaults.contentPaddingWithLabel().dense(dense)
             },
         )
     }
+}
+
+/** Flutter's `isDense` default padding: 4 off the top and the bottom when [dense]. */
+@Composable
+private fun PaddingValues.dense(dense: Boolean): PaddingValues {
+    if (!dense) return this
+    val direction = LocalLayoutDirection.current
+    return PaddingValues(
+        start = calculateStartPadding(direction),
+        top = calculateTopPadding() - 4.dp,
+        end = calculateEndPadding(direction),
+        bottom = calculateBottomPadding() - 4.dp,
+    )
 }
