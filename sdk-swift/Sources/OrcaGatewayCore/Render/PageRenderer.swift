@@ -32,6 +32,8 @@ public final class WidgetRegistry: @unchecked Sendable {
         let first = reported.insert(type).inserted
         lock.unlock()
         if first { onUnknownType?(type) }
+        // The process-wide sink hears each type once, whatever registry saw it.
+        OrcaTelemetry.reportUnknownWidgetOnce(type)
         return first
     }
 

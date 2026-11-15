@@ -85,6 +85,43 @@ in place of the system one. The drawer follows in the same release. The `tabs` d
 SIMCTL_CHILD_ORCA_APP_ID=tabs SIMCTL_CHILD_ORCA_BOOT=config xcrun simctl launch booted com.orcagateway.examples.counter
 ```
 
+## Version check and sessions
+
+Two switches turn on what `OrcaApp` does besides drawing pages. `1` or `true` turns each on. Add
+them in Xcode under Product › Scheme › Edit Scheme… › Run › Arguments › Environment Variables, or
+pass them to `simctl launch` as `SIMCTL_CHILD_*`:
+
+| Setting | Turns on |
+|---|---|
+| `ORCA_OFFLINE` | `enableOffline`: a version check before the first page |
+| `ORCA_SESSIONS` | `enableSessionTracking`: a session start and end as the app comes and goes |
+
+Both work with `ORCA_BOOT=config` too: the version check then comes before the navigation config
+is asked for, and a force update loads neither the config nor a page.
+
+**Force update.** Start the server with `ORCA_FORCE_UPDATE=1` (from source:
+`ORCA_FORCE_UPDATE=1 task example:dev:server`; Docker: add `-e ORCA_FORCE_UPDATE=1`), then launch
+the `static-flows` app with the version check on:
+
+```bash
+SIMCTL_CHILD_ORCA_OFFLINE=1 SIMCTL_CHILD_ORCA_APP_ID=static-flows SIMCTL_CHILD_ORCA_PATH=home \
+  xcrun simctl launch booted com.orcagateway.examples.counter
+```
+
+The app shows "Update required. Please update the app." and loads no page. Restart the server
+without the flag and launch again: the "Home (Static)" page loads. Without `ORCA_OFFLINE` the app
+never asks for the version, so the server flag changes nothing.
+
+**Sessions.** Launch with `SIMCTL_CHILD_ORCA_SESSIONS=1`. The server's console prints
+`[Orca Gateway] Session started device=<id>` when the app comes to the foreground and
+`[Orca Gateway] Session ended device=<id>` when it goes to the background (Device › Home in the
+Simulator). The id is the app's device id, made on first run and kept. A start or end that cannot
+reach the server is queued and sent on the next foreground; the server then prints
+`[Orca Gateway] Offline sessions registered: device=<id> count=<n>`.
+
+Not there yet: the offline page cache and `preload()` arrive with plan step 14. Until then the
+version check runs with no saved flow versions, and only a force update changes what the app does.
+
 ## DevTools
 
 Debug builds connect to Orca DevTools on `ws://localhost:6363` (start it with `task devtools:dev`)

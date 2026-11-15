@@ -119,6 +119,53 @@ The `tabs` app in `examples/server/tabs.ts` shows the tab bar: extras `ORCA_APP_
 |---|---|---|---|
 | `ORCA_BOOT` | string | `path` | `config` boots from the server's navigation config; anything else starts at `ORCA_PATH` |
 
+## Force update and sessions
+
+Two boolean extras turn on `OrcaApp`'s `enableOffline` and `enableSessionTracking`. The run task
+does not pass them: install the app once with `task example:android:run`, then start it with
+`adb shell am start`. `-S` stops the running app first, so the new extras apply.
+
+| Extra | Type | Default | What |
+|---|---|---|---|
+| `ORCA_OFFLINE` | boolean | off | ask the server's `/version` before the first page |
+| `ORCA_SESSIONS` | boolean | off | send a session start and end as the app comes and goes |
+
+**Force update.** With `ORCA_FORCE_UPDATE=1` the server's static-flows app answers `/version` with
+`forceUpdate: true`. Start the server that way, then that app with the check on:
+
+```bash
+ORCA_FORCE_UPDATE=1 task example:dev:server
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
+  --ez ORCA_OFFLINE true --es ORCA_APP_ID static-flows --es ORCA_PATH home
+```
+
+The app shows a spinner, then "Update required. Please update the app.", and loads no page. The SDK
+draws that screen itself; the "Update required" page of `ORCA_MIN_SDK_VERSION` above is one the
+server sends. Without `ORCA_OFFLINE` the app never asks `/version` and shows the home page. Restart
+the server without `ORCA_FORCE_UPDATE` and the check passes: the home page shows too.
+
+**Sessions.** Start any app with tracking on, the counter here:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --ez ORCA_SESSIONS true
+```
+
+The server's console prints `[Orca Gateway] Session started device=<id>`. Send the app to the
+background (Home, or `adb shell input keyevent KEYCODE_HOME`): about a second later it prints
+`[Orca Gateway] Session ended device=<id>`. Bring the app back from the recent apps: a new
+`Session started`. A rotation ends nothing. Each one is also a `request_start` and `request_end`
+line with `"path":"/session"`. The id stays the same: the SDK saves it on first run.
+
+To see the offline queue, stop the server while the app is open, send the app to the background,
+start the server again and bring the app back. The end that failed was queued: the console prints
+`Session started`, then `Offline sessions registered: device=<id> count=1`.
+
+Not there yet: `ORCA_OFFLINE` runs only the version check. The offline cache of static flows and
+`preload()` arrive with plan step 14, so with the server down the app still cannot load a page.
+
+Both extras work with `ORCA_BOOT config` too: the version check then comes before `/config`, and a
+force update fetches neither the config nor a page.
+
 ## DevTools
 
 Debug builds connect to Orca DevTools on port 6363 of the Mac (start it with `task devtools:dev`)
@@ -146,8 +193,8 @@ On a device, pass the Mac's address the same way (`--es ORCA_DEVTOOLS_HOST 192.1
 ## What it shows
 
 `+` and `-` change the count; `Reset` sets it to 0 and shows a snackbar. The page, the state and the
-actions all come from `examples/server/counter.ts`; the app holds no logic beyond the server URL
-and the DevTools settings. On the first request the SDK goes through the capability handshake (a
+actions all come from `examples/server/counter.ts`; the app holds no logic beyond the settings it
+reads from intent extras. On the first request the SDK goes through the capability handshake (a
 412, then one retry with its capability vector), as the Flutter and Swift SDKs do.
 
 Debug builds allow plain HTTP for the example server and DevTools; release builds keep Android's

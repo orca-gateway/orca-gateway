@@ -196,6 +196,58 @@ connection; `OrcaDebug.stop()` ends it. On a device, set `host` to the Mac's add
 build must allow cleartext traffic (debug builds only). The example app reads both settings from
 intent extras; see [`examples/app-android`](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android).
 
+## Sessions, analytics and version check
+
+`OrcaApp` takes two switches, both off by default. Both overloads have them, `OrcaApp(client)` and
+`OrcaApp(router)`:
+
+```kotlin
+OrcaApp(client, path = "home", enableOffline = true, enableSessionTracking = true)
+```
+
+`enableOffline` asks the server's `/version` before the first page. When the answer says
+`forceUpdate: true`, the app shows "Update required. Please update the app." and loads no page. Any
+other answer, or none, lets the app start. The offline cache of static flows and `preload()` come
+later (plan step 14), so for now this switch runs only the check.
+
+`enableSessionTracking` posts a session start to `/session` when the app process comes to the
+foreground, and an end when it goes to the background. It follows the process through
+`ProcessLifecycleOwner`, not the activity, so a rotation does not end the session. A start or end
+that cannot reach the server is queued in SharedPreferences and sent to `/session/offline` on the
+next foreground. The SDK
+declares `androidx.lifecycle:lifecycle-process` for this; your app adds nothing.
+
+`OrcaApp(client)` gives a client without a `deviceId` a random one, made on first run and saved in
+the SharedPreferences file `orca_gateway`. The client sends it as `x-orca-device-id` on every
+request, whether or not sessions are tracked. For `OrcaApp(router)`, build the router's client with
+`deviceId = DeviceIdentity.resolve(SharedPreferencesKeyValueStore(context))` to send the same id.
+
+The SDK sends no analytics by itself. Build one `OrcaAnalytics` at app start and call `track`:
+
+```kotlin
+import com.orcagateway.core.json.JsonValue
+import com.orcagateway.core.telemetry.OrcaAnalytics
+
+val analytics = OrcaAnalytics.forClient(client)
+analytics.track("screen_view", mapOf("screen" to JsonValue.String("home")))
+```
+
+Events go to `/events` in batches: when 20 are waiting, or 10 seconds after the first one. A batch
+that fails goes back in the buffer, which keeps the newest 500. `/events` is a cloud route; the OSS
+engine answers it 404. Call `dispose()` on teardown to send what is left.
+
+`OrcaTelemetry.onEvent` is a process-wide hook for what the SDK itself reports. Set it once:
+
+```kotlin
+import android.util.Log
+import com.orcagateway.core.telemetry.OrcaTelemetry
+
+OrcaTelemetry.onEvent = { event, data -> Log.w("Orca", "$event $data") }
+```
+
+It reports one event so far, `unknown_widget_type` with `{"type": "<type>"}`, the first time the
+process meets a widget type the SDK does not draw.
+
 ## Tests
 
 ```bash

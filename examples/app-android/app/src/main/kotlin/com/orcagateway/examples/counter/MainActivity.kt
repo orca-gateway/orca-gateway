@@ -24,6 +24,8 @@ import java.net.URI
  * Any example app on that server runs here too: pass ORCA_APP_ID and
  * ORCA_PATH as intent extras (for example `basic-actions` and `home`, or
  * `server-actions` and `shop`), and ORCA_SERVER_URL for another server.
+ * The boolean extras ORCA_OFFLINE and ORCA_SESSIONS turn on OrcaApp's
+ * version check and session tracking; both are off by default.
  *
  * An app with a navigation config (app id `navigation`) boots from it with
  * the extra ORCA_BOOT set to `config`: the server's config says where the
@@ -42,9 +44,13 @@ class MainActivity : ComponentActivity() {
         // The default app, `counter`, has no navigation config: it starts at a path.
         // No path (null) is how a host asks OrcaApp to boot from the server's config.
         val path = if (setting("ORCA_BOOT", "path") == "config") null else setting("ORCA_PATH", "home")
+        val offline = intent.getBooleanExtra("ORCA_OFFLINE", false)
+        val sessions = intent.getBooleanExtra("ORCA_SESSIONS", false)
         setContent {
             MaterialTheme {
-                Surface { OrcaApp(client, path = path) }
+                Surface {
+                    OrcaApp(client, path = path, enableOffline = offline, enableSessionTracking = sessions)
+                }
             }
         }
     }

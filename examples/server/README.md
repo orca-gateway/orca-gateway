@@ -50,3 +50,20 @@ The server runs on `http://localhost:8080` by default.
 | `tabs.ts`             | Two apps, `tabs` and `tabs-server`, over the same pages. `tabs`: the SDK's own tab bar and drawer; each tab keeps its page (a counter, a scroll position, typed text), `SwitchTab`, `OpenDrawer`, the `_tabIndex` app state, routes over the tabs, a page with its own drawer, end drawer and bottom bar. `tabs-server`: the same with the tab bar and the drawer sent by the server |
 | `orca_google_map.ts`  | Google Maps integration via the map plugin                    |
 | `index.ts`            | Entry point — registers all examples into a single engine     |
+
+## Settings for trying SDK features
+
+The server reads these when it starts; restart it to change them. With Docker, pass each as
+`-e NAME=value`.
+
+| Variable | Effect |
+| --- | --- |
+| `ORCA_FALLBACK_POLICY` | What a client gets for a widget it lacks: `graceful` (left out, the default), `warn` (a notice) or `require` (a blocking prompt). |
+| `ORCA_MIN_SDK_VERSION` | With `99.0.0`, every page of every app answers 426 and the app draws the "Update required" page. |
+| `ORCA_FORCE_UPDATE` | With `1`, the `static-flows` app answers `"forceUpdate": true` on `GET /api/v1/app/static-flows/version`; an SDK started with offline mode on shows its force-update screen. |
+
+```bash
+ORCA_FALLBACK_POLICY=warn task example:dev:server      # or =require
+ORCA_MIN_SDK_VERSION=99.0.0 task example:dev:server
+ORCA_FORCE_UPDATE=1 task example:dev:server
+```

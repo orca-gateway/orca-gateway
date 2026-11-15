@@ -201,26 +201,53 @@ public final class OrcaAppBoot: ObservableObject {
 @MainActor
 public struct OrcaApp: View {
     @StateObject private var boot: OrcaAppBoot
+    @StateObject private var gate: OrcaBootModel
 
+    /// A client without a device id gets the one saved in UserDefaults
+    /// (`DeviceIdentity`, made on first run).
+    /// - Parameters:
+    ///   - path: the first page; nil boots from the server's navigation
+    ///     config (see above).
+    ///   - enableOffline: run the version check at boot, before the config
+    ///     or any page is asked for; a forceUpdate answer shows the
+    ///     force-update screen and loads neither. The static-flow cache, the
+    ///     saved config and `preload()` arrive with plan step 14.
+    ///   - enableSessionTracking: send a session start when the app comes to
+    ///     the foreground and an end when it goes to the background.
+    ///   - onRouteChanged: told of every route change, the first route included.
     public init(client: OrcaClient, path: String? = "home", system: SystemActions? = nil,
+                enableOffline: Bool = false, enableSessionTracking: Bool = false,
                 onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) {
         _boot = StateObject(wrappedValue: OrcaAppBoot(
-            client: client, path: path, system: system, onRouteChanged: onRouteChanged))
+            client: client.identified(by: UserDefaultsKeyValueStore()), path: path, system: system,
+            onRouteChanged: onRouteChanged))
+        _gate = StateObject(wrappedValue: OrcaBootModel(
+            enableOffline: enableOffline, enableSessionTracking: enableSessionTracking))
     }
 
-    public init(router: @autoclosure @escaping () -> OrcaRouter) {
+    /// The router's client is used as the host built it: to send a device
+    /// id, set `client.deviceId = DeviceIdentity.resolve(UserDefaultsKeyValueStore())`.
+    /// The options are those of `init(client:)`.
+    public init(router: @autoclosure @escaping () -> OrcaRouter,
+                enableOffline: Bool = false, enableSessionTracking: Bool = false) {
         _boot = StateObject(wrappedValue: OrcaAppBoot(router: router()))
+        _gate = StateObject(wrappedValue: OrcaBootModel(
+            enableOffline: enableOffline, enableSessionTracking: enableSessionTracking))
     }
 
     public var body: some View {
-        switch boot.phase {
-        case .loading:
-            ProgressView().task { await boot.startIfNeeded() }
-        case .ready(let router):
-            RouterRoot(router: router)
-        case .failed(let message):
-            LoadError(title: "Could not start the app", message: message) {
-                Task { await boot.retry() }
+        // The gate first: its content, and so the config fetch and every
+        // page, exists only once the version check lets the app through.
+        OrcaBootView(boot: gate, client: boot.client) {
+            switch boot.phase {
+            case .loading:
+                ProgressView().task { await boot.startIfNeeded() }
+            case .ready(let router):
+                RouterRoot(router: router)
+            case .failed(let message):
+                LoadError(title: "Could not start the app", message: message) {
+                    Task { await boot.retry() }
+                }
             }
         }
     }
