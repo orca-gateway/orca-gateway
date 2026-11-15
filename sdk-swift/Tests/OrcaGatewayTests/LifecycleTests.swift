@@ -1,0 +1,353 @@
+#if canImport(SwiftUI)
+import Foundation
+import OSLog
+import SwiftUI
+import XCTest
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
+@testable import OrcaGateway
+
+/// Plan step 2 on Swift: the lifecycle triggers any node may carry (Flutter
+/// component_renderer.dart:230-255, lifecycle_wrapper.dart), the widget
+/// source a tap hands the executor, and the host's debugLog line. The node
+/// is drawn in a real host window (onAppear needs one); the scene phase is
+/// driven through the environment by the host view, so the app events run
+/// the same path as a scene's own phase.
+@MainActor
+final class LifecycleTests: XCTestCase {
+    // MARK: A2.1 / A2.2 once per mount
+
+    /// A2.1: onInit runs once when the node is first built, not again when a
+    /// state change it watches redraws it.
+    func testA2_1OnInitRunsOnceWhenTheNodeIsFirstBuiltNotOnARedraw() throws {
+        try assertRunsOnceOnAppear("onInit")
+    }
+
+    /// A2.2 (corrected, as Flutter): onVisible runs once when the node is
+    /// first built, not again when it redraws.
+    func testA2_2OnVisibleRunsOnceWhenTheNodeIsFirstBuiltNotOnARedraw() throws {
+        try assertRunsOnceOnAppear("onVisible")
+    }
+
+    #if os(macOS)
+    /// A2.1: a node hidden and shown again while it stays mounted (another
+    /// tab here; a page popped back over it is the same case, Flutter keeps
+    /// a covered route mounted) does not run its onInit or onVisible again,
+    /// though SwiftUI calls its onAppear again. macOS only: the iOS test
+    /// runner has no window scene, and there UIKit sends the covered tab
+    /// no disappearance (nor does a NavigationStack its root), so the case
+    /// cannot be staged.
+    func testA2_1ANodeShownAgainWhileMountedDoesNotRunItsOnInitAgain() throws {
+        let model = try page(["onInit", "onVisible"])
+        let tabs = TabBox()
+        let hosted = HostedNode(TabHost(tabs: tabs, model: model), model: model)
+        defer { hosted.close() }
+        hosted.pump(0.5)
+        XCTAssertEqual(model.store.value("onInit"), 1, "onInit not run on the first build")
+        XCTAssertEqual(model.store.value("onVisible"), 1, "onVisible not run on the first build")
+
+        tabs.selection = 1
+        hosted.pump(1)
+        tabs.selection = 0
+        hosted.pump(1)
+        XCTAssertEqual(tabs.appeared, 2, "the node was not shown again")
+        XCTAssertEqual(model.store.value("onInit"), 1, "onInit ran again when the node came back")
+        XCTAssertEqual(model.store.value("onVisible"), 1, "onVisible ran again when the node came back")
+    }
+    #endif
+
+    // MARK: A2.3 app events
+
+    /// A2.3: going to the background runs onBackground, coming back runs
+    /// onForeground. No onForeground on the first build, `.inactive` alone
+    /// runs nothing, and `.active` without a `.background` before it runs
+    /// nothing.
+    func testA2_3BackgroundThenForegroundRunOnBackgroundThenOnForeground() throws {
+        let model = try page(["onBackground", "onForeground"])
+        let hosted = HostedNode(model: model)
+        defer { hosted.close() }
+        hosted.pump()
+        XCTAssertEqual(model.store.value("onForeground"), 0, "onForeground on the first build")
+
+        hosted.set(.inactive)
+        hosted.set(.active)
+        XCTAssertEqual(model.store.value("onBackground"), 0, "inactive is not the background")
+        XCTAssertEqual(model.store.value("onForeground"), 0, "active after inactive alone is not a return")
+
+        hosted.set(.inactive)
+        hosted.set(.background)
+        XCTAssertEqual(model.store.value("onBackground"), 1, "onBackground not run")
+        XCTAssertEqual(model.store.value("onForeground"), 0)
+        XCTAssertEqual(model.store.value("order"), 1)
+
+        hosted.set(.inactive)
+        hosted.set(.active)
+        XCTAssertEqual(model.store.value("onBackground"), 1)
+        XCTAssertEqual(model.store.value("onForeground"), 1, "onForeground not run")
+        XCTAssertEqual(model.store.value("order"), 12, "background then foreground")
+    }
+
+    /// A2.3: onAppBackground and onAppForeground win over onBackground and
+    /// onForeground when both are set; alone, either spelling runs.
+    func testA2_3TheOnAppSpellingWinsOverTheShortName() throws {
+        let both = try page(["onAppBackground", "onBackground", "onAppForeground", "onForeground"])
+        let hosted = HostedNode(model: both)
+        defer { hosted.close() }
+        hosted.pump()
+        hosted.set(.background)
+        hosted.set(.active)
+        XCTAssertEqual(both.store.value("onAppBackground"), 1)
+        XCTAssertEqual(both.store.value("onBackground"), 0, "the short name ran beside onAppBackground")
+        XCTAssertEqual(both.store.value("onAppForeground"), 1)
+        XCTAssertEqual(both.store.value("onForeground"), 0, "the short name ran beside onAppForeground")
+
+        let app = try page(["onAppBackground", "onAppForeground"])
+        let alone = HostedNode(model: app)
+        defer { alone.close() }
+        alone.pump()
+        alone.set(.background)
+        alone.set(.active)
+        XCTAssertEqual(app.store.value("onAppBackground"), 1)
+        XCTAssertEqual(app.store.value("onAppForeground"), 1)
+    }
+
+    // MARK: A2.5 once per widget and trigger
+
+    /// A2.5: a tap wrapped in once changes the state one time; a second tap
+    /// on the same widget does nothing, another widget's once still runs. A
+    /// text field's onChange is keyed the same way.
+    func testA2_5AOnceTapRunsOneTimePerWidgetAndTrigger() async throws {
+        let once: JSONValue = ["type": "once", "action": Self.count("taps")]
+        let model = try OrcaPageModel(page: JSONValue.object([
+            "pageId": "p", "title": "T",
+            "state": [Self.zero("taps"), Self.zero("edits")],
+            "components": [
+                Self.node("buy", actions: ["onTap": once]),
+                Self.node("cancel", actions: ["onTap": once]),
+                AppBarCardTests.node("f", "TextField", kind: "input", childMode: "none", props: [:])
+                    .merging(["actions": ["onChange": ["type": "once", "action": Self.count("edits")]]]),
+            ],
+        ]).decode(PageResponse.self))
+
+        let buy = try XCTUnwrap(model.resolve("buy"))
+        await model.fire("onTap", on: buy)?.value
+        await model.fire("onTap", on: buy)?.value
+        XCTAssertEqual(model.store.value("taps"), 1, "a second tap on the same widget ran its once again")
+
+        await model.fire("onTap", on: try XCTUnwrap(model.resolve("cancel")))?.value
+        XCTAssertEqual(model.store.value("taps"), 2, "another widget's once did not run")
+
+        let field = try XCTUnwrap(model.resolve("f"))
+        await model.textChanged("a", on: field)?.value
+        await model.textChanged("ab", on: field)?.value
+        XCTAssertEqual(model.store.value("edits"), 1, "a second edit ran the field's once again")
+    }
+
+    // MARK: A2.6 debugLog on the host
+
+    /// A2.6: the host writes a debugLog effect to the system log (subsystem
+    /// com.orcagateway, the tag as category, message then data) and still
+    /// hands it on to the effect handler.
+    func testA2_6ADebugLogIsLoggedAndStillReachesTheEffectHandler() async throws {
+        let model = OrcaPageModel(page: PageResponse(pageId: "p", title: "P"))
+        var handled: [ActionEffect] = []
+        model.effectHandler = { handled.append($0) }
+        let since = Date().addingTimeInterval(-1)
+        let tag = "lifecycle-\(UUID().uuidString)"
+        await model.run(.debugLog(.init(level: "error", message: "hi", tag: tag, data: ["n": 1])))
+        XCTAssertEqual(handled, [ActionEffect("debugLog", [
+            "level": "error", "tag": .string(tag), "message": "hi", "data": ["n": 1],
+        ])])
+
+        let store = try OSLogStore(scope: .currentProcessIdentifier)
+        let entries = try store.getEntries(at: store.position(date: since),
+                                           matching: NSPredicate(format: "subsystem == %@", "com.orcagateway"))
+        let lines = entries.compactMap { $0 as? OSLogEntryLog }.filter { $0.category == tag }
+        XCTAssertEqual(lines.map(\.composedMessage), [#"hi {"n":1}"#], "the debugLog line")
+        XCTAssertEqual(lines.first?.level, .error)
+    }
+
+    // MARK: helpers
+
+    /// The node runs `trigger` once on its first build; its own state change
+    /// (the counter it watches) and a second one (a longer label, drawn
+    /// wider) redraw it without running the trigger again.
+    func assertRunsOnceOnAppear(_ trigger: String, file: StaticString = #filePath, line: UInt = #line) throws {
+        let model = try page([trigger])
+        let hosted = HostedNode(model: model)
+        defer { hosted.close() }
+        hosted.pump()
+        XCTAssertEqual(model.store.value(trigger), 1, "\(trigger) not run on the first build", file: file, line: line)
+        let narrow = try XCTUnwrap(hosted.box.frames["n"], "node not drawn", file: file, line: line)
+
+        Task { await model.run(.setState(.init(key: "label", value: "a much longer label"))) }
+        hosted.pump()
+        let wide = try XCTUnwrap(hosted.box.frames["n"], file: file, line: line)
+        XCTAssertGreaterThan(wide.width, narrow.width, "the node did not redraw", file: file, line: line)
+        XCTAssertEqual(model.store.value(trigger), 1, "\(trigger) ran again on a redraw", file: file, line: line)
+    }
+
+    /// A page of one Text `n` showing the page state `label`, watching it
+    /// and its trigger counts; each trigger adds 1 to the page state of its
+    /// name and appends its digit to `order` (background 1, foreground 2: a
+    /// background then a foreground make 12).
+    func page(_ triggers: [String]) throws -> OrcaPageModel {
+        var actions: [String: JSONValue] = [:]
+        for trigger in triggers {
+            actions[trigger] = ["type": "actionGroup", "mode": "sequential", "actions": [
+                Self.count(trigger),
+                ["type": "setState", "scope": "page", "key": "order", "value": [
+                    "type": "transform", "input": ["type": "state", "key": "order", "scope": "page"],
+                    "by": [["type": "multiply", "by": ["type": "static", "value": 10]],
+                           ["type": "add", "by": ["type": "static", "value": .int(Self.digit(trigger))]]],
+                ]],
+            ]]
+        }
+        return try OrcaPageModel(page: JSONValue.object([
+            "pageId": "p", "title": "T",
+            "state": .array(triggers.map(Self.zero) + [
+                ["key": "label", "scope": "page", "initial": "a"],
+                ["key": "order", "scope": "page", "initial": 0],
+            ]),
+            "components": [Self.node("n", watches: ["label"] + triggers, actions: actions)],
+        ]).decode(PageResponse.self))
+    }
+
+    /// 1 for a background trigger, 2 for a foreground one, 3 otherwise.
+    static func digit(_ trigger: String) -> Int {
+        trigger.hasSuffix("Background") ? 1 : trigger.hasSuffix("Foreground") ? 2 : 3
+    }
+
+    /// A Text showing the page state `label`, with `watches` and `actions`.
+    static func node(_ id: String, watches: [String] = [], actions: [String: JSONValue]) -> JSONValue {
+        let data: JSONValue = ["type": "state", "key": "label", "scope": "page"]
+        return ["id": .string(id), "type": "Text", "kind": "primitive", "childMode": "none",
+                "props": ["data": data], "children": [],
+                "watches": .array(watches.map { .string($0) }), "actions": .object(actions)]
+    }
+
+    static func zero(_ key: String) -> JSONValue {
+        ["key": .string(key), "scope": "page", "initial": 0]
+    }
+
+    /// setState `key` to itself plus 1.
+    static func count(_ key: String) -> JSONValue {
+        ["type": "setState", "scope": "page", "key": .string(key), "value": [
+            "type": "transform", "input": ["type": "state", "key": .string(key), "scope": "page"],
+            "by": [["type": "add", "by": ["type": "static", "value": 1]]],
+        ]]
+    }
+}
+
+#if os(macOS)
+/// The selected tab of a TabHost, and how often its first tab appeared.
+private final class TabBox: ObservableObject {
+    @Published var selection = 0
+    var appeared = 0
+}
+
+/// The node in a TabView's first tab, a Text in the second.
+private struct TabHost: View {
+    @ObservedObject var tabs: TabBox
+    let model: OrcaPageModel
+
+    var body: some View {
+        TabView(selection: $tabs.selection) {
+            NodeView(id: "n", model: model).onAppear { tabs.appeared += 1 }
+                .tabItem { Text("node") }.tag(0)
+            Text("other").tabItem { Text("other") }.tag(1)
+        }
+    }
+}
+#endif
+
+/// The scene phase a test drives; the host view puts it in the environment.
+private final class PhaseBox: ObservableObject {
+    @Published var value: ScenePhase = .active
+}
+
+/// `NodeView(id: "n")` 300 by 300 at the top left, its frame recorded, under
+/// the test's scene phase.
+private struct PhaseHost<Content: View>: View {
+    @ObservedObject var phase: PhaseBox
+    let box: FrameBox
+    let content: Content
+
+    var body: some View {
+        content
+            .frame(width: 300, height: 300, alignment: .topLeading)
+            .coordinateSpace(name: FrameBox.space)
+            .onPreferenceChange(FramesKey.self) { box.frames = $0 }
+            .environment(\.scenePhase, phase.value)
+    }
+}
+
+/// A view in a real window (UIKit or AppKit), kept on screen until `close`.
+@MainActor
+private final class HostedNode {
+    let model: OrcaPageModel
+    let phase = PhaseBox()
+    let box = FrameBox()
+    #if canImport(UIKit)
+    private let window: UIWindow
+    #elseif canImport(AppKit)
+    private let window: NSWindow
+    #endif
+
+    convenience init(model: OrcaPageModel) {
+        self.init(NodeView(id: "n", model: model).record("n"), model: model)
+    }
+
+    init<V: View>(_ content: V, model: OrcaPageModel) {
+        self.model = model
+        let root = PhaseHost(phase: phase, box: box, content: content)
+        let size = CGRect(x: 0, y: 0, width: 300, height: 300)
+        #if canImport(UIKit)
+        let host = UIHostingController(rootView: root)
+        window = UIWindow(frame: size)
+        window.rootViewController = host
+        window.isHidden = false
+        host.view.frame = size
+        host.view.layoutIfNeeded()
+        #elseif canImport(AppKit)
+        window = NSWindow(contentRect: size, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let host = NSHostingView(rootView: root)
+        host.frame = size
+        window.contentView = host
+        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #endif
+    }
+
+    /// Let SwiftUI draw and the fired actions run.
+    func pump(_ seconds: Double = 0.2) {
+        RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+    }
+
+    func set(_ phase: ScenePhase) {
+        self.phase.value = phase
+        pump()
+    }
+
+    func close() {
+        #if canImport(UIKit)
+        window.isHidden = true
+        #elseif canImport(AppKit)
+        window.orderOut(nil)
+        #endif
+    }
+}
+
+private extension JSONValue {
+    func merging(_ other: [String: JSONValue]) -> JSONValue {
+        guard case .object(var o) = self else { return self }
+        o.merge(other) { $1 }
+        return .object(o)
+    }
+}
+#endif
