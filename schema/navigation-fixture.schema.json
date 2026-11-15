@@ -656,7 +656,7 @@
         },
         "wasRedirected": {
           "type": "boolean",
-          "description": "True when the final location's path differs from the path of the link as it was given, before a trailing slash is dropped or an empty path becomes `/`."
+          "description": "True when the final location's path differs from the path of the link's location (after a trailing slash is dropped and an empty path becomes `/`); always equals `redirected`."
         },
         "isColdStart": {
           "type": "boolean",
