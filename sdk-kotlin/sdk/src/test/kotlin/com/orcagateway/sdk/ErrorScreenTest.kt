@@ -2,6 +2,7 @@ package com.orcagateway.sdk
 
 import android.content.Context
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,6 +18,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -303,6 +305,31 @@ class ErrorScreenTest {
 
         compose.onNodeWithText("Try again").performClick()
         compose.runOnIdle { assertEquals(1, retried) }
+    }
+
+    /**
+     * Flutter's sizes go onto the host's text style, as Flutter's inheriting
+     * TextStyle does: the host theme's font family and letter spacing reach
+     * the title and the message.
+     */
+    @Test
+    fun c18_2_theErrorViewKeepsTheHostFontFamilyAndLetterSpacingUnderFlutterSizes() {
+        val host = TextStyle(fontFamily = FontFamily.Serif, letterSpacing = 2.sp)
+        compose.setContent {
+            MaterialTheme(typography = Typography(bodyLarge = host)) {
+                OrcaErrorView(OrcaClientException.Http(404, ""))
+            }
+        }
+
+        val titleStyle = style("Not Found")
+        assertEquals(FontFamily.Serif, titleStyle.fontFamily)
+        assertEquals(2.sp, titleStyle.letterSpacing)
+        assertEquals(18.sp, titleStyle.fontSize)
+        assertEquals(FontWeight.SemiBold, titleStyle.fontWeight)
+        val messageStyle = style("The requested page could not be found.")
+        assertEquals(FontFamily.Serif, messageStyle.fontFamily)
+        assertEquals(2.sp, messageStyle.letterSpacing)
+        assertEquals(14.sp, messageStyle.fontSize)
     }
 
     private companion object {

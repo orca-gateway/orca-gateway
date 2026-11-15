@@ -28,6 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -733,6 +734,7 @@ public fun OrcaErrorView(error: Throwable, modifier: Modifier = Modifier, onRetr
 @Composable
 internal fun OrcaErrorView(info: OrcaErrorInfo, modifier: Modifier = Modifier, onRetry: (() -> Unit)? = null) {
     val colors = MaterialTheme.colorScheme
+    val base = LocalTextStyle.current
     Box(modifier.fillMaxSize().testTag("orca.error"), contentAlignment = Alignment.Center) {
         Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
@@ -746,14 +748,14 @@ internal fun OrcaErrorView(info: OrcaErrorInfo, modifier: Modifier = Modifier, o
                 info.title,
                 color = colors.onSurface,
                 textAlign = TextAlign.Center,
-                style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+                style = base.merge(TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold)),
             )
             Spacer(Modifier.height(8.dp))
             Text(
                 info.message,
                 color = colors.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                style = TextStyle(fontSize = 14.sp),
+                style = base.merge(TextStyle(fontSize = 14.sp)),
             )
             if (onRetry != null) {
                 Spacer(Modifier.height(16.dp))
