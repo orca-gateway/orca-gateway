@@ -72,7 +72,50 @@ Notes that are easy to miss:
   pattern has as many segments as the location and matches it. The target's own rule is not applied.
 - A config with tabs needs at least two of them (Flutter's default tab bar refuses one).
 - With tabs, Flutter also writes the current tab into app state as `_tabIndex`; that is the shell's doing, not
-  route resolution, so no fixture with tabs carries `expected.appState`.
+  route resolution, so no case with tabs carries `expected.appState`. Sessions pin `_tabIndex` instead (below).
+
+## Sessions
+
+A case is one `go` on a fresh app. What the tab shell does over time (a tab keeps its stack, a reselect pops to
+its root, `_tabIndex` follows and drives the tab) needs several steps on one app, so a file may carry `sessions`
+beside `cases`, or alone:
+
+```jsonc
+"sessions": [
+  {
+    "name": "switch away and back",
+    "boot": { "expected": { /* the app as booted at config.initialRoute, before any step */ } },
+    "steps": [
+      { "op": "push", "location": "/home/product/42",
+        "expected": {
+          "location": "/home/product/42",   // the visible location after the step
+          "tabIndex": 0,                    // index into config.tabs, or null when no shell is shown
+          "appState": { "_tabIndex": 0 },   // a subset: only the keys listed are compared
+          "pageRequests": ["home/product/42"] // page paths requested during this step, in order; [] when none
+        } }
+    ]
+  }
+]
+```
+
+| Op | Fields | What the Flutter runner does |
+|---|---|---|
+| `go` | `location` | `go(location)` on the router |
+| `push` | `location` | `push(location)` on the router |
+| `back` | | `pop()` on the router |
+| `tapTab` | `index` | taps that item of the default tab bar |
+| `switchTab` | `tabId` | runs a `switchTab` action through the real action executor |
+| `setAppState` | `key`, `value` | sets the key through the real state manager |
+
+`boot.expected` and every step's `expected` carry the same four keys. As with cases, every value is recorded
+from the real Flutter `OrcaApp`, here with a client that records the page requests. Steps of a session share one
+app, in order; sessions are independent of each other.
+
+| File | Behaviour |
+|---|---|
+| `12_tab_sessions` | switching away and back restores a tab's stack and fetches nothing; a reselect pops to the root; a tab is fetched on its first visit |
+| `13_tab_index_state` | `_tabIndex` follows taps, `go` and `switchTab`; setting it switches the tab; the same value or a non-int does nothing |
+| `14_switch_tab` | `switchTab` lands on the tab's root and drops routes over the shell; an unknown id does nothing |
 
 ## Running it
 

@@ -1,0 +1,205 @@
+{
+  "name": "bottom-navigation-bar",
+  "description": "Scaffold whose bottomNavigationBar slot holds a BottomNavigationBar. Each item is its own BottomNavItem node in an indexed slot (item_0..2), one with activeIcon. currentIndex is bound to page state, so it stays a Value and is watched; onChange reads the tapped index from the event (the client fires it with {value: index}).",
+  "input": {
+    "type": "Scaffold",
+    "key": "page",
+    "slots": [
+      {
+        "name": "body",
+        "widget": {
+          "type": "Text",
+          "key": "body",
+          "props": {
+            "data": "Feed"
+          }
+        }
+      },
+      {
+        "name": "bottomNavigationBar",
+        "widget": {
+          "type": "BottomNavigationBar",
+          "key": "nav",
+          "props": {
+            "backgroundColor": "#FFFFFF",
+            "selectedItemColor": "#6200EE",
+            "unselectedItemColor": "#9E9E9E",
+            "currentIndex": {
+              "type": "state",
+              "key": "tab",
+              "scope": "page"
+            }
+          },
+          "slots": [
+            {
+              "name": "item_0",
+              "widget": {
+                "type": "BottomNavItem",
+                "key": "nav_home",
+                "props": {
+                  "icon": "home",
+                  "activeIcon": "home_filled",
+                  "label": "Home"
+                }
+              }
+            },
+            {
+              "name": "item_1",
+              "widget": {
+                "type": "BottomNavItem",
+                "key": "nav_search",
+                "props": {
+                  "icon": "search",
+                  "label": "Search"
+                }
+              }
+            },
+            {
+              "name": "item_2",
+              "widget": {
+                "type": "BottomNavItem",
+                "key": "nav_profile",
+                "props": {
+                  "icon": "person",
+                  "label": "Profile",
+                  "tooltip": "Your profile"
+                }
+              }
+            }
+          ],
+          "actions": {
+            "onChange": {
+              "type": "setState",
+              "scope": "page",
+              "key": "lastTab",
+              "value": {
+                "type": "event",
+                "key": "value"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "tab": 1,
+      "lastTab": 0
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "page",
+      "type": "Scaffold",
+      "kind": "structure",
+      "childMode": "none",
+      "props": {
+        "body": "body",
+        "bottomNavigationBar": "nav"
+      },
+      "children": [
+        "body",
+        "nav"
+      ],
+      "watches": []
+    },
+    {
+      "id": "nav",
+      "type": "BottomNavigationBar",
+      "kind": "structure",
+      "childMode": "none",
+      "props": {
+        "backgroundColor": "#FFFFFF",
+        "selectedItemColor": "#6200EE",
+        "unselectedItemColor": "#9E9E9E",
+        "currentIndex": {
+          "type": "state",
+          "key": "tab",
+          "scope": "page"
+        },
+        "item_0": "nav_home",
+        "item_1": "nav_search",
+        "item_2": "nav_profile"
+      },
+      "children": [
+        "nav_home",
+        "nav_search",
+        "nav_profile"
+      ],
+      "watches": [
+        "tab"
+      ],
+      "actions": {
+        "onChange": {
+          "type": "setState",
+          "scope": "page",
+          "key": "lastTab",
+          "value": {
+            "type": "event",
+            "key": "value"
+          }
+        }
+      }
+    },
+    {
+      "id": "nav_profile",
+      "type": "BottomNavItem",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "icon": "person",
+        "label": "Profile",
+        "tooltip": "Your profile"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "nav_search",
+      "type": "BottomNavItem",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "icon": "search",
+        "label": "Search"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "nav_home",
+      "type": "BottomNavItem",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "icon": "home",
+        "activeIcon": "home_filled",
+        "label": "Home"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "body",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Feed"
+      },
+      "children": [],
+      "watches": []
+    }
+  ],
+  "resolved": {
+    "nav": {
+      "currentIndex": 1,
+      "selectedItemColor": "#6200EE"
+    }
+  }
+}

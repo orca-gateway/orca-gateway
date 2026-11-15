@@ -1,0 +1,232 @@
+{
+  "name": "scaffold-drawers",
+  "description": "Scaffold with appBar, body, drawer and endDrawer slots. Each Drawer is a single-child layout node carrying backgroundColor, elevation and width; the Scaffold names both in its props and lists them in children in slot order.",
+  "input": {
+    "type": "Scaffold",
+    "key": "page",
+    "slots": [
+      {
+        "name": "appBar",
+        "widget": {
+          "type": "AppBar",
+          "key": "bar",
+          "slots": [
+            {
+              "name": "title",
+              "widget": {
+                "type": "Text",
+                "key": "title",
+                "props": {
+                  "data": "Inbox"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "body",
+        "widget": {
+          "type": "Text",
+          "key": "body",
+          "props": {
+            "data": "Messages"
+          }
+        }
+      },
+      {
+        "name": "drawer",
+        "widget": {
+          "type": "Drawer",
+          "key": "drawer",
+          "props": {
+            "backgroundColor": "#FAFAFA",
+            "elevation": 16,
+            "width": 280
+          },
+          "children": [
+            {
+              "type": "Column",
+              "key": "menu",
+              "children": [
+                {
+                  "type": "Text",
+                  "key": "menu_inbox",
+                  "props": {
+                    "data": "Inbox"
+                  }
+                },
+                {
+                  "type": "Text",
+                  "key": "menu_sent",
+                  "props": {
+                    "data": "Sent"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "endDrawer",
+        "widget": {
+          "type": "Drawer",
+          "key": "end_drawer",
+          "props": {
+            "backgroundColor": "#263238",
+            "elevation": 4,
+            "width": 320
+          },
+          "children": [
+            {
+              "type": "Text",
+              "key": "filters_title",
+              "props": {
+                "data": "Filters"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {},
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "page",
+      "type": "Scaffold",
+      "kind": "structure",
+      "childMode": "none",
+      "props": {
+        "appBar": "bar",
+        "body": "body",
+        "drawer": "drawer",
+        "endDrawer": "end_drawer"
+      },
+      "children": [
+        "bar",
+        "body",
+        "drawer",
+        "end_drawer"
+      ],
+      "watches": []
+    },
+    {
+      "id": "end_drawer",
+      "type": "Drawer",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "backgroundColor": "#263238",
+        "elevation": 4,
+        "width": 320
+      },
+      "children": [
+        "filters_title"
+      ],
+      "watches": []
+    },
+    {
+      "id": "filters_title",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Filters"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "drawer",
+      "type": "Drawer",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "backgroundColor": "#FAFAFA",
+        "elevation": 16,
+        "width": 280
+      },
+      "children": [
+        "menu"
+      ],
+      "watches": []
+    },
+    {
+      "id": "menu",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "menu_inbox",
+        "menu_sent"
+      ],
+      "watches": []
+    },
+    {
+      "id": "menu_sent",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Sent"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "menu_inbox",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Inbox"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "body",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Messages"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "bar",
+      "type": "AppBar",
+      "kind": "structure",
+      "childMode": "none",
+      "props": {
+        "title": "title"
+      },
+      "children": [
+        "title"
+      ],
+      "watches": []
+    },
+    {
+      "id": "title",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Inbox"
+      },
+      "children": [],
+      "watches": []
+    }
+  ]
+}
