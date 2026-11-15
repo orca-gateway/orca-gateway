@@ -311,6 +311,9 @@ public final class OrcaAppBoot: ObservableObject {
 public struct OrcaApp: View {
     @StateObject private var boot: OrcaAppBoot
     @StateObject private var gate: OrcaBootModel
+    private let views: BootViews
+    private let colorScheme: ColorScheme?
+    private let locale: Locale?
 
     /// A client without a device id gets the one saved in UserDefaults
     /// (`DeviceIdentity`, made on first run).
@@ -345,45 +348,78 @@ public struct OrcaApp: View {
     ///   - widgets: builders for host widget types the SDK does not draw, not
     ///     advertised (Dart `OrcaApp.registry`). A plugin widget of the same
     ///     type is a conflict.
+    ///   - loadingView: shown while the config is asked for (Dart
+    ///     `OrcaApp.loadingWidget`), and while the version check runs when
+    ///     there is no `splashView`.
+    ///   - splashView: shown while the version check runs and while the
+    ///     config is asked for (Dart `OrcaApp.splashWidget`, which falls back
+    ///     to `loadingWidget`). With neither, the SDK's spinner.
+    ///   - errorView: given the error when the config cannot be fetched or
+    ///     the plugins conflict, and drawn alone, with no retry (Dart
+    ///     `OrcaApp.errorBuilder`). Without it, `OrcaErrorView`.
+    ///   - forceUpdateView: drawn when the server demands an update (Dart
+    ///     `OrcaApp.forceUpdateBuilder`). Without it, one centred line.
+    ///
+    ///     The four are boot views, as in Flutter: a page keeps the SDK's
+    ///     spinner and `OrcaErrorView` with its retry.
+    ///   - colorScheme: the colour scheme of everything the app draws (Dart
+    ///     `OrcaMaterialAppConfig.themeMode`); nil follows the system. A
+    ///     Scaffold stays light, as Flutter's builders keep it.
+    ///   - locale: the locale of everything the app draws (Dart
+    ///     `OrcaMaterialAppConfig.locale`); nil is the environment's. The
+    ///     `x-orca-locale` header stays the device's, as in Flutter.
     public init(client: OrcaClient, path: String? = nil, system: SystemActions? = nil,
                 enableOffline: Bool = false, enableSessionTracking: Bool = false,
                 onRouteChanged: ((RouteChangeEvent) -> Void)? = nil,
                 onDeeplink: ((DeeplinkEvent) -> Void)? = nil,
                 plugins: [OrcaPlugin] = [], customActions: [String: OrcaActionHandler] = [:],
-                widgets: WidgetBuilders = WidgetBuilders()) {
+                widgets: WidgetBuilders = WidgetBuilders(),
+                loadingView: (() -> AnyView)? = nil, splashView: (() -> AnyView)? = nil,
+                errorView: ((Error) -> AnyView)? = nil, forceUpdateView: (() -> AnyView)? = nil,
+                colorScheme: ColorScheme? = nil, locale: Locale? = nil) {
         let host = OrcaPluginHost(plugins: plugins, customActions: customActions, widgets: widgets)
         _boot = StateObject(wrappedValue: OrcaAppBoot(
             client: client.identified(by: UserDefaultsKeyValueStore()), path: path, system: system,
             onRouteChanged: onRouteChanged, onDeeplink: onDeeplink, plugins: host))
         _gate = StateObject(wrappedValue: OrcaBootModel(
             enableOffline: enableOffline, enableSessionTracking: enableSessionTracking, failure: host.failure))
+        views = BootViews(loading: loadingView, splash: splashView, error: errorView, forceUpdate: forceUpdateView)
+        self.colorScheme = colorScheme
+        self.locale = locale
     }
 
     /// The router's client is used as the host built it: to send a device
     /// id, set `client.deviceId = DeviceIdentity.resolve(UserDefaultsKeyValueStore())`.
-    /// The options are those of `init(client:)`, `plugins`, `customActions`
-    /// and `widgets` included (Dart `OrcaApp`, sdk/lib/src/widgets/orca_app.dart):
-    /// a conflict shows the error view. Deep links go to the router as for
-    /// `init(client:)`; set `router.onDeeplink` to be told of them. The
-    /// router shows its first page at once, so a launch URL iOS delivers
-    /// after that is a link to a running app (`isColdStart` false, the first
-    /// page already requested); a router made with `link:` starts at the
-    /// link, and drops the system's repeat of it.
+    /// The options are those of `init(client:)`, `plugins`, `customActions`,
+    /// `widgets`, the boot views, `colorScheme` and `locale` included (Dart
+    /// `OrcaApp`, sdk/lib/src/widgets/orca_app.dart): a conflict shows the
+    /// error view. Deep links go to the router as for `init(client:)`; set
+    /// `router.onDeeplink` to be told of them. The router shows its first
+    /// page at once, so a launch URL iOS delivers after that is a link to a
+    /// running app (`isColdStart` false, the first page already requested); a
+    /// router made with `link:` starts at the link, and drops the system's
+    /// repeat of it.
     public init(router: @autoclosure @escaping () -> OrcaRouter,
                 enableOffline: Bool = false, enableSessionTracking: Bool = false,
                 plugins: [OrcaPlugin] = [], customActions: [String: OrcaActionHandler] = [:],
-                widgets: WidgetBuilders = WidgetBuilders()) {
+                widgets: WidgetBuilders = WidgetBuilders(),
+                loadingView: (() -> AnyView)? = nil, splashView: (() -> AnyView)? = nil,
+                errorView: ((Error) -> AnyView)? = nil, forceUpdateView: (() -> AnyView)? = nil,
+                colorScheme: ColorScheme? = nil, locale: Locale? = nil) {
         let host = OrcaPluginHost(plugins: plugins, customActions: customActions, widgets: widgets)
         _boot = StateObject(wrappedValue: OrcaAppBoot(router: host.attach(router())))
         _gate = StateObject(wrappedValue: OrcaBootModel(
             enableOffline: enableOffline, enableSessionTracking: enableSessionTracking, failure: host.failure))
+        views = BootViews(loading: loadingView, splash: splashView, error: errorView, forceUpdate: forceUpdateView)
+        self.colorScheme = colorScheme
+        self.locale = locale
     }
 
     public var body: some View {
         // The gate first: its content, and so the config fetch and every
         // page, exists only once the version check lets the app through.
-        OrcaBootView(boot: gate, client: boot.client) {
-            AppBootContent(boot: boot)
+        OrcaBootView(boot: gate, client: boot.client, views: views) {
+            AppBootContent(boot: boot, views: views)
         }
         // Deep links: a URL scheme link, and a universal link. Held by the
         // boot while there is no router (also under the version check),
@@ -392,25 +428,45 @@ public struct OrcaApp: View {
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
             if let url = activity.webpageURL { boot.receive(url) }
         }
+        .modifier(AppEnvironment(colorScheme: colorScheme, locale: locale))
     }
 }
 
-/// The app once the gate lets it through: the spinner while the config is
-/// asked for, the routes, or the error screen with a retry.
+/// OrcaApp's colour scheme and locale, set on everything below it, as
+/// Flutter's MaterialApp `themeMode` and `locale` reach the boot screens and
+/// the pages; nil leaves the host's. Written into the environment, so it
+/// stays inside OrcaApp (`preferredColorScheme` would turn the whole window).
+private struct AppEnvironment: ViewModifier {
+    let colorScheme: ColorScheme?
+    let locale: Locale?
+
+    func body(content: Content) -> some View {
+        content
+            .transformEnvironment(\.colorScheme) { if let colorScheme { $0 = colorScheme } }
+            .transformEnvironment(\.locale) { if let locale { $0 = locale } }
+    }
+}
+
+/// The app once the gate lets it through: the splash while the config is
+/// asked for, the routes, or the error screen with a retry (the host's
+/// views when given, its error view with no retry).
 @MainActor
 struct AppBootContent: View {
     @ObservedObject var boot: OrcaAppBoot
+    var views = BootViews()
 
     var body: some View {
         switch boot.phase {
         case .loading:
-            ProgressView().task { await boot.startIfNeeded() }
+            views.splashScreen().task { await boot.startIfNeeded() }
         case .ready(let router):
             RouterRoot(router: router).onAppear { boot.firstRouteAppeared() }
         case .failed:
             if let error = boot.error {
-                OrcaErrorView(error: error) {
-                    Task { await boot.retry() }
+                views.errorScreen(error) {
+                    OrcaErrorView(error: error) {
+                        Task { await boot.retry() }
+                    }
                 }
             }
         }

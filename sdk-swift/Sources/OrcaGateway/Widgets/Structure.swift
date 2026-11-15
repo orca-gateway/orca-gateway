@@ -20,6 +20,11 @@ import AppKit
 /// from the body (Flutter removes them from its MediaQuery padding,
 /// scaffold.dart :3027-3031): a SafeArea in it neither adds them nor lets its
 /// content under the bars. Bottom sheets are not drawn yet.
+///
+/// Always light: Flutter's `_buildScaffold`
+/// (sdk/lib/src/builders/structure_builders.dart), like its AppBar, Card,
+/// button and input builders, wraps the widget in `Theme(data: ThemeData())`,
+/// so an app's dark theme does not reach a Scaffold page.
 @MainActor
 struct ScaffoldView: View {
     let node: ResolvedNode
@@ -78,6 +83,7 @@ struct ScaffoldView: View {
         // constraints, so an axis forced on the Scaffold (the warn banner's
         // stretched Column) reaches neither the AppBar title nor the body.
         .environment(\.orcaTight, [])
+        .environment(\.colorScheme, .light)
     }
 
     /// The top edge under an appBar, the bottom one above bottom bars.
