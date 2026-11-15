@@ -61,9 +61,11 @@ public enum DeepLink {
     /// `/settings` and `settings` are all `/settings`. A location is its own
     /// location.
     public static func location(of link: String) -> String {
-        var rest = Substring(link)
+        // By scalar, not by `Character`: a delimiter followed by a combining
+        // scalar is still a delimiter, as for the Kotlin twin.
+        var rest = Substring(link).unicodeScalars
         if let hash = rest.firstIndex(of: "#") { rest = rest[..<hash] }
-        var query: Substring = ""
+        var query = Substring().unicodeScalars
         if let mark = rest.firstIndex(of: "?") {
             query = rest[rest.index(after: mark)...]
             rest = rest[..<mark]
@@ -71,13 +73,13 @@ public enum DeepLink {
         if let colon = rest.firstIndex(of: ":"), isScheme(rest[..<colon]) {
             rest = rest[rest.index(after: colon)...]
         }
-        if rest.hasPrefix("//") {
+        if rest.starts(with: "//".unicodeScalars) {
             rest = rest.dropFirst(2)
-            rest = rest.firstIndex(of: "/").map { rest[$0...] } ?? ""
+            rest = rest.firstIndex(of: "/").map { rest[$0...] } ?? Substring().unicodeScalars
         }
-        while rest.hasSuffix("/") { rest = rest.dropLast() }
-        let path = rest.hasPrefix("/") ? String(rest) : "/" + rest
-        return query.isEmpty ? path : path + "?" + query
+        while rest.last == "/" { rest = rest.dropLast() }
+        let path = rest.first == "/" ? String(rest) : "/" + String(rest)
+        return query.isEmpty ? path : path + "?" + String(query)
     }
 
     /// The location of a link the platform delivered as a `URL`: that of its
@@ -96,9 +98,9 @@ public enum DeepLink {
     }
 
     /// RFC 3986 `scheme`: a letter, then letters, digits, `+`, `-` or `.`.
-    private static func isScheme(_ text: Substring) -> Bool {
-        guard let first = text.unicodeScalars.first, isLetter(first) else { return false }
-        return text.unicodeScalars.allSatisfy { isLetter($0) || ("0"..."9").contains($0) || "+-.".unicodeScalars.contains($0) }
+    private static func isScheme(_ text: Substring.UnicodeScalarView) -> Bool {
+        guard let first = text.first, isLetter(first) else { return false }
+        return text.allSatisfy { isLetter($0) || ("0"..."9").contains($0) || "+-.".unicodeScalars.contains($0) }
     }
 
     private static func isLetter(_ scalar: Unicode.Scalar) -> Bool {
@@ -115,7 +117,7 @@ extension TabShell {
     /// redirect, nothing changes and nothing is requested; the resolution is
     /// returned all the same, for the event.
     public mutating func open(link location: String, appState: [String: JSONValue]) -> DeepLinkNavigation {
-        let resolution = table.resolve(location.hasPrefix("/") ? location : "/" + location, appState: appState)
+        let resolution = table.resolve(location.unicodeScalars.first == "/" ? location : "/" + location, appState: appState)
         if !visible.isEmpty, resolution.location == self.location {
             return DeepLinkNavigation(resolution: resolution,
                                       change: TabShellChange(requested: [], dropped: [], tabIndexWrite: nil))

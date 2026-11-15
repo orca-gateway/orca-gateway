@@ -109,6 +109,11 @@ class DeepLinkTest {
             // Every trailing slash goes.
             "https://shop.example/settings//" to "/settings",
             "https://shop.example//" to "/",
+            // A delimiter is a delimiter also when a combining scalar
+            // follows it: the text is split by code unit, not by grapheme.
+            "/s?q=#\uFE0F\u20E31" to "/s?q=",
+            "a:\u0301b" to "/\u0301b",
+            "x://\u0301h/p" to "/p",
         )
         for ((link, location) in odd) assertEquals(location, DeepLink.location(link), "\"$link\"")
         // A location is its own location.

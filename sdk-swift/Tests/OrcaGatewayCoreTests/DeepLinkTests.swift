@@ -84,6 +84,11 @@ final class DeepLinkTests: XCTestCase {
             // Every trailing slash goes.
             ("https://shop.example/settings//", "/settings"),
             ("https://shop.example//", "/"),
+            // A delimiter is a delimiter also when a combining scalar
+            // follows it: the text is split by scalar, not by grapheme.
+            ("/s?q=#\u{FE0F}\u{20E3}1", "/s?q="),
+            ("a:\u{0301}b", "/\u{0301}b"),
+            ("x://\u{0301}h/p", "/p"),
         ]
         for (link, location) in odd {
             XCTAssertEqual(DeepLink.location(of: link), location, "'\(link)'")
@@ -91,6 +96,33 @@ final class DeepLinkTests: XCTestCase {
         // A location is its own location.
         for (_, location) in odd {
             XCTAssertEqual(DeepLink.location(of: location), location, "again '\(location)'")
+        }
+    }
+
+    /// The pairs the Kotlin twin pins too (`DeepLinkTest.kt`): one function,
+    /// two languages, the same answers.
+    func test_L1_pairsSharedWithKotlin() {
+        let shared: [(link: String, location: String)] = [
+            // The first part after `//` is the host, whatever the scheme.
+            ("app://product/42", "/42"),
+            ("OrcaShop://open/order/7", "/order/7"),
+            // Nothing is decoded or encoded.
+            ("https://shop.example/order/a%20b?q=%C3%A9+x", "/order/a%20b?q=%C3%A9+x"),
+            ("/settings/?a=1#f", "/settings?a=1"),
+            // No path at all, with and without a query.
+            ("https://shop.example?tab=2", "/?tab=2"),
+            ("orcashop://?tab=2", "/?tab=2"),
+            ("orcashop://", "/"),
+            // A host without a scheme.
+            ("//shop.example/settings", "/settings"),
+            // A URL inside the query is the query's own business.
+            ("/settings?next=https://x.example/y", "/settings?next=https://x.example/y"),
+            // Only trailing slashes go; a second `?` belongs to the query.
+            ("https://shop.example/a//b/", "/a//b"),
+            ("https://shop.example/settings?a=1?b=2", "/settings?a=1?b=2"),
+        ]
+        for (link, location) in shared {
+            XCTAssertEqual(DeepLink.location(of: link), location, "'\(link)'")
         }
     }
 
