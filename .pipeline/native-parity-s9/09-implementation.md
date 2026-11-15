@@ -3,23 +3,23 @@
 ## Front page
 
 ### In one breath
-group 4 of 5 · tasks: 8 green, 0 blocked · cases: 25 of 31 legs green · Swift 352 · Kotlin 389
-T7 Swift router: boots from a config, resolves and redirects, shares app state, reports changes.
-T8 Kotlin router: the same, with the same names.
-A host write made while a page loads is kept on both; Kotlin lost it until the review caught it.
+group 5 of 5 · tasks: 10 green, 0 blocked · cases: 31 of 31 legs green · Swift 322 · Kotlin 395
+T9 Swift `OrcaApp`: `path: nil` boots from the config; title bar; "Page not found" page.
+T10 Kotlin `OrcaApp`: `path = null` does the same, with a Material top bar and a Back arrow.
+The default stays `home`: making the config boot the default broke three existing Kotlin tests.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided: a push of a nested location adds only its top page; `replace` shows the whole
-chain · when a page lands, the router's scope wins and the page's seeds fill only unset keys.
+1 needs you: config boot as the default of `OrcaApp(client)` (breaks hosts relying on `home`)
+vs opt-in with no path (landed). · 1 auto-decided: one navigation bar on iOS, two on Android.
 
 ### Questions for you
 1. No task is blocked. (default: nothing to retry)
-2. Next: group 5, `OrcaApp` boots from the config and draws the title bar? (default: go)
-3. A host write of null during a page's fetch is refilled by that page's seed, on both SDKs.
-   Leave it. (default: leave)
+2. `A` approves the stage; ship runs the hand checks and opens the PR. (default: go)
+3. Flip the default so `OrcaApp(client)` boots from the config, as Flutter? Not blocking: the
+   opt-in form ships now, the flip is one word plus three test updates. (default: keep opt-in)
 
 ## Appendix
 
@@ -99,8 +99,27 @@ Review fit: pass
 Review quality: a host write made while a page was fetching was reverted when the page landed, fixed (`attach` merges as Swift does; the not-found path drops only the query, as Swift)
 Not done: the `OrcaApp` side is group 5
 
+### Group 5
+#### Task T9 · Swift OrcaApp: config boot, title bar
+Files: `sdk-swift/Sources/OrcaGateway/OrcaApp.swift` · `sdk-swift/Tests/OrcaGatewayTests/AppBootTests.swift` (new) · `examples/app-ios/OrcaCounter/OrcaCounterApp.swift` · `examples/app-ios/README.md`
+Cases: B9.1-US, B9.5-US, B9.8-US → green (`swift test`: UI 74, core 248, 0 failures; 6 new; red first as a compile error) · baseline unchanged · the example app builds
+Changed: `OrcaAppBoot` (loading / ready(router) / failed(message)) · `OrcaApp(client:path:system:onRouteChanged:)`: a path (default `home`) as before, `path: nil` fetches `/config` once and boots the config router, a failed fetch shows "Try again" · a not-found route draws "Page not found" with no loader · a route with `scaffoldTitle` gets an inline navigation title, the page's title once loaded · example host `ORCA_BOOT=config`
+Decisions: 1. a page with its own AppBar on a titled route gives one navigation bar (Flutter shows two) · 2. the title is `page.title` once loaded, even when empty, as Flutter · 3. the hosted title check runs on macOS and is skipped on iOS
+Review fit: pass
+Review quality: pass
+Not done: the back button is not asserted by a test (NavigationStack draws it); it rests on the hand check
+
+#### Task T10 · Kotlin OrcaApp: config boot, top bar
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/OrcaApp.kt` · `sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/OrcaAppTest.kt` · `examples/app-android/app/src/main/kotlin/com/orcagateway/examples/counter/MainActivity.kt` · `examples/app-android/README.md` (`OrcaPageView.kt` not needed)
+Cases: B9.1-UK, B9.5-UK, B9.8-UK → green (`./gradlew build`: BUILD SUCCESSFUL, core 243, sdk 152; 6 new; red first) · baseline unchanged (no baseline test edited) · the example app builds
+Changed: `OrcaAppBoot` (Loading / Ready(router) / Failed(message)) · `OrcaApp(client, modifier, path, system, onRouteChanged)`: a path (default `home`) as before, `path = null` boots from `/config` · a not-found route draws "Page not found" with no loader · a route with `scaffoldTitle` sits under a Material 3 `TopAppBar` with the live title and a Back arrow · example host extra `ORCA_BOOT=config`
+Decisions: 1. a page with its own AppBar draws it below the route bar, two bars as Flutter · 2. the title is the page's once loaded, else the fallback · 3. first pass made the config boot the default and broke three baseline tests; reworked to opt-in, the default question goes to the user
+Review fit: pass
+Review quality: pass
+Not done: nothing
+
 ### Test run
-`cd sdk-swift && swift test` · UI 104 and core 248 tests, 0 failures · `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL, core 243, sdk 146 · group 1: `bun test` 738 pass, `flutter test` +303 · failures: none
+`cd engine && bun test` · 738 pass, 0 fail · `cd sdk && flutter test` · +303 All tests passed · `flutter analyze` · No issues found · `cd sdk-swift && swift test` · UI 74 and core 248 tests, 0 failures, no warnings · `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL, core 243, sdk 152 · `examples/app-android` `:app:assembleDebug` BUILD SUCCESSFUL · `examples/app-ios` `xcodebuild build` BUILD SUCCEEDED · failures: none (an earlier line of this section said "Swift UI 104": that was a sub-suite of the core bundle)
 
 ### Blocked
 none

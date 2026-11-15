@@ -4,9 +4,9 @@
   "idea": "Native parity step 9 (Phase B of /Users/amrebada/.claude/plans/native-parity/plan.md): app config, routes, redirects and shared state on sdk-swift and sdk-kotlin. Fetch /config; server-chosen initial route; NavConfig model, route matcher (:param, nested children) and redirect evaluator in both pure cores; new shared fixture family schema/fixtures/navigation/ passed by Flutter, Swift and Kotlin; initialAppState seeded; host reads/writes app state; onRouteChanged; non-tab routes wrapped in Scaffold+AppBar with back button and live title; demo config in examples/server. Test cases B9.1-B9.10 in phase-b-tests.md",
   "kind": "feature",
   "created_at": "2026-11-15T18:17:26Z",
-  "updated_at": "2026-11-15T19:02:46Z",
+  "updated_at": "2026-11-15T19:13:59Z",
   "active_session": "fe23fb0a-f62c-4a83-a51f-655a2e0bf8ff",
-  "current": "09",
+  "current": "10",
   "stages": {
     "01": {
       "status": "skipped",
@@ -44,9 +44,11 @@
       "approved_with": "standing rule (2026-11-11, restated for the parity phases 2026-11-15): minor and patch questions auto-approved; gate 08's five questions are minor (4: the plan's step 9 asks for the config boot and path stays as an override; 5: tabs are step 10), all defaults"
     },
     "09": {
-      "status": "draft",
+      "status": "approved",
       "rounds": 5,
-      "card": "cards/09-r4.md"
+      "card": "cards/09-r5.md",
+      "approved_at": "2026-11-15T19:13:59Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch auto-approved; gate 09 group 5: nothing blocked, approve the stage and ship; question 3 (config boot as the default of OrcaApp(client)) is major and stays OPEN for the user: the non-breaking opt-in form is what ships, nothing is decided for them"
     },
     "10": {
       "status": "pending"

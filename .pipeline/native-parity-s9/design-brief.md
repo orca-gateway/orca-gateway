@@ -83,9 +83,10 @@ field, so an expected value is whatever Flutter does. No change to Flutter's pro
 
 ## Native UI (`sdk-swift/Sources/OrcaGateway`, `sdk-kotlin/sdk`)
 
-- `OrcaApp(client:)` boots from the config: loading → `fetchConfig` → seed `initialAppState` → resolve
-  `initialRoute` → show it; a failed fetch shows the error view with a retry. `path` becomes optional: a host
-  that passes one keeps today's behaviour (no config fetch, that start path), so nothing breaks.
+- `OrcaApp(client:path: nil)` boots from the config: loading → `fetchConfig` → seed `initialAppState` → resolve
+  `initialRoute` → show it; a failed fetch shows the error view with a retry. `path` becomes optional and keeps its
+  default `home` (corrected at group 5: a config boot by default broke three existing tests, so it would break
+  hosts): `OrcaApp(client)` and a host path behave as today; `path: nil` / `path = null` boots from the config.
 - `OrcaRouter` gains a config: `navigate` resolves through `RouteTable` (redirect applied, `replace` = GoRouter
   `go` with the page chain as root + stack, otherwise push); an unknown location shows a "Page not found" page
   and fetches nothing. Navigation stays on `NavigationStack` / `NavHost`.
