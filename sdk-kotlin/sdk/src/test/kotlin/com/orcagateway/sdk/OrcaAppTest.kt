@@ -512,7 +512,6 @@ class HostActivity : ComponentActivity() {
     }
 }
 
-
 /** The tag of the top bar's title, as OrcaApp sets it. */
 private const val ORCA_ROUTE_TITLE_TAG = "orca-route-title"
 

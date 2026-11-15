@@ -261,8 +261,8 @@ public fun OrcaApp(
     // Keyed by the call site: two OrcaApps in one activity keep a router (or a boot) each.
     val site = currentCompositeKeyHashCode.toString(36)
     if (path != null) {
-        val retained = viewModel(key = "com.orcagateway.sdk.OrcaApp:$site") { RetainedRouter(OrcaRouter(identified, path)) }
-        val router = retained.router
+        val retained = viewModel(key = "com.orcagateway.sdk.OrcaApp:$site") { Retained(OrcaRouter(identified, path)) }
+        val router = retained.value
         AttachHost(router, system, onRouteChanged)
         OrcaApp(router, modifier, enableOffline, enableSessionTracking)
         return
@@ -270,8 +270,8 @@ public fun OrcaApp(
     // The version check comes first: the config is asked only once the app may run.
     OrcaBootView(identified, enableOffline, enableSessionTracking, modifier) {
         val scope = rememberCoroutineScope()
-        val retained = viewModel(key = "com.orcagateway.sdk.OrcaAppBoot:$site") { RetainedBoot(OrcaAppBoot(identified)) }
-        val boot = retained.boot
+        val retained = viewModel(key = "com.orcagateway.sdk.OrcaAppBoot:$site") { Retained(OrcaAppBoot(identified)) }
+        val boot = retained.value
         // Before the load starts, so the router it makes gets them.
         DisposableEffect(boot, system, onRouteChanged) {
             boot.system = system
@@ -311,19 +311,8 @@ private fun AttachHost(router: OrcaRouter, system: SystemActions?, onRouteChange
     }
 }
 
-/** OrcaApp(client)'s router through configuration changes; closed when the activity finishes. */
-internal class RetainedRouter(val router: OrcaRouter) : ViewModel() {
-    override fun onCleared() {
-        router.close()
-    }
-}
-
-/** OrcaApp(client, path = null)'s boot (and its router) through configuration changes; closed when the activity finishes. */
-internal class RetainedBoot(val boot: OrcaAppBoot) : ViewModel() {
-    override fun onCleared() {
-        boot.close()
-    }
-}
+/** OrcaApp(client)'s router or boot through configuration changes; [value] is closed when the activity finishes. */
+internal class Retained<T : AutoCloseable>(val value: T) : ViewModel(value)
 
 /**
  * [OrcaApp] over a router the host made and keeps (Swift
