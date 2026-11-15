@@ -33,6 +33,8 @@ public class WidgetRegistry(
     public fun reportUnknown(type: String): Boolean {
         val first = synchronized(lock) { reported.add(type) }
         if (first) onUnknownType?.invoke(type)
+        // The process-wide sink hears each type once, whatever registry saw it.
+        com.orcagateway.core.telemetry.OrcaTelemetry.reportUnknownWidgetOnce(type)
         return first
     }
 

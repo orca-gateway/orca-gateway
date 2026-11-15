@@ -7,12 +7,14 @@ import SwiftUI
 /// Any example app on that server runs here too: set ORCA_APP_ID and
 /// ORCA_PATH (for example `basic-actions` and `home`, or `server-actions`
 /// and `shop`) in the scheme, or as SIMCTL_CHILD_ORCA_APP_ID and
-/// SIMCTL_CHILD_ORCA_PATH for `simctl launch`.
+/// SIMCTL_CHILD_ORCA_PATH for `simctl launch`. ORCA_OFFLINE=1 runs the
+/// version check at boot (the force-update screen when the server answers
+/// forceUpdate), and ORCA_SESSIONS=1 reports session starts and ends.
 ///
 /// ORCA_BOOT=config starts from the server's navigation config instead of a
 /// path (the host passes `path: nil`): its `initialRoute` is the first page and its `initialAppState` is
 /// seeded. Use it with ORCA_APP_ID=navigation (`examples/server/navigation.ts`);
-/// ORCA_PATH is not read then.
+/// ORCA_PATH is not read then. The two switches above work in both modes.
 @main
 struct OrcaCounterApp: App {
     init() {
@@ -31,11 +33,12 @@ struct OrcaCounterApp: App {
         WindowGroup {
             let client = OrcaClient(baseURL: Self.serverURL, appId: Self.setting("ORCA_APP_ID", "counter"),
                                     apiKey: "demo-key")
-            if Self.setting("ORCA_BOOT", "path") == "config" {
-                OrcaApp(client: client, path: nil)
-            } else {
-                OrcaApp(client: client, path: Self.setting("ORCA_PATH", "home"))
-            }
+            let path: String? = Self.setting("ORCA_BOOT", "path") == "config"
+                ? nil : Self.setting("ORCA_PATH", "home")
+            OrcaApp(
+                client: client, path: path,
+                enableOffline: Self.isOn("ORCA_OFFLINE"),
+                enableSessionTracking: Self.isOn("ORCA_SESSIONS"))
         }
     }
 
@@ -49,5 +52,10 @@ struct OrcaCounterApp: App {
     static func setting(_ key: String, _ fallback: String) -> String {
         let value = ProcessInfo.processInfo.environment[key] ?? ""
         return value.isEmpty ? fallback : value
+    }
+
+    /// A switch: on when the setting is "1" or "true".
+    static func isOn(_ key: String) -> Bool {
+        ["1", "true"].contains(setting(key, ""))
     }
 }

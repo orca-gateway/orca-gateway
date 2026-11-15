@@ -99,9 +99,9 @@ user, so navigate after a login (`router.navigate(to: "/home", replace: true)`).
 
 `router.top` is the route on screen: `path` (the page request path), `location` (leading slash
 and query), `isNotFound`, and `scaffoldTitle`, the fallback title of a route outside the tabs.
-`OrcaApp(client:)` booting from the config by itself, the "Page not found" page and the title bar
-follow in the next step; until then `OrcaApp(router:)` draws a router made as above, and a config
-with tabs runs as one stack.
+`OrcaApp(client: client, path: nil)` boots from the config by itself (with no `path` it opens
+`home`, as before); `OrcaApp(router:)` draws a router made as above. Both show the "Page not found"
+page and the title bar. A config with tabs runs as one stack.
 
 ## Layout
 
@@ -141,6 +141,47 @@ OrcaApp(client: client, path: "home")
 The server wins: a button whose node carries its own style props (ElevatedButton
 `backgroundColor`, `foregroundColor`, `borderRadius`, `padding`; OutlinedButton `color`,
 `borderColor`; TextButton `color`) is drawn with those, not with the host style.
+
+## Sessions, analytics and version check
+
+`OrcaApp` takes two options, both off by default:
+
+```swift
+OrcaApp(client: client, path: "home", enableOffline: true, enableSessionTracking: true)
+```
+
+- `enableOffline` asks the server's `/version` before the first page. When the answer carries
+  `forceUpdate: true`, the app shows "Update required. Please update the app." and loads no page.
+  Any other answer, or none, lets it boot. The offline page cache and `preload()` come later.
+- `enableSessionTracking` sends a session start to `/session` when the app comes to the foreground,
+  and an end when it goes to the background. One that cannot reach the server is saved in
+  `UserDefaults` and sent to `/session/offline` on the next foreground.
+
+`OrcaApp(client:)` gives its client a device id when the client has none: a random id made on
+first run, saved in `UserDefaults` and sent as `x-orca-device-id` on every request. `OrcaApp(router:)`
+uses the router's client as you built it; set
+`client.deviceId = DeviceIdentity.resolve(UserDefaultsKeyValueStore())` to send the same id.
+
+`OrcaAnalytics` sends your own events. `OrcaApp` does not make one; build it from your client and
+call `track`:
+
+```swift
+let analytics = OrcaAnalytics.forClient(client)
+analytics.track("screen_view", payload: ["screen": .string("home")])
+```
+
+Events go to `POST /api/v1/app/<appId>/events` in batches of 20, or every 10 seconds while some
+wait. A failed batch goes back in the buffer and is sent with the next one; past 500 buffered
+events the oldest are dropped. `await analytics.dispose()` sends what is left. The events route is
+an Orca Cloud route: the open-source engine answers it with 404, so there the events stay buffered.
+
+`OrcaTelemetry.onEvent` receives the SDK's own events. There is one so far: `unknown_widget_type`
+with `["type": "<widget type>"]`, sent the first time a page holds a widget type the SDK does not
+draw (once per type per process).
+
+```swift
+OrcaTelemetry.onEvent = { name, payload in print(name, payload) }
+```
 
 ## Tests
 
