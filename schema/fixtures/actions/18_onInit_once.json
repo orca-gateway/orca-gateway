@@ -1,0 +1,82 @@
+{
+  "name": "onInit-once",
+  "description": "A node's onInit action wrapped in once, fired twice from the same widget (first build, then a redraw): the inner setState runs one time.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "inits": 0
+    },
+    "app": {}
+  },
+  "steps": [
+    {
+      "action": {
+        "type": "once",
+        "action": {
+          "type": "setState",
+          "key": "inits",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "inits"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "widgetId": "w",
+        "trigger": "onInit"
+      }
+    },
+    {
+      "action": {
+        "type": "once",
+        "action": {
+          "type": "setState",
+          "key": "inits",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "inits"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "widgetId": "w",
+        "trigger": "onInit"
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "inits": 1
+      },
+      "app": {}
+    },
+    "effects": []
+  }
+}

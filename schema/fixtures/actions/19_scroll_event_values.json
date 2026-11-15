@@ -1,0 +1,192 @@
+{
+  "name": "scroll-event-values",
+  "description": "Scroll triggers read their payload through the event Value, shaped as Flutter's _scrollEventData {offset, maxExtent, minExtent, viewportDimension, atStart, atEnd} plus delta on onScrolling; each step's event replaces the one before.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "offset": 0,
+      "maxExtent": 0,
+      "atEnd": false,
+      "delta": 0
+    },
+    "app": {}
+  },
+  "steps": [
+    {
+      "action": {
+        "type": "actionGroup",
+        "mode": "sequential",
+        "actions": [
+          {
+            "type": "setState",
+            "key": "maxExtent",
+            "value": {
+              "type": "event",
+              "key": "maxExtent"
+            }
+          },
+          {
+            "type": "setState",
+            "key": "atEnd",
+            "value": {
+              "type": "event",
+              "key": "atEnd"
+            }
+          }
+        ]
+      },
+      "source": {
+        "widgetId": "scroll",
+        "trigger": "onScrollBegin"
+      },
+      "event": {
+        "offset": 0.0,
+        "maxExtent": 600.0,
+        "minExtent": 0.0,
+        "viewportDimension": 400.0,
+        "atStart": true,
+        "atEnd": false
+      }
+    },
+    {
+      "action": {
+        "type": "actionGroup",
+        "mode": "sequential",
+        "actions": [
+          {
+            "type": "setState",
+            "key": "offset",
+            "value": {
+              "type": "event",
+              "key": "offset"
+            }
+          },
+          {
+            "type": "setState",
+            "key": "delta",
+            "value": {
+              "type": "event",
+              "key": "delta"
+            }
+          },
+          {
+            "type": "setState",
+            "key": "atEnd",
+            "value": {
+              "type": "event",
+              "key": "atEnd"
+            }
+          }
+        ]
+      },
+      "source": {
+        "widgetId": "scroll",
+        "trigger": "onScrolling"
+      },
+      "event": {
+        "offset": 250.5,
+        "maxExtent": 600.0,
+        "minExtent": 0.0,
+        "viewportDimension": 400.0,
+        "atStart": false,
+        "atEnd": false,
+        "delta": 250.5
+      }
+    },
+    {
+      "action": {
+        "type": "actionGroup",
+        "mode": "sequential",
+        "actions": [
+          {
+            "type": "setState",
+            "key": "offset",
+            "value": {
+              "type": "event",
+              "key": "offset"
+            }
+          },
+          {
+            "type": "setState",
+            "key": "delta",
+            "value": {
+              "type": "event",
+              "key": "delta"
+            }
+          },
+          {
+            "type": "setState",
+            "key": "atEnd",
+            "value": {
+              "type": "event",
+              "key": "atEnd"
+            }
+          }
+        ]
+      },
+      "source": {
+        "widgetId": "scroll",
+        "trigger": "onScrolling"
+      },
+      "event": {
+        "offset": 600.0,
+        "maxExtent": 600.0,
+        "minExtent": 0.0,
+        "viewportDimension": 400.0,
+        "atStart": false,
+        "atEnd": true,
+        "delta": 349.5
+      }
+    },
+    {
+      "action": {
+        "type": "actionGroup",
+        "mode": "sequential",
+        "actions": [
+          {
+            "type": "setState",
+            "key": "endOffset",
+            "value": {
+              "type": "event",
+              "key": "offset"
+            }
+          },
+          {
+            "type": "setState",
+            "key": "endAtEnd",
+            "value": {
+              "type": "event",
+              "key": "atEnd"
+            }
+          }
+        ]
+      },
+      "source": {
+        "widgetId": "scroll",
+        "trigger": "onScrollEnd"
+      },
+      "event": {
+        "offset": 600.0,
+        "maxExtent": 600.0,
+        "minExtent": 0.0,
+        "viewportDimension": 400.0,
+        "atStart": false,
+        "atEnd": true
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "offset": 600.0,
+        "maxExtent": 600.0,
+        "atEnd": true,
+        "delta": 349.5,
+        "endOffset": 600.0,
+        "endAtEnd": true
+      },
+      "app": {}
+    },
+    "effects": []
+  }
+}
