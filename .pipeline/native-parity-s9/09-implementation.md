@@ -3,22 +3,23 @@
 ## Front page
 
 ### In one breath
-group 2 of 5 · tasks: 4 green, 0 blocked · cases: 9 of 31 legs green · Swift 239 · Kotlin 367
-T3 Swift core: `NavConfig` and its parts decode a `/config` body; `fetchConfig()` fetches it.
-T4 Kotlin core: the same model and `fetchConfig()`, same names and defaults.
-Both decode every navigation fixture's config; the file count is pinned at 11 on each side.
+group 3 of 5 · tasks: 6 green, 0 blocked · cases: 21 of 31 legs green · Swift 248 · Kotlin 375
+T5 Swift core: `RouteTable` resolves a location; all 11 fixtures (56 cases) pass.
+T6 Kotlin core: the same `RouteTable`; the same 56 cases pass.
+A cross-check aligned the two on corners no fixture pins, with one mirrored test on each side.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided: `fetchConfig` is one plain GET with no capability handshake, as Dart · the
-models only decode; the raw body is kept for Phase C's offline cache.
+2 auto-decided: a path or query part with a bad escape is kept as raw text on both SDKs ·
+`routePath` is built from the matched segments, not the raw config string.
 
 ### Questions for you
 1. No task is blocked. (default: nothing to retry)
-2. Next: group 3, `RouteTable` in both cores against the fixtures? (default: go)
-3. A typed encoder for `NavConfig` is left out until Phase C needs one. (default: leave out)
+2. Next: group 4, both routers (config, app state, onRouteChanged)? (default: go)
+3. Swift compares path text by Unicode canonical equivalence, Kotlin and Dart by code unit; a
+   route in NFC asked in NFD matches on Swift only. Leave it as a known difference. (default: leave)
 
 ## Appendix
 
@@ -60,8 +61,27 @@ Review fit: the new count pin sat inside an existing test, fixed (its own test, 
 Review quality: the same finding, fixed
 Not done: a config failure still reads "Failed to fetch page: <status>" in the exception message (Dart says "config"); status and body are right
 
+### Group 3
+#### Task T5 · Swift core: RouteTable passes the navigation fixtures
+Files: `sdk-swift/Sources/OrcaGatewayCore/Navigation/RouteTable.swift` (new) · `.../Navigation/RouteChangeEvent.swift` (new) · `sdk-swift/Tests/OrcaGatewayCoreTests/NavigationFixtureTests.swift` (new)
+Cases: B9.2-S, B9.3-S, B9.4-S, B9.5-S, B9.9-S, B9.10-S → green (`swift test`: 248 tests, 0 failures; 11 files, 56 cases; red first as a compile error) · baseline unchanged (239 + 9 new)
+Changed: `RouteTable(config).resolve(location, appState:) -> RouteResolution` (kind, location, redirected, pagePath, routePath, params, stack, tabIndex, scaffoldTitle, transition, queryParameters), `RouteResolutionKind`, `RouteChangeEvent`, `RouteChangeType` · the runner compares every expected field, one method per case id, `test_unpinnedCornersAgreeWithKotlin` beside them
+Decisions: 1. the redirect lookup runs on the asked location whether or not a reachable route matches, as go_router does · 2. params and query values are percent-decoded, `pagePath` and `stack` keep raw segments · 3. a rule whose `equals` is a list or map never holds, as Dart `==`
+Review fit: the twins disagreed on one name and on unpinned inputs, fixed (`routePath` from the chain's segments, Dart's title capitalisation, a mirrored test)
+Review quality: pass
+Not done: Swift compares path text by canonical equivalence (NFC / NFD), Kotlin and Dart by code unit
+
+#### Task T6 · Kotlin core: RouteTable passes the navigation fixtures
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/navigation/RouteTable.kt` (new) · `.../navigation/RouteChangeEvent.kt` (new) · `sdk-kotlin/core/src/test/kotlin/com/orcagateway/core/navigation/NavigationFixtureTest.kt` (new)
+Cases: B9.2-K, B9.3-K, B9.4-K, B9.5-K, B9.9-K, B9.10-K → green (`./gradlew build`: BUILD SUCCESSFUL, core 243, sdk 132; 11 files, 56 cases; red first as a compile error) · baseline unchanged (core 235 + 8 new)
+Changed: `RouteTable(config).resolve(location, appState)`, `RouteResolution`, `RouteResolutionKind { Page, Error }`, `RouteChangeEvent`, `RouteChangeType { Push, Replace, Pop }` · the runner compares every expected field, one method per case id, `unpinnedCornersAgreeWithSwift` beside them
+Decisions: 1. when a rule holds, `location` is the rule's `to` · 2. params percent-decoded, `pagePath` / `stack` raw; `+` is a space in a query, a repeated key keeps its last value · 3. one bad escape keeps the whole part raw
+Review fit: pass
+Review quality: the percent-decoder corrupted a non-BMP character beside an escape, fixed (text copied whole, escape runs decoded strictly; `queryParameters`, `config` and the defaults aligned with Swift)
+Not done: nothing
+
 ### Test run
-`cd sdk-swift && swift test` · Executed 239 tests, with 0 failures · `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL, core 235, sdk 132 · group 1: `bun test` 738 pass, `flutter test` +303 · failures: none
+`cd sdk-swift && swift test` · Executed 248 tests, with 0 failures · `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL, core 243, sdk 132 · group 1: `bun test` 738 pass, `flutter test` +303 · failures: none
 
 ### Blocked
 none
