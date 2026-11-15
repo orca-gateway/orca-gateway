@@ -318,6 +318,25 @@ final class DeeplinkTests: XCTestCase {
         XCTAssertTrue(stub.requests[0].url.path.hasSuffix("/page/product/42"))
     }
 
+    /// The query mark is a scalar: a combining scalar after it does not hide
+    /// it, warm or cold, and the page asked for is the one Kotlin asks for.
+    func test_B11_2_withoutAConfigAQueryMarkBeforeACombiningScalarStillEndsThePagePath() async throws {
+        let link = try url("orcashop://open/a?\u{301}x=1")
+        let warmStub = PageStub()
+        let warm = OrcaRouter(client: PageStub.client(warmStub), path: "home", system: SystemRecorder().actions())
+        warm.handleDeeplink(link)
+        XCTAssertEqual(warm.root.path, "a")
+        _ = try await loaded(warm, warm.root)
+        XCTAssertEqual(pages(warmStub.requests), ["a"])
+
+        let coldStub = PageStub()
+        let cold = OrcaRouter(client: PageStub.client(coldStub), path: "home", system: SystemRecorder().actions(),
+                              link: link)
+        XCTAssertEqual(cold.root.path, "a")
+        _ = try await loaded(cold, cold.root)
+        XCTAssertEqual(pages(coldStub.requests), ["a"])
+    }
+
     // MARK: - L3 a protected route
 
     func test_B11_3_aProtectedLinkIsRedirectedWarmAndCold() async throws {

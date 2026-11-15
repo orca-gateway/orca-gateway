@@ -278,7 +278,7 @@ public final class OrcaRouter: ObservableObject {
             resolution = Self.pathResolution(location, appState)
             if location != top.location {
                 pendingType = .replace
-                root = OrcaRoute(String(location.prefix { $0 != "?" }), location: location)
+                root = OrcaRoute(String(location.unicodeScalars.prefix { $0 != "?" }), location: location)
                 stack = []
             }
         }
@@ -299,7 +299,7 @@ public final class OrcaRouter: ObservableObject {
         let location = DeepLink.location(of: link)
         if location != top.location {
             lastLocation = location
-            root = OrcaRoute(String(location.prefix { $0 != "?" }), location: location)
+            root = OrcaRoute(String(location.unicodeScalars.prefix { $0 != "?" }), location: location)
             if !stack.isEmpty { stack = [] }
         }
         onDeeplink?(DeepLink.event(link: link, resolution: Self.pathResolution(location, appState),

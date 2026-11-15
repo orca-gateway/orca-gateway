@@ -176,6 +176,15 @@ class DeeplinkTest {
     }
 
     @Test
+    fun b11_2_inPathModeAQueryMarkBeforeACombiningCharStillEndsThePagePath() {
+        val engine = LinkEngine()
+        val router = OrcaRouter(engine.client, "home")
+        router.handleDeeplink("orcashop://open/a?\u0301x=1")
+        assertEquals("a", router.root.path)
+        assertEquals("/a?\u0301x=1", router.root.location)
+    }
+
+    @Test
     fun b11_2_inPathModeTheQueryIsDecodedAsWithAConfig() {
         val link = "https://shop.example/settings?q=%FF&name=a+b%20c&caf%C3%A9=1"
         router(LinkEngine()).handleDeeplink(link)
