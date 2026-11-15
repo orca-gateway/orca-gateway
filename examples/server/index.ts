@@ -10,6 +10,7 @@ import { capabilityDemoApp } from "./capability-demo";
 import { nativeWidgetsApp } from "./native-widgets";
 import { todoApp } from "./todo";
 import { navigationApp } from "./navigation";
+import { tabsApp, tabsServerApp } from "./tabs";
 import { recoveryMiddleware } from "../../engine/src/middlewares/recovery";
 import { loggingMiddleware } from "../../engine/src/middlewares/logging";
 import { corsMiddleware } from "../../engine/src/middlewares/cors";
@@ -20,7 +21,7 @@ import enginePackage from "../../engine/package.json";
 
 // ── Register middleware on each app ──────────────────────────
 
-const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp, navigationApp];
+const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp, navigationApp, tabsApp, tabsServerApp];
 
 for (const app of apps) {
   app
@@ -95,3 +96,5 @@ console.log("  - capability:     /api/v1/app/capability-demo/page/degrade  (a Ch
 console.log("  - native-widgets: /api/v1/app/native-widgets/page/home");
 console.log("  - todo:           /api/v1/app/todo/page/home");
 console.log("  - navigation:     /api/v1/app/navigation/config");
+console.log("  - tabs:           /api/v1/app/tabs/config");
+console.log("  - tabs-server:    /api/v1/app/tabs-server/config");
