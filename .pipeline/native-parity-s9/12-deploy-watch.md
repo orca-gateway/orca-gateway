@@ -3,18 +3,21 @@
 ## Front page
 
 ### In one breath
-One or two sentences a tired person understands.
+PR #30 is merged into main (81b4bc1) by the user with its checks green.
+Nothing is published: releases go through `scripts/release.sh`, which is the user's to run.
+Rows B9.1 to B9.10 are ticked on both SDKs.
 
 ### New for you
-Numbered list of concepts likely new to the decider, one per line, each ending with its learning card:
-`1. <topic in words> → learning/<topic>.md`. Or: nothing new.
+nothing new
 
 ### Trade-offs
-"n needs you: <what and the options>" · "n auto-decided: <what> (your call, <date>)" · or: none
+none
 
 ### Questions for you
-Numbered, batched, each with a default. Or: none
+1. Stages 13 to 16 skipped: nothing is deployed, so there is nothing to observe. (default: yes)
 
 ## Appendix
 
-Everything else: components, data, sequences, alternatives, references. No budget here.
+**Placeholder:** this stage is rendered by pipeline-core; the pipeline-ship module replaces it.
+
+Merged by the user; the next plan step starts from `origin/main`.
