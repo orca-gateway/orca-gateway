@@ -420,7 +420,7 @@ public fun OrcaApp(
         if (boot.plugins == null) boot.plugins = OrcaPluginHost.merge(boot.client, plugins, customActions, widgets)
     }
     val bootSplash = splash ?: loading
-    OrcaTheme(colorScheme, locale) {
+    WithSchemeAndLocale(colorScheme, locale) {
         // The version check comes first: the config is asked only once the app may run.
         OrcaBootView(identified, enableOffline, enableSessionTracking, modifier, prepare, bootSplash, error, forceUpdate) {
             val scope = rememberCoroutineScope()
@@ -625,7 +625,7 @@ private fun RouterApp(
     val prepare = {
         if (router.plugins == null) router.plugins = OrcaPluginHost.merge(router.client, plugins, customActions, widgets)
     }
-    OrcaTheme(colorScheme, locale) {
+    WithSchemeAndLocale(colorScheme, locale) {
         OrcaBootView(router.client, enableOffline, enableSessionTracking, modifier, prepare, splash ?: loading, error, forceUpdate) {
             OrcaNavHost(router, modifier)
         }
@@ -640,7 +640,7 @@ private fun RouterApp(
  * the host's own is set again.
  */
 @Composable
-private fun OrcaTheme(colorScheme: ColorScheme?, locale: Locale?, content: @Composable () -> Unit) {
+private fun WithSchemeAndLocale(colorScheme: ColorScheme?, locale: Locale?, content: @Composable () -> Unit) {
     val configuration = LocalConfiguration.current
     val localized = remember(configuration, locale) { locale?.let { configuration.withLocale(it) } }
     CompositionLocalProvider(*listOfNotNull(localized?.let { LocalConfiguration provides it }).toTypedArray()) {
