@@ -312,7 +312,7 @@ private struct ShellBar: ViewModifier {
             #endif
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if server, let bar = model.bar {
-                    ShellTreeView(tree: bar)
+                    ShellTreeView(tree: bar).bottomBarBacking()
                 }
             }
     }

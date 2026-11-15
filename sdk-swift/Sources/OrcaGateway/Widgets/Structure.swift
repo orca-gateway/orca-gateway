@@ -91,6 +91,7 @@ struct ScaffoldView: View {
                     NodeView(id: bar, model: model)
                 }
             }
+            .bottomBarBacking(Props.color(node["backgroundColor"]) ?? systemBackground)
         }
     }
 }
@@ -466,5 +467,16 @@ var systemBackground: Color {
     #else
     Color.white
     #endif
+}
+
+extension View {
+    /// The backing of a bar set in the bottom safe-area inset (the shell's
+    /// server tab bar, a Scaffold's bottom bars): a fill behind the bar that
+    /// runs down through the bottom safe area, so no page content scrolling
+    /// under the inset shows in the home-indicator strip. Only the fill
+    /// leaves the safe area; the bar's content stays where it was.
+    func bottomBarBacking(_ color: Color = systemBackground) -> some View {
+        background(color.ignoresSafeArea(edges: .bottom))
+    }
 }
 #endif
