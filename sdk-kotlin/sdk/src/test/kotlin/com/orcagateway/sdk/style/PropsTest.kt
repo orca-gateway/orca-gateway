@@ -6,13 +6,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.orcagateway.core.json.JsonValue
 import org.junit.Test
@@ -177,6 +180,63 @@ class PropsTest {
         assertNull(plain.fontWeight)
         assertNull(plain.textDecoration)
         assertEquals(TextDecoration.Underline, TextStyleProps(JsonValue.obj("decoration" to "underline")).textStyle().textDecoration)
+    }
+
+    /**
+     * A1.1: `height` is a line height in multiples of the font size, as
+     * Flutter's line box (centred, not trimmed); `wordSpacing`, the overline
+     * and `decorationStyle` are read. Compose's own decoration covers only a
+     * solid underline or line-through in the text colour; anything else is
+     * drawn by the Text.
+     */
+    @Test
+    fun a1_1_textStyleReadsHeightWordSpacingOverlineAndDecorationStyle() {
+        val props = TextStyleProps(
+            JsonValue.obj(
+                "height" to 1.5, "wordSpacing" to 4, "decoration" to "overline", "decorationStyle" to "dashed",
+                "decorationColor" to "#E53935",
+            ),
+        )
+        val style = props.textStyle()
+        assertEquals(1.5.em, style.lineHeight)
+        assertEquals(LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None), style.lineHeightStyle)
+        assertEquals(4.0, props.wordSpacing)
+        assertTrue(props.overline)
+        assertEquals(TextStyleProps.DecorationStyle.Dashed, props.decorationStyle)
+        assertNull(style.textDecoration)
+        assertTrue(props.drawsDecoration)
+
+        val plain = TextStyleProps(null)
+        assertEquals(TextUnit.Unspecified, plain.textStyle().lineHeight)
+        assertNull(plain.textStyle().lineHeightStyle)
+        assertNull(plain.wordSpacing)
+        assertEquals(TextStyleProps.DecorationStyle.Solid, plain.decorationStyle)
+        assertFalse(plain.drawsDecoration)
+
+        val styles = mapOf(
+            "solid" to TextStyleProps.DecorationStyle.Solid, "double" to TextStyleProps.DecorationStyle.Double,
+            "dotted" to TextStyleProps.DecorationStyle.Dotted, "dashed" to TextStyleProps.DecorationStyle.Dashed,
+            "wavy" to TextStyleProps.DecorationStyle.Wavy, "zigzag" to TextStyleProps.DecorationStyle.Solid,
+        )
+        for ((name, expected) in styles) {
+            assertEquals(expected, TextStyleProps(JsonValue.obj("decorationStyle" to name)).decorationStyle, name)
+        }
+
+        fun draws(vararg style: Pair<String, Any?>) = TextStyleProps(JsonValue.obj(*style)).drawsDecoration
+        assertFalse(draws("decoration" to "underline"))
+        assertFalse(draws("decoration" to "lineThrough", "decorationStyle" to "solid"))
+        assertTrue(draws("decoration" to "underline", "decorationColor" to "#0000FF"))
+        assertTrue(draws("decoration" to "lineThrough", "decorationStyle" to "wavy"))
+        assertFalse(draws("decoration" to "none", "decorationColor" to "#0000FF"))
+        assertFalse(draws("decorationStyle" to "dashed"))
+    }
+
+    /** A1.2: the style keeps its own `overflow`, for a Text that sends none. */
+    @Test
+    fun a1_2_textStyleKeepsItsOverflow() {
+        assertEquals("fade", TextStyleProps(JsonValue.obj("overflow" to "fade")).overflow?.stringValue)
+        assertNull(TextStyleProps(JsonValue.obj("fontSize" to 12)).overflow)
+        assertNull(TextStyleProps(null).overflow)
     }
 
     /**

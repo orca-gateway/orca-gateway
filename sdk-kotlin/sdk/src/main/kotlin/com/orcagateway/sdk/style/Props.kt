@@ -10,12 +10,14 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.orcagateway.core.json.DartFormat
 import com.orcagateway.core.json.JsonValue
@@ -266,8 +268,11 @@ internal data class CornerRadii(
  * from the surrounding style (the page's body style, an app bar's title
  * style, a button's label style), as Flutter's `DefaultTextStyle` does.
  *
- * `decorationColor` is read but cannot be drawn: Compose text decorations
- * always take the text colour.
+ * `height` is a line height in multiples of the font size (Flutter's line
+ * box). Compose draws only a solid underline or line-through in the text
+ * colour, so [textStyle] carries those and a Text draws the rest itself
+ * ([drawsDecoration]): an overline, `decorationStyle` and `decorationColor`.
+ * `wordSpacing` and `overflow` are for the Text too.
  */
 internal class TextStyleProps(value: JsonValue?) {
     val size: Double?
@@ -279,7 +284,14 @@ internal class TextStyleProps(value: JsonValue?) {
     val letterSpacing: Double?
     val underline: Boolean
     val strikethrough: Boolean
+    val overline: Boolean
     val decorationColor: Color?
+    val decorationStyle: DecorationStyle
+    val height: Double?
+    val wordSpacing: Double?
+
+    /** The style's own `overflow`, which a Text without one takes (Flutter). */
+    val overflow: JsonValue?
 
     init {
         val s = value?.objectValue.orEmpty()
@@ -293,8 +305,31 @@ internal class TextStyleProps(value: JsonValue?) {
         letterSpacing = Props.number(s["letterSpacing"])
         underline = s["decoration"]?.stringValue == "underline"
         strikethrough = s["decoration"]?.stringValue == "lineThrough"
+        overline = s["decoration"]?.stringValue == "overline"
         decorationColor = Props.color(s["decorationColor"])
+        decorationStyle = DecorationStyle.entries.firstOrNull { it.wire == s["decorationStyle"]?.stringValue }
+            ?: DecorationStyle.Solid
+        // A negative height inherits, as a negative size does.
+        height = Props.number(s["height"])?.takeIf { it >= 0 }
+        wordSpacing = Props.number(s["wordSpacing"])
+        overflow = s["overflow"]
     }
+
+    /** Flutter `TextDecorationStyle`; anything unknown is `solid`. */
+    enum class DecorationStyle(val wire: String) {
+        Solid("solid"),
+        Double("double"),
+        Dotted("dotted"),
+        Dashed("dashed"),
+        Wavy("wavy"),
+    }
+
+    /**
+     * A decoration Compose cannot draw: an overline, a style other than
+     * solid, or a `decorationColor`. The Text draws it instead.
+     */
+    val drawsDecoration: Boolean
+        get() = overline || ((underline || strikethrough) && (decorationStyle != DecorationStyle.Solid || decorationColor != null))
 
     val decoration: TextDecoration?
         get() = when {
@@ -313,9 +348,14 @@ internal class TextStyleProps(value: JsonValue?) {
         letterSpacing = letterSpacing?.sp ?: TextUnit.Unspecified,
         background = background ?: Color.Unspecified,
         textDecoration = decoration,
+        lineHeight = height?.em ?: TextUnit.Unspecified,
+        lineHeightStyle = height?.let { LINE_BOX },
     )
 
     private companion object {
+        /** Flutter's line box: the extra height split above and below, the first and last lines too. */
+        val LINE_BOX = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
+
         /**
          * A family by name: the generic Flutter names map to Compose's, any
          * other name is looked up among the system fonts (Swift:

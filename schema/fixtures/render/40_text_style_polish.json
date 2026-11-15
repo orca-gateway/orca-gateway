@@ -1,0 +1,84 @@
+{
+  "name": "text-style-polish",
+  "description": "Text whose style carries line height 1.5 (a multiple of fontSize), word spacing 4, an overline decoration drawn dashed in #E53935 and style.overflow fade, with overflow fade, textAlign justify and maxLines 1 on the Text itself. The static props reach the wire unchanged and every client resolver passes them through unchanged; `data` is a page-state Value so the node watches `caption`.",
+  "input": {
+    "type": "Text",
+    "key": "t",
+    "props": {
+      "data": {
+        "type": "state",
+        "scope": "page",
+        "key": "caption"
+      },
+      "style": {
+        "fontSize": 16,
+        "height": 1.5,
+        "wordSpacing": 4,
+        "decoration": "overline",
+        "decorationStyle": "dashed",
+        "decorationColor": "#E53935",
+        "overflow": "fade"
+      },
+      "overflow": "fade",
+      "textAlign": "justify",
+      "maxLines": 1
+    }
+  },
+  "context": {
+    "pageState": {
+      "caption": "Polished text style"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "t",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "state",
+          "scope": "page",
+          "key": "caption"
+        },
+        "style": {
+          "fontSize": 16,
+          "height": 1.5,
+          "wordSpacing": 4,
+          "decoration": "overline",
+          "decorationStyle": "dashed",
+          "decorationColor": "#E53935",
+          "overflow": "fade"
+        },
+        "overflow": "fade",
+        "textAlign": "justify",
+        "maxLines": 1
+      },
+      "children": [],
+      "watches": [
+        "caption"
+      ]
+    }
+  ],
+  "resolved": {
+    "t": {
+      "data": "Polished text style",
+      "style": {
+        "fontSize": 16,
+        "height": 1.5,
+        "wordSpacing": 4,
+        "decoration": "overline",
+        "decorationStyle": "dashed",
+        "decorationColor": "#E53935",
+        "overflow": "fade"
+      },
+      "overflow": "fade",
+      "textAlign": "justify",
+      "maxLines": 1
+    }
+  }
+}

@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.ChildView
 import com.orcagateway.sdk.NodeView
@@ -37,6 +38,11 @@ import kotlin.math.roundToInt
  * `mainAxisAlignment` spaces like any child. An Expanded or Spacer child
  * ([ExpandedWidget], [SpacerWidget]) takes a share of the space the others
  * leave; every other child takes its own size.
+ *
+ * `textDirection` (`ltr` or `rtl`; the page's direction when absent) and
+ * `verticalDirection` (`up` or `down`) order the Flex's own layout only:
+ * its children keep the page's layout direction, as Flutter's Flex sets no
+ * Directionality for them.
  */
 @Composable
 internal fun FlexWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier, vertical: Boolean) {
@@ -47,6 +53,12 @@ internal fun FlexWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modi
             cross = Props.crossAxis(node["crossAxisAlignment"]),
             fill = Props.fillsMainAxis(node["mainAxisSize"]),
             gap = Props.length(node["gap"]),
+            textDirection = when (node["textDirection"]?.stringValue) {
+                "ltr" -> LayoutDirection.Ltr
+                "rtl" -> LayoutDirection.Rtl
+                else -> null
+            },
+            up = node["verticalDirection"]?.stringValue == "up",
         )
     }
     Layout(
@@ -130,10 +142,14 @@ private class FlexFactorNode(var flex: Int) : Modifier.Node(), ParentDataModifie
  * 4. Space left over is placed by `mainAxisAlignment` over the items, gap
  *    boxes included; each child sits on the cross axis by
  *    `crossAxisAlignment`. `baseline` aligns the first baselines in a Row,
- *    a child without one sitting at the top; in a Column it is `start`.
+ *    a child without one sitting at the top; in a Column it is the left
+ *    edge (Flutter's offset 0).
  *
- * Positions are relative, so a right-to-left layout mirrors a Row's main
- * axis and a Column's cross axis, as Flutter's text direction does.
+ * Flutter's `_flipMainAxis` and `_flipCrossAxis`: a right-to-left
+ * [textDirection] (the layout direction when null) mirrors a Row's main
+ * axis and a Column's cross axis; [up] mirrors a Column's main axis (its
+ * first child at the bottom) and a Row's cross axis (`start` at the
+ * bottom). Positions are absolute, so nothing else mirrors them.
  */
 internal class FlexMeasurePolicy(
     private val vertical: Boolean,
@@ -142,6 +158,10 @@ internal class FlexMeasurePolicy(
     private val fill: Boolean,
     /** The gap box between two children; null sends none. */
     private val gap: Dp?,
+    /** Flutter's `textDirection`; null follows the layout direction. */
+    private val textDirection: LayoutDirection? = null,
+    /** Flutter's `verticalDirection: up`. */
+    private val up: Boolean = false,
 ) : MeasurePolicy {
     override fun MeasureScope.measure(measurables: List<Measurable>, constraints: Constraints): MeasureResult {
         val maxMain = if (vertical) constraints.maxHeight else constraints.maxWidth
@@ -208,20 +228,25 @@ internal class FlexMeasurePolicy(
         val remaining = max(0f, mainSize - allocated)
         val (leading, between) = spacing(remaining, items)
 
+        val rtl = (textDirection ?: layoutDirection) == LayoutDirection.Rtl
+        val flipMain = if (vertical) up else rtl
+        val flipCross = if (vertical) rtl else up
         val width = if (vertical) crossLength else mainSize
         val height = if (vertical) mainSize else crossLength
         return layout(width, height) {
             var position = leading
             placeables.forEachIndexed { i, p ->
                 if (i > 0 && gap != null) position += gapPx + between
+                val free = crossLength - crossOf(p)
                 val offset = when {
                     baseline -> baselines[i].let { if (it == AlignmentLine.Unspecified) 0 else maxAbove - it }
-                    cross == Props.CrossAxis.End -> crossLength - crossOf(p)
-                    cross == Props.CrossAxis.Center -> (crossLength - crossOf(p)) / 2
+                    cross == Props.CrossAxis.Start -> if (flipCross) free else 0
+                    cross == Props.CrossAxis.End -> if (flipCross) 0 else free
+                    cross == Props.CrossAxis.Center -> free / 2
                     else -> 0
                 }
-                val at = position.roundToInt()
-                if (vertical) p.placeRelative(offset, at) else p.placeRelative(at, offset)
+                val at = position.roundToInt().let { if (flipMain) mainSize - it - mainOf(p) else it }
+                if (vertical) p.place(offset, at) else p.place(at, offset)
                 position += mainOf(p) + between
             }
         }

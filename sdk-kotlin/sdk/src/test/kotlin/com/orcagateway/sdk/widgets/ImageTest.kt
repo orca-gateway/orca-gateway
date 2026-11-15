@@ -68,6 +68,9 @@ import kotlin.test.assertTrue
  * pixels per dp), where the 40x20-pixel image at one dp per image pixel,
  * as Flutter lays it out, is 40x20 dp, and at one device pixel per image
  * pixel, as Compose would, 20x10.
+ *
+ * A1.7: `fit` and `repeat` drawn as Flutter's `paintImage`, with a second
+ * PNG, 10x10 pixels, its left half red and its right half blue.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -86,11 +89,21 @@ class ImageTest {
         ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
     }
 
-    /** `/stripes.png` is the PNG, `/slow.png` the PNG once [release]d, anything else a 404. */
+    private val halves: ByteArray by lazy {
+        val pixels = IntArray(10 * 10) { if (it % 10 < 5) Color.RED else Color.BLUE }
+        val bitmap = Bitmap.createBitmap(pixels, 10, 10, Bitmap.Config.ARGB_8888)
+        ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+    }
+
+    /**
+     * `/stripes.png` is the PNG, `/halves.png` the 10x10 one, `/slow.png`
+     * the PNG once [release]d, anything else a 404.
+     */
     private val server = MockWebServer().apply {
         dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
                 "/stripes.png" -> MockResponse().setBody(Buffer().write(png))
+                "/halves.png" -> MockResponse().setBody(Buffer().write(halves))
                 "/slow.png" -> {
                     release.await(5, TimeUnit.SECONDS)
                     MockResponse().setBody(Buffer().write(png))
@@ -146,9 +159,14 @@ class ImageTest {
         return bitmap
     }
 
-    /** The pixel [x], [y] from the top left of [box] (which may lie outside it). */
-    private fun Bitmap.at(box: DpRect, x: Int, y: Int): Int =
-        getPixel(box.left.value.roundToInt() + x, box.top.value.roundToInt() + y)
+    /**
+     * The device pixel at [x], [y] dp from the top left of [box] (which may
+     * lie outside it): the same number at mdpi, twice it at xhdpi.
+     */
+    private fun Bitmap.at(box: DpRect, x: Int, y: Int): Int {
+        val density = compose.density.density
+        return getPixel(((box.left.value + x) * density).roundToInt(), ((box.top.value + y) * density).roundToInt())
+    }
 
     private fun assertColor(expected: Int, actual: Int, where: String) {
         val close = intArrayOf(24, 16, 8, 0).all { abs((expected ushr it and 0xFF) - (actual ushr it and 0xFF)) <= 8 }
@@ -337,5 +355,151 @@ class ImageTest {
         assertEquals(16.dp to 8.dp, narrow.width to narrow.height, "cover in 16 dp")
         val contained = box("Contained")
         assertEquals(30.dp to 15.dp, contained.width to contained.height, "contain in 30 dp")
+    }
+
+    /**
+     * A1.7: in an 80x80 box the 40x20 image is, as Flutter's BoxFit:
+     * fitWidth 80 wide and 40 high, centred (white above and below);
+     * fitHeight 160 wide and 80 high, centred and cut to the box (its red
+     * and blue columns fill it); scaleDown its own 40x20, centred, never
+     * enlarged. In a 20x40 box scaleDown shrinks it to 20x10 as contain.
+     */
+    @Test
+    fun a1_7_fitWidthFitHeightAndScaleDownAreFlutters() {
+        fun fitted(id: String, alt: String, fit: String, width: Int, height: Int) =
+            image(id, "src" to url("/stripes.png"), "alt" to alt, "width" to width, "height" to height, "fit" to fit)
+        show(
+            column("0", "1", "2", "3", "4"),
+            fitted("1", "Width", "fitWidth", 80, 80),
+            fitted("2", "Height", "fitHeight", 80, 80),
+            fitted("3", "Down", "scaleDown", 80, 80),
+            fitted("4", "Shrunk", "scaleDown", 20, 40),
+        )
+        compose.waitUntil(5_000) { draw().at(box("Shrunk"), 7, 20) != Color.WHITE }
+        val picture = draw()
+
+        val width = box("Width")
+        assertColor(Color.WHITE, picture.at(width, 40, 10), "fitWidth, above")
+        for ((x, color) in listOf(10 to Color.GREEN, 30 to Color.RED, 50 to Color.BLUE, 70 to Color.GREEN)) {
+            assertColor(color, picture.at(width, x, 40), "fitWidth, x $x")
+        }
+        assertColor(Color.WHITE, picture.at(width, 40, 70), "fitWidth, below")
+
+        val height = box("Height")
+        for (y in listOf(3, 40, 77)) {
+            assertColor(Color.RED, picture.at(height, 20, y), "fitHeight, left, y $y")
+            assertColor(Color.BLUE, picture.at(height, 60, y), "fitHeight, right, y $y")
+        }
+
+        val down = box("Down")
+        val row = listOf(15 to Color.WHITE, 25 to Color.GREEN, 35 to Color.RED, 45 to Color.BLUE, 55 to Color.GREEN, 65 to Color.WHITE)
+        for ((x, color) in row) {
+            assertColor(color, picture.at(down, x, 40), "scaleDown, x $x")
+        }
+        assertColor(Color.WHITE, picture.at(down, 40, 25), "scaleDown, above")
+        assertColor(Color.WHITE, picture.at(down, 40, 55), "scaleDown, below")
+
+        val shrunk = box("Shrunk")
+        for ((x, color) in listOf(2 to Color.GREEN, 7 to Color.RED, 12 to Color.BLUE, 17 to Color.GREEN)) {
+            assertColor(color, picture.at(shrunk, x, 20), "scaleDown shrunk, x $x")
+        }
+        assertColor(Color.WHITE, picture.at(shrunk, 10, 10), "scaleDown shrunk, above")
+        assertColor(Color.WHITE, picture.at(shrunk, 10, 30), "scaleDown shrunk, below")
+    }
+
+    /**
+     * A1.7: `repeat` draws the image at its fitted size and position (fit
+     * none, centred: x 15 to 25, y 5 to 15 of a 40x20 box), then tiles it
+     * from there over the box, as Flutter's `ImageRepeat`: x 5 and x 15
+     * both start a tile (red), x 2 ends one (blue). repeatX tiles across
+     * only, repeatY down only; noRepeat draws the one image.
+     */
+    @Test
+    fun a1_7_repeatTilesTheImageFromItsAlignedPosition() {
+        fun tiled(id: String, alt: String, repeat: String) = image(
+            id, "src" to url("/halves.png"), "alt" to alt, "width" to 40, "height" to 20, "fit" to "none", "repeat" to repeat,
+        )
+        show(
+            column("0", "1", "2", "3", "4"),
+            tiled("1", "Repeat", "repeat"),
+            tiled("2", "RepeatX", "repeatX"),
+            tiled("3", "RepeatY", "repeatY"),
+            tiled("4", "Once", "noRepeat"),
+        )
+        compose.waitUntil(5_000) { draw().at(box("Once"), 17, 10) != Color.WHITE }
+        val picture = draw()
+
+        val repeat = box("Repeat")
+        assertColor(picture.at(repeat, 15, 10), picture.at(repeat, 5, 10), "repeat: x 5 as x 15")
+        assertColor(Color.RED, picture.at(repeat, 5, 10), "repeat (5, 10)")
+        assertColor(Color.BLUE, picture.at(repeat, 12, 10), "repeat (12, 10)")
+        assertColor(Color.BLUE, picture.at(repeat, 2, 2), "repeat (2, 2)")
+        assertColor(Color.RED, picture.at(repeat, 35, 18), "repeat (35, 18)")
+
+        val across = box("RepeatX")
+        assertColor(Color.RED, picture.at(across, 5, 10), "repeatX (5, 10)")
+        assertColor(Color.BLUE, picture.at(across, 32, 10), "repeatX (32, 10)")
+        assertColor(Color.WHITE, picture.at(across, 17, 2), "repeatX (17, 2)")
+        assertColor(Color.WHITE, picture.at(across, 17, 18), "repeatX (17, 18)")
+
+        val down = box("RepeatY")
+        assertColor(Color.RED, picture.at(down, 17, 2), "repeatY (17, 2)")
+        assertColor(Color.BLUE, picture.at(down, 22, 18), "repeatY (22, 18)")
+        assertColor(Color.WHITE, picture.at(down, 5, 10), "repeatY (5, 10)")
+        assertColor(Color.WHITE, picture.at(down, 32, 10), "repeatY (32, 10)")
+
+        val once = box("Once")
+        assertColor(Color.RED, picture.at(once, 17, 10), "noRepeat (17, 10)")
+        assertColor(Color.BLUE, picture.at(once, 22, 10), "noRepeat (22, 10)")
+        for ((x, y) in listOf(5 to 10, 32 to 10, 17 to 2, 17 to 18)) {
+            assertColor(Color.WHITE, picture.at(once, x, y), "noRepeat ($x, $y)")
+        }
+    }
+
+    /**
+     * A1.7 on an xhdpi screen (2 pixels per dp): the 10x10-pixel image is
+     * 10x10 dp, as Flutter paints a network image at scale 1, whether drawn
+     * once or tiled. In a 40x20 box `fit: none` and `scaleDown` both centre
+     * it at x 15 to 25, y 5 to 15 (red to 20, blue after), the same as the
+     * first tile of `repeat`; at one device pixel per image pixel it would
+     * be 5x5 dp. With no size the box is 10x10 dp and the image fills it.
+     */
+    @Test
+    @Config(qualifiers = "xhdpi")
+    fun a1_7_atXhdpiEveryFitDrawsTheImageAtOneDpPerImagePixel() {
+        fun halves(id: String, alt: String, vararg props: Pair<String, Any?>) =
+            image(id, "src" to url("/halves.png"), "alt" to alt, *props)
+        show(
+            column("0", "1", "2", "3", "4"),
+            halves("1", "None", "width" to 40, "height" to 20, "fit" to "none", "repeat" to "noRepeat"),
+            halves("2", "Down", "width" to 40, "height" to 20, "fit" to "scaleDown"),
+            halves("3", "Tiled", "width" to 40, "height" to 20, "fit" to "none", "repeat" to "repeatY"),
+            halves("4", "Natural"),
+        )
+        compose.waitUntil(5_000) { draw().at(box("Down"), 20, 10) != Color.WHITE && box("Natural").width > 0.dp }
+        val picture = draw()
+
+        for (alt in listOf("None", "Down", "Tiled")) {
+            val box = box(alt)
+            assertEquals(40.dp to 20.dp, box.width to box.height, alt)
+            assertColor(Color.RED, picture.at(box, 16, 10), "$alt (16, 10)")
+            assertColor(Color.BLUE, picture.at(box, 24, 10), "$alt (24, 10)")
+            assertColor(Color.WHITE, picture.at(box, 13, 10), "$alt (13, 10)")
+            assertColor(Color.WHITE, picture.at(box, 27, 10), "$alt (27, 10)")
+        }
+        for (alt in listOf("None", "Down")) {
+            val box = box(alt)
+            assertColor(Color.RED, picture.at(box, 16, 6), "$alt (16, 6)")
+            assertColor(Color.BLUE, picture.at(box, 24, 14), "$alt (24, 14)")
+            assertColor(Color.WHITE, picture.at(box, 20, 3), "$alt (20, 3)")
+            assertColor(Color.WHITE, picture.at(box, 20, 17), "$alt (20, 17)")
+        }
+
+        val natural = box("Natural")
+        assertEquals(10.dp to 10.dp, natural.width to natural.height, "no size")
+        for (y in listOf(1, 5, 9)) {
+            assertColor(Color.RED, picture.at(natural, 1, y), "no size (1, $y)")
+            assertColor(Color.BLUE, picture.at(natural, 9, y), "no size (9, $y)")
+        }
     }
 }

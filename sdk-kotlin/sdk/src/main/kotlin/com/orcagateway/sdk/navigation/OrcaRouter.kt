@@ -3,6 +3,7 @@ package com.orcagateway.sdk.navigation
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.NavConfig
@@ -265,3 +266,19 @@ public class OrcaRouter private constructor(
         return true
     }
 }
+
+/**
+ * What a page knows of the stack it is shown on, provided by
+ * [OrcaApp][com.orcagateway.sdk.OrcaApp] around each page: [canPop] when the
+ * page is a pushed one (not the root), and [goBack] pops the [router]. The
+ * AppBar's implied back arrow is drawn from it (Flutter `ModalRoute.canPop`).
+ * A page shown outside `OrcaApp` has no router: it cannot pop, and [goBack]
+ * does nothing.
+ */
+internal class OrcaNavigation(val router: OrcaRouter?, val canPop: Boolean) {
+    fun goBack() {
+        router?.goBack()
+    }
+}
+
+internal val LocalOrcaNavigation = staticCompositionLocalOf { OrcaNavigation(router = null, canPop = false) }
