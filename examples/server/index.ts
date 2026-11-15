@@ -8,6 +8,7 @@ import { animationsApp } from "./animations";
 import { customApp } from "./custom";
 import { capabilityDemoApp } from "./capability-demo";
 import { nativeWidgetsApp } from "./native-widgets";
+import { parityAApp } from "./parity-a";
 import { todoApp } from "./todo";
 import { navigationApp } from "./navigation";
 import { recoveryMiddleware } from "../../engine/src/middlewares/recovery";
@@ -20,7 +21,7 @@ import enginePackage from "../../engine/package.json";
 
 // ── Register middleware on each app ──────────────────────────
 
-const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp, navigationApp];
+const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp, navigationApp, parityAApp];
 
 for (const app of apps) {
   app
@@ -95,3 +96,4 @@ console.log("  - capability:     /api/v1/app/capability-demo/page/degrade  (a Ch
 console.log("  - native-widgets: /api/v1/app/native-widgets/page/home");
 console.log("  - todo:           /api/v1/app/todo/page/home");
 console.log("  - navigation:     /api/v1/app/navigation/config");
+console.log("  - parity-a:       /api/v1/app/parity-a/page/polish");
