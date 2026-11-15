@@ -6,6 +6,11 @@ import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.json.encoding
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.models.DrawerItemDef
+import com.orcagateway.core.models.NavConfig
+import com.orcagateway.core.models.RedirectRule
+import com.orcagateway.core.models.RouteTransitionDef
+import com.orcagateway.core.models.TabDef
 import com.orcagateway.core.models.PageResponse
 import com.orcagateway.core.resolver.ValueResolver
 import com.orcagateway.core.support.ActionStub
@@ -24,6 +29,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.SerializationException
 
 /** T2.1 (the capability handshake), T2.2 (headers) and C1 (a live 4.0) on the Kotlin client. */
 class OrcaClientTest {
@@ -272,5 +278,161 @@ class OrcaClientTest {
             .map { it.decode(ComponentNode.serializer()) }
         assertLiveDouble(added.single().props["fontSize"], "added component prop 4.0")
         assertLiveInt(added.single().props["maxLines"], "added component prop 4")
+    }
+
+    // MARK: B9.1-CK the navigation config
+
+    /**
+     * A /config body as the engine's `getNavConfig` serves it: keys the
+     * client does not read (`appId`, `appName`, `requiredAppState`), a nested
+     * route, a redirect, a transition, shell components and a static flow.
+     */
+    private val configBody = """
+        {"appId":"shop","appName":"Shop","initialRoute":"/home",
+         "tabs":[{"id":"home","label":"Home","icon":"home","initialRoute":"/home"},
+                 {"id":"cart","label":"Cart","icon":"shopping_cart","initialRoute":"/cart"}],
+         "drawerItems":[{"id":"settings","label":"Settings","icon":"settings","route":"/settings"},
+                        {"id":"about","label":"About","route":"/about"}],
+         "initialAppState":{"loggedIn":false,"ratio":4.0,"count":4},
+         "tabBarComponents":[{"id":"bar","type":"Row","kind":"layout","childMode":"multi",
+           "props":{},"children":[],"watches":[]}],
+         "drawerComponents":[{"id":"drawer","type":"Column","kind":"layout","childMode":"multi",
+           "props":{},"children":[],"watches":[]}],
+         "flows":[
+           {"name":"main","version":3,"routes":[
+             {"path":"home","requiredAppState":[],"children":[
+               {"path":"home/product/:id","requiredAppState":[],"isDynamic":true,
+                "transition":{"type":"slide","duration":150,"curve":"linear"}}]},
+             {"path":"cart","requiredAppState":["loggedIn"],
+              "redirect":{"when":"loggedIn","equals":false,"to":"/login"},
+              "transition":{"type":"fade"}}]},
+           {"name":"onboarding","isStatic":true,"routes":[{"path":"welcome","requiredAppState":[]}],
+            "pages":{"welcome":{"pageId":"welcome","title":"Welcome","state":[],"components":[
+              {"id":"t","type":"Text","kind":"primitive","childMode":"none",
+               "props":{"data":"Hi"},"children":[],"watches":[]}]}}}
+         ]}
+    """.trimIndent()
+
+    private fun configStub(body: String = configBody): StubEngine =
+        StubEngine(body.encodeToByteArray()).also { it.negotiates = false }
+
+    @Test
+    fun b9_1_ck_fetchConfigGetsTheConfigRouteWithTheDeviceHeaders() = runSuspend {
+        val stub = configStub()
+        val c = client(stub, DeviceInfo(osVersion = "Android 15 (API 35)", locale = "en_US"))
+            .copy(apiKey = "demo-key", environment = "staging", deviceId = "device-1")
+        c.fetchConfig()
+
+        val request = stub.requests.single()
+        assertEquals("GET", request.method)
+        assertEquals("http://localhost:8080/api/v1/app/counter/config", request.url.toString())
+        assertNull(request.body)
+        assertEquals(c.headers, request.headers)
+        assertEquals("Android", request.headers["x-orca-platform"])
+        assertEquals("en_US", request.headers["x-orca-locale"])
+        assertEquals("device-1", request.headers["x-orca-device-id"])
+        assertEquals("Bearer demo-key", request.headers["Authorization"])
+        assertEquals(c.capsHash, request.headers["x-orca-caps-hash"])
+    }
+
+    @Test
+    fun b9_1_ck_fetchConfigDecodesTheBodyAndKeepsItRaw() = runSuspend {
+        val config = client(configStub()).fetchConfig()
+
+        assertEquals("/home", config.initialRoute)
+        assertEquals(
+            listOf(TabDef("home", "Home", "home", "/home"), TabDef("cart", "Cart", "shopping_cart", "/cart")),
+            config.tabs,
+        )
+        assertEquals(
+            listOf(
+                DrawerItemDef("settings", "Settings", "settings", "/settings"),
+                DrawerItemDef("about", "About", null, "/about"),
+            ),
+            config.drawerItems,
+        )
+        assertEquals(setOf("loggedIn", "ratio", "count"), config.initialAppState.keys)
+        assertEquals(JsonValue.Bool(false), config.initialAppState["loggedIn"])
+        assertIs<JsonValue.Double>(config.initialAppState["ratio"], "a 4.0 seed stays a double")
+        assertIs<JsonValue.Int>(config.initialAppState["count"], "a 4 seed stays an int")
+        assertEquals(listOf("bar"), config.tabBarComponents.map { it.id })
+        assertEquals(listOf("drawer"), config.drawerComponents.map { it.id })
+
+        assertEquals(listOf("main", "onboarding"), config.flows.map { it.name })
+        val main = config.flows[0]
+        assertEquals(3, main.version)
+        assertFalse(main.isStatic)
+        assertNull(main.pages)
+        assertEquals(listOf("home", "cart"), main.routes.map { it.path })
+
+        val home = main.routes[0]
+        assertNull(home.redirect)
+        assertNull(home.transition)
+        assertFalse(home.isDynamic)
+        val product = home.children.single()
+        assertEquals("home/product/:id", product.path)
+        assertTrue(product.isDynamic)
+        assertTrue(product.children.isEmpty())
+        assertEquals(RouteTransitionDef("slide", 150, "linear"), product.transition)
+
+        val cart = main.routes[1]
+        assertEquals(RedirectRule("loggedIn", JsonValue.Bool(false), "/login"), cart.redirect)
+        assertEquals("loggedIn", cart.redirect?.`when`)
+        assertEquals(RouteTransitionDef("fade", duration = 300, curve = "easeInOut"), cart.transition)
+        assertEquals(RouteTransitionDef("fade"), cart.transition)
+
+        val onboarding = config.flows[1]
+        assertNull(onboarding.version)
+        assertTrue(onboarding.isStatic)
+        val welcome = onboarding.pages?.get("welcome")
+        assertEquals("Welcome", welcome?.title)
+        assertEquals(JsonValue.String("Hi"), welcome?.components?.single()?.props?.get("data"))
+
+        assertEquals(configBody, config.rawBody)
+        assertEquals(JsonValue.parse(configBody), config.raw)
+        assertEquals(JsonValue.String("shop"), config.raw["appId"])
+    }
+
+    @Test
+    fun b9_1_ck_aBareConfigTakesTheFlutterDefaults() = runSuspend {
+        val config = client(configStub("""{"flows":[{"name":"main"}]}""")).fetchConfig()
+        assertEquals("/", config.initialRoute)
+        assertTrue(config.tabs.isEmpty())
+        assertTrue(config.drawerItems.isEmpty())
+        assertTrue(config.initialAppState.isEmpty())
+        assertTrue(config.tabBarComponents.isEmpty())
+        assertTrue(config.drawerComponents.isEmpty())
+        assertTrue(config.flows.single().routes.isEmpty())
+        assertTrue(NavConfig.fromJson(JsonValue.parse("{}")).flows.isEmpty())
+        assertNull(NavConfig.fromJson(JsonValue.parse("{}")).rawBody)
+    }
+
+    @Test
+    fun b9_1_ck_aMissingRequiredKeyIsADecodeError() = runSuspend {
+        val body = """{"flows":[{"name":"main","routes":[{"requiredAppState":[]}]}]}"""
+        val error = assertFailsWith<SerializationException> { client(configStub(body)).fetchConfig() }
+        assertTrue(error.message.orEmpty().contains("path"), error.message)
+        assertFailsWith<SerializationException> {
+            NavConfig.fromJson(JsonValue.parse("""{"tabs":[{"id":"home","label":"Home","icon":"home"}]}"""))
+        }
+    }
+
+    @Test
+    fun b9_1_ck_fetchConfigThrowsOnA404AndA500LikeFetchPage() = runSuspend {
+        for ((status, text) in listOf(404 to """{"error":"App not found"}""", 500 to "boom")) {
+            val stub = configStub()
+            stub.forced = HttpResponse(status, body = text.encodeToByteArray())
+            val error = assertFailsWith<OrcaClientException>("expected an error") { client(stub).fetchConfig() }
+            assertEquals(OrcaClientException.Http(status, text), error)
+            assertEquals(1, stub.requests.size)
+        }
+    }
+
+    @Test
+    fun b9_1_ck_fetchConfigNeverStartsTheCapabilityHandshake() = runSuspend {
+        val stub = StubEngine(configBody.encodeToByteArray())
+        val error = assertFailsWith<OrcaClientException.Http> { client(stub).fetchConfig() }
+        assertEquals(412, error.status)
+        assertEquals(listOf("GET"), stub.requests.map { it.method })
     }
 }
