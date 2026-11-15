@@ -1,0 +1,118 @@
+{
+  "name": "redirect-logged-in",
+  "description": "The same config as 04 with the app state laid over the seed: logged in and on another plan, so no rule holds and every guarded route resolves to itself.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/welcome",
+    "initialAppState": {
+      "loggedIn": false,
+      "plan": "free"
+    },
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "welcome",
+            "requiredAppState": []
+          },
+          {
+            "path": "login",
+            "requiredAppState": []
+          },
+          {
+            "path": "account",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "loggedIn",
+              "equals": false,
+              "to": "/login"
+            }
+          },
+          {
+            "path": "order/:id",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "loggedIn",
+              "equals": false,
+              "to": "/login"
+            }
+          },
+          {
+            "path": "upgrade",
+            "requiredAppState": []
+          },
+          {
+            "path": "reports",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "plan",
+              "equals": "free",
+              "to": "/upgrade"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "appState": {
+    "loggedIn": true,
+    "plan": "pro"
+  },
+  "cases": [
+    {
+      "name": "a guarded route resolves to itself",
+      "location": "/account",
+      "expected": {
+        "kind": "page",
+        "location": "/account",
+        "redirected": false,
+        "pagePath": "account",
+        "routePath": "/account",
+        "params": {},
+        "stack": [
+          "account"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a guarded param route keeps its params",
+      "location": "/order/5",
+      "expected": {
+        "kind": "page",
+        "location": "/order/5",
+        "redirected": false,
+        "pagePath": "order/5",
+        "routePath": "/order/:id",
+        "params": {
+          "id": "5"
+        },
+        "stack": [
+          "order/5"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "the string rule no longer holds",
+      "location": "/reports",
+      "expected": {
+        "kind": "page",
+        "location": "/reports",
+        "redirected": false,
+        "pagePath": "reports",
+        "routePath": "/reports",
+        "params": {},
+        "stack": [
+          "reports"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "name": "param-match",
+  "description": "A `:name` segment matches any one segment and lands in params; the page request path is the location without its leading slash and without the query. Routes are tried in order and the first match wins, so a static route listed after a param route with the same shape is never reached.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": []
+          },
+          {
+            "path": "product/featured",
+            "requiredAppState": []
+          },
+          {
+            "path": "product/:id",
+            "requiredAppState": []
+          },
+          {
+            "path": "product/sale",
+            "requiredAppState": []
+          },
+          {
+            "path": "user/:userId/post/:postId",
+            "requiredAppState": []
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "one param",
+      "location": "/product/42",
+      "expected": {
+        "kind": "page",
+        "location": "/product/42",
+        "redirected": false,
+        "pagePath": "product/42",
+        "routePath": "/product/:id",
+        "params": {
+          "id": "42"
+        },
+        "stack": [
+          "product/42"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a static route listed before the param route wins",
+      "location": "/product/featured",
+      "expected": {
+        "kind": "page",
+        "location": "/product/featured",
+        "redirected": false,
+        "pagePath": "product/featured",
+        "routePath": "/product/featured",
+        "params": {},
+        "stack": [
+          "product/featured"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a static route listed after the param route is shadowed",
+      "location": "/product/sale",
+      "expected": {
+        "kind": "page",
+        "location": "/product/sale",
+        "redirected": false,
+        "pagePath": "product/sale",
+        "routePath": "/product/:id",
+        "params": {
+          "id": "sale"
+        },
+        "stack": [
+          "product/sale"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "the query stays in the location and out of the page path",
+      "location": "/product/42?ref=home",
+      "expected": {
+        "kind": "page",
+        "location": "/product/42?ref=home",
+        "redirected": false,
+        "pagePath": "product/42",
+        "routePath": "/product/:id",
+        "params": {
+          "id": "42"
+        },
+        "stack": [
+          "product/42"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "two params",
+      "location": "/user/7/post/9",
+      "expected": {
+        "kind": "page",
+        "location": "/user/7/post/9",
+        "redirected": false,
+        "pagePath": "user/7/post/9",
+        "routePath": "/user/:userId/post/:postId",
+        "params": {
+          "userId": "7",
+          "postId": "9"
+        },
+        "stack": [
+          "user/7/post/9"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "no param",
+      "location": "/home",
+      "expected": {
+        "kind": "page",
+        "location": "/home",
+        "redirected": false,
+        "pagePath": "home",
+        "routePath": "/home",
+        "params": {},
+        "stack": [
+          "home"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    }
+  ]
+}

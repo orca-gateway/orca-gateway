@@ -1,0 +1,163 @@
+{
+  "name": "redirect-logged-out",
+  "description": "A route with `redirect {when, equals, to}` sends the location to `to` while appState[when] equals `equals`. Here the seeded state is logged out, so the guarded routes end on /login and report redirected; the request goes to the target only.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/welcome",
+    "initialAppState": {
+      "loggedIn": false,
+      "plan": "free"
+    },
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "welcome",
+            "requiredAppState": []
+          },
+          {
+            "path": "login",
+            "requiredAppState": []
+          },
+          {
+            "path": "account",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "loggedIn",
+              "equals": false,
+              "to": "/login"
+            }
+          },
+          {
+            "path": "order/:id",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "loggedIn",
+              "equals": false,
+              "to": "/login"
+            }
+          },
+          {
+            "path": "upgrade",
+            "requiredAppState": []
+          },
+          {
+            "path": "reports",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "plan",
+              "equals": "free",
+              "to": "/upgrade"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "a guarded route goes to the login",
+      "location": "/account",
+      "expected": {
+        "kind": "page",
+        "location": "/login",
+        "redirected": true,
+        "pagePath": "login",
+        "routePath": "/login",
+        "params": {},
+        "stack": [
+          "login"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a guarded param route goes to the login",
+      "location": "/order/5",
+      "expected": {
+        "kind": "page",
+        "location": "/login",
+        "redirected": true,
+        "pagePath": "login",
+        "routePath": "/login",
+        "params": {},
+        "stack": [
+          "login"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "the query of the asked location is not carried over",
+      "location": "/account?from=menu",
+      "expected": {
+        "kind": "page",
+        "location": "/login",
+        "redirected": true,
+        "pagePath": "login",
+        "routePath": "/login",
+        "params": {},
+        "stack": [
+          "login"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a rule can compare a string",
+      "location": "/reports",
+      "expected": {
+        "kind": "page",
+        "location": "/upgrade",
+        "redirected": true,
+        "pagePath": "upgrade",
+        "routePath": "/upgrade",
+        "params": {},
+        "stack": [
+          "upgrade"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "the target itself is not redirected",
+      "location": "/login",
+      "expected": {
+        "kind": "page",
+        "location": "/login",
+        "redirected": false,
+        "pagePath": "login",
+        "routePath": "/login",
+        "params": {},
+        "stack": [
+          "login"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a route without a rule is not redirected",
+      "location": "/welcome",
+      "expected": {
+        "kind": "page",
+        "location": "/welcome",
+        "redirected": false,
+        "pagePath": "welcome",
+        "routePath": "/welcome",
+        "params": {},
+        "stack": [
+          "welcome"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    }
+  ]
+}

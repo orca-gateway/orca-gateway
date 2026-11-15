@@ -1,0 +1,227 @@
+{
+  "name": "redirect-applied-once",
+  "description": "The redirect rule is applied once per navigation: the rule of the asked location decides the target, and the target's own rule is not evaluated. So a chain stops after its first step, a loop of two shows the second route, a route that redirects to itself shows itself, and no redirect ever ends on the error screen unless its target is unknown.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/end",
+    "initialAppState": {
+      "gate": "closed"
+    },
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "end",
+            "requiredAppState": []
+          },
+          {
+            "path": "a",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/b"
+            }
+          },
+          {
+            "path": "b",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/end"
+            }
+          },
+          {
+            "path": "loop1",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/loop2"
+            }
+          },
+          {
+            "path": "loop2",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/loop1"
+            }
+          },
+          {
+            "path": "self",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/self"
+            }
+          },
+          {
+            "path": "s1",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/s2"
+            }
+          },
+          {
+            "path": "s2",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/s3"
+            }
+          },
+          {
+            "path": "s3",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/s4"
+            }
+          },
+          {
+            "path": "s4",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/s5"
+            }
+          },
+          {
+            "path": "s5",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/end"
+            }
+          },
+          {
+            "path": "t0",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/s1"
+            }
+          },
+          {
+            "path": "lost",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "gate",
+              "equals": "closed",
+              "to": "/nowhere"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "a two-step chain stops after the first step",
+      "location": "/a",
+      "expected": {
+        "kind": "page",
+        "location": "/b",
+        "redirected": true,
+        "pagePath": "b",
+        "routePath": "/b",
+        "params": {},
+        "stack": [
+          "b"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "entering the chain at its last step reaches the end",
+      "location": "/b",
+      "expected": {
+        "kind": "page",
+        "location": "/end",
+        "redirected": true,
+        "pagePath": "end",
+        "routePath": "/end",
+        "params": {},
+        "stack": [
+          "end"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a loop of two shows the second route",
+      "location": "/loop1",
+      "expected": {
+        "kind": "page",
+        "location": "/loop2",
+        "redirected": true,
+        "pagePath": "loop2",
+        "routePath": "/loop2",
+        "params": {},
+        "stack": [
+          "loop2"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a route that redirects to itself shows itself",
+      "location": "/self",
+      "expected": {
+        "kind": "page",
+        "location": "/self",
+        "redirected": false,
+        "pagePath": "self",
+        "routePath": "/self",
+        "params": {},
+        "stack": [
+          "self"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a chain of six steps stops after the first too",
+      "location": "/t0",
+      "expected": {
+        "kind": "page",
+        "location": "/s1",
+        "redirected": true,
+        "pagePath": "s1",
+        "routePath": "/s1",
+        "params": {},
+        "stack": [
+          "s1"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a redirect to an unknown location",
+      "location": "/lost",
+      "expected": {
+        "kind": "error",
+        "location": "/nowhere",
+        "redirected": true
+      }
+    }
+  ]
+}

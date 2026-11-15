@@ -1,0 +1,81 @@
+{
+  "name": "unknown-path",
+  "description": "A location no route matches ends on the error screen: the location stays the one asked for, nothing is redirected and no page is requested. Segment counts must agree, so a prefix of a route or a route with a tail is unknown too.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": []
+          },
+          {
+            "path": "product/:id",
+            "requiredAppState": []
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "no such route",
+      "location": "/nope",
+      "expected": {
+        "kind": "error",
+        "location": "/nope",
+        "redirected": false
+      }
+    },
+    {
+      "name": "too few segments for the pattern",
+      "location": "/product",
+      "expected": {
+        "kind": "error",
+        "location": "/product",
+        "redirected": false
+      }
+    },
+    {
+      "name": "too many segments for the pattern",
+      "location": "/product/42/extra",
+      "expected": {
+        "kind": "error",
+        "location": "/product/42/extra",
+        "redirected": false
+      }
+    },
+    {
+      "name": "an unknown location keeps its query",
+      "location": "/nope?x=1",
+      "expected": {
+        "kind": "error",
+        "location": "/nope?x=1",
+        "redirected": false
+      }
+    },
+    {
+      "name": "a known route beside them still resolves",
+      "location": "/product/42",
+      "expected": {
+        "kind": "page",
+        "location": "/product/42",
+        "redirected": false,
+        "pagePath": "product/42",
+        "routePath": "/product/:id",
+        "params": {
+          "id": "42"
+        },
+        "stack": [
+          "product/42"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    }
+  ]
+}
