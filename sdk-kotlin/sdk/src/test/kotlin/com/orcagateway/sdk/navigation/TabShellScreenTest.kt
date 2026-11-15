@@ -1,10 +1,13 @@
 package com.orcagateway.sdk.navigation
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
@@ -16,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import com.orcagateway.core.client.DeviceInfo
 import com.orcagateway.core.client.HttpRequest
@@ -25,12 +29,14 @@ import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.models.DrawerItemDef
 import com.orcagateway.core.models.NavConfig
 import com.orcagateway.core.models.NavFlow
 import com.orcagateway.core.models.NavRoute
 import com.orcagateway.core.models.PageResponse
 import com.orcagateway.core.models.TabDef
 import com.orcagateway.sdk.OrcaApp
+import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.support.button
 import com.orcagateway.sdk.support.column
 import com.orcagateway.sdk.support.leaf
@@ -45,13 +51,15 @@ import org.robolectric.annotation.Config
 import java.net.URI
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
  * The pages of the tab shell tests: page `name` shows "name page". `home`
  * also has the buttons "Go" (pushes `/home/product/3`, inside the tab) and
- * "Settings" (pushes `/settings`, outside the tabs); `search` has a
- * TextField bound to no state key; `more` is forty rows in a scroll view.
+ * "Settings" (pushes `/settings`, outside the tabs) and "Open drawer" (the
+ * `openDrawer` action); `search` has a TextField bound to no state key;
+ * `more` is forty rows in a scroll view.
  * Every request is kept.
  */
 private class ShellPages : HttpTransport {
@@ -71,12 +79,14 @@ private class ShellPages : HttpTransport {
 
     private fun nodes(name: String): List<ComponentNode> = when (name) {
         "home" -> listOf(
-            column("c", "t", "go", "set"),
+            column("c", "t", "go", "set", "od"),
             text("t", "home page"),
             button("go", "TextButton", "gol", mapOf("onTap" to Action.Navigate(route = JsonValue.String("/home/product/3")))),
             text("gol", "Go"),
             button("set", "TextButton", "setl", mapOf("onTap" to Action.Navigate(route = JsonValue.String("/settings")))),
             text("setl", "Settings"),
+            button("od", "TextButton", "odl", mapOf("onTap" to Action.OpenDrawer)),
+            text("odl", "Open drawer"),
         )
         "search" -> listOf(column("c", "t", "f"), text("t", "search page"), leaf("f", "TextField"))
         "more" -> {
@@ -94,15 +104,25 @@ private class ShellPages : HttpTransport {
         get() = OrcaClient(URI("http://stub.invalid"), appId = "fixture-app", device = DeviceInfo(osVersion = "test"), transport = this)
 }
 
-/** Three tabs (`/home` with the child `home/product/:id`, `/search`, `/more`) and `settings` outside them. */
-private fun tabConfig(tabBarComponents: List<ComponentNode> = emptyList()) = NavConfig(
+/**
+ * Three tabs (`/home` with the child `home/product/:id`, `/search`, `/more`)
+ * and `settings` outside them; a drawer when [drawerItems] or
+ * [drawerComponents] has any.
+ */
+private fun tabConfig(
+    tabBarComponents: List<ComponentNode> = emptyList(),
+    drawerItems: List<DrawerItemDef> = emptyList(),
+    drawerComponents: List<ComponentNode> = emptyList(),
+) = NavConfig(
     initialRoute = "/home",
     tabs = listOf(
         TabDef("home", "Home", "home", "/home"),
         TabDef("search", "Search", "search", "/search"),
         TabDef("more", "More", "menu", "/more"),
     ),
+    drawerItems = drawerItems,
     tabBarComponents = tabBarComponents,
+    drawerComponents = drawerComponents,
     flows = listOf(
         NavFlow(
             name = "main",
@@ -116,10 +136,17 @@ private fun tabConfig(tabBarComponents: List<ComponentNode> = emptyList()) = Nav
     ),
 )
 
+/** The default drawer's entries: a route outside the tabs, and one inside the first tab. */
+private val drawerItems = listOf(
+    DrawerItemDef("settings", "App settings", "settings", "/settings"),
+    DrawerItemDef("product", "Product 3", null, "/home/product/3"),
+)
+
 /**
  * The tab shell on screen (Swift's `TabShellViewTests`): the default bar
  * and the lazy first visit of a tab (B10.1-K), the server tab bar (B10.4-K),
- * and the system back gesture (B10.7-K).
+ * the shell drawer (B10.5-K), the system back gesture (B10.7-K), and pages
+ * kept across tab switches and drawer cycles (B10.8-K).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w393dp-h852dp-xhdpi")
@@ -143,6 +170,29 @@ class TabShellScreenTest {
     private fun tagCount(tag: String): Int = compose.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().size
 
     private fun tapTab(index: Int) = compose.onNodeWithTag(tabTag(index)).performClick()
+
+    /** The node tagged [tag] is composed and inside the screen: a closed drawer's sheet is composed beside it. */
+    private fun onScreen(tag: String): Boolean = runCatching { compose.onNodeWithTag(tag).assertIsDisplayed() }.isSuccess
+
+    /** The default drawer is open on screen: its header and every item. */
+    private fun defaultDrawerShown(): Boolean {
+        compose.waitForIdle()
+        val header = runCatching { compose.onNodeWithText("Menu").assertIsDisplayed() }.isSuccess
+        val items = drawerItems.map { onScreen(drawerItemTag(it.id)) }
+        assertEquals(List(items.size) { header }, items, "the header and the items are not shown together")
+        return header
+    }
+
+    private fun onUi(block: () -> Unit) {
+        compose.runOnUiThread(block)
+        compose.waitForIdle()
+    }
+
+    /** Tap the part of the open drawer's scrim that its sheet leaves free: the trailing edge. */
+    private fun tapScrim() {
+        compose.onNodeWithContentDescription(CLOSE_DRAWER).performTouchInput { click(Offset(width - 4f, height / 2f)) }
+        compose.waitForIdle()
+    }
 
     private fun backIsHandled(): Boolean {
         compose.waitForIdle()
@@ -341,7 +391,262 @@ class TabShellScreenTest {
         awaitShown("more page")
         compose.onNodeWithText("To more").assertIsDisplayed()
     }
+
+    /**
+     * B10.5-K: with a drawer in the config every tab page, at any depth, is
+     * under the shell's top bar: the current tab's label and the menu
+     * button. A route over the shell has its own title bar instead.
+     */
+    @Test
+    fun b10_5_withADrawerEveryTabPageIsUnderATopBarWithTheTabLabelAndTheMenuButton() {
+        val pages = ShellPages()
+        show(pages, tabConfig(drawerItems = drawerItems))
+
+        compose.onNodeWithTag(SHELL_TITLE_TAG).assertIsDisplayed().assertTextEquals("Home")
+        compose.onNodeWithTag(DRAWER_MENU_TAG).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Menu").assertIsDisplayed()
+        assertFalse(defaultDrawerShown())
+
+        tapTab(1)
+        awaitShown("search page")
+        compose.onNodeWithTag(SHELL_TITLE_TAG).assertTextEquals("Search")
+        compose.onNodeWithTag(DRAWER_MENU_TAG).assertIsDisplayed()
+
+        tapTab(0)
+        awaitShown("home page")
+        compose.onNodeWithText("Go").performClick()
+        awaitShown("home/product/3 page")
+        compose.onNodeWithTag(SHELL_TITLE_TAG).assertIsDisplayed().assertTextEquals("Home")
+        compose.onNodeWithTag(DRAWER_MENU_TAG).assertIsDisplayed()
+
+        compose.onNodeWithTag(tabTag(0)).performClick()
+        awaitShown("home page")
+        compose.onNodeWithText("Settings").performClick()
+        awaitShown("settings page")
+        assertEquals(0, tagCount(SHELL_TITLE_TAG))
+        assertEquals(0, tagCount(DRAWER_MENU_TAG))
+        compose.onNodeWithTag(TITLE_TAG).assertTextEquals("Title of settings")
+    }
+
+    /**
+     * B10.5-K: the menu button, `router.openDrawer()` and a page's
+     * `openDrawer` action each open the default drawer (the "Menu" header
+     * and one row per `drawerItems` entry); `router.closeDrawer()`, a tap on
+     * the scrim and a swipe each close it, and the router follows.
+     */
+    @Test
+    fun b10_5_theMenuButtonTheRouterAndAPageActionOpenTheDefaultDrawerAndItClosesThreeWays() {
+        val pages = ShellPages()
+        val router = show(pages, tabConfig(drawerItems = drawerItems))
+        assertFalse(defaultDrawerShown())
+
+        compose.onNodeWithTag(DRAWER_MENU_TAG).performClick()
+        assertTrue(defaultDrawerShown())
+        assertTrue(router.isDrawerOpen)
+        compose.onNodeWithText("Product 3").assertIsDisplayed()
+        onUi { router.closeDrawer() }
+        assertFalse(defaultDrawerShown())
+
+        onUi { router.openDrawer() }
+        assertTrue(defaultDrawerShown())
+        tapScrim()
+        assertFalse(router.isDrawerOpen)
+        assertFalse(defaultDrawerShown())
+
+        compose.onNodeWithText("Open drawer").performClick()
+        assertTrue(defaultDrawerShown())
+        assertTrue(router.isDrawerOpen)
+        // Across a row, towards the leading edge: far enough to take the sheet with it.
+        compose.onNodeWithTag(drawerItemTag("product")).performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        assertFalse(router.isDrawerOpen)
+        assertEquals(emptyList(), router.stack)
+        assertFalse(defaultDrawerShown())
+
+        // Closed by the user, it opens again.
+        compose.onNodeWithTag(DRAWER_MENU_TAG).performClick()
+        assertTrue(defaultDrawerShown())
+        assertEquals(listOf("home"), pages.pages)
+    }
+
+    /**
+     * B10.5-K: the router closes the drawer while the user drags its sheet,
+     * and the user lets go on the open side: the sheet still ends closed, as
+     * the router says, and the back gesture has no drawer left to close.
+     */
+    @Test
+    fun b10_5_aRouterCloseDuringADragThatIsReleasedOnTheOpenSideStillClosesTheSheet() {
+        val pages = ShellPages()
+        val router = show(pages, tabConfig(drawerItems = drawerItems))
+        compose.onNodeWithTag(DRAWER_MENU_TAG).performClick()
+        assertTrue(defaultDrawerShown())
+
+        // Slowly, and not half of the sheet: let go here and it settles open.
+        val row = compose.onNodeWithTag(drawerItemTag("product"))
+        row.performTouchInput {
+            down(center)
+            repeat(3) { moveBy(Offset(-40f, 0f), delayMillis = 200) }
+        }
+        compose.runOnUiThread { router.closeDrawer() }
+        row.performTouchInput {
+            moveBy(Offset(-10f, 0f), delayMillis = 200)
+            up()
+        }
+        compose.waitForIdle()
+
+        assertFalse(router.isDrawerOpen)
+        assertFalse(defaultDrawerShown())
+        assertFalse(backIsHandled())
+        assertEquals(emptyList(), router.stack)
+
+        // In step again: it opens and closes as before.
+        compose.onNodeWithTag(DRAWER_MENU_TAG).performClick()
+        assertTrue(defaultDrawerShown())
+        onUi { router.closeDrawer() }
+        assertFalse(defaultDrawerShown())
+    }
+
+    /** B10.5-K: a tap on a drawer item closes the drawer, then pushes the item's route: over the shell, with its title bar. */
+    @Test
+    fun b10_5_aDrawerItemClosesTheDrawerAndPushesItsRoute() {
+        val pages = ShellPages()
+        val router = show(pages, tabConfig(drawerItems = drawerItems))
+
+        compose.onNodeWithTag(DRAWER_MENU_TAG).performClick()
+        assertTrue(defaultDrawerShown())
+        compose.onNodeWithTag(drawerItemTag("settings")).performClick()
+        awaitShown("settings page")
+        assertFalse(router.isDrawerOpen)
+        assertFalse(defaultDrawerShown())
+        compose.onNodeWithTag(TITLE_TAG).assertTextEquals("Title of settings")
+        assertEquals(listOf("/settings"), router.overRoutes.map { it.location })
+        for (index in 0..2) assertEquals(0, tagCount(tabTag(index)))
+
+        // Back is a pop: the tab page again, the drawer closed.
+        compose.onNodeWithContentDescription("Back").performClick()
+        awaitShown("home page")
+        assertFalse(defaultDrawerShown())
+
+        // An item of a route inside the tab pushes it on the tab's stack.
+        compose.onNodeWithTag(DRAWER_MENU_TAG).performClick()
+        compose.onNodeWithTag(drawerItemTag("product")).performClick()
+        awaitShown("home/product/3 page")
+        assertFalse(router.isDrawerOpen)
+        assertEquals(listOf("/home/product/3"), router.stack.map { it.location })
+        assertEquals(listOf("home", "settings", "home/product/3"), pages.pages)
+    }
+
+    /**
+     * B10.5-K: the server's `drawerComponents` are drawn in place of the
+     * default drawer, and the tree's `SwitchTab` row switches the tab, which
+     * closes the drawer.
+     */
+    @Test
+    fun b10_5_theServerDrawerReplacesTheDefaultOneAndItsSwitchTabClosesIt() {
+        val drawer = listOf(
+            ComponentNode("drawer", "Drawer", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single, emptyMap(), listOf("rows")),
+            column("rows", "head", "to-more"),
+            text("head", "Server menu"),
+            button("to-more", "TextButton", "to-more-label", mapOf("onTap" to Action.SwitchTab("more"))),
+            text("to-more-label", "To more"),
+        )
+        val pages = ShellPages()
+        val router = show(pages, tabConfig(drawerItems = drawerItems, drawerComponents = drawer))
+        fun serverDrawerShown(): Boolean {
+            compose.waitForIdle()
+            return runCatching { compose.onNodeWithText("Server menu").assertIsDisplayed() }.isSuccess
+        }
+
+        compose.onNodeWithTag(SHELL_TITLE_TAG).assertTextEquals("Home")
+        assertFalse(serverDrawerShown())
+        compose.onNodeWithTag(DRAWER_MENU_TAG).performClick()
+        assertTrue(serverDrawerShown())
+        assertEquals(0, compose.onAllNodes(hasText("Menu")).fetchSemanticsNodes().size)
+        for (item in drawerItems) assertEquals(0, tagCount(drawerItemTag(item.id)))
+
+        compose.onNodeWithText("To more").performClick()
+        awaitShown("more page")
+        assertEquals(2, router.currentTab)
+        assertFalse(router.isDrawerOpen)
+        assertFalse(serverDrawerShown())
+        compose.onNodeWithTag(SHELL_TITLE_TAG).assertTextEquals("More")
+        assertEquals(listOf("home", "more"), pages.pages)
+    }
+
+    /** B10.5-K: a config without `drawerItems` and `drawerComponents` has no drawer, no top bar and no menu button. */
+    @Test
+    fun b10_5_noDrawerAndNoTopBarWhenTheConfigHasNone() {
+        val pages = ShellPages()
+        val router = show(pages)
+
+        assertEquals(0, tagCount(SHELL_TITLE_TAG))
+        assertEquals(0, tagCount(DRAWER_MENU_TAG))
+        compose.onNodeWithText("Open drawer").performClick()
+        onUi { router.openDrawer() }
+        assertFalse(router.isDrawerOpen)
+        assertEquals(0, compose.onAllNodes(hasText("Menu")).fetchSemanticsNodes().size)
+        compose.onNodeWithText("home page").assertIsDisplayed()
+    }
+
+    /**
+     * B10.8-K: a round of tab switches with the drawer opened and closed on
+     * every tab asks the server for nothing, and leaves every page as it
+     * was: the same loader, the same page model, the typed text, the scroll
+     * offset.
+     */
+    @Test
+    fun b10_8_tabSwitchesAndDrawerCyclesRequestNothingAndKeepEveryPage() {
+        val pages = ShellPages()
+        val router = show(pages, tabConfig(drawerItems = drawerItems))
+        fun typed(): String = compose.onNode(hasSetTextAction()).fetchSemanticsNode().config[SemanticsProperties.EditableText].text
+        // The drawer's rows scroll too.
+        val list = hasScrollAction() and hasAnyDescendant(hasText("more page"))
+        fun offset(): Float = compose.onNode(list).fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+
+        tapTab(1)
+        awaitShown("search page")
+        compose.onNode(hasSetTextAction()).performTextInput("pizza")
+        tapTab(2)
+        awaitShown("more page")
+        compose.onNode(list).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        val scrolled = offset()
+        assertTrue(scrolled > 0f, "the list did not scroll")
+        tapTab(0)
+        awaitShown("home page")
+
+        val routes = router.tabStacks.flatten()
+        assertEquals(listOf("/home", "/search", "/more"), routes.map { it.location })
+        val loaders = routes.map { router.loader(it) }
+        val models = loaders.map { (it.phase as OrcaPageLoader.Phase.Loaded).model }
+        val requests = pages.requests.size
+        assertEquals(listOf("home", "search", "more"), pages.pages)
+
+        repeat(2) { round ->
+            for (tab in listOf(1, 2, 0)) {
+                tapTab(tab)
+                awaitShown("${listOf("home", "search", "more")[tab]} page")
+                compose.onNodeWithTag(DRAWER_MENU_TAG).performClick()
+                assertTrue(defaultDrawerShown())
+                if (round == 0) tapScrim() else onUi { router.closeDrawer() }
+                assertFalse(defaultDrawerShown())
+            }
+        }
+
+        assertEquals(requests, pages.requests.size)
+        assertEquals(listOf("home", "search", "more"), pages.pages)
+        assertEquals(routes, router.tabStacks.flatten())
+        routes.forEachIndexed { i, route ->
+            assertSame(loaders[i], router.loader(route))
+            assertSame(models[i], (router.loader(route).phase as OrcaPageLoader.Phase.Loaded).model)
+        }
+        assertEquals("pizza", typed())
+        assertEquals(scrolled, offset())
+    }
 }
 
 /** The tag of the top bar's title, as OrcaApp sets it. */
 private const val TITLE_TAG = "orca-route-title"
+
+/** What TalkBack reads on the scrim of an open Material 3 drawer. */
+private const val CLOSE_DRAWER = "Close navigation menu"

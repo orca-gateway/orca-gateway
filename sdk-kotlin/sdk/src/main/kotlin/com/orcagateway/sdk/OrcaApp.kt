@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,6 +50,8 @@ import com.orcagateway.sdk.navigation.OrcaRoute
 import com.orcagateway.sdk.navigation.OrcaRouter
 import com.orcagateway.sdk.navigation.TabShellScreen
 import com.orcagateway.sdk.system.SystemActions
+import com.orcagateway.sdk.widgets.LocalOrcaPageDrawerHost
+import com.orcagateway.sdk.widgets.PageDrawerHost
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -326,11 +329,19 @@ private fun NavHostController.follow(shown: List<OrcaRoute>, stack: List<OrcaRou
  * with a fallback title is drawn under a top bar: the page's own title once
  * it loaded, and a back arrow while the router has a page to pop. A page
  * whose root is a Scaffold with an AppBar draws that one below, as Flutter
- * shows both.
+ * shows both. The page's Scaffold can reach the router, to open its drawer
+ * when the router asks this route to ([OrcaRouter.pageDrawerRequest]).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RoutePage(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoader?) {
+    val drawers = remember(router, route.id) { PageDrawerHost(router, route.id) }
+    CompositionLocalProvider(LocalOrcaPageDrawerHost provides drawers) { RouteFrame(router, route, loader) }
+}
+
+/** A route's page, under the title bar of a route that has a fallback title. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RouteFrame(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoader?) {
     val fallback = route.scaffoldTitle
     if (fallback == null) {
         RouteBody(route, loader)
