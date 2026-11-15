@@ -22,7 +22,7 @@ public final class ActionExecutor {
     /// response kind outside action.ts, so it is handled but never advertised.
     nonisolated public static let kinds: Set<String> = [
         "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
-        "lifecycle", "navigate", "goBack", "openUrl", "copyToClipboard", "share",
+        "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
         "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
     ]
 
@@ -117,6 +117,12 @@ public final class ActionExecutor {
 
         case .goBack:
             await emit(ActionEffect("goBack"))
+
+        case .switchTab(let t):
+            await emit(ActionEffect("switchTab", ["tabId": .string(t.tabId)]))
+
+        case .openDrawer:
+            await emit(ActionEffect("openDrawer"))
 
         case .openUrl(let o):
             await emit(ActionEffect("openUrl", ["url": .string(resolver.resolveToString(o.url ?? .null))]))

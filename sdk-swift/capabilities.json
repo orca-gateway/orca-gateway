@@ -39,12 +39,14 @@
     "goBack",
     "lifecycle",
     "navigate",
+    "openDrawer",
     "openUrl",
     "serverAction",
     "setState",
     "share",
     "showSnackbar",
     "showToast",
+    "switchTab",
     "updateComponent"
   ]
 }
