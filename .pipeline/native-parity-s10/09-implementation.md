@@ -3,22 +3,22 @@
 ## Front page
 
 ### In one breath
-group 3 of 5 · tasks: 12 green, 0 blocked · cases: 19 of 36 green · all four suites green
-T9 / T10 routers own the tab shell: per-tab stacks, `_tabIndex` both ways, drawer state.
-T11 / T12 widgets: BottomNavigationBar, BottomNavItem, Drawer; 31 widgets advertised on both.
-A side-by-side review of the two routers found five differences; all aligned and pinned.
-engine 742 · Flutter +321 · Swift core 252, UI 97 · Kotlin core 249, sdk 162.
+group 4 of 5 · tasks: 15 green, 0 blocked · cases: 27 of 36 green · all four suites green
+T13 / T14 tab shells: `OrcaApp` draws a tab bar with one kept stack per tab; server tab bar.
+T15 demo apps `tabs` and `tabs-server`, held to what both native SDKs can draw.
+Android back pops inside a tab and is not handled at a tab root.
+engine 743 · Flutter +321 · Swift core 252, UI 106 · Kotlin core 249, sdk 169.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided: the bar stops at the first missing item slot, as Flutter (my brief said skip) ·
-Android keeps the Material 3 selection pill · a host write to `stack` that adds routes is
-pushed through the shell on both SDKs (step 9 allowed it).
+2 auto-decided: on macOS, where `swift test` runs, the shell uses a plain stand-in for `TabView`
+(the real one is checked by hand on the simulator) · Android keeps visited pages composed,
+unplaced, so text and scroll survive a switch.
 
 ### Questions for you
-1. Next: group 4 (the tab shells in OrcaApp, server tab bar, demo apps)? (default: go)
+1. Next: group 5 (drawers on both SDKs, state kept across switches)? (default: go)
 
 ## Appendix
 
@@ -152,7 +152,46 @@ Changed: M3 `NavigationBar` with tags `orca-bottom-nav-item-<i>`, helpers `botto
 Review fit: pass; the same slot rule as Swift, fixed
 Review quality: pass
 
+### Group 4
+
+#### T13 · Swift OrcaApp: TabView shell, server tab bar
+Files: sdk-swift/Sources/OrcaGateway/OrcaApp.swift · Navigation/TabShellView.swift (new) · Navigation/OrcaRouter.swift
+(additive: `appStateChanges`) · Tests/OrcaGatewayTests/TabShellTests.swift (new) · AppBootTests.swift · examples/app-ios/README.md
+Cases: B10.1-S, B10.4-S → green (TabShellTests 8, AppBootTests +1; UI 106; iOS example builds)
+Changed: `RouterRoot` draws `TabShellView` while `hasShell`, else the untouched `RouteStack`; iOS `TabView` with a
+`NavigationStack` per tab (placeholder until visited); `ShellTree` (page id `__shell__`) draws `tabBarComponents` in a
+bottom inset with the system bar hidden; routes over the shell hide the bar.
+Decisions: off iOS a `PlainTabs` stand-in (macOS `TabView` logs geometry warnings in hosted tests) · the server bar is
+a per-page inset, so it slides with a push inside a tab (Flutter's stays put)
+Review fit: pass
+Review quality: pass
+
+#### T14 · Kotlin OrcaApp: NavigationBar shell, back
+Files: sdk-kotlin/sdk/.../OrcaApp.kt · navigation/TabShellScreen.kt (new) · navigation/OrcaRouter.kt (additive, internal:
+`onAppStateChange`) · sdk/src/test/.../navigation/TabShellScreenTest.kt (new) · OrcaAppTest.kt · examples/app-android/README.md
+Cases: B10.1-K, B10.4-K, B10.7-K (unit half) → green (TabShellScreenTest 6, OrcaAppTest +1; sdk 169; example assembles)
+Changed: `OrcaApp(router)` → `TabShellScreen` while `hasShell`, else the old NavHost body moved into `StackScreen`;
+M3 `NavigationBar` (tags `orca-tab-<i>`), `KeptPages` (visited pages stay composed, placed only on top),
+`BackHandler(enabled = router.canGoBack)`, `ShellTree` for the server bar. Typed text and a scroll offset survive a
+tab switch (tested); back is not handled at a tab root (tested through the dispatcher).
+Decisions: kept composition per route, not SaveableStateHolder · a page under the top after a deep `go` is fetched
+when first shown (as the NavHost path)
+Review fit: pass
+Review quality: side effects of `ShellTree` ran inside `remember`, fixed
+
+#### T15 · Demo apps tabs and tabs-server
+Files: examples/server/tabs.ts (new) · index.ts · README.md · engine/test/demo-server.test.ts
+Cases: B10.D → green (engine 743)
+Changed: `tabs` (three tabs, drawer items, Feed counter + 40 rows + child route + SwitchTab / _tabIndex / OpenDrawer
+buttons, Search TextField, Profile → a page with its own drawer, endDrawer and BottomNavigationBar) and `tabs-server`
+(the same with a server tab bar and drawer). The test asserts every node type and action kind is in
+sdk-swift/capabilities.json.
+Review fit: the test's action walker missed nested actions, fixed
+Review quality: pass
+
 ### Test run
+group 4: `bun test` 743 pass 0 fail · `swift test` core 252, UI 106, 0 failures, 0 warnings · `./gradlew build`
+successful, core 249, sdk 169, 0 failed · both example apps build · Flutter unchanged (+321).
 group 3: `swift test` core 252, UI 97, 0 failures, 0 warnings · `./gradlew build` successful, core 249, sdk 162,
 0 failed · engine and Flutter unchanged since group 2 (742, +321). Generators leave no diff.
 group 2: `bun test` 742 pass 0 fail · `flutter test` +321 all passed · `swift test` core 252, UI 74, 0 failures,
@@ -173,5 +212,7 @@ none
 - The Swift and Kotlin corner tests pin the same corners with different scripts and ids (not literal mirrors).
 - Known differences to list: the Android bar has the M3 selection pill; a host route pushed by a `stack` write keeps
   its own path if its location redirects; Kotlin closes loaders of dropped routes, Swift forgets them (as before).
+- Hand-check must cover the real iOS `TabView` (tap, reselect, bar hiding over a pushed route, the server bar's place),
+  since `swift test` runs a stand-in. A toast or snackbar fired from a server shell tree is not drawn on either SDK.
 - No Kotlin test yet for the bar's stop-at-gap rule or its tap (T17 writes `StructureTest.kt`).
 - `hasShell` always equals `currentTab != nil` in both twins (could be computed).
