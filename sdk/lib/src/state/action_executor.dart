@@ -345,10 +345,11 @@ class ActionExecutor {
 
     // switchTab — resolve tab's initial route and go to it
     _handlers['switchTab'] = (action, exec) async {
-      final ctx = exec.context;
-      if (ctx == null) return;
       final tabId = action['tabId'] as String?;
       if (tabId == null) return;
+      exec._emit('switchTab', {'tabId': tabId});
+      final ctx = exec.context;
+      if (ctx == null) return;
       final navConfig = OrcaNavConfig.configOf(ctx);
       if (navConfig == null) return;
       final tab = navConfig.tabs.where((t) => t.id == tabId).firstOrNull;
@@ -358,6 +359,7 @@ class ActionExecutor {
 
     // openDrawer
     _handlers['openDrawer'] = (action, exec) async {
+      exec._emit('openDrawer');
       final ctx = exec.context;
       if (ctx == null) return;
       Scaffold.of(ctx).openDrawer();
