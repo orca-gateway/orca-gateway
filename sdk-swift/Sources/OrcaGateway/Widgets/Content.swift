@@ -160,4 +160,73 @@ struct FallbackPromptView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
+
+/// UnsupportedWidgetPlaceholder, as the Flutter builder draws it: the grey
+/// "known widget that cannot run here" card, kept apart from FallbackPrompt's
+/// "unknown widget". `iconName` (the Icon widget's names, `IconNames`) and
+/// the title (`displayName`, else `widgetType`) on one line, `reason` (else
+/// Flutter's default) under it, and "Learn more" when `docsUrl` is set, which
+/// opens it through the URL policy as FallbackPrompt's link does. As wide as
+/// its content, or the width a parent forces (TightAxes), as a Container.
+@MainActor
+struct UnsupportedWidgetPlaceholderView: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+    @Environment(\.openURL) private var openURL
+
+    static let defaultReason = "This widget runs in the compiled mobile app and cannot preview here."
+
+    var body: some View {
+        let accent = Props.color(hex: "#6B7280")
+        let displayName = node["displayName"]?.stringValue ?? ""
+        let docsUrl = node["docsUrl"]?.stringValue ?? ""
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                if let iconName = node["iconName"]?.stringValue {
+                    // A Material glyph fills about 20 of its 24 points, as IconNodeView.
+                    Image(systemName: IconNames.symbol(for: iconName))
+                        .font(.system(size: 20 * 0.83))
+                        .rotationEffect(.degrees(IconNames.isRotated(iconName) ? 90 : 0))
+                        .frame(width: 20, height: 20)
+                        .foregroundColor(accent)
+                }
+                Text(displayName.isEmpty ? Props.text(node["widgetType"]) : displayName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Props.color(hex: "#374151"))
+                    .lineLimit(1)
+            }
+            Text(node["reason"]?.stringValue ?? Self.defaultReason)
+                .font(.system(size: 13))
+                .foregroundColor(accent)
+                .padding(.top, 6)
+            if !docsUrl.isEmpty {
+                Button {
+                    model.openLink(docsUrl) { openURL($0) }
+                } label: {
+                    Text("Learn more")
+                        .font(.system(size: 13, weight: .semibold))
+                        .underline()
+                        .foregroundColor(Props.color(hex: "#2563EB"))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+            }
+        }
+        .modifier(FillsForcedWidth())
+        .padding(16)
+        .background(accent.opacity(0.06))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(accent.opacity(0.35), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// Spans the width when the parent forces it (TightAxes), else as wide as
+/// the content.
+private struct FillsForcedWidth: ViewModifier {
+    @Environment(\.orcaTight) private var tight
+
+    func body(content: Content) -> some View {
+        content.frame(maxWidth: tight.contains(.horizontal) ? .infinity : nil, alignment: .leading)
+    }
+}
 #endif
