@@ -1,5 +1,22 @@
 import Foundation
 
+/// Where an action chain started: the widget and the trigger that fired it,
+/// so `once` can run at most once per (widget, trigger). A port of the Dart
+/// `ActionSource` (sdk/lib/src/state/action_executor.dart); nested runs of
+/// the chain inherit it.
+public struct ActionSource: Equatable, Hashable, Sendable {
+    public var widgetId: String
+    public var trigger: String
+
+    public init(widgetId: String, trigger: String) {
+        self.widgetId = widgetId
+        self.trigger = trigger
+    }
+
+    /// `widgetId::trigger`, the key `once` records.
+    public var dedupeKey: String { "\(widgetId)::\(trigger)" }
+}
+
 /// Runs a page's actions: state changes through the store, structural changes
 /// through `onMutation`, everything else as effects. A port of
 /// `sdk/lib/src/state/action_executor.dart` for the kinds the Swift caps
@@ -24,6 +41,7 @@ public final class ActionExecutor {
         "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
         "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
         "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
+        "once", "always", "debugLog",
     ]
 
     public let store: ElmStore
@@ -41,6 +59,13 @@ public final class ActionExecutor {
     /// Custom handlers by the type they were registered under, apart from
     /// `kinds` (which stays what the caps vector advertises).
     private var handlers: [String: OrcaActionHandler] = [:]
+    /// The source of the chain being run; nested runs inherit it.
+    private var source: ActionSource?
+    /// The `once` keys (`widgetId::trigger`) that have fired, for as long as
+    /// this executor (its page model) lives. Flutter's known limit is kept:
+    /// the key has no id for the wrapper, so two `once` fired by one widget
+    /// and trigger share it, and in Sequential(Once(A), Once(B)) B never runs.
+    private var firedOnceKeys: Set<String> = []
 
     public init(store: ElmStore, client: OrcaClient? = nil) {
         self.store = store
@@ -66,17 +91,24 @@ public final class ActionExecutor {
     }
 
     /// Run one action. `eventData` feeds `V.event(...)` for this action and
-    /// everything it runs, as Dart's `execute(action, eventData:)` does.
-    public func execute(_ action: Action, eventData: [String: JSONValue]? = nil) async throws {
-        let previous = self.eventData
+    /// everything it runs, as Dart's `execute(action, eventData:, source:)`
+    /// does; `source` (the widget and trigger that fired it) keys `once`.
+    /// Both are inherited by everything the action runs and restored after.
+    public func execute(
+        _ action: Action, eventData: [String: JSONValue]? = nil, source: ActionSource? = nil
+    ) async throws {
+        let previous = (self.eventData, self.source)
         if let eventData { self.eventData = eventData }
-        defer { self.eventData = previous }
+        if let source { self.source = source }
+        defer { (self.eventData, self.source) = previous }
         try await run(action)
     }
 
     /// Run actions one after another (Dart `executeAll`).
-    public func executeAll(_ actions: [Action], eventData: [String: JSONValue]? = nil) async throws {
-        for action in actions { try await execute(action, eventData: eventData) }
+    public func executeAll(
+        _ actions: [Action], eventData: [String: JSONValue]? = nil, source: ActionSource? = nil
+    ) async throws {
+        for action in actions { try await execute(action, eventData: eventData, source: source) }
     }
 
     /// True when the action and everything nested in it is implemented.
@@ -84,6 +116,7 @@ public final class ActionExecutor {
         switch action {
         case .actionGroup(let group): return group.actions.allSatisfy(implements)
         case .lifecycle(let l): return implements(l.action)
+        case .once(let w), .always(let w): return implements(w.action)
         case .conditionalAction(let c):
             return c.branches.allSatisfy { implements($0.then) } && (c.else.map(implements) ?? true)
         default: return kinds.contains(action.kind)
@@ -145,6 +178,18 @@ public final class ActionExecutor {
         case .lifecycle(let l):
             try await runLifecycle(l)
 
+        // At most once per (widget, trigger) (see `firedOnceKeys`); without
+        // a source, every time.
+        case .once(let w):
+            if let source, !firedOnceKeys.insert(source.dedupeKey).inserted { return }
+            try await run(w.action)
+
+        case .always(let w):
+            try await run(w.action)
+
+        case .debugLog(let d):
+            await emit(debugLogEffect(d))
+
         case .navigate(let n):
             let resolver = self.resolver
             let route = resolver.resolveToString(n.route ?? n.path ?? .null)
@@ -197,6 +242,31 @@ public final class ActionExecutor {
         default:
             return
         }
+    }
+
+    /// The `debugLog` effect: level ("debug") and tag ("orca"), the message
+    /// as text, the data resolved (entry by entry for a record, as Dart does
+    /// for any map). Never throws: the resolver yields null where Dart's
+    /// throws, so Dart's "<unresolvable>" has no case here. No timestamp and
+    /// nothing from the include* flags, which only feed the host's log line.
+    private func debugLogEffect(_ d: Action.DebugLog) -> ActionEffect {
+        let resolver = self.resolver
+        var payload: [String: JSONValue] = [
+            "level": .string(d.level ?? "debug"), "tag": .string(d.tag ?? "orca"),
+        ]
+        if let message = d.message, !message.isNull {
+            payload["message"] = .string(resolver.resolveToString(message))
+        }
+        switch d.data {
+        case .object(let entries)?:
+            payload["data"] = .object(entries.mapValues { resolver.resolve($0) })
+        case let raw?:
+            let data = resolver.resolve(raw)
+            if !data.isNull { payload["data"] = data }
+        case nil:
+            break
+        }
+        return ActionEffect("debugLog", payload)
     }
 
     /// Report an effect, then hand it to the platform.
