@@ -15,6 +15,7 @@ import { filterByCapabilities } from "../src/core/capability-filter";
 import { createStaticPolicyResolver } from "../src/core/fallback-policy";
 import type { CapabilityVector } from "../src/types/context";
 import type { ComponentNode } from "../src/types/node";
+import type { Action, OpenUrlAction } from "../src/types/action";
 
 // Minimal vector covering the widgets/values these tests use. When a test
 // wants a feature to appear unsupported, it rebuilds this vector with that
@@ -258,5 +259,53 @@ describe("filterByCapabilities", () => {
     const result = filterByCapabilities(tree, FULL_VECTOR, graceful);
     expect(result.components).toBe(tree);
     expect(result.droppedFeatures).toEqual([]);
+  });
+});
+
+// native-parity-s2 D4: once/always wrap one inner action; the filter checks
+// that inner action as it checks the same action unwrapped.
+describe("filterByCapabilities · once/always inner action (A2.5 eng)", () => {
+  // Advertises once and always but not openUrl, and not the `request` Value
+  // kind the inner action reads.
+  const vector: CapabilityVector = {
+    ...FULL_VECTOR,
+    valueKinds: FULL_VECTOR.valueKinds.filter((k) => k !== "request"),
+    actionKinds: ["navigate", "setState", "once", "always"],
+  };
+  const openUrl: OpenUrlAction = { type: "openUrl", url: { type: "request", key: "next" } };
+
+  function page(onTap: Action): ComponentNode[] {
+    return [
+      n("root", "Column", { kind: "layout", childMode: "multi", children: ["t1", "t2"] }),
+      n("t1", "Text", { props: { data: "a" }, actions: { onTap } }),
+      n("t2", "Text", { props: { data: "b" } }),
+    ];
+  }
+
+  test("A2.5 eng: an unadvertised kind inside once is handled as the same kind unwrapped", () => {
+    const unwrapped = filterByCapabilities(page(openUrl), vector, graceful);
+    const wrapped = filterByCapabilities(page({ type: "once", action: openUrl }), vector, graceful);
+    expect(unwrapped.droppedFeatures).toEqual(["action.openUrl", "value.request"]);
+    expect(wrapped).toEqual(unwrapped);
+    expect(wrapped.components.some((c) => c.id === "t1")).toBe(false);
+  });
+
+  test("A2.5 eng: an unadvertised kind inside always is handled as the same kind unwrapped", () => {
+    const unwrapped = filterByCapabilities(page(openUrl), vector, graceful);
+    const wrapped = filterByCapabilities(page({ type: "always", action: openUrl }), vector, graceful);
+    expect(wrapped).toEqual(unwrapped);
+    expect(wrapped.components.some((c) => c.id === "t1")).toBe(false);
+  });
+
+  test("A2.5 eng: a fully advertised Once(SetState) passes through unchanged", () => {
+    const tree = page({
+      type: "once",
+      action: { type: "setState", scope: "page", key: "seen", value: { type: "static", value: true } },
+    });
+    const result = filterByCapabilities(tree, vector, graceful);
+    expect(result.components).toBe(tree);
+    expect(result.droppedFeatures).toEqual([]);
+    expect(result.replacedWithBlocker).toBe(false);
+    expect(result.addedWarnBanner).toBe(false);
   });
 });
