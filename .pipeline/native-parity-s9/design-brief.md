@@ -31,7 +31,11 @@ the Flutter SDK (`sdk/lib/src/navigation/navigation_handler.dart`, `widgets/orca
 - Redirect (GoRouter top-level `redirect`, runs for `go` and `push`): find the route for the matched location
   with `_findRouteByPath` (all routes in flow order, a node before its children, full-path patterns, equal
   segment counts); when it has `redirect {when, equals, to}` and `appState[when] == equals`, go to `to`. The
-  redirect runs again on the target; GoRouter stops with its error screen after 5 redirects or on a loop.
+  rule is applied ONCE per navigation (go_router 16.3.0 `applyTopLegacyRedirect`: "executed at most once per
+  navigation", corrected at group 1 from T1's run on the real router): the target's own rule is not evaluated,
+  so a chain stops at its first target, a loop shows the second route, a route redirecting to itself shows
+  itself with `redirected` false, and only an unknown target ends on the error screen. After a redirect the
+  location, routePath, params and stack describe the target and the asked query is dropped.
   State changes do not re-run it: the user navigates again after logging in.
 - Unknown location: GoRouter's default error screen ("Page Not Found"), the location stays the unknown one, no
   page request.
@@ -60,7 +64,7 @@ One file per behaviour, numbered like the others:
                                  "appState": { ... } } } ] }        // optional: app state seen at resolve time
 
 Fixtures (at least): param match (B9.2), unknown path and the `/homework` unreachable case (B9.3), redirect on
-app state both ways plus a chain and a loop (B9.4), initialAppState seeding with the overlay (B9.5), nested
+app state both ways plus the applied-once cases (B9.4), initialAppState seeding with the overlay (B9.5), nested
 children with the chain (B9.9), tabs with a non-tab route and its title rules (feeds B9.8 and step 10).
 Flutter is the oracle: `sdk/test/conformance/navigation_fixtures_test.dart` drives the real
 `NavigationHandler.buildRouter` / `OrcaApp(preloadedConfig:)` with a stub client and asserts every expected
@@ -73,7 +77,7 @@ field, so an expected value is whatever Flutter does. No change to Flutter's pro
   `RedirectRule`, `RouteTransitionDef` (type, duration 300, curve easeInOut), the raw JSON and raw body kept.
 - `OrcaClient.fetchConfig()`: GET `/api/v1/app/{appId}/config` with the device headers, HTTP errors as today.
 - `RouteTable(config)`: `resolve(location, appState) -> RouteResolution` with the fields of `expected` above
-  plus the matched route's `transition`; it applies the redirect chain (limit 5, loop → error). Passes every
+  plus the matched route's `transition`; it applies the matched route's redirect rule once (no chain, no limit; see above). Passes every
   navigation fixture.
 - `RouteChangeEvent { location, previousLocation, type: push | replace | pop }`.
 
