@@ -64,11 +64,18 @@ extension EnvironmentValues {
 /// changes nothing, as in Flutter. When the main axis is unbounded (a Column
 /// in a scroll view, where Flutter throws), flex children take their own
 /// size.
+///
+/// `up` is Flutter's `VerticalDirection.up` (LB:119-158): a Column places
+/// its children bottom-to-top, a Row swaps its cross start and end. The
+/// layout direction (a Row's main axis, a Column's cross axis) is the
+/// environment's, which FlexView sets from `textDirection`. `baseline`
+/// stays at the cross start, `up` or not: Flutter flips start and end only.
 struct FlexLayout: Layout {
     var axis: Axis
     var cross: Props.CrossAxis
     var fill: Bool
     var gap: CGFloat
+    var up = false
 
     struct Measured {
         var mains: [CGFloat]
@@ -132,21 +139,26 @@ struct FlexLayout: Layout {
                        cache: inout ()) {
         let measured = measure(offered, subviews)
         let boundsCross = axis == .horizontal ? bounds.height : bounds.width
-        var position = axis == .horizontal ? bounds.minX : bounds.minY
+        let reversed = up && axis == .vertical
+        let flipped = up && axis == .horizontal
+        var position = axis == .horizontal ? bounds.minX : reversed ? bounds.maxY : bounds.minY
         for (i, child) in subviews.enumerated() {
             let childCross = cross == .stretch ? boundsCross : min(measured.crosses[i], boundsCross)
+            let end = boundsCross - childCross
             let offset: CGFloat
             switch cross {
-            case .end: offset = boundsCross - childCross
-            case .center: offset = (boundsCross - childCross) / 2
-            default: offset = 0
+            case .end: offset = flipped ? 0 : end
+            case .center: offset = end / 2
+            case .baseline: offset = 0
+            default: offset = flipped ? end : 0
             }
+            if reversed { position -= measured.mains[i] }
             let point = axis == .horizontal
                 ? CGPoint(x: position, y: bounds.minY + offset)
                 : CGPoint(x: bounds.minX + offset, y: position)
             child.place(at: point, anchor: .topLeading,
                         proposal: proposal(main: measured.mains[i], cross: childCross))
-            position += measured.mains[i] + gap
+            position += reversed ? -gap : measured.mains[i] + gap
         }
     }
 }

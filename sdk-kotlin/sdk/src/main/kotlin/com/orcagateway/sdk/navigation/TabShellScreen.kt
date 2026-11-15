@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -252,7 +253,10 @@ private fun TabBar(router: OrcaRouter) {
 /**
  * The page of every route on a tab's stack or over the shell that was on
  * top at least once, each under its route's id, and only the one on top
- * placed. A route that left the stacks leaves the composition.
+ * placed. A route that left the stacks leaves the composition. Each page is
+ * told whether it can pop, for its AppBar's back arrow ([LocalOrcaNavigation]):
+ * a tab's root cannot, a page pushed on it and a route over the shell can,
+ * and the arrow pops the router as the system back does.
  */
 @Composable
 private fun KeptPages(router: OrcaRouter) {
@@ -262,6 +266,10 @@ private fun KeptPages(router: OrcaRouter) {
     val shown = remember(router) { HashSet<UUID>() }
     shown.retainAll(routes.mapTo(HashSet()) { it.id })
     shown.add(top.id)
+    // As on the single stack: a tab's root cannot pop, a page pushed on it and a route over the shell can.
+    val tabRoots = router.tabStacks.mapNotNullTo(HashSet()) { it.firstOrNull()?.id }
+    val atRoot = remember(router) { OrcaNavigation(router, canPop = false) }
+    val pushed = remember(router) { OrcaNavigation(router, canPop = true) }
 
     // A field of a page that is no longer on top must not keep the keyboard.
     val focus = LocalFocusManager.current
@@ -276,7 +284,11 @@ private fun KeptPages(router: OrcaRouter) {
                 layout(placeable.width, placeable.height) { if (onTop) placeable.place(0, 0) }
             }
             // A not-found route has no loader: nothing is requested for it.
-            Box(kept) { RoutePage(router, route, if (route.isNotFound) null else router.loader(route)) }
+            Box(kept) {
+                CompositionLocalProvider(LocalOrcaNavigation provides if (route.id in tabRoots) atRoot else pushed) {
+                    RoutePage(router, route, if (route.isNotFound) null else router.loader(route))
+                }
+            }
         }
     }
 }

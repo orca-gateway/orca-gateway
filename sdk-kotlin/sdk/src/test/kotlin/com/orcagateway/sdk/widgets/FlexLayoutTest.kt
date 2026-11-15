@@ -11,11 +11,14 @@ import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.getAlignmentLinePosition
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.LayoutDirection
@@ -252,5 +255,129 @@ class FlexLayoutTest {
         assertEquals(100.dp, boundsOfText("rest").top)
         assertEquals(300.dp, boundsOfText("rest").height)
         assertEquals(200.dp, boundsOfText("rest").width)
+    }
+
+    /**
+     * A page drawn from its root inside a loose box under [direction], its
+     * Rows, Columns, SizedBoxes and Texts tagged with their ids.
+     */
+    private fun directedPage(direction: LayoutDirection, width: Dp, height: Dp, vararg nodes: ComponentNode) {
+        val model = OrcaPageModel(page(*nodes)).apply {
+            builders = WidgetBuilders.standard().apply {
+                register("Row") { node, model, modifier ->
+                    FlexWidget(node, model, modifier.testTag(node.id), vertical = false)
+                }
+                register("Column") { node, model, modifier ->
+                    FlexWidget(node, model, modifier.testTag(node.id), vertical = true)
+                }
+                register("SizedBox") { node, model, modifier -> SizedBoxWidget(node, model, modifier.testTag(node.id)) }
+                register("Text") { node, _, modifier -> TextWidget(node, modifier.testTag(node.id)) }
+            }
+        }
+        compose.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                Box(Modifier.size(width, height)) { NodeView(nodes.first().id, model) }
+            }
+        }
+    }
+
+    private fun props(vararg props: Pair<String, String>): Map<String, JsonValue> =
+        props.associate { (key, value) -> key to JsonValue.String(value) }
+
+    private fun textLayout(tag: String): TextLayoutResult {
+        val results = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+        return results.single()
+    }
+
+    /** A1.10: `textDirection: rtl` starts a Row at the right on a left-to-right page. */
+    @Test
+    fun a1_10_aRowRtlStartsAtTheRightOnALeftToRightPage() {
+        directedPage(
+            LayoutDirection.Ltr, 100.dp, 100.dp,
+            row("r", "a", "b", props = props("textDirection" to "rtl")),
+            sizedBox("a", 10, 10),
+            sizedBox("b", 10, 10),
+        )
+        assertEquals(listOf(90.dp, 80.dp), listOf(bounds("a").left, bounds("b").left))
+    }
+
+    /** A1.10: the prop wins over the page's direction: `ltr` starts at the left on a right-to-left page. */
+    @Test
+    fun a1_10_aRowLtrStartsAtTheLeftOnARightToLeftPage() {
+        directedPage(
+            LayoutDirection.Rtl, 100.dp, 100.dp,
+            row("r", "a", "b", props = props("textDirection" to "ltr")),
+            sizedBox("a", 10, 10),
+            sizedBox("b", 10, 10),
+        )
+        assertEquals(listOf(0.dp, 10.dp), listOf(bounds("a").left, bounds("b").left))
+    }
+
+    /** A1.10: `verticalDirection: up` lays a Column out bottom to top, its start at the bottom. */
+    @Test
+    fun a1_10_aColumnUpPutsTheFirstChildAtTheBottom() {
+        directedPage(
+            LayoutDirection.Ltr, 100.dp, 100.dp,
+            column("c", "a", "b", props = props("verticalDirection" to "up")),
+            sizedBox("a", 10, 10),
+            sizedBox("b", 10, 10),
+        )
+        assertEquals(100.dp, bounds("c").height)
+        assertEquals(listOf(90.dp, 80.dp), listOf(bounds("a").top, bounds("b").top))
+    }
+
+    /** A1.10: `verticalDirection: up` puts a Row's cross start at the bottom and its end at the top. */
+    @Test
+    fun a1_10_upFlipsARowsCrossStartAndEnd() {
+        directedPage(
+            LayoutDirection.Ltr, 100.dp, 100.dp,
+            column("c", "r1", "r2"),
+            row("r1", "a", "b", props = props("verticalDirection" to "up", "crossAxisAlignment" to "start")),
+            row("r2", "x", "y", props = props("verticalDirection" to "up", "crossAxisAlignment" to "end")),
+            sizedBox("a", 10, 10),
+            sizedBox("b", 10, 30),
+            sizedBox("x", 10, 10),
+            sizedBox("y", 10, 30),
+        )
+        // Each Row is 30 high, the second below the first.
+        assertEquals(20.dp, bounds("a").top)
+        assertEquals(30.dp, bounds("x").top)
+    }
+
+    /** A1.10: `textDirection: rtl` puts a Column's cross start at the right and its end at the left. */
+    @Test
+    fun a1_10_rtlFlipsAColumnsCrossStartAndEnd() {
+        directedPage(
+            LayoutDirection.Ltr, 100.dp, 100.dp,
+            row("r", "c1", "c2"),
+            column("c1", "a", "b", props = props("textDirection" to "rtl", "crossAxisAlignment" to "start")),
+            column("c2", "x", "y", props = props("textDirection" to "rtl", "crossAxisAlignment" to "end")),
+            sizedBox("a", 10, 10),
+            sizedBox("b", 30, 10),
+            sizedBox("x", 10, 10),
+            sizedBox("y", 30, 10),
+        )
+        // Each Column is 30 wide, the second right of the first.
+        assertEquals(20.dp, bounds("a").left)
+        assertEquals(30.dp, bounds("x").left)
+    }
+
+    /**
+     * A1.10: the Row's `textDirection` orders its children only; a Text in
+     * it keeps the page's direction, as Flutter's Flex sets no
+     * Directionality for its children.
+     */
+    @Test
+    fun a1_10_aTextInAnRtlRowKeepsThePagesDirection() {
+        directedPage(
+            LayoutDirection.Ltr, 200.dp, 100.dp,
+            row("r", "t1", "t2", props = props("textDirection" to "rtl")),
+            text("t1", "one"),
+            text("t2", "two"),
+        )
+        assertEquals(200.dp, bounds("t1").right)
+        assertEquals(bounds("t1").left, bounds("t2").right)
+        assertEquals(LayoutDirection.Ltr, textLayout("t1").layoutInput.layoutDirection)
     }
 }

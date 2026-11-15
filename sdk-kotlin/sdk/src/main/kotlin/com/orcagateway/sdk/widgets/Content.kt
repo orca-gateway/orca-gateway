@@ -11,18 +11,32 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.toRect
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.orcagateway.core.render.ResolvedNode
@@ -33,23 +47,59 @@ import com.orcagateway.sdk.style.TextStyleProps
 /**
  * Flutter `Text`: `data` printed the Dart way, `style` merged over the
  * surrounding text style, `textAlign`, `maxLines`, `softWrap`, `overflow`
- * (clip by default, as Flutter) and `semanticsLabel`. Where the parent
- * forces the width (a stretched Column), the text spans it and `textAlign`
- * places the lines, as Flutter lays a Text out in a tight box.
+ * (the style's when the Text sends none, then clip, as Flutter) and
+ * `semanticsLabel`. Where the parent forces the width (a stretched Column),
+ * the text spans it and `textAlign` places the lines, as Flutter lays a
+ * Text out in a tight box. Word spacing, the decorations Compose cannot draw
+ * and the `fade` overflow are drawn here (TextDecorations.kt).
  */
 @Composable
 internal fun TextWidget(node: ResolvedNode, modifier: Modifier) {
     val data = Props.text(node["data"])
-    var style = LocalTextStyle.current.merge(TextStyleProps(node["style"]).textStyle())
+    val props = TextStyleProps(node["style"])
+    var style = LocalTextStyle.current.merge(props.textStyle())
     Props.textAlign(node["textAlign"])?.let { style = style.merge(TextStyle(textAlign = it)) }
+    if (props.drawsDecoration) style = style.merge(TextStyle(textDecoration = TextDecoration.None))
     val maxLines = node["maxLines"]?.intValue?.takeIf { it > 0 }?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
     val label = node["semanticsLabel"]?.stringValue
+    val overflowValue = node["overflow"]?.takeUnless { it.isNull } ?: props.overflow
+    val overflow = Props.overflow(overflowValue)
+    val fade = overflowValue?.stringValue == "fade"
+    val decorationColor = props.decorationColor ?: style.color.takeOrElse { LocalContentColor.current }
+    val measurer = if (fade || props.overline) rememberTextMeasurer() else null
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val drawn = if (!fade && !props.drawsDecoration) {
+        Modifier
+    } else {
+        Modifier.drawWithCache {
+            // Read here, the layout rebuilds the cache whenever the Text lays out anew.
+            val result = layout ?: return@drawWithCache onDrawWithContent { drawContent() }
+            val ascent = if (props.overline && measurer != null) fontAscent(measurer, result) else 0f
+            val lines = if (props.drawsDecoration) decorationLines(result, props, decorationColor, ascent) else null
+            val clip = overflow != TextOverflow.Visible
+            val brush = if (fade && measurer != null) fadeBrush(measurer, result, size, layoutDirection) else null
+            val bounds = size.toRect()
+            val layer = brush?.let { Paint() }
+            onDrawWithContent {
+                if (layer != null) drawContext.canvas.saveLayer(bounds, layer)
+                drawContent()
+                if (lines != null) {
+                    if (clip) clipRect { drawDecoration(lines) } else drawDecoration(lines)
+                }
+                if (brush != null) {
+                    fadeOverflow(brush)
+                    drawContext.canvas.restore()
+                }
+            }
+        }
+    }
     Text(
-        text = data,
-        modifier = if (label != null) modifier.clearAndSetSemantics { contentDescription = label } else modifier,
-        overflow = Props.overflow(node["overflow"]),
+        text = props.wordSpacing?.let { wordSpaced(data, it, style) } ?: AnnotatedString(data),
+        modifier = (if (label != null) modifier.clearAndSetSemantics { contentDescription = label } else modifier).then(drawn),
+        overflow = overflow,
         softWrap = node["softWrap"]?.boolValue ?: true,
         maxLines = maxLines ?: Int.MAX_VALUE,
+        onTextLayout = { layout = it },
         style = style,
     )
 }

@@ -21,11 +21,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.currentCompositeKeyHashCode
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -34,6 +36,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -46,6 +50,8 @@ import com.orcagateway.core.navigation.RouteChangeEvent
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.StoreState
 import com.orcagateway.sdk.client.current
+import com.orcagateway.sdk.navigation.LocalOrcaNavigation
+import com.orcagateway.sdk.navigation.OrcaNavigation
 import com.orcagateway.sdk.navigation.OrcaRoute
 import com.orcagateway.sdk.navigation.OrcaRouter
 import com.orcagateway.sdk.navigation.TabShellScreen
@@ -139,11 +145,14 @@ public class OrcaPageLoader(
  * A boot cancelled mid-fetch leaves [phase] at `Loading` and runs again on
  * the next [loadIfNeeded]. After [close] it builds no router: a config that
  * lands then is dropped.
+ *
+ * [system] and [onRouteChanged] go to the router a load makes. OrcaApp keeps
+ * a boot through a rotation and sets them to the shown activity's own.
  */
 public class OrcaAppBoot(
     public val client: OrcaClient,
-    private val system: SystemActions? = null,
-    private val onRouteChanged: ((RouteChangeEvent) -> Unit)? = null,
+    internal var system: SystemActions? = null,
+    internal var onRouteChanged: ((RouteChangeEvent) -> Unit)? = null,
 ) : AutoCloseable {
     /** Where the boot stands. */
     public sealed interface Phase {
@@ -215,17 +224,22 @@ public class OrcaAppBoot(
  *     OrcaApp(client, path = "home")
  *
  * [onRouteChanged] is called once per change of the location on top (see
- * [OrcaRouter.onRouteChanged]); the one given at the first composition is
- * kept.
+ * [OrcaRouter.onRouteChanged]); the current one is used, set on the router
+ * only while shown, so a router kept through a rotation holds no old activity's.
  *
  * Snackbars and toasts are handled by the page; `openUrl`, the clipboard and
  * share go to [system], by default the device's own ([SystemActions.android]).
- * The router is made once, like Swift's `StateObject`, and closed with this
- * composition: a new activity starts again at [path], or boots again. A
- * [client] without a device id gets the one saved in SharedPreferences
- * (`DeviceIdentity`, [SharedPreferencesKeyValueStore]), made on first run,
- * as Flutter does whether or not sessions are tracked; `/config` is asked
- * with it too.
+ *
+ * The router (with `path = null`, the boot and the router it makes) is made
+ * once, like Swift's `StateObject`, and kept in the activity's
+ * `ViewModelStore` (one per call site): an activity recreated by a rotation
+ * shows the same pages, with their state, without asking `/config` again,
+ * and it is closed when the activity finishes. It never holds the activity:
+ * [system] and [onRouteChanged] are the router's only while this composition
+ * shows it. A [client] without a device id gets the one saved in
+ * SharedPreferences (`DeviceIdentity`, [SharedPreferencesKeyValueStore]),
+ * made on first run, as Flutter does whether or not sessions are tracked;
+ * `/config` is asked with it too.
  *
  * @param enableOffline runs the version check at boot, before anything else
  * is asked: a forceUpdate answer shows the force-update screen and neither
@@ -246,27 +260,61 @@ public fun OrcaApp(
 ) {
     val context = LocalContext.current
     val identified = remember { client.identified(SharedPreferencesKeyValueStore(context)) }
+    // Keyed by the call site: two OrcaApps in one activity keep a router (or a boot) each.
+    val site = currentCompositeKeyHashCode.toString(36)
     if (path != null) {
-        val router = remember { OrcaRouter(identified, path, system).also { it.onRouteChanged = onRouteChanged } }
-        DisposableEffect(router) { onDispose { router.close() } }
+        val retained = viewModel(key = "com.orcagateway.sdk.OrcaApp:$site") { Retained(OrcaRouter(identified, path)) }
+        val router = retained.value
+        AttachHost(router, system, onRouteChanged)
         OrcaApp(router, modifier, enableOffline, enableSessionTracking)
         return
     }
     // The version check comes first: the config is asked only once the app may run.
     OrcaBootView(identified, enableOffline, enableSessionTracking, modifier) {
         val scope = rememberCoroutineScope()
-        val boot = remember { OrcaAppBoot(identified, system, onRouteChanged) }
-        DisposableEffect(boot) { onDispose { boot.close() } }
+        val retained = viewModel(key = "com.orcagateway.sdk.OrcaAppBoot:$site") { Retained(OrcaAppBoot(identified)) }
+        val boot = retained.value
+        // Before the load starts, so the router it makes gets them.
+        DisposableEffect(boot, system, onRouteChanged) {
+            boot.system = system
+            boot.onRouteChanged = onRouteChanged
+            onDispose {
+                if (boot.system === system) boot.system = null
+                if (boot.onRouteChanged === onRouteChanged) boot.onRouteChanged = null
+            }
+        }
         LaunchedEffect(boot) { boot.loadIfNeeded(context) }
         when (val phase = boot.phase) {
             OrcaAppBoot.Phase.Loading -> LoadingView(modifier)
-            is OrcaAppBoot.Phase.Ready -> OrcaNavHost(phase.router, modifier)
+            is OrcaAppBoot.Phase.Ready -> {
+                AttachHost(phase.router, system, onRouteChanged)
+                OrcaNavHost(phase.router, modifier)
+            }
             is OrcaAppBoot.Phase.Failed -> ErrorView("Could not load this app", phase.message, modifier) {
                 scope.launch { boot.reload(context) }
             }
         }
     }
 }
+
+/**
+ * While shown, the host's latest [system] and [onRouteChanged] are the
+ * router's (OrcaApp(client) keeps the router, not the activity they belong to).
+ */
+@Composable
+private fun AttachHost(router: OrcaRouter, system: SystemActions?, onRouteChanged: ((RouteChangeEvent) -> Unit)?) {
+    DisposableEffect(router, system) {
+        if (system != null) router.system = system
+        onDispose { if (system != null && router.system === system) router.system = null }
+    }
+    DisposableEffect(router, onRouteChanged) {
+        router.onRouteChanged = onRouteChanged
+        onDispose { if (router.onRouteChanged === onRouteChanged) router.onRouteChanged = null }
+    }
+}
+
+/** OrcaApp(client)'s router or boot through configuration changes; [value] is closed when the activity finishes. */
+internal class Retained<T : AutoCloseable>(val value: T) : ViewModel(value)
 
 /**
  * [OrcaApp] over a router the host made and keeps (Swift
@@ -279,7 +327,12 @@ public fun OrcaApp(
  * The router is the one source of truth: the system back gesture pops the
  * router, and the [NavHost] follows the router's stack. While the router
  * has a tab shell ([OrcaRouter.hasShell]) the [TabShellScreen] is drawn
- * instead.
+ * instead. After the activity is recreated (a rotation) the [NavHost] keeps
+ * the entries it restored that are still on the router's stack, so the page
+ * on screen stays as it was.
+ *
+ * Each page is told whether it can pop (it is a pushed page, not the root)
+ * and how to go back, for the AppBar's back arrow ([LocalOrcaNavigation]).
  *
  * The router's client is used as the host built it: to send the device id
  * OrcaApp(client) gives, build the client with
@@ -317,39 +370,50 @@ private fun OrcaNavHost(router: OrcaRouter, modifier: Modifier) {
 @Composable
 private fun StackScreen(router: OrcaRouter, modifier: Modifier) {
     val navController = rememberNavController()
+    // The route ids of the pages pushed on the NavController, saved with it:
+    // its own back stack is not public API.
+    val shown = rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val atRoot = remember(router) { OrcaNavigation(router, canPop = false) }
+    val pushed = remember(router) { OrcaNavigation(router, canPop = true) }
     NavHost(navController, startDestination = ROOT_ROUTE, modifier = modifier) {
         composable(ROOT_ROUTE) {
             val root = router.root
-            key(root.id) { RoutePage(router, root, if (root.isNotFound) null else router.loader(root)) }
+            CompositionLocalProvider(LocalOrcaNavigation provides atRoot) {
+                key(root.id) { RoutePage(router, root, if (root.isNotFound) null else router.loader(root)) }
+            }
         }
         composable(PAGE_ROUTE) { entry ->
             val id = entry.arguments?.getString(ROUTE_ID)
             // Kept while a popped page leaves the screen, after the router dropped it.
             // A not-found route has no loader: nothing is requested for it.
-            val shown = remember(id) {
+            val page = remember(id) {
                 router.stack.firstOrNull { it.id.toString() == id }
                     ?.let { route -> route to if (route.isNotFound) null else router.loader(route) }
             }
-            if (shown != null) RoutePage(router, shown.first, shown.second)
+            if (page != null) {
+                CompositionLocalProvider(LocalOrcaNavigation provides pushed) { RoutePage(router, page.first, page.second) }
+            }
         }
     }
     // After the NavHost, so it is asked before the NavHost's own back handling.
     BackHandler(enabled = router.stack.isNotEmpty()) { router.goBack() }
     LaunchedEffect(router, navController) {
-        // Pages a restored NavHost still shows belong to no route here.
-        navController.popBackStack(ROOT_ROUTE, inclusive = false)
-        var shown = emptyList<OrcaRoute>()
         snapshotFlow { router.stack }.collect { stack ->
-            navController.follow(shown, stack)
-            shown = stack
+            navController.follow(shown.value, stack)
+            shown.value = stack.map { it.id.toString() }
         }
     }
 }
 
-/** Pop the pages [shown] has beyond what it shares with [stack], then push the rest of [stack]. */
-private fun NavHostController.follow(shown: List<OrcaRoute>, stack: List<OrcaRoute>) {
+/**
+ * Bring the NavController from the pages it shows ([shown], route ids) to
+ * [stack]: keep the ones the two share from the bottom, pop the rest, push
+ * what is missing. After a recreation the restored entries that are still on
+ * the stack stay, so a rotation pops and pushes nothing.
+ */
+private fun NavHostController.follow(shown: List<String>, stack: List<OrcaRoute>) {
     var same = 0
-    while (same < shown.size && same < stack.size && shown[same] === stack[same]) same++
+    while (same < shown.size && same < stack.size && shown[same] == stack[same].id.toString()) same++
     repeat(shown.size - same) { popBackStack() }
     for (route in stack.drop(same)) navigate("orca/page/${route.id}")
 }

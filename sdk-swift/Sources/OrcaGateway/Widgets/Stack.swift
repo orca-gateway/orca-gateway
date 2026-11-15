@@ -57,13 +57,18 @@ struct PositionedKey: LayoutValueKey {
 }
 
 /// Flutter `RenderStack`. The Stack is as big as its largest ordinary child
-/// (`fit: expand`: all the space offered); ordinary children are placed by
+/// (`fit: expand`: all the space offered), and as long as it is offered on
+/// the axes its parent forces (`tight`); ordinary children are placed by
 /// `alignment` (center by default, as the Flutter SDK parses it); Positioned
 /// children by their edges, sized by both edges or their own width and
-/// height. Later children draw on top.
+/// height. Later children draw on top. `fit: passthrough` (`passthrough`)
+/// forces the ordinary children on the `tight` axes too and leaves them
+/// loose on the others.
 struct StackLayout: Layout {
     var alignment: UnitPoint
     var expand: Bool
+    var tight: TightAxes = []
+    var passthrough = false
 
     private func finite(_ value: CGFloat?) -> CGFloat? {
         guard let value, value.isFinite else { return nil }
@@ -84,7 +89,10 @@ struct StackLayout: Layout {
             sized = true
         }
         // Only Positioned children: the Stack takes what it is offered.
-        return sized ? size : CGSize(width: offered.0 ?? 0, height: offered.1 ?? 0)
+        if !sized { size = CGSize(width: offered.0 ?? 0, height: offered.1 ?? 0) }
+        if tight.contains(.horizontal), let width = offered.0 { size.width = width }
+        if tight.contains(.vertical), let height = offered.1 { size.height = height }
+        return size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -100,7 +108,9 @@ struct StackLayout: Layout {
                     y: bounds.minY + spec.y(height: height, in: bounds.height, alignment: alignment.y))
                 child.place(at: point, anchor: .topLeading, proposal: ProposedViewSize(width: width, height: height))
             } else {
-                let size = expand ? bounds.size : child.sizeThatFits(ProposedViewSize(bounds.size))
+                var size = expand ? bounds.size : child.sizeThatFits(ProposedViewSize(bounds.size))
+                if passthrough, tight.contains(.horizontal) { size.width = bounds.width }
+                if passthrough, tight.contains(.vertical) { size.height = bounds.height }
                 let point = CGPoint(x: bounds.minX + (bounds.width - size.width) * alignment.x,
                                     y: bounds.minY + (bounds.height - size.height) * alignment.y)
                 child.place(at: point, anchor: .topLeading, proposal: ProposedViewSize(size))
@@ -115,16 +125,20 @@ struct StackLayout: Layout {
 struct StackNodeView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
+    @Environment(\.orcaTight) private var tight
 
     var body: some View {
-        StackLayout(alignment: Props.unitPoint(node["alignment"]), expand: node["fit"]?.stringValue == "expand") {
+        let fit = node["fit"]?.stringValue
+        StackLayout(alignment: Props.unitPoint(node["alignment"]), expand: fit == "expand",
+                    tight: tight, passthrough: fit == "passthrough") {
             ForEach(node.childIds, id: \.self) { id in
                 NodeView(id: id, model: model).layoutValue(key: PositionedKey.self, value: positioned(id))
             }
         }
-        // A Stack loosens its ordinary children (fit: expand would tighten
-        // them; that is left to the layout's proposal).
-        .environment(\.orcaTight, [])
+        // loose (the default) loosens the ordinary children; passthrough
+        // hands them the Stack's own tight axes (D9); expand tightens them
+        // through the layout's proposal.
+        .environment(\.orcaTight, fit == "passthrough" ? tight : [])
         .modifier(ClipIf(shape: Props.clips(node["clipBehavior"]) ? CornersShape(radii: .zero) : nil))
     }
 
