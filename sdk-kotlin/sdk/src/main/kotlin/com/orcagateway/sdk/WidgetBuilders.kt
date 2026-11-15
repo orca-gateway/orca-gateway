@@ -34,9 +34,11 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Draws one resolved node. [modifier] comes from the parent (a stretched
  * Flex child, a slot) and goes on the builder's outermost layout; a builder
- * emits one layout node, or none.
+ * emits one layout node, or none. Dart `ComponentBuilder`
+ * (sdk/lib/src/rendering/component_registry.dart): children are drawn with
+ * [NodeView], triggers fired with [OrcaPageModel.fire].
  */
-internal typealias WidgetBuilder = @Composable (node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) -> Unit
+public typealias WidgetBuilder = @Composable (node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) -> Unit
 
 /**
  * The Compose side of the registry: wire type to builder (Swift's
@@ -46,36 +48,40 @@ internal typealias WidgetBuilder = @Composable (node: ResolvedNode, model: OrcaP
  * told about, such as a plugin's, or the core's `_Empty`) draws nothing,
  * takes no space and is logged once per type. Nothing here throws.
  *
- * Open: [register] adds or replaces a builder, which is how plugins will
- * add their widgets. Thread-safe.
+ * Open: [register] adds or replaces a builder, which is how plugins and
+ * hosts add their widgets, on an instance of their own from [standard].
+ * Thread-safe.
  */
-internal class WidgetBuilders private constructor(initial: Map<String, WidgetBuilder>) {
+public class WidgetBuilders private constructor(initial: Map<String, WidgetBuilder>) {
     private val builders = ConcurrentHashMap(initial)
     private val missing: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
-    operator fun get(type: String): WidgetBuilder? = builders[type]
+    /** The builder for a wire [type], or null when none is registered. */
+    public operator fun get(type: String): WidgetBuilder? = builders[type]
 
-    fun register(type: String, builder: WidgetBuilder) {
+    /** Draw nodes of a wire [type] with [builder], replacing any builder it had. */
+    public fun register(type: String, builder: WidgetBuilder) {
         builders[type] = builder
     }
 
-    val types: Set<String> get() = builders.keys.toSet()
+    /** The wire types with a builder, a snapshot. */
+    public val types: Set<String> get() = builders.keys.toSet()
 
     /** Log a type with no builder, once per type; true the first time. */
-    fun reportMissing(type: String): Boolean {
+    internal fun reportMissing(type: String): Boolean {
         val first = missing.add(type)
         if (first) Log.w(LOG_TAG, "No Compose builder for widget type \"$type\"; it draws nothing.")
         return first
     }
 
     /** Types reported by [reportMissing] so far. */
-    val reportedMissing: Set<String> get() = missing.toSet()
+    internal val reportedMissing: Set<String> get() = missing.toSet()
 
-    companion object {
-        const val LOG_TAG: String = "OrcaGateway"
+    public companion object {
+        internal const val LOG_TAG: String = "OrcaGateway"
 
         /** The builders every page draws with unless told otherwise. */
-        val shared: WidgetBuilders = standard()
+        internal val shared: WidgetBuilders = standard()
 
         /**
          * A fresh registry with the 28 widgets of sdk-kotlin/capabilities.json:
@@ -84,7 +90,7 @@ internal class WidgetBuilders private constructor(initial: Map<String, WidgetBui
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video. Keep the two lists in step: the caps vector
          * advertises what this draws (WidgetBuildersTest checks it).
          */
-        fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
+        public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
             register("Scaffold") { node, model, modifier -> ScaffoldWidget(node, model, modifier) }
             register("AppBar") { node, model, modifier -> AppBarWidget(node, model, modifier) }
             register("Column") { node, model, modifier -> FlexWidget(node, model, modifier, vertical = true) }
