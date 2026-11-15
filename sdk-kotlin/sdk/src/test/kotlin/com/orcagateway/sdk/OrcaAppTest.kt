@@ -91,7 +91,7 @@ class OrcaAppTest {
     @Test
     fun theCounterLoadsThroughTheHandshakeAndCounts() {
         val engine = StubEngine()
-        compose.setContent { OrcaApp(client(engine)) }
+        compose.setContent { OrcaApp(client(engine), path = "home") }
 
         compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("Counter Example") > 0 }
         compose.onNodeWithText("Counter Example").assertIsDisplayed()
@@ -109,7 +109,7 @@ class OrcaAppTest {
     @Test
     fun aFailedLoadShowsTheErrorAndRetries() {
         val engine = StubEngine(failWith = 500)
-        compose.setContent { OrcaApp(client(engine)) }
+        compose.setContent { OrcaApp(client(engine), path = "home") }
 
         compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("Could not load this page") > 0 }
         compose.onNodeWithText("HTTP 500: {\"error\":\"boom\"}").assertIsDisplayed()
@@ -137,6 +137,19 @@ class OrcaAppTest {
         assertEquals("393", engine.configRequests.single().headers["x-orca-screen-width"])
     }
 
+    /** No path is the default: `OrcaApp(client)` asks `/config` first, as Flutter's OrcaApp does. */
+    @Test
+    fun b9_1_withoutAPathTheAppBootsFromTheConfig() {
+        val engine = ConfigEngine(config(initialRoute = "/welcome"))
+        compose.setContent { OrcaApp(engine.client) }
+
+        compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("welcome page") > 0 }
+
+        assertTrue(engine.requests.first().url.path.endsWith("/config"))
+        assertEquals(1, engine.configRequests.size)
+        assertEquals(listOf("welcome"), engine.pageRequests)
+    }
+
     @Test
     fun b9_1_aHostPathSkipsTheConfig() {
         val engine = ConfigEngine(config(initialRoute = "/welcome"))
@@ -147,8 +160,8 @@ class OrcaAppTest {
             if (explicit) {
                 OrcaApp(engine.client, path = "settings", onRouteChanged = { events += it })
             } else {
-                // No path at all: the page `home`, as before the config boot existed.
-                OrcaApp(byDefault.client, onRouteChanged = { events += it })
+                // The path `home`, which was the default before the config boot became it.
+                OrcaApp(byDefault.client, path = "home", onRouteChanged = { events += it })
             }
         }
 
@@ -228,6 +241,30 @@ class OrcaAppTest {
         assertEquals(listOf("home", "settings"), engine.pageRequests)
     }
 
+    // MARK: Tabs (B10.1)
+
+    /** B10.1-K: a config boot whose initial route is a tab lands in the tab shell, with its bar. */
+    @Test
+    fun b10_1_bootingIntoATabShowsTheShell() {
+        val tabs = """[{"id":"home","label":"Home","icon":"home","initialRoute":"/home"},""" +
+            """{"id":"welcome","label":"Welcome","icon":"star","initialRoute":"/welcome"}]"""
+        val engine = ConfigEngine(config(initialRoute = "/home", tabs = tabs))
+        compose.setContent { OrcaApp(engine.client, path = null) }
+
+        compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("home page") > 0 }
+        compose.onNodeWithTag("orca-tab-0").assertIsDisplayed()
+        compose.onNodeWithTag("orca-tab-1").assertIsDisplayed()
+        compose.onNodeWithText("Welcome").assertIsDisplayed()
+        // Only the tab on screen was asked for.
+        assertEquals(listOf("home"), engine.pageRequests)
+
+        compose.onNodeWithTag("orca-tab-1").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("welcome page") > 0 }
+        compose.onNodeWithText("welcome page").assertIsDisplayed()
+        assertEquals(1, engine.configRequests.size)
+        assertEquals(listOf("home", "welcome"), engine.pageRequests)
+    }
+
     @Test
     fun aNotFoundRouteRequestsNoPage() {
         val engine = ConfigEngine(config(initialRoute = "/nowhere"))
@@ -303,7 +340,7 @@ class OrcaAppTest {
     fun a1_13_kt_aPushedPageSurvivesARecreationAndBackReturnsHome() {
         probe()
         val pages = PathPages()
-        val activity = host { OrcaApp(pages.client) }
+        val activity = host { OrcaApp(pages.client, path = "home") }
         compose.waitUntil(5_000) { count("Go") > 0 }
         compose.onNodeWithText("Go").performClick()
         compose.waitUntil(5_000) { count("about") > 0 }
@@ -333,7 +370,7 @@ class OrcaAppTest {
     @Test
     fun a1_13_kt_theRouterOutlivesARecreationAndClosesWhenTheActivityFinishes() {
         probe()
-        val activity = host { OrcaApp(PathPages().client) }
+        val activity = host { OrcaApp(PathPages().client, path = "home") }
         compose.waitUntil(5_000) { count("Go") > 0 }
         compose.waitForIdle()
         val router = checkNotNull(seen.getValue("Go").navigation.router)
@@ -365,7 +402,7 @@ class OrcaAppTest {
         val made = mutableListOf<SystemActions>()
         val activity = host {
             val own = remember { SystemActions(open = {}, copy = {}, share = { _, _ -> }).also { made += it } }
-            OrcaApp(PathPages().client, system = own)
+            OrcaApp(PathPages().client, path = "home", system = own)
         }
         compose.waitUntil(5_000) { count("Go") > 0 }
         val router = checkNotNull(seen.getValue("Go").navigation.router)

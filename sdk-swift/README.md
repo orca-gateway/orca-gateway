@@ -36,7 +36,8 @@ targets: [
 ```
 
 Then make `OrcaApp` the root view. It loads the page at `path` from your Orca server and follows
-the page's navigation:
+the page's navigation; with no `path` it starts from the app's navigation config instead, as the
+Flutter SDK does (see the router section below):
 
 ```swift
 import OrcaGateway
@@ -99,8 +100,9 @@ user, so navigate after a login (`router.navigate(to: "/home", replace: true)`).
 
 `router.top` is the route on screen: `path` (the page request path), `location` (leading slash
 and query), `isNotFound`, and `scaffoldTitle`, the fallback title of a route outside the tabs.
-`OrcaApp(client: client, path: nil)` boots from the config by itself (with no `path` it opens
-`home`, as before); `OrcaApp(router:)` draws a router made as above. Both show the "Page not found"
+`OrcaApp(client: client)` boots from the config by itself (with a `path`, as in
+`OrcaApp(client: client, path: "home")`, it opens that page and fetches no config);
+`OrcaApp(router:)` draws a router made as above. Both show the "Page not found"
 page and the title bar. A config with tabs runs as one stack.
 
 ## Layout

@@ -6,7 +6,7 @@
 
 import { describe, expect, test, afterEach } from "bun:test";
 import type { Subprocess } from "bun";
-import { mkdtempSync, rmSync } from "fs";
+import { mkdtempSync, readFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import enginePackage from "../package.json";
@@ -142,6 +142,41 @@ async function getTodoPage(r: Running, headers?: Record<string, string>): Promis
   return fetch(`${r.base}${TODO_ROUTE}`, { headers });
 }
 
+interface NodeJson {
+  type: string;
+  props: Record<string, unknown>;
+  actions?: Record<string, ActionJson>;
+}
+
+interface ActionJson {
+  type: string;
+  actions?: ActionJson[];
+  action?: ActionJson;
+  else?: ActionJson;
+  branches?: { then: ActionJson }[];
+  onLoading?: ActionJson | ActionJson[];
+  onSuccess?: ActionJson | ActionJson[];
+  onError?: ActionJson | ActionJson[];
+  onComplete?: ActionJson | ActionJson[];
+  node?: { actions?: Record<string, ActionJson> };
+}
+
+/**
+ * The kinds of an action and of every action nested in it. The nesting fields
+ * are those of `src/types/action.ts`: `actions` (actionGroup), `action`
+ * (lifecycle, once, always), `branches[].then` and `else` (conditionalAction),
+ * the four lifecycle callbacks, and the actions of an addComponent `node`.
+ */
+function actionKinds(action: ActionJson): string[] {
+  const nested = [
+    ...(action.actions ?? []),
+    ...(action.branches ?? []).map((b) => b.then),
+    ...[action.action, action.else, action.onLoading, action.onSuccess, action.onError, action.onComplete].flat(),
+    ...Object.values(action.node?.actions ?? {}),
+  ].filter((a): a is ActionJson => a !== undefined && a !== null);
+  return [action.type, ...nested.flatMap(actionKinds)];
+}
+
 // ── Cases ──────────────────────────────────────────────────
 
 describe("demo server (examples/server/index.ts)", () => {
@@ -242,6 +277,131 @@ describe("demo server (examples/server/index.ts)", () => {
     const welcome = await fetch(`${app}/page/welcome`, { headers: KEY });
     expect(welcome.status).toBe(200);
     await welcome.body?.cancel();
+  }, 30_000);
+
+  test("B10.D the tabs apps: /config carries three tabs and the drawer items (tabs) or the server tab bar and drawer trees (tabs-server); every page of both renders", async () => {
+    // The demo has no conditional, lifecycle or wrapper action: the walker is
+    // proven here on a hand-made one that uses every nesting field of the wire.
+    const leaf = (type: string): ActionJson => ({ type });
+    const everyNesting: ActionJson = {
+      type: "actionGroup",
+      actions: [
+        {
+          type: "conditionalAction",
+          branches: [{ then: leaf("navigate") }, { then: { type: "once", action: leaf("goBack") } }],
+          else: { type: "always", action: leaf("openDrawer") },
+        },
+        {
+          type: "lifecycle",
+          action: leaf("serverAction"),
+          onLoading: leaf("showToast"),
+          onSuccess: [leaf("setState"), leaf("switchTab")],
+          onError: [leaf("showSnackbar")],
+          onComplete: leaf("refetchPage"),
+        },
+        { type: "addComponent", node: { type: "Button", props: {}, actions: { onTap: leaf("openUrl") } } },
+      ],
+    };
+    expect(actionKinds(everyNesting).sort()).toEqual(
+      [
+        "actionGroup",
+        "conditionalAction",
+        "navigate",
+        "once",
+        "goBack",
+        "always",
+        "openDrawer",
+        "lifecycle",
+        "serverAction",
+        "showToast",
+        "setState",
+        "switchTab",
+        "showSnackbar",
+        "refetchPage",
+        "addComponent",
+        "openUrl",
+      ].sort(),
+    );
+
+    const r = await startDemo();
+    const supported = JSON.parse(readFileSync(join(OSS_ROOT, "sdk-swift", "capabilities.json"), "utf8")) as {
+      widgets: string[];
+      actionKinds: string[];
+    };
+    const pages = ["feed", "feed/post/7", "search", "profile", "profile/local", "settings", "help"];
+    interface TabsConfigJson {
+      initialRoute: string;
+      initialAppState?: Record<string, unknown>;
+      tabs?: { id: string; icon?: string; initialRoute: string }[];
+      drawerItems?: { label: string; route: string }[];
+      tabBarComponents?: NodeJson[];
+      drawerComponents?: NodeJson[];
+    }
+
+    /** No widget and no action kind the native SDKs do not draw. */
+    function expectNativeDrawable(where: string, nodes: NodeJson[]): void {
+      const widgets = nodes.map((n) => n.type).filter((type) => !supported.widgets.includes(type));
+      const kinds = nodes
+        .flatMap((n) => Object.values(n.actions ?? {}).flatMap(actionKinds))
+        .filter((kind) => !supported.actionKinds.includes(kind));
+      expect({ where, widgets, kinds }).toEqual({ where, widgets: [], kinds: [] });
+    }
+
+    for (const appId of ["tabs", "tabs-server"]) {
+      const app = `${r.base}/api/v1/app/${appId}`;
+
+      const configRes = await fetch(`${app}/config`, { headers: KEY });
+      expect(configRes.status).toBe(200);
+      const config = (await configRes.json()) as TabsConfigJson;
+
+      expect(config.initialRoute).toBe("/feed");
+      expect(config.initialAppState).toMatchObject({ _tabIndex: 0, visits: 0 });
+      expect(config.tabs?.map((t) => [t.id, t.icon, t.initialRoute])).toEqual([
+        ["feed", "home", "/feed"],
+        ["search", "search", "/search"],
+        ["profile", "person", "/profile"],
+      ]);
+
+      if (appId === "tabs") {
+        expect(config.drawerItems?.map((d) => [d.label, d.route])).toEqual([
+          ["Settings", "/settings"],
+          ["Help", "/help"],
+        ]);
+        expect(config.tabBarComponents).toBeUndefined();
+        expect(config.drawerComponents).toBeUndefined();
+      } else {
+        const tabBar = config.tabBarComponents ?? [];
+        const drawer = config.drawerComponents ?? [];
+        expect(tabBar.length).toBeGreaterThan(0);
+        expect(drawer[0]?.type).toBe("Drawer");
+        // One SwitchTab button per tab (flat nodes are not in tree order).
+        const switches = tabBar.flatMap((n) => Object.values(n.actions ?? {})).map((a) => JSON.stringify(a));
+        expect(switches.sort()).toEqual(
+          ["feed", "profile", "search"].map((tabId) => JSON.stringify({ type: "switchTab", tabId })),
+        );
+        expect(JSON.stringify(drawer)).toContain(JSON.stringify({ type: "switchTab", tabId: "profile" }));
+        expectNativeDrawable(`${appId} tab bar`, tabBar);
+        expectNativeDrawable(`${appId} drawer`, drawer);
+      }
+
+      for (const page of pages) {
+        const res = await fetch(`${app}/page/${page}`, { headers: KEY });
+        expect({ page, status: res.status }).toEqual({ page, status: 200 });
+        const nodes = ((await res.json()) as { components: NodeJson[] }).components;
+        expect(nodes.length).toBeGreaterThan(0);
+        expectNativeDrawable(`${appId} /${page}`, nodes);
+
+        if (page === "feed/post/7") expect(JSON.stringify(nodes)).toContain("Post 7");
+        if (page === "profile/local") {
+          const scaffold = nodes.find((n) => n.type === "Scaffold");
+          for (const slot of ["appBar", "body", "drawer", "endDrawer", "bottomNavigationBar"]) {
+            expect(scaffold?.props[slot]).toBeString();
+          }
+          expect(nodes.filter((n) => n.type === "Drawer")).toHaveLength(2);
+          expect(nodes.filter((n) => n.type === "BottomNavItem")).toHaveLength(3);
+        }
+      }
+    }
   }, 30_000);
 
   test("I4 the compiled binary, run outside the repo, prints the startup line, serves todo and stops on SIGTERM", async () => {

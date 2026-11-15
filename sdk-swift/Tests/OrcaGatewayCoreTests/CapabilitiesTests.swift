@@ -26,11 +26,13 @@ final class CapabilitiesTests: XCTestCase {
         XCTAssertEqual(advertised, listed.intersection(ios))
         XCTAssertEqual(advertised, listed)
 
-        // The seven Material-only widgets are never advertised on iOS.
-        for orphan in ["Checkbox", "Drawer", "FloatingActionButton", "InkWell", "Radio", "SnackBar", "Tooltip"] {
+        // The six Material-only widgets are never advertised on iOS.
+        for orphan in ["Checkbox", "FloatingActionButton", "InkWell", "Radio", "SnackBar", "Tooltip"] {
             XCTAssertFalse(ios.contains(orphan), "\(orphan) has the ios target")
             XCTAssertFalse(advertised.contains(orphan))
         }
+        // Drawer now has the ios target.
+        XCTAssertTrue(ios.contains("Drawer"), "Drawer lacks the ios target")
     }
 
     func testActionKindsMatchTheImplementedList() throws {
@@ -38,7 +40,8 @@ final class CapabilitiesTests: XCTestCase {
         let listed = Set((implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue))
         XCTAssertEqual(Set(GeneratedCapabilities.actionKinds), listed)
         XCTAssertTrue(listed.isSubset(of: Set(Action.kinds)))
-        XCTAssertEqual(listed.count, 15)
+        XCTAssertEqual(listed.count, 17)
+        XCTAssertTrue(listed.isSuperset(of: ["switchTab", "openDrawer"]))
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).
         XCTAssertEqual(ActionExecutor.kinds, listed.union(["replaceComponent"]))

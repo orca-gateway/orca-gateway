@@ -22,12 +22,15 @@ public object GeneratedCapabilities {
     public val widgets: List<String> = listOf(
         "AnimatedBuilder",
         "AppBar",
+        "BottomNavItem",
+        "BottomNavigationBar",
         "Card",
         "Center",
         "ClipRRect",
         "Column",
         "Container",
         "Divider",
+        "Drawer",
         "ElevatedButton",
         "Expanded",
         "FallbackPrompt",
@@ -71,12 +74,14 @@ public object GeneratedCapabilities {
         "goBack",
         "lifecycle",
         "navigate",
+        "openDrawer",
         "openUrl",
         "serverAction",
         "setState",
         "share",
         "showSnackbar",
         "showToast",
+        "switchTab",
         "updateComponent",
     )
 
@@ -131,5 +136,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "582ab6ab9ae64e92679b3d5b83585db42c268e59598a52ada04eb43f3481753f"
+    public const val capsHash: String = "341de73030069b161ff2b179dd684ed751cc9b3c42d711c49464f533fd31c467"
 }

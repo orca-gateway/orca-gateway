@@ -7,7 +7,7 @@ import XCTest
 final class ModelRoundTripTests: XCTestCase {
     func testAllRenderFixturesRoundTrip() throws {
         let files = try Fixtures.files("render")
-        XCTAssertEqual(files.count, 41, "render fixtures 01-41")
+        XCTAssertEqual(files.count, 43, "render fixtures 01-41, 60-61")
         var nodes = 0
         for (name, fixture) in files {
             let expected = fixture["expected"]
@@ -36,7 +36,7 @@ final class ModelRoundTripTests: XCTestCase {
 
     func testAllActionFixturesRoundTrip() throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 18, "action fixtures 01-15, 45-47")
+        XCTAssertEqual(files.count, 20, "action fixtures 01-15, 30-31, 45-47")
         var kinds = Set<String>()
         for (name, fixture) in files {
             var lists: [JSONValue] = [fixture["actions"]]
@@ -162,7 +162,7 @@ final class ModelRoundTripTests: XCTestCase {
 
     func testB9_1_CS_EveryNavigationFixtureConfigDecodes() throws {
         let files = try Fixtures.navigation()
-        XCTAssertEqual(files.count, 11, "navigation fixtures 01-11")
+        XCTAssertEqual(files.count, 14, "navigation fixtures 01-14")
         var routes = 0
         for (name, fixture) in files {
             let json = fixture["config"]

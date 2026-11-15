@@ -1392,7 +1392,8 @@
       "targets": [
         "flutter",
         "web",
-        "android"
+        "android",
+        "ios"
       ],
       "triggers": []
     },

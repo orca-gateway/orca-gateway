@@ -110,8 +110,8 @@ public final class OrcaPageLoader: ObservableObject {
     }
 }
 
-/// How an `OrcaApp` starts. With a path (`home` when none is given) the
-/// router is ready at once and nothing is fetched here. With `path: nil` the
+/// How an `OrcaApp` starts. With a path the router is ready at once and
+/// nothing is fetched here. With no path (the default, `path: nil`) the
 /// app boots from the server config, as Flutter's `OrcaApp._initializeOnlineOnly`: `fetchConfig`, then a router
 /// seeded with `initialAppState` showing `initialRoute`.
 @MainActor
@@ -130,9 +130,9 @@ public final class OrcaAppBoot: ObservableObject {
     private let plugins: OrcaPluginHost?
     private var started = false
 
-    /// `path` defaults to `home`. An explicit `path: nil` boots from the
-    /// config: call `startIfNeeded()`.
-    public convenience init(client: OrcaClient, path: String? = "home", system: SystemActions? = nil,
+    /// `path` defaults to nil, the boot from the config: call
+    /// `startIfNeeded()`. A path opens that page and fetches no config.
+    public convenience init(client: OrcaClient, path: String? = nil, system: SystemActions? = nil,
                             onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) {
         self.init(client: client, path: path, system: system, onRouteChanged: onRouteChanged, plugins: nil)
     }
@@ -197,19 +197,21 @@ public final class OrcaAppBoot: ObservableObject {
 
 /// The root view of an Orca-driven app: a NavigationStack of server pages,
 /// each with loading and error states. `navigate` pushes a page, `goBack`
-/// pops one, and app state is shared by every page on the stack.
+/// pops one, and app state is shared by every page on the stack. A config
+/// with tabs is drawn as a tab bar with one NavigationStack per tab
+/// (`TabShellView`).
 ///
-/// With a `path` no config is fetched and every path is a page. The default
-/// is `home`: `OrcaApp(client:)` opens the page `home`, as it always has.
+/// With no `path` (the default, as in the Flutter SDK) the app gets the
+/// server's navigation (routes, redirects, initial app state): it fetches
+/// the navigation config first, its `initialRoute` is the first page and its
+/// `initialAppState` is seeded before that page is asked for.
 ///
-/// `path: nil` is the way to get the server's navigation (routes, redirects,
-/// initial app state): the app fetches the navigation config first, its
-/// `initialRoute` is the first page and its `initialAppState` is seeded
-/// before that page is asked for.
+/// With a `path` no config is fetched and every path is a page: the app
+/// opens that one page.
 ///
-///     OrcaApp(client: OrcaClient(baseURL: url, appId: "counter", apiKey: "demo-key"))
+///     OrcaApp(client: OrcaClient(baseURL: url, appId: "navigation", apiKey: "demo-key"))
+///     OrcaApp(client: OrcaClient(baseURL: url, appId: "counter", apiKey: "demo-key"), path: "home")
 ///     OrcaApp(client: OrcaClient(baseURL: url, appId: "server-actions", apiKey: "demo-key"), path: "shop")
-///     OrcaApp(client: OrcaClient(baseURL: url, appId: "navigation", apiKey: "demo-key"), path: nil)
 @MainActor
 public struct OrcaApp: View {
     @StateObject private var boot: OrcaAppBoot
@@ -218,8 +220,8 @@ public struct OrcaApp: View {
     /// A client without a device id gets the one saved in UserDefaults
     /// (`DeviceIdentity`, made on first run).
     /// - Parameters:
-    ///   - path: the first page; nil boots from the server's navigation
-    ///     config (see above).
+    ///   - path: the first page; nil, the default, boots from the server's
+    ///     navigation config (see above).
     ///   - enableOffline: run the version check at boot, before the config
     ///     or any page is asked for; a forceUpdate answer shows the
     ///     force-update screen and loads neither. The static-flow cache, the
@@ -238,7 +240,7 @@ public struct OrcaApp: View {
     ///   - widgets: builders for host widget types the SDK does not draw, not
     ///     advertised (Dart `OrcaApp.registry`). A plugin widget of the same
     ///     type is a conflict.
-    public init(client: OrcaClient, path: String? = "home", system: SystemActions? = nil,
+    public init(client: OrcaClient, path: String? = nil, system: SystemActions? = nil,
                 enableOffline: Bool = false, enableSessionTracking: Bool = false,
                 onRouteChanged: ((RouteChangeEvent) -> Void)? = nil,
                 plugins: [OrcaPlugin] = [], customActions: [String: OrcaActionHandler] = [:],
@@ -274,12 +276,38 @@ public struct OrcaApp: View {
             case .loading:
                 ProgressView().task { await boot.startIfNeeded() }
             case .ready(let router):
-                RouteStack(router: router)
+                RouterRoot(router: router)
             case .failed(let message):
                 LoadError(title: "Could not start the app", message: message) {
                     Task { await boot.retry() }
                 }
             }
+        }
+    }
+}
+
+/// A router on screen: the tab shell while it has one (a config with tabs,
+/// showing a tab), else one stack (no tabs, a host path, or after a `go` to
+/// a route outside the tabs). Over it lies the drawer layer: the one place a
+/// drawer is drawn (the shell's and each page Scaffold's), so a panel covers
+/// the navigation and tab bars too. The host is not observed here: a drawer
+/// opening redraws the layer, not the pages.
+@MainActor
+private struct RouterRoot: View {
+    @ObservedObject var router: OrcaRouter
+    @State private var drawers = DrawerHost()
+
+    var body: some View {
+        ZStack {
+            Group {
+                if router.hasShell {
+                    TabShellView(router: router, drawers: drawers)
+                } else {
+                    RouteStack(router: router)
+                }
+            }
+            .environment(\.orcaDrawerHost, drawers)
+            DrawerHostLayer(host: drawers)
         }
     }
 }
@@ -291,7 +319,7 @@ private struct RouteStack: View {
 
     var body: some View {
         NavigationStack(path: $router.stack) {
-            RoutePage(router: router, route: router.root)
+            RoutePage(router: router, route: router.root, isStackRoot: true)
                 .id(router.root.id)
                 .navigationDestination(for: OrcaRoute.self) { route in
                     RoutePage(router: router, route: route)
@@ -313,11 +341,13 @@ extension OrcaRoute {
 }
 
 /// One route: its page, or "Page not found" for a location no route matches
-/// (no loader is made for it, so nothing is fetched).
+/// (no loader is made for it, so nothing is fetched). `isStackRoot`: the first
+/// page of its NavigationStack, where no back swipe takes the leading edge.
 @MainActor
 struct RoutePage: View {
     let router: OrcaRouter
     let route: OrcaRoute
+    var isStackRoot = false
 
     var body: some View {
         if route.isNotFound {
@@ -330,6 +360,7 @@ struct RoutePage: View {
             .accessibilityIdentifier("orca.notFound")
         } else {
             LoadedRoutePage(route: route, loader: router.loader(for: route))
+                .environment(\.orcaPage, OrcaPageContext(router: router, route: route, isStackRoot: isStackRoot))
         }
     }
 }
@@ -361,7 +392,7 @@ private struct LoadedRoutePage: View {
 
 /// The navigation bar of a route outside the tabs: an inline title; the
 /// NavigationStack adds the back button when the route is pushed.
-private struct TitleBar: ViewModifier {
+struct TitleBar: ViewModifier {
     let title: String?
 
     func body(content: Content) -> some View {

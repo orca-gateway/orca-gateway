@@ -22,7 +22,7 @@ final class ActionFixtureTests: XCTestCase {
 
     @MainActor func testAllActionFixturesPass() async throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 18)
+        XCTAssertEqual(files.count, 20)
         for (name, fx) in files {
             let actions = try (fx["actions"].arrayValue ?? []).map { try $0.decode(Action.self) }
             let handlers = (fx["handlers"].arrayValue ?? []).compactMap(\.stringValue)
@@ -66,7 +66,7 @@ final class ActionFixtureTests: XCTestCase {
 
     @MainActor func testUnimplementedKindsChangeNothing() async throws {
         let state = StoreState(page: ["count": 1])
-        let (next, effects) = ActionReducer().reduce(state, .openDrawer)
+        let (next, effects) = ActionReducer().reduce(state, .animateForward(.init(animationId: "a")))
         XCTAssertEqual(next, state)
         XCTAssertEqual(effects, [])
 
@@ -74,12 +74,33 @@ final class ActionFixtureTests: XCTestCase {
         let executor = ActionExecutor(store: store)
         var seen: [ActionEffect] = []
         executor.onEffect = { seen.append($0) }
-        try await executor.execute(.openDrawer)
+        try await executor.execute(.animateForward(.init(animationId: "a")))
         try await executor.execute(.closeDialog)
         XCTAssertEqual(store.state, state)
         XCTAssertEqual(seen, [])
-        XCTAssertFalse(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .openDrawer]))))
+        XCTAssertFalse(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .animateForward(.init(animationId: "a"))]))))
         XCTAssertTrue(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .setState(.init(key: "a", value: 1))]))))
+    }
+
+    /// B10.3-A, B10.5-A: the two shell effects go out as data, then to the
+    /// platform, and leave the state alone.
+    @MainActor func testSwitchTabAndOpenDrawerEmitThenPerform() async throws {
+        let state = StoreState(page: ["count": 1])
+        let store = ElmStore(state)
+        let executor = ActionExecutor(store: store)
+        var order: [String] = []
+        executor.onEffect = { order.append("effect:\($0.type)") }
+        executor.perform = { order.append("perform:\($0.type)") }
+        var seen: [ActionEffect] = []
+        let report = executor.onEffect
+        executor.onEffect = { seen.append($0); report?($0) }
+
+        try await executor.execute(.switchTab(.init(tabId: "search")))
+        try await executor.execute(.openDrawer)
+        XCTAssertEqual(seen, [ActionEffect("switchTab", ["tabId": "search"]), ActionEffect("openDrawer")])
+        XCTAssertEqual(order, ["effect:switchTab", "perform:switchTab", "effect:openDrawer", "perform:openDrawer"])
+        XCTAssertEqual(store.state, state)
+        XCTAssertTrue(ActionExecutor.implements(.actionGroup(.init(actions: [.switchTab(.init(tabId: "a")), .openDrawer]))))
     }
 
     func testSetStateWritesTheAppScopeAndReadsEventData() {

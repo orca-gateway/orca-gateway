@@ -8,11 +8,14 @@ import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.NavConfig
 import com.orcagateway.core.models.RouteTransitionDef
+import com.orcagateway.core.models.TabDef
 import com.orcagateway.core.navigation.RouteChangeEvent
 import com.orcagateway.core.navigation.RouteChangeType
-import com.orcagateway.core.navigation.RouteResolution
 import com.orcagateway.core.navigation.RouteResolutionKind
 import com.orcagateway.core.navigation.RouteTable
+import com.orcagateway.core.navigation.TabShell
+import com.orcagateway.core.navigation.TabShellChange
+import com.orcagateway.core.navigation.TabShellEntry
 import com.orcagateway.core.state.ActionEffect
 import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
@@ -30,12 +33,9 @@ import java.util.UUID
 public class OrcaRoute(
     path: String,
     location: String? = null,
-    /** Fallback title when the page is drawn under a title bar (a top-level route beside tabs), else null. */
-    public val scaffoldTitle: String? = null,
-    /** The location matched no route: the "page not found" screen, and nothing is requested. */
-    public val isNotFound: Boolean = false,
-    /** The matched route's transition, when it declares one. */
-    public val transition: RouteTransitionDef? = null,
+    scaffoldTitle: String? = null,
+    isNotFound: Boolean = false,
+    transition: RouteTransitionDef? = null,
 ) {
     public val id: UUID = UUID.randomUUID()
 
@@ -43,8 +43,28 @@ public class OrcaRoute(
     /** The page request path, without a leading slash. */
     public val path: String = path.trimStart('/')
 
-    /** The full location, with its leading slash and its query: what `onRouteChanged` reports. */
-    public val location: String = location ?: "/${this.path}"
+    /**
+     * The full location, with its leading slash and its query: what
+     * `onRouteChanged` reports. Compose state: a replace navigation that
+     * keeps this page (the same page, another query) moves it.
+     */
+    public var location: String by mutableStateOf(location ?: "/${this.path}")
+        internal set
+
+    // The three below are Compose state for the same reason: a kept page that
+    // becomes the top of the chain, or a parent under it, takes them anew.
+
+    /** Fallback title when the page is drawn under a title bar (a top-level route beside tabs), else null. */
+    public var scaffoldTitle: String? by mutableStateOf(scaffoldTitle)
+        internal set
+
+    /** The location matched no route: the "page not found" screen, and nothing is requested. */
+    public var isNotFound: Boolean by mutableStateOf(isNotFound)
+        internal set
+
+    /** The matched route's transition, when it declares one. */
+    public var transition: RouteTransitionDef? by mutableStateOf(transition)
+        internal set
 
     override fun toString(): String = "OrcaRoute($path)"
 }
@@ -64,8 +84,17 @@ public class OrcaRoute(
  * location no route matches is a route with [OrcaRoute.isNotFound]. Built
  * from a path, there is no table: every path is a page.
  *
- * [OrcaApp][com.orcagateway.sdk.OrcaApp] draws it on a `NavHost` that
- * follows [root] and [stack] (Compose state). Use it from the main thread.
+ * A config with [tabs] gives every tab its own stack (a
+ * [TabShell][com.orcagateway.core.navigation.TabShell]): [root] and [stack]
+ * are the stack on screen, the current tab's pages and then the routes over
+ * the tab shell ([overRoutes]). A page lives as long as its route is on any
+ * tab's stack, so switching tabs ([selectTab], [switchTab], an app state
+ * write of `_tabIndex`) closes and requests nothing. The router keeps app
+ * state `_tabIndex` at the current tab's index.
+ *
+ * [OrcaApp][com.orcagateway.sdk.OrcaApp] draws it (the stacks are Compose
+ * state): a single stack on a `NavHost` that follows [root] and [stack], a
+ * config with tabs on the tab shell. Use it from the main thread.
  *
  * [system] performs `openUrl`, `copyToClipboard` and `share`; without one
  * they are only reported to [onEffect]. While `OrcaApp` shows a router that
@@ -81,7 +110,8 @@ public class OrcaRouter private constructor(
     /**
      * Called once per change of the location on top, after the redirect
      * resolved (Flutter's `onLocationChanged`): [navigate] is a `Push`, with
-     * `replace` a `Replace`, [goBack] and a [stack] set shorter a `Pop`.
+     * `replace` a `Replace`, [goBack] and a [stack] set shorter a `Pop`,
+     * a change of tab a `Replace`.
      * Nothing is reported while the top location stays the same.
      */
     public var onRouteChanged: ((RouteChangeEvent) -> Unit)?,
@@ -105,7 +135,25 @@ public class OrcaRouter private constructor(
 
     /** The shared app scope, as the latest page or [setAppState] left it. */
     public var appState: Map<String, JsonValue> = table?.config?.initialAppState.orEmpty()
-        private set
+        // Named apart from the host's `setAppState(Map)`.
+        @JvmName("writeAppState")
+        private set(value) {
+            field = value
+            for (listener in appStateListeners.toList()) listener(value)
+        }
+
+    private val appStateListeners = ArrayList<(Map<String, JsonValue>) -> Unit>()
+
+    /**
+     * Calls [listener] with the app scope after every write of it (a page's
+     * commit, the host's, the router's `_tabIndex`), until the returned
+     * handle is closed: the tab shell's server trees are drawn against app
+     * state, and belong to no page the router commits into.
+     */
+    internal fun onAppStateChange(listener: (Map<String, JsonValue>) -> Unit): AutoCloseable {
+        appStateListeners.add(listener)
+        return AutoCloseable { appStateListeners.remove(listener) }
+    }
 
     /** The page under every pushed route. */
     public var root: OrcaRoute by mutableStateOf(OrcaRoute(start))
@@ -113,14 +161,69 @@ public class OrcaRouter private constructor(
 
     private var routes by mutableStateOf(emptyList<OrcaRoute>())
 
-    /** Pushed routes, bottom to top: the pages the `NavHost` shows over [root]. */
+    /**
+     * Pushed routes, bottom to top: the pages the `NavHost` shows over [root].
+     * With a config, a stack set by the host goes through the table like
+     * [goBack] and [navigate]: routes taken off the top are popped, and each
+     * route added is pushed by its location and stays the route given.
+     */
     public var stack: List<OrcaRoute>
         get() = routes
         set(value) {
             val type = if (value.size < routes.size) RouteChangeType.Pop else RouteChangeType.Push
-            routes = value
+            val shell = shell
+            if (shell == null) {
+                routes = value
+            } else {
+                val current = routes
+                var kept = 0
+                while (kept < value.size && kept < current.size && value[kept] === current[kept]) kept++
+                repeat(current.size - kept) { for (entry in shell.pop().dropped) bound.remove(entry.id) }
+                for (route in value.drop(kept)) {
+                    shell.push(route.location, appState)
+                    val entry = shell.visible.last()
+                    bound[entry.id] = Bound(route, entry)
+                }
+                follow()
+            }
             routesChanged(type)
         }
+
+    /** The tabs of the config, in bar order; empty without a config or when it has none. */
+    public val tabs: List<TabDef> get() = table?.config?.tabs.orEmpty()
+
+    /** A tab shell is on screen: the config has tabs and the last replace navigation (or the boot) landed in one. */
+    public val hasShell: Boolean get() = currentTab != null
+
+    /** The tab on screen, also under a route pushed over the shell; null when [hasShell] is false. Compose state. */
+    public var currentTab: Int? by mutableStateOf(null)
+        private set
+
+    /** One stack per tab, bottom to top; empty: not visited since the shell came on screen. Compose state. */
+    public var tabStacks: List<List<OrcaRoute>> by mutableStateOf(emptyList())
+        private set
+
+    /** The routes above the tab shell, bottom to top; with a config and no shell, the whole stack. Compose state. */
+    public var overRoutes: List<OrcaRoute> by mutableStateOf(emptyList())
+        private set
+
+    /** The config has tabs and a drawer for them (`drawerItems` or `drawerComponents`). */
+    public val hasDrawer: Boolean
+        get() = table?.config?.let { it.tabs.isNotEmpty() && (it.drawerItems.isNotEmpty() || it.drawerComponents.isNotEmpty()) } ?: false
+
+    /** The tab shell's drawer is open ([openDrawer], [closeDrawer]). Compose state. */
+    public var isDrawerOpen: Boolean by mutableStateOf(false)
+        private set
+
+    /**
+     * The route whose page was asked to open its own drawer ([openDrawer]
+     * where the shell drawer does not apply). The page that opens it sets
+     * this back to null; with no such page nothing happens. Compose state.
+     */
+    public var pageDrawerRequest: UUID? by mutableStateOf(null)
+
+    /** [goBack] would pop a page: false at a tab's root and on the root page. */
+    public val canGoBack: Boolean get() = routes.isNotEmpty()
 
     /** Called with every effect a page reports, for DevTools and logging. */
     public var onEffect: ((ActionEffect) -> Unit)? = null
@@ -130,14 +233,26 @@ public class OrcaRouter private constructor(
 
     private val loaders = HashMap<UUID, OrcaPageLoader>()
 
+    // With a config, every navigation goes through the shell; its entries are the routes.
+    private val shell: TabShell? = table?.let { TabShell(it) }
+
+    /** The route of a shell entry, and the entry as it was when the route last followed it. */
+    private class Bound(val route: OrcaRoute, var entry: TabShellEntry)
+
+    private val bound = HashMap<Int, Bound>()
+
+    // App state `_tabIndex` as last seen: a different value is somebody's write.
+    private var seenTabIndex: JsonValue? = appState[TAB_INDEX]
+
     // The top location last reported (or the first one, when nobody listened yet).
     private var shownLocation: String
 
     init {
-        if (table != null) {
-            val chain = chain(table.resolve(slashed(start), appState))
-            root = chain.first()
-            routes = chain.drop(1)
+        if (shell != null) {
+            val change = shell.go(start, appState)
+            follow()
+            // Before the first page request: no page is loaded yet.
+            change.tabIndexWrite?.let { writeTabIndex(it) }
         }
         shownLocation = top.location
         if (table != null) onRouteChanged?.invoke(RouteChangeEvent(shownLocation, null, RouteChangeType.Push))
@@ -159,21 +274,59 @@ public class OrcaRouter private constructor(
      */
     public fun navigate(path: String, replace: Boolean = false) {
         if (path.isEmpty()) return
-        val chain = if (table != null) chain(table.resolve(slashed(path), appState)) else listOf(OrcaRoute(path))
-        if (replace) {
-            root = chain.first()
-            routes = chain.drop(1)
+        val shell = shell
+        if (shell != null) {
+            if (replace) {
+                apply(shell.go(path, appState), RouteChangeType.Replace)
+            } else {
+                apply(shell.push(path, appState), RouteChangeType.Push)
+            }
+        } else if (replace) {
+            root = OrcaRoute(path)
+            routes = emptyList()
             routesChanged(RouteChangeType.Replace)
         } else {
-            routes = routes + chain.last()
+            routes = routes + OrcaRoute(path)
             routesChanged(RouteChangeType.Push)
         }
     }
 
-    /** Pop the page on top; nothing happens on the root page. */
+    /** Pop the page on top; nothing happens on the root page or at a tab's root. */
     public fun goBack() {
         if (stack.isEmpty()) return
-        stack = stack.dropLast(1)
+        val shell = shell
+        if (shell != null) apply(shell.pop(), RouteChangeType.Pop) else stack = stack.dropLast(1)
+    }
+
+    /**
+     * A tap on the tab bar: tab [index] comes back as it was left (its page
+     * is requested on the first visit only), and a tap on the current tab
+     * pops it to its root. Routes over the shell are dropped. Nothing
+     * without a shell or for an index that is no tab's.
+     */
+    public fun selectTab(index: Int) {
+        val shell = shell ?: return
+        apply(shell.selectTab(index, appState), RouteChangeType.Replace)
+    }
+
+    /** The `switchTab` action: show the root of the tab with id [tabId]. Nothing for an unknown id or without tabs. */
+    public fun switchTab(tabId: String) {
+        val shell = shell ?: return
+        apply(shell.switchTab(tabId, appState), RouteChangeType.Replace)
+    }
+
+    /**
+     * The `openDrawer` action: on a tab page of a config with a drawer
+     * ([hasDrawer]) the shell drawer opens; anywhere else the page on top is
+     * asked for its own ([pageDrawerRequest]).
+     */
+    public fun openDrawer() {
+        if (hasShell && overRoutes.isEmpty() && hasDrawer) isDrawerOpen = true else pageDrawerRequest = top.id
+    }
+
+    /** Close the shell drawer. */
+    public fun closeDrawer() {
+        isDrawerOpen = false
     }
 
     /** Write one app state key from the host: see the map form. */
@@ -186,10 +339,12 @@ public class OrcaRouter private constructor(
      * committed into every page the router has loaded, so widgets watching
      * a key redraw; a page loaded later starts from them. It does not
      * navigate: a redirect rule reads the new state at the next [navigate].
+     * The one key that does is `_tabIndex`: another tab's index shows that tab.
      */
     public fun setAppState(values: Map<String, JsonValue>) {
-        val next = appState + values
-        appState = next
+        appState = appState + values
+        tabIndexMayHaveChanged()
+        val next = appState
         for (loader in loaders.values.toList()) {
             val store = (loader.phase as? OrcaPageLoader.Phase.Loaded)?.model?.store ?: continue
             if (store.state.app != next) store.commit(store.state.copy(app = next))
@@ -217,36 +372,98 @@ public class OrcaRouter private constructor(
         }
         appState = scope
         if (model.store.state.app != scope) model.store.commit(model.store.state.copy(app = scope))
-        model.store.onCommit = { state -> appState = state.app }
+        model.store.onCommit = { state ->
+            appState = state.app
+            tabIndexMayHaveChanged()
+        }
         model.onEffect = { effect -> onEffect?.invoke(effect) }
         model.effectHandler = { effect -> if (!perform(effect)) system?.perform(effect) }
     }
 
-    /**
-     * The routes a resolution shows, bottom to top: its page chain, of which
-     * only the top entry carries the location, the title and the transition;
-     * or the one not-found route.
-     */
-    private fun chain(resolution: RouteResolution): List<OrcaRoute> {
-        if (resolution.kind == RouteResolutionKind.Error) {
-            val path = resolution.location.substringBefore('?')
-            return listOf(OrcaRoute(path, location = resolution.location, isNotFound = true))
-        }
-        val parents = resolution.stack.dropLast(1).map { OrcaRoute(it) }
-        val page = resolution.pagePath ?: resolution.stack.last()
-        return parents + OrcaRoute(page, resolution.location, resolution.scaffoldTitle, transition = resolution.transition)
+    /** Take what a shell operation changed: the stacks, the `_tabIndex` write, the loaders, the location. */
+    private fun apply(change: TabShellChange, type: RouteChangeType) {
+        for (entry in change.dropped) bound.remove(entry.id)
+        follow()
+        change.tabIndexWrite?.let { writeTabIndex(it) }
+        routesChanged(type)
     }
 
-    private fun slashed(location: String): String = if (location.startsWith("/")) location else "/$location"
+    /** Make [root], [stack], [tabStacks], [overRoutes] and [currentTab] those of the shell. */
+    private fun follow() {
+        val shell = shell ?: return
+        tabStacks = shell.tabStacks.map { stack -> stack.map(::route) }
+        overRoutes = shell.over.map(::route)
+        currentTab = shell.currentTab
+        val visible = shell.visible.map(::route)
+        root = visible.first()
+        routes = visible.drop(1)
+    }
 
     /**
-     * Drop (and close) loaders of routes that left the stack, hand the page
-     * now on top the latest app scope, and report a top location that
-     * changed as a [type] event.
+     * The route of a shell entry, one for the entry's life. An entry a
+     * replace navigation kept comes back changed (the top of another
+     * resolution, or under a new page): its route follows with every field
+     * a new route for the entry would have, and keeps its id and its loader.
+     */
+    private fun route(entry: TabShellEntry): OrcaRoute {
+        val known = bound[entry.id] ?: return newRoute(entry).also { bound[entry.id] = Bound(it, entry) }
+        if (known.entry != entry) {
+            known.entry = entry
+            val fresh = newRoute(entry)
+            known.route.location = entry.location
+            known.route.scaffoldTitle = fresh.scaffoldTitle
+            known.route.isNotFound = fresh.isNotFound
+            known.route.transition = fresh.transition
+        }
+        return known.route
+    }
+
+    /**
+     * A new route for an entry: only the top of a page chain carries the
+     * resolved location, the title and the transition; the pages under it
+     * are plain; an error is the one not-found route.
+     */
+    private fun newRoute(entry: TabShellEntry): OrcaRoute {
+        val resolution = entry.resolution
+        if (resolution.kind == RouteResolutionKind.Error) {
+            val path = resolution.location.substringBefore('?')
+            return OrcaRoute(path, location = resolution.location, isNotFound = true)
+        }
+        if (!entry.isTop) return OrcaRoute(entry.pagePath)
+        val page = resolution.pagePath ?: entry.pagePath
+        return OrcaRoute(page, resolution.location, resolution.scaffoldTitle, transition = resolution.transition)
+    }
+
+    /** The shell asked for `_tabIndex`: into app state and every loaded page, as the router's own write. */
+    private fun writeTabIndex(index: Int) {
+        val value = JsonValue.Int(index.toLong())
+        seenTabIndex = value
+        setAppState(TAB_INDEX, value)
+    }
+
+    /**
+     * App state changed: when `_tabIndex` is not what the router last saw, a
+     * page or the host wrote it, and another tab's index shows that tab.
+     * The router's own write is seen before it lands, so it stops here.
+     */
+    private fun tabIndexMayHaveChanged() {
+        val shell = shell ?: return
+        val value = appState[TAB_INDEX]
+        if (value == seenTabIndex) return
+        seenTabIndex = value
+        apply(shell.tabIndexChanged(value, appState), RouteChangeType.Replace)
+    }
+
+    /**
+     * Drop (and close) loaders of routes that left every stack, hand the
+     * page now on top the latest app scope, and report a top location that
+     * changed as a [type] event (which also closes the shell drawer).
      */
     private fun routesChanged(type: RouteChangeType) {
-        val live = stack.mapTo(HashSet()) { it.id } + root.id
+        // With a config: every route on any tab's stack or over the shell, shown or not.
+        val live = if (shell != null) bound.values.mapTo(HashSet()) { it.route.id } else stack.mapTo(HashSet()) { it.id } + root.id
         for (id in loaders.keys - live) loaders.remove(id)?.close()
+        if (pageDrawerRequest != null && pageDrawerRequest !in live) pageDrawerRequest = null
         val model = (loaders[top.id]?.phase as? OrcaPageLoader.Phase.Loaded)?.model
         if (model != null && model.store.state.app != appState) model.store.commit(model.store.state.copy(app = appState))
 
@@ -254,6 +471,7 @@ public class OrcaRouter private constructor(
         if (location == shownLocation) return
         val previous = shownLocation
         shownLocation = location
+        isDrawerOpen = false
         onRouteChanged?.invoke(RouteChangeEvent(location, previous, type))
     }
 
@@ -265,9 +483,16 @@ public class OrcaRouter private constructor(
                 replace = effect.payload["replace"]?.boolValue ?: false,
             )
             "goBack" -> goBack()
+            "switchTab" -> switchTab(effect.payload["tabId"]?.stringValue ?: "")
+            "openDrawer" -> openDrawer()
             else -> return false
         }
         return true
+    }
+
+    private companion object {
+        /** The app state key that holds the current tab's index (Flutter's `OrcaShell`). */
+        const val TAB_INDEX = "_tabIndex"
     }
 }
 

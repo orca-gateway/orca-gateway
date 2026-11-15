@@ -56,7 +56,10 @@ import com.orcagateway.sdk.navigation.LocalOrcaNavigation
 import com.orcagateway.sdk.navigation.OrcaNavigation
 import com.orcagateway.sdk.navigation.OrcaRoute
 import com.orcagateway.sdk.navigation.OrcaRouter
+import com.orcagateway.sdk.navigation.TabShellScreen
 import com.orcagateway.sdk.system.SystemActions
+import com.orcagateway.sdk.widgets.LocalOrcaPageDrawerHost
+import com.orcagateway.sdk.widgets.PageDrawerHost
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -216,19 +219,18 @@ public class OrcaAppBoot(
  *
  *     OrcaApp(OrcaClient(URI("https://api.example.com"), appId = "counter", transport = OkHttpTransport()))
  *
- * By default the app starts at the page `home`, and so does any [path] the
- * host gives: no config is fetched and every path is a page.
+ * By default, with no [path], the app boots from the server's navigation
+ * config ([OrcaAppBoot]), as Flutter's `OrcaApp` does, and so gets the
+ * server's navigation (routes, redirects, initial app state): a spinner
+ * while `/config` is fetched (once), then the config's `initialRoute` with
+ * its `initialAppState`, every location going through the config's routes;
+ * a failed fetch shows an error with a retry. A config with tabs is drawn as
+ * a tab shell ([TabShellScreen]): a bottom bar, and one stack per tab.
  *
- * `path = null` is the way to get the server's navigation (routes,
- * redirects, initial app state): the app boots from the server's navigation
- * config ([OrcaAppBoot]):
+ * A [path] the host gives opens that one page instead: no config is fetched
+ * and every path is a page.
  *
- *     OrcaApp(client, path = null)
- *
- * a spinner while `/config` is fetched (once), then the config's
- * `initialRoute` with its `initialAppState`, every location going through
- * the config's routes; a failed fetch shows an error with a retry. Tabs and
- * the drawer of a config are not drawn yet: the app runs as one stack.
+ *     OrcaApp(client, path = "home")
  *
  * [onRouteChanged] is called once per change of the location on top (see
  * [OrcaRouter.onRouteChanged]); the current one is used, set on the router
@@ -275,7 +277,7 @@ public class OrcaAppBoot(
 public fun OrcaApp(
     client: OrcaClient,
     modifier: Modifier = Modifier,
-    path: String? = "home",
+    path: String? = null,
     system: SystemActions? = null,
     onRouteChanged: ((RouteChangeEvent) -> Unit)? = null,
     enableOffline: Boolean = false,
@@ -355,9 +357,11 @@ internal class Retained<T : AutoCloseable>(val value: T) : ViewModel(value)
  * activity.
  *
  * The router is the one source of truth: the system back gesture pops the
- * router, and the [NavHost] follows the router's stack. After the activity is
- * recreated (a rotation) the [NavHost] keeps the entries it restored that are
- * still on the router's stack, so the page on screen stays as it was.
+ * router, and the [NavHost] follows the router's stack. While the router
+ * has a tab shell ([OrcaRouter.hasShell]) the [TabShellScreen] is drawn
+ * instead. After the activity is recreated (a rotation) the [NavHost] keeps
+ * the entries it restored that are still on the router's stack, so the page
+ * on screen stays as it was.
  *
  * Each page is told whether it can pop (it is a pushed page, not the root)
  * and how to go back, for the AppBar's back arrow ([LocalOrcaNavigation]).
@@ -399,6 +403,16 @@ private fun OrcaNavHost(router: OrcaRouter, modifier: Modifier) {
         // Only the ones set here: a host may have set its own since.
         onDispose { if (filled != null && router.system === filled) router.system = null }
     }
+    if (router.hasShell) {
+        TabShellScreen(router, modifier)
+    } else {
+        StackScreen(router, modifier)
+    }
+}
+
+/** The router as one stack, on a [NavHost]: a config without tabs, a host path, a route shown outside the tabs. */
+@Composable
+private fun StackScreen(router: OrcaRouter, modifier: Modifier) {
     val navController = rememberNavController()
     // The route ids of the pages pushed on the NavController, saved with it:
     // its own back stack is not public API.
@@ -454,11 +468,19 @@ private fun NavHostController.follow(shown: List<String>, stack: List<OrcaRoute>
  * with a fallback title is drawn under a top bar: the page's own title once
  * it loaded, and a back arrow while the router has a page to pop. A page
  * whose root is a Scaffold with an AppBar draws that one below, as Flutter
- * shows both.
+ * shows both. The page's Scaffold can reach the router, to open its drawer
+ * when the router asks this route to ([OrcaRouter.pageDrawerRequest]).
  */
+@Composable
+internal fun RoutePage(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoader?) {
+    val drawers = remember(router, route.id) { PageDrawerHost(router, route.id) }
+    CompositionLocalProvider(LocalOrcaPageDrawerHost provides drawers) { RouteFrame(router, route, loader) }
+}
+
+/** A route's page, under the title bar of a route that has a fallback title. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RoutePage(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoader?) {
+private fun RouteFrame(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoader?) {
     val fallback = route.scaffoldTitle
     if (fallback == null) {
         RouteBody(route, loader)

@@ -64,7 +64,7 @@ SIMCTL_CHILD_ORCA_APP_ID=server-actions SIMCTL_CHILD_ORCA_PATH=shop xcrun simctl
 
 The apps above start at a path the host gives. Set `ORCA_BOOT=config` and the host calls
 `OrcaApp(client:path:)` with `path: nil`, so the app asks the server for its navigation config first
-(`OrcaApp(client:)` alone still opens the page `home` and fetches no config): the
+(this is what `OrcaApp(client:)` alone does; the host passes a path in the other mode): the
 config's `initialRoute` is the first page, its `initialAppState` is seeded before that page is
 requested, redirects apply, an unknown location shows "Page not found", and a route outside the
 tabs gets a title bar with a back button. `ORCA_PATH` is not read in this mode. The `navigation`
@@ -75,7 +75,16 @@ SIMCTL_CHILD_ORCA_APP_ID=navigation SIMCTL_CHILD_ORCA_BOOT=config xcrun simctl l
 ```
 
 The default `counter` app has no navigation config, which is why the default stays `ORCA_PATH=home`.
-Tabs and the drawer are not drawn yet: a config with tabs runs as one stack.
+
+A config with tabs is drawn as a tab bar with one stack per tab: a tab's page is fetched on its first
+visit and kept while another tab is shown, a tap on the selected tab pops it to its first page, and
+a route outside the tabs covers the bar. A config with `tabBarComponents` gets the server's tab bar
+in place of the system one. The drawer follows in the same release. The `tabs` demo app
+(`examples/server/tabs.ts`) is made for it: `ORCA_APP_ID=tabs ORCA_BOOT=config`.
+
+```bash
+SIMCTL_CHILD_ORCA_APP_ID=tabs SIMCTL_CHILD_ORCA_BOOT=config xcrun simctl launch booted com.orcagateway.examples.counter
+```
 
 ## Plugins
 

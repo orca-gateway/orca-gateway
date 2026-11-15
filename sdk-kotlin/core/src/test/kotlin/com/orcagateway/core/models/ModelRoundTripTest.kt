@@ -28,7 +28,7 @@ class ModelRoundTripTest {
     @Test
     fun allRenderFixturesRoundTrip() {
         val files = Fixtures.files("render")
-        assertEquals(41, files.size, "render fixtures 01-41")
+        assertEquals(43, files.size, "render fixtures 01-41, 60-61")
         var nodes = 0
         for ((name, fixture) in files) {
             val expected = fixture["expected"]
@@ -39,6 +39,25 @@ class ModelRoundTripTest {
             nodes += decoded.size
         }
         assertTrue(nodes > 24)
+    }
+
+    /** B10.6-R: the BottomNavigationBar and Scaffold drawer fixtures decode into nodes and encode back equal. */
+    @Test
+    fun b10_6_r_bottomNavigationBarAndScaffoldDrawersRoundTrip() {
+        val files = Fixtures.files("render").filter { (name, _) -> name.startsWith("60_") || name.startsWith("61_") }
+        assertEquals(
+            listOf("60_bottom_navigation_bar", "61_scaffold_drawers"),
+            files.map { (name, _) -> name.removeSuffix(".json") },
+        )
+        val types = HashSet<String>()
+        for ((name, fixture) in files) {
+            val expected = fixture["expected"]
+            val decoded = decodeModel<List<ComponentNode>>(expected)
+            assertTrue(decoded.isNotEmpty(), name)
+            assertJsonEqual(jsonOf(decoded), expected, name)
+            expected.arrayValue.orEmpty().mapNotNullTo(types) { it["type"].stringValue }
+        }
+        assertTrue(types.containsAll(listOf("BottomNavigationBar", "BottomNavItem", "Drawer", "Scaffold")), "$types")
     }
 
     @Test
@@ -56,7 +75,7 @@ class ModelRoundTripTest {
     @Test
     fun allActionFixturesRoundTrip() {
         val files = Fixtures.files("actions")
-        assertEquals(18, files.size, "action fixtures 01-15 and 45-47")
+        assertEquals(20, files.size, "action fixtures 01-15, 30-31 and 45-47")
         val kinds = HashSet<String>()
         for ((name, fixture) in files) {
             // Plugin action names a fixture registers handlers for (45-47).

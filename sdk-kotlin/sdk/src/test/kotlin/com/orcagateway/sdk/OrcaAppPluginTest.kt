@@ -215,7 +215,7 @@ class OrcaAppPluginTest {
         val engine = PluginEngine()
         val client = client(engine)
         val plugin = CountingPlugin()
-        val activity = host { OrcaApp(client, plugins = listOf(plugin)) }
+        val activity = host { OrcaApp(client, path = "home", plugins = listOf(plugin)) }
         waitForBadge()
         compose.waitForIdle()
         val merged = plugin.reads

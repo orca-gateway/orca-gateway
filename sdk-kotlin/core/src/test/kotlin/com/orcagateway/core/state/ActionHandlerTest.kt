@@ -171,7 +171,7 @@ class ActionHandlerTest {
         assertEquals(
             setOf(
                 "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
-                "lifecycle", "navigate", "goBack", "openUrl", "copyToClipboard", "share",
+                "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
                 "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
             ),
             ActionExecutor.kinds,

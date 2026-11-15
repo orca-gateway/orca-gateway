@@ -78,9 +78,12 @@ struct WidgetView: View {
         case "AnimatedBuilder": AnimatedBuilderView(node: node, model: model)
         case "Transform": TransformView(node: node, model: model)
         case "Video": VideoNodeView(node: node)
+        case "BottomNavigationBar": BottomNavigationBarView(node: node, model: model)
+        case "BottomNavItem": BottomNavItemView(node: node)
+        case "Drawer": DrawerView(node: node, model: model)
         default:
             // A plugin or host widget; any other type draws nothing.
-            if let build = model.widgets.builder(for: node.type) { build(node, model) }
+            if let build = model.widgets.builder(for: node.type) { build(node, model) } else { EmptyView() }
         }
     }
 }

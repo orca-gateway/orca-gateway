@@ -485,5 +485,427 @@ final class RouterTests: XCTestCase {
         XCTAssertNil(route.transition)
         XCTAssertFalse(route.isNotFound)
     }
+
+    // MARK: - Step 10: tabs, _tabIndex, drawer state
+
+    /// Tabs `/home` (with a child), `/search`, `/more`, and `/settings`
+    /// outside the tabs.
+    private func tabConfig(initialRoute: String = "/home", drawer: Bool = false,
+                           seed: [String: JSONValue] = [:]) -> NavConfig
+    {
+        NavConfig(
+            initialRoute: initialRoute,
+            tabs: [TabDef(id: "home", label: "Home", icon: "home", initialRoute: "/home"),
+                   TabDef(id: "search", label: "Search", icon: "search", initialRoute: "/search"),
+                   TabDef(id: "more", label: "More", icon: "menu", initialRoute: "/more")],
+            drawerItems: drawer ? [DrawerItemDef(id: "settings", label: "Settings", route: "/settings")] : [],
+            initialAppState: seed,
+            flows: [NavFlow(name: "main", routes: [
+                NavRoute(path: "home", children: [NavRoute(path: "home/product/:id")]),
+                NavRoute(path: "search"),
+                NavRoute(path: "more"),
+                NavRoute(path: "settings"),
+            ])])
+    }
+
+    /// The page paths requested so far, in order.
+    private func pages(_ stub: PageStub) -> [String] {
+        stub.requests.map { $0.url.path.components(separatedBy: "/page/").last ?? "" }
+    }
+
+    /// The route's page is still the model it was: not loaded again.
+    private func assertSamePage(_ router: OrcaRouter, _ route: OrcaRoute, _ model: OrcaPageModel,
+                                line: UInt = #line) async throws
+    {
+        let now = try await loaded(router, route)
+        XCTAssertTrue(now === model, "the page of \(route.path) is another object", line: line)
+    }
+
+    func test_B10_2_aTabKeepsItsStackAndItsPagesAcrossASwitch() async throws {
+        let stub = PageStub()
+        let router = router(tabConfig(), stub)
+        XCTAssertTrue(router.hasShell)
+        XCTAssertEqual(router.tabs.map(\.id), ["home", "search", "more"])
+        XCTAssertEqual(router.currentTab, 0)
+        XCTAssertEqual(router.tabStacks.map { $0.map(\.path) }, [["home"], [], []])
+
+        let home = try await loaded(router, router.root)
+        router.navigate(to: "/home/product/7")
+        let pushed = router.top
+        let product = try await loaded(router, pushed)
+        XCTAssertEqual(router.stack, [pushed])
+
+        router.selectTab(1)
+        XCTAssertEqual(router.currentTab, 1)
+        XCTAssertEqual(router.root.path, "search")
+        XCTAssertEqual(router.stack, [])
+        let search = try await loaded(router, router.root)
+        XCTAssertEqual(pages(stub), ["home", "home/product/7", "search"], "a tab's first visit fetches once")
+
+        router.selectTab(0)
+        XCTAssertEqual(router.currentTab, 0)
+        XCTAssertEqual(router.root.path, "home")
+        XCTAssertEqual(router.stack, [pushed], "tab 0 shows its pushed page")
+        XCTAssertEqual(router.top.location, "/home/product/7")
+        XCTAssertEqual(router.tabStacks.map { $0.map(\.path) }, [["home", "home/product/7"], ["search"], []])
+        try await assertSamePage(router, router.root, home)
+        try await assertSamePage(router, router.top, product)
+
+        router.selectTab(1)
+        try await assertSamePage(router, router.root, search)
+        router.selectTab(0)
+        XCTAssertEqual(pages(stub), ["home", "home/product/7", "search"], "nothing is fetched again")
+
+        // The selected tab again: it pops to its root, and the popped page goes.
+        let productLoader = router.loader(for: pushed)
+        router.selectTab(0)
+        XCTAssertEqual(router.currentTab, 0)
+        XCTAssertEqual(router.stack, [])
+        XCTAssertEqual(router.tabStacks[0].map(\.path), ["home"])
+        try await assertSamePage(router, router.root, home)
+        XCTAssertFalse(router.loader(for: pushed) === productLoader, "a dropped entry loses its loader")
+        XCTAssertEqual(pages(stub), ["home", "home/product/7", "search"])
+    }
+
+    func test_B10_2_aShorterPathPopsInsideTheTabAndEventsFollow() {
+        var events: [RouteChangeEvent] = []
+        let router = router(tabConfig()) { events.append($0) }
+        router.navigate(to: "/home/product/1")
+        router.navigate(to: "/home/product/2")
+        let first = router.stack[0]
+        router.stack = [first]  // a back swipe sets the path directly
+        XCTAssertEqual(router.tabStacks[0].map(\.path), ["home", "home/product/1"])
+        XCTAssertEqual(router.stack, [first])
+
+        router.selectTab(2)
+        router.setTabPath(0, [])  // not the tab on screen: nothing
+        XCTAssertEqual(router.tabStacks[0].count, 2)
+        router.selectTab(0)
+        router.setTabPath(0, [first])  // the path as it is: nothing
+        XCTAssertEqual(router.tabStacks[0].count, 2)
+        router.setTabPath(0, [])
+        XCTAssertEqual(router.tabStacks[0].map(\.path), ["home"])
+        XCTAssertEqual(router.stack, [])
+        router.goBack()  // a tab root: nothing to pop
+        XCTAssertEqual(router.currentTab, 0)
+
+        XCTAssertEqual(events, [
+            RouteChangeEvent(location: "/home", previousLocation: nil, type: .push),
+            RouteChangeEvent(location: "/home/product/1", previousLocation: "/home", type: .push),
+            RouteChangeEvent(location: "/home/product/2", previousLocation: "/home/product/1", type: .push),
+            RouteChangeEvent(location: "/home/product/1", previousLocation: "/home/product/2", type: .pop),
+            RouteChangeEvent(location: "/more", previousLocation: "/home/product/1", type: .replace),
+            RouteChangeEvent(location: "/home/product/1", previousLocation: "/more", type: .replace),
+            RouteChangeEvent(location: "/home", previousLocation: "/home/product/1", type: .pop),
+        ])
+    }
+
+    func test_B10_2_aRouteOverTheShellKeepsTheTabAndIsDroppedBySelectTab() {
+        let router = router(tabConfig())
+        router.navigate(to: "/home/product/1")
+        router.navigate(to: "/settings")
+        XCTAssertEqual(router.currentTab, 0)
+        XCTAssertEqual(router.overRoutes.map(\.path), ["settings"])
+        XCTAssertEqual(router.stack.map(\.path), ["home/product/1", "settings"])
+        XCTAssertEqual(router.top.scaffoldTitle, "Settings")
+        XCTAssertEqual(router.tabStacks[0].count, 2)
+
+        // What a tab's NavigationStack binds: its own pages, then the routes over the shell.
+        let product = router.stack[0]
+        router.setTabPath(0, [product])
+        XCTAssertEqual(router.overRoutes, [])
+        XCTAssertEqual(router.stack, [product])
+
+        router.navigate(to: "/settings")
+        router.selectTab(1)
+        XCTAssertEqual(router.currentTab, 1)
+        XCTAssertEqual(router.overRoutes, [])
+        XCTAssertEqual(router.top.path, "search")
+        XCTAssertEqual(router.tabStacks[0].count, 2, "tab 0 keeps its stack")
+
+        router.navigate(to: "/settings")
+        router.selectTab(1)  // the selected tab: the route over the shell goes too
+        XCTAssertEqual(router.overRoutes, [])
+        XCTAssertEqual(router.top.path, "search")
+
+        // `go` outside the tabs unmounts the shell; `_tabIndex` keeps its value.
+        router.navigate(to: "/settings", replace: true)
+        XCTAssertFalse(router.hasShell)
+        XCTAssertNil(router.currentTab)
+        XCTAssertEqual(router.tabStacks.map(\.count), [0, 0, 0])
+        XCTAssertEqual(router.root.path, "settings")
+        XCTAssertEqual(router.stack, [])
+        XCTAssertEqual(router.appState["_tabIndex"], 1)
+        router.selectTab(0)  // no shell: nothing
+        XCTAssertEqual(router.root.path, "settings")
+    }
+
+    func test_B10_3_tabIndexIsInTheFirstPageRequestAndFollowsEveryTabChange() async throws {
+        let stub = PageStub()
+        let router = router(tabConfig(initialRoute: "/search", seed: ["_tabIndex": 9, "user": "amr"]), stub)
+        XCTAssertEqual(router.appState, ["_tabIndex": 1, "user": "amr"], "the boot write beats the seeded value")
+        XCTAssertEqual(stub.requests.count, 0)
+        let search = try await loaded(router, router.root)
+        XCTAssertEqual(PageStub.appState(stub.requests[0]), ["_tabIndex": 1, "user": "amr"])
+
+        router.selectTab(2)
+        XCTAssertEqual(router.appState["_tabIndex"], 2)
+        XCTAssertEqual(search.store.state.app["_tabIndex"], 2, "a loaded page of another tab sees it")
+        _ = try await loaded(router, router.root)
+        XCTAssertEqual(PageStub.appState(stub.requests[1]), ["_tabIndex": 2, "user": "amr"])
+
+        router.switchTab("home")
+        XCTAssertEqual(router.currentTab, 0)
+        XCTAssertEqual(router.appState["_tabIndex"], 0)
+        router.navigate(to: "/more", replace: true)
+        XCTAssertEqual(router.currentTab, 2)
+        XCTAssertEqual(router.appState["_tabIndex"], 2)
+        router.selectTab(1)
+        XCTAssertEqual(router.appState["_tabIndex"], 1)
+        XCTAssertEqual(search.store.state.app["_tabIndex"], 1)
+
+        router.switchTab("nowhere")  // an unknown tab: nothing
+        router.navigate(to: "/settings")  // over the shell: the index stays
+        XCTAssertEqual(router.currentTab, 1)
+        XCTAssertEqual(router.appState["_tabIndex"], 1)
+    }
+
+    func test_B10_3_aPageWritingTabIndexSwitchesTheTab() async throws {
+        var events: [RouteChangeEvent] = []
+        let stub = PageStub()
+        let router = router(tabConfig(), stub) { events.append($0) }
+        let home = try await loaded(router, router.root)
+        router.navigate(to: "/home/product/7")
+        let pushed = router.top
+        events = []
+
+        await home.run(.setState(.init(key: "_tabIndex", scope: .app, value: 2)))
+        XCTAssertEqual(router.currentTab, 2)
+        XCTAssertEqual(router.root.path, "more")
+        XCTAssertEqual(router.appState["_tabIndex"], 2)
+        XCTAssertEqual(events, [RouteChangeEvent(location: "/more", previousLocation: "/home/product/7",
+                                                 type: .replace)])
+        let more = try await loaded(router, router.root)
+        XCTAssertEqual(more.store.state.app["_tabIndex"], 2)
+
+        // Back to a visited tab: its stack as it was left, nothing fetched.
+        await more.run(.setState(.init(key: "_tabIndex", scope: .app, value: 0)))
+        XCTAssertEqual(router.currentTab, 0)
+        XCTAssertEqual(router.stack, [pushed])
+        XCTAssertEqual(home.store.state.app["_tabIndex"], 0)
+        XCTAssertEqual(pages(stub), ["home", "more"])
+
+        // The same index, a non-int and an index out of range move nothing;
+        // the value stays as written until the next tab change.
+        events = []
+        for value: JSONValue in [0, "x", 7, -1, 1.5] {
+            await home.run(.setState(.init(key: "_tabIndex", scope: .app, value: value)))
+            XCTAssertEqual(router.currentTab, 0)
+            XCTAssertEqual(router.stack, [pushed])
+            XCTAssertEqual(router.appState["_tabIndex"], value)
+        }
+        XCTAssertEqual(events, [])
+        router.selectTab(1)
+        XCTAssertEqual(router.appState["_tabIndex"], 1)
+        XCTAssertEqual(home.store.state.app["_tabIndex"], 1)
+
+        // The host writing it switches too.
+        router.setAppState("_tabIndex", 2)
+        XCTAssertEqual(router.currentTab, 2)
+        XCTAssertEqual(router.root.path, "more")
+    }
+
+    func test_B10_3_switchTabActionSwitchesAndLandsOnTheRoot() async throws {
+        let stub = PageStub()
+        let router = router(tabConfig(), stub)
+        let home = try await loaded(router, router.root)
+        router.navigate(to: "/home/product/7")
+        router.navigate(to: "/settings")
+
+        await home.run(.switchTab(.init(tabId: "search")))
+        XCTAssertEqual(router.currentTab, 1)
+        XCTAssertEqual(router.root.path, "search")
+        XCTAssertEqual(router.stack, [])
+        XCTAssertEqual(router.overRoutes, [], "what lay over the shell is dropped")
+        XCTAssertEqual(router.appState["_tabIndex"], 1)
+        XCTAssertEqual(router.tabStacks[0].map(\.path), ["home", "home/product/7"])
+        let search = try await loaded(router, router.root)
+
+        await search.run(.switchTab(.init(tabId: "home")))
+        XCTAssertEqual(router.currentTab, 0)
+        XCTAssertEqual(router.stack, [], "it lands on the tab's root")
+        XCTAssertEqual(router.tabStacks[0].map(\.path), ["home"])
+        XCTAssertEqual(router.appState["_tabIndex"], 0)
+        try await assertSamePage(router, router.root, home)
+        XCTAssertEqual(pages(stub), ["home", "search"])
+
+        await home.run(.switchTab(.init(tabId: "nowhere")))
+        XCTAssertEqual(router.currentTab, 0)
+    }
+
+    func test_B10_3_openDrawerOpensTheShellDrawerOnATabPageOnly() async throws {
+        let router = router(tabConfig(drawer: true))
+        XCTAssertTrue(router.hasDrawer)
+        XCTAssertFalse(router.isDrawerOpen)
+        let home = try await loaded(router, router.root)
+        await home.run(.openDrawer)
+        XCTAssertTrue(router.isDrawerOpen)
+        XCTAssertNil(router.pageDrawerRequest)
+        router.closeDrawer()
+        XCTAssertFalse(router.isDrawerOpen)
+
+        // A navigation that changes the visible location closes it.
+        router.openDrawer()
+        router.selectTab(1)
+        XCTAssertFalse(router.isDrawerOpen)
+        router.openDrawer()
+        router.navigate(to: "/settings")
+        XCTAssertFalse(router.isDrawerOpen)
+
+        // Over the shell there is no shell drawer: the page is asked.
+        let settings = try await loaded(router, router.top)
+        await settings.run(.openDrawer)
+        XCTAssertFalse(router.isDrawerOpen)
+        XCTAssertEqual(router.pageDrawerRequest, router.top.id)
+    }
+
+    func test_B10_3_openDrawerWithoutAShellDrawerAsksThePage() async throws {
+        let router = router(tabConfig())
+        XCTAssertFalse(router.hasDrawer)
+        let home = try await loaded(router, router.root)
+        await home.run(.openDrawer)
+        XCTAssertFalse(router.isDrawerOpen)
+        XCTAssertEqual(router.pageDrawerRequest, router.root.id)
+
+        // Drawer items without tabs are no shell drawer.
+        var noTabs = config()
+        noTabs.drawerItems = [DrawerItemDef(id: "a", label: "A", route: "/login")]
+        XCTAssertFalse(self.router(noTabs).hasDrawer)
+    }
+
+    func test_B10_3_withoutTabsThereIsNoShell() {
+        for router in [router(), router(config())] {
+            XCTAssertFalse(router.hasShell)
+            XCTAssertEqual(router.tabs, [])
+            XCTAssertNil(router.currentTab)
+            XCTAssertEqual(router.tabStacks, [])
+            XCTAssertFalse(router.hasDrawer)
+            let root = router.root
+            router.selectTab(0)
+            router.switchTab("home")
+            router.setTabPath(0, [])
+            XCTAssertEqual(router.root, root)
+            XCTAssertEqual(router.stack, [])
+            XCTAssertNil(router.appState["_tabIndex"])
+        }
+    }
+
+    // MARK: - Step 10 rework: the Kotlin router's twin behavior
+
+    /// A not-found route's path drops only the query, as Kotlin's does
+    /// (`c4_aNotFoundRoutesPathDropsOnlyTheQuery`).
+    func test_c4_aNotFoundRoutesPathDropsOnlyTheQuery() {
+        let router = router(config())
+        router.navigate(to: "/missing#top?x=1")
+        XCTAssertTrue(router.top.isNotFound)
+        XCTAssertEqual(router.top.path, "missing#top")
+        XCTAssertEqual(router.top.location, "/missing#top?x=1")
+    }
+
+    /// A stack set by the host with routes added: each is pushed through the
+    /// shell by its location and stays the route given, with and without tabs.
+    func test_B10_2_aStackWrittenWithAnAddedRouteIsPushedThroughTheShell() {
+        var events: [RouteChangeEvent] = []
+        let plain = router(config(loggedIn: true)) { events.append($0) }
+        let settings = OrcaRoute("/settings")
+        plain.stack = [settings]
+        XCTAssertEqual(plain.stack, [settings], "the added route is kept, not put back")
+        XCTAssertEqual(plain.top.id, settings.id)
+        XCTAssertEqual(plain.top.location, "/settings")
+        XCTAssertEqual(plain.overRoutes.map(\.path), ["welcome", "settings"])
+        XCTAssertEqual(plain.overRoutes.last?.id, settings.id, "the shell's entry is the route given")
+        let loader = plain.loader(for: settings)
+        plain.navigate(to: "/login")
+        XCTAssertTrue(plain.loader(for: plain.stack[0]) === loader, "the given route keeps its page")
+        plain.goBack()
+        plain.goBack()
+        XCTAssertEqual(plain.stack, [], "the shell pops what the host pushed")
+        XCTAssertEqual(Array(events.dropFirst()), [
+            RouteChangeEvent(location: "/settings", previousLocation: "/welcome", type: .push),
+            RouteChangeEvent(location: "/login", previousLocation: "/settings", type: .push),
+            RouteChangeEvent(location: "/settings", previousLocation: "/login", type: .pop),
+            RouteChangeEvent(location: "/welcome", previousLocation: "/settings", type: .pop),
+        ])
+
+        // With tabs: a tab's route goes on the tab's stack, another over the shell.
+        events = []
+        let tabbed = router(tabConfig()) { events.append($0) }
+        let product = OrcaRoute("/home/product/1")
+        let over = OrcaRoute("/settings")
+        tabbed.stack = [product, over]
+        XCTAssertEqual(tabbed.stack, [product, over])
+        XCTAssertEqual(tabbed.tabStacks[0].map(\.path), ["home", "home/product/1"])
+        XCTAssertEqual(tabbed.tabStacks[0].last?.id, product.id)
+        XCTAssertEqual(tabbed.overRoutes, [over])
+        XCTAssertEqual(tabbed.currentTab, 0)
+
+        // The top route swapped for another: one pop, one push.
+        let other = OrcaRoute("/home/product/2")
+        tabbed.stack = [product, other]
+        XCTAssertEqual(tabbed.stack, [product, other])
+        XCTAssertEqual(tabbed.overRoutes, [])
+        XCTAssertEqual(tabbed.tabStacks[0].map(\.path), ["home", "home/product/1", "home/product/2"])
+        tabbed.stack = [product]  // shorter: a pop
+        XCTAssertEqual(tabbed.tabStacks[0].map(\.path), ["home", "home/product/1"])
+        XCTAssertEqual(Array(events.dropFirst()), [
+            RouteChangeEvent(location: "/settings", previousLocation: "/home", type: .push),
+            RouteChangeEvent(location: "/home/product/2", previousLocation: "/settings", type: .push),
+            RouteChangeEvent(location: "/home/product/1", previousLocation: "/home/product/2", type: .pop),
+        ])
+
+        // A tab's own path stays pop-only: a longer one changes nothing.
+        tabbed.setTabPath(0, [product, OrcaRoute("/settings")])
+        XCTAssertEqual(tabbed.stack, [product])
+        XCTAssertEqual(tabbed.overRoutes, [])
+    }
+
+    /// The page drawer request goes with its route.
+    func test_B10_3_thePageDrawerRequestIsClearedWhenItsRouteIsDropped() {
+        let tabbed = router(tabConfig())
+        tabbed.navigate(to: "/settings")
+        tabbed.openDrawer()
+        XCTAssertEqual(tabbed.pageDrawerRequest, tabbed.top.id)
+        tabbed.navigate(to: "/home/product/1")  // the asked route is still on the stack
+        XCTAssertEqual(tabbed.pageDrawerRequest, tabbed.stack[0].id)
+        tabbed.goBack()
+        tabbed.goBack()
+        XCTAssertNil(tabbed.pageDrawerRequest)
+
+        // Without a config too.
+        let plain = router()
+        plain.navigate(to: "about")
+        plain.openDrawer()
+        XCTAssertEqual(plain.pageDrawerRequest, plain.top.id)
+        plain.goBack()
+        XCTAssertNil(plain.pageDrawerRequest)
+    }
+
+    /// The shell drawer closes when the visible location changes, not when
+    /// another page shows the same location.
+    func test_B10_3_theShellDrawerClosesOnlyWhenTheVisibleLocationChanges() {
+        let router = router(tabConfig(drawer: true))
+        router.openDrawer()
+        XCTAssertTrue(router.isDrawerOpen)
+        let home = router.top
+        router.navigate(to: "/home")  // another page, the same location
+        XCTAssertNotEqual(router.top.id, home.id)
+        XCTAssertEqual(router.top.location, "/home")
+        XCTAssertTrue(router.isDrawerOpen, "the same location keeps the drawer open")
+        router.goBack()
+        XCTAssertTrue(router.isDrawerOpen)
+
+        router.navigate(to: "/home/product/1")
+        XCTAssertFalse(router.isDrawerOpen, "another location closes it")
+    }
 }
 #endif

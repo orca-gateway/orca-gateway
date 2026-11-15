@@ -7,13 +7,18 @@ import { Text } from "../src/components";
 describe("findOffTargetWidgets", () => {
   test("names each widget type a declared target cannot render, once", () => {
     const hits = findOffTargetWidgets(
-      [{ type: "Column" }, { type: "Drawer" }, { type: "Text" }, { type: "Drawer" }, { type: "SnackBar" }],
+      [{ type: "Column" }, { type: "FloatingActionButton" }, { type: "Text" }, { type: "FloatingActionButton" }, { type: "SnackBar" }],
       ["ios"],
     );
     expect(hits).toEqual([
-      { type: "Drawer", missing: ["ios"] },
+      { type: "FloatingActionButton", missing: ["ios"] },
       { type: "SnackBar", missing: ["ios"] },
     ]);
+  });
+
+  test("B10.C-S Drawer is on every target, ios included: it never hits", () => {
+    expect(findOffTargetWidgets([{ type: "Drawer" }, { type: "SnackBar" }], ["ios"])).toEqual([{ type: "SnackBar", missing: ["ios"] }]);
+    expect(findOffTargetWidgets([{ type: "Drawer" }], ["flutter", "web", "android", "ios"])).toEqual([]);
   });
 
   test("all-platform widgets and unknown (plugin) types never hit", () => {
@@ -32,16 +37,16 @@ describe("warnOffTargetOnce", () => {
   test("logs once per page for the same hits, again for new ones", () => {
     const logs: string[] = [];
     const log = (m: string) => logs.push(m);
-    const hits = [{ type: "Drawer", missing: ["ios"] as const }];
+    const hits = [{ type: "FloatingActionButton", missing: ["ios"] as const }];
     expect(warnOffTargetOnce("home", hits, log)).toBe(true);
     expect(warnOffTargetOnce("home", hits, log)).toBe(false);
     expect(warnOffTargetOnce("settings", hits, log)).toBe(true);
     expect(warnOffTargetOnce("home", [...hits, { type: "Tooltip", missing: ["ios"] as const }], log)).toBe(true);
     expect(logs).toHaveLength(3);
     expect(logs[0]).toContain('page "home"');
-    expect(logs[0]).toContain("Drawer (not on ios)");
+    expect(logs[0]).toContain("FloatingActionButton (not on ios)");
     expect(logs[2]).toContain("Tooltip");
-    expect(logs[2]).not.toContain("Drawer");
+    expect(logs[2]).not.toContain("FloatingActionButton");
   });
 
   test("no hits, no log", () => {

@@ -29,9 +29,9 @@ import kotlin.test.assertTrue
  */
 class ActionFixtureTest {
     @Test
-    fun allEighteenActionFixturesPass() = runSuspend {
+    fun allTwentyActionFixturesPass() = runSuspend {
         val files = Fixtures.files("actions")
-        assertEquals(18, files.size)
+        assertEquals(20, files.size)
         for ((name, fx) in files) {
             val handlers = fx["handlers"].arrayValue.orEmpty().map { it.stringValue ?: error("$name: a handler name is a string") }
             val actions = fx["actions"].arrayValue.orEmpty().map { it.decode(Action.serializer()) }
@@ -71,7 +71,7 @@ class ActionFixtureTest {
     @Test
     fun unimplementedKindsChangeNothing() = runSuspend {
         val state = StoreState(page = props("count" to 1))
-        val (next, effects) = ActionReducer().reduce(state, Action.OpenDrawer)
+        val (next, effects) = ActionReducer().reduce(state, Action.AnimateForward("fade"))
         assertEquals(state, next)
         assertEquals(emptyList(), effects)
 
@@ -79,14 +79,48 @@ class ActionFixtureTest {
         val executor = ActionExecutor(store)
         val seen = ArrayList<ActionEffect>()
         executor.onEffect = { seen.add(it) }
-        executor.execute(Action.OpenDrawer)
+        executor.execute(Action.AnimateForward("fade"))
         executor.execute(Action.CloseDialog)
         assertEquals(state, store.state)
         assertEquals(emptyList(), seen)
-        assertFalse(ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.OpenDrawer))))
+        assertFalse(ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.AnimateForward("fade")))))
         assertTrue(
             ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.SetState("a", value = j(1))))),
         )
+    }
+
+    /** B10.3-A, Kotlin leg: `switchTab` is one effect carrying the tab id; state stays. */
+    @Test
+    fun b10_3_A_switchTabEmitsTheTabId() = runSuspend {
+        val state = StoreState(page = props("count" to 1))
+        val store = ElmStore(state)
+        val executor = ActionExecutor(store)
+        val seen = ArrayList<ActionEffect>()
+        val performed = ArrayList<ActionEffect>()
+        executor.onEffect = { seen.add(it) }
+        executor.perform = { performed.add(it) }
+        executor.execute(Action.SwitchTab("search"))
+        assertEquals(listOf(ActionEffect("switchTab", props("tabId" to "search"))), seen)
+        assertEquals(seen, performed)
+        assertEquals(state, store.state)
+        assertTrue(ActionExecutor.implements(Action.SwitchTab("search")))
+    }
+
+    /** B10.5-A, Kotlin leg: `openDrawer` is one bare effect; state stays. */
+    @Test
+    fun b10_5_A_openDrawerEmitsABareEffect() = runSuspend {
+        val state = StoreState(page = props("count" to 1))
+        val store = ElmStore(state)
+        val executor = ActionExecutor(store)
+        val seen = ArrayList<ActionEffect>()
+        val performed = ArrayList<ActionEffect>()
+        executor.onEffect = { seen.add(it) }
+        executor.perform = { performed.add(it) }
+        executor.execute(Action.OpenDrawer)
+        assertEquals(listOf(ActionEffect("openDrawer", emptyMap())), seen)
+        assertEquals(seen, performed)
+        assertEquals(state, store.state)
+        assertTrue(ActionExecutor.implements(Action.OpenDrawer))
     }
 
     @Test

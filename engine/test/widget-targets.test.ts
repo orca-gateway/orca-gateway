@@ -2,9 +2,10 @@
 //
 // `targets` generalises the Epic 38 `isSupportedOnWeb` bit: the list of
 // platforms whose Orca SDK renders the widget natively. Every widget carries
-// it, the default is all four platforms, and the seven widgets with no iOS
+// it, the default is all four platforms, and the six widgets with no iOS
 // counterpart omit "ios" so a SwiftUI client degrades them via the caps
-// vector instead of guessing.
+// vector instead of guessing. Drawer left that list in native-parity-s10
+// (B10.C-S): the iOS SDK draws it as a side panel.
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -12,7 +13,7 @@ import { WIDGET_REGISTRY } from "../src/core/widget-registry-gen";
 
 const MANIFEST = join(import.meta.dir, "../../schema/widget-registry.json");
 const ALL = ["flutter", "web", "android", "ios"];
-const IOS_ORPHANS = ["Checkbox", "Drawer", "FloatingActionButton", "InkWell", "Radio", "SnackBar", "Tooltip"];
+const IOS_ORPHANS = ["Checkbox", "FloatingActionButton", "InkWell", "Radio", "SnackBar", "Tooltip"];
 // Widgets only the native SDKs draw so far; Flutter and web degrade them.
 const NATIVE_ONLY = ["Video"];
 
@@ -37,6 +38,12 @@ describe("widget targets", () => {
       if (IOS_ORPHANS.includes(w.type)) expect(w.targets).toEqual(["flutter", "web", "android"]);
       else if (!NATIVE_ONLY.includes(w.type)) expect(w.targets).toEqual(ALL);
     }
+  });
+
+  test("B10.C-S Drawer targets all four platforms, ios included, in the manifest and the TS registry", () => {
+    expect(manifest.widgets.find((w) => w.type === "Drawer")?.targets).toEqual(ALL);
+    expect([...WIDGET_REGISTRY.Drawer.targets]).toEqual(ALL);
+    expect(IOS_ORPHANS).not.toContain("Drawer");
   });
 
   test("isSupportedOnWeb is derived from targets", () => {

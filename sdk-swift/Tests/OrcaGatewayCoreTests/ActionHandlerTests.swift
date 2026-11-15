@@ -123,6 +123,7 @@ final class ActionHandlerTests: XCTestCase {
             "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
             "lifecycle", "navigate", "goBack", "openUrl", "copyToClipboard", "share",
             "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
+            "switchTab", "openDrawer",
         ])
     }
 }

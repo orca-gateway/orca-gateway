@@ -6,12 +6,15 @@ import androidx.compose.ui.Modifier
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.widgets.AnimatedBuilderWidget
 import com.orcagateway.sdk.widgets.AppBarWidget
+import com.orcagateway.sdk.widgets.BottomNavItemWidget
+import com.orcagateway.sdk.widgets.BottomNavigationBarWidget
 import com.orcagateway.sdk.widgets.ButtonWidget
 import com.orcagateway.sdk.widgets.CardWidget
 import com.orcagateway.sdk.widgets.CenterWidget
 import com.orcagateway.sdk.widgets.ClipRRectWidget
 import com.orcagateway.sdk.widgets.ContainerWidget
 import com.orcagateway.sdk.widgets.DividerWidget
+import com.orcagateway.sdk.widgets.DrawerWidget
 import com.orcagateway.sdk.widgets.ExpandedWidget
 import com.orcagateway.sdk.widgets.FallbackPromptWidget
 import com.orcagateway.sdk.widgets.FlexWidget
@@ -84,11 +87,13 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 28 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 31 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
-         * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video. Keep the two lists in step: the caps vector
-         * advertises what this draws (WidgetBuildersTest checks it).
+         * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
+         * and S10's BottomNavigationBar, BottomNavItem and Drawer. Keep the two
+         * lists in step: the caps vector advertises what this draws
+         * (WidgetBuildersTest checks it).
          */
         public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
             register("Scaffold") { node, model, modifier -> ScaffoldWidget(node, model, modifier) }
@@ -119,6 +124,9 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("AnimatedBuilder") { node, model, modifier -> AnimatedBuilderWidget(node, model, modifier) }
             register("Transform") { node, model, modifier -> TransformWidget(node, model, modifier) }
             register("Video") { node, _, modifier -> VideoWidget(node, modifier) }
+            register("BottomNavigationBar") { node, model, modifier -> BottomNavigationBarWidget(node, model, modifier) }
+            register("BottomNavItem") { node, _, modifier -> BottomNavItemWidget(node, modifier) }
+            register("Drawer") { node, model, modifier -> DrawerWidget(node, model, modifier) }
         }
     }
 }

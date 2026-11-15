@@ -2,13 +2,12 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://orcagateway.com/schemas/navigation-fixture.json",
   "title": "Navigation conformance fixture",
-  "description": "Executable spec for route resolution. Every Orca SDK (Flutter, Swift, Kotlin) loads these files, builds its route table from `config`, seeds app state from `config.initialAppState` with `appState` laid over it, resolves each case's `location` as a `go` (replace) navigation and asserts `expected`. The Flutter SDK is the oracle: an expected value is what its real router shows.",
+  "description": "Executable spec for route resolution. Every Orca SDK (Flutter, Swift, Kotlin) loads these files, builds its route table from `config`, seeds app state from `config.initialAppState` with `appState` laid over it, resolves each case's `location` as a `go` (replace) navigation and asserts `expected`. The Flutter SDK is the oracle: an expected value is what its real router shows. A file may also carry `sessions` (beside `cases` or instead of them): each session boots a fresh app at `config.initialRoute` with the seeded app state (the file-level `appState` overlay is for `cases` only), then runs its steps in order on that one app. What the SDK shows is asserted after the boot (`boot.expected`) and after every step (`expected`).",
   "type": "object",
   "required": [
     "name",
     "description",
-    "config",
-    "cases"
+    "config"
   ],
   "additionalProperties": false,
   "properties": {
@@ -30,6 +29,13 @@
       "minItems": 1,
       "items": {
         "$ref": "#/definitions/Case"
+      }
+    },
+    "sessions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/Session"
       }
     }
   },
@@ -302,6 +308,223 @@
           ]
         }
       }
+    },
+    "Session": {
+      "type": "object",
+      "description": "One run of a booted app. The boot is not a step: the app starts at `config.initialRoute` and `boot.expected` pins what is shown then, so the boot's page requests (the initial route's page) and the first `_tabIndex` write are accounted for there and never in the first step.",
+      "required": [
+        "name",
+        "boot",
+        "steps"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "boot": {
+          "type": "object",
+          "required": [
+            "expected"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "expected": {
+              "$ref": "#/definitions/Observed"
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/Step"
+          }
+        }
+      }
+    },
+    "Step": {
+      "description": "One operation and what is shown once it has settled.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Replace navigation to a location (GoRouter.go).",
+          "required": [
+            "op",
+            "location",
+            "expected"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "go"
+            },
+            "location": {
+              "type": "string",
+              "pattern": "^/",
+              "description": "A location with a leading slash."
+            },
+            "expected": {
+              "$ref": "#/definitions/Observed"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Push a location over what is shown (GoRouter.push).",
+          "required": [
+            "op",
+            "location",
+            "expected"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "push"
+            },
+            "location": {
+              "type": "string",
+              "pattern": "^/",
+              "description": "A location with a leading slash."
+            },
+            "expected": {
+              "$ref": "#/definitions/Observed"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Pop the top page (GoRouter.pop). Never written where there is nothing to pop: at a tab root Flutter's router throws and the platform's back leaves the app.",
+          "required": [
+            "op",
+            "expected"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "back"
+            },
+            "expected": {
+              "$ref": "#/definitions/Observed"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "A tap on the item at `index` of the default tab bar. Only written while the bar is on screen.",
+          "required": [
+            "op",
+            "index",
+            "expected"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "tapTab"
+            },
+            "index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "expected": {
+              "$ref": "#/definitions/Observed"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "The `switchTab` action run by the action executor from the page on screen.",
+          "required": [
+            "op",
+            "tabId",
+            "expected"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "switchTab"
+            },
+            "tabId": {
+              "type": "string"
+            },
+            "expected": {
+              "$ref": "#/definitions/Observed"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "One key written into app state through the state manager.",
+          "required": [
+            "op",
+            "key",
+            "value",
+            "expected"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "setAppState"
+            },
+            "key": {
+              "type": "string"
+            },
+            "value": {
+              "description": "Any JSON value, null included."
+            },
+            "expected": {
+              "$ref": "#/definitions/Observed"
+            }
+          }
+        }
+      ]
+    },
+    "Observed": {
+      "type": "object",
+      "description": "What the SDK shows after the boot or after a step. All four keys are always present.",
+      "required": [
+        "location",
+        "tabIndex",
+        "appState",
+        "pageRequests"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "location": {
+          "type": "string",
+          "description": "The visible location: the one of the page on top, also when it was pushed."
+        },
+        "tabIndex": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "The tab shell's current index while a shell exists, also under a route pushed over it; null when there is no shell (after a `go` to a route outside the tabs)."
+        },
+        "appState": {
+          "type": "object",
+          "description": "A subset of app state: every key listed is compared, other keys are not looked at. Carries `_tabIndex`."
+        },
+        "pageRequests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Page request paths (no leading slash) made during the boot or during this step, in order; empty when nothing is fetched."
+        }
+      }
     }
-  }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "cases"
+      ]
+    },
+    {
+      "required": [
+        "sessions"
+      ]
+    }
+  ]
 }

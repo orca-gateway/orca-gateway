@@ -100,8 +100,8 @@ it: the app asks the server for `/config`, seeds the config's `initialAppState` 
 `initialRoute`, and every location goes through the config's routes (parameters, nested routes,
 redirects, a "Page not found" page for an unknown one). The `navigation` app in
 `examples/server/navigation.ts` is made for it. Set the extra `ORCA_BOOT` to `config`; `ORCA_PATH`
-is then not used. The host then calls `OrcaApp(client, path = null)`: a host that passes a path, or
-none at all (`OrcaApp(client)` opens `home`), fetches no config:
+is then not used. The host then calls `OrcaApp` with no path (`OrcaApp(client)`, the default): a
+host that passes a path fetches no config:
 
 ```bash
 adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
@@ -110,7 +110,11 @@ adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
 
 It starts logged out on its welcome page; the protected route sends you to the login page until
 you log in. A route that is not one of the tabs is drawn under a top bar with a back arrow and
-the page's title. The tab bar itself is not drawn yet: the app runs as one stack.
+the page's title. A config with tabs is drawn with its tab bar, one page stack per tab; the
+drawer follows in the same release.
+
+The `tabs` app in `examples/server/tabs.ts` shows the tab bar: extras `ORCA_APP_ID=tabs`,
+`ORCA_BOOT=config` (`--es ORCA_APP_ID tabs --es ORCA_BOOT config`).
 
 | Extra | Type | Default | What |
 |---|---|---|---|

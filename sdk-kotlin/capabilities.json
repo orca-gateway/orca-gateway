@@ -3,12 +3,15 @@
   "widgets": [
     "AnimatedBuilder",
     "AppBar",
+    "BottomNavItem",
+    "BottomNavigationBar",
     "Card",
     "Center",
     "ClipRRect",
     "Column",
     "Container",
     "Divider",
+    "Drawer",
     "ElevatedButton",
     "Expanded",
     "FallbackPrompt",
@@ -39,12 +42,14 @@
     "goBack",
     "lifecycle",
     "navigate",
+    "openDrawer",
     "openUrl",
     "serverAction",
     "setState",
     "share",
     "showSnackbar",
     "showToast",
+    "switchTab",
     "updateComponent"
   ]
 }
