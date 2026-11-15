@@ -43,8 +43,8 @@ private struct WatchedNode: View {
 }
 
 /// The registry's builders: wire type to SwiftUI view. The types listed in
-/// sdk-swift/capabilities.json; anything else has already been degraded by
-/// the renderer.
+/// sdk-swift/capabilities.json, then the page model's `WidgetBuilders`;
+/// anything else has already been degraded by the renderer.
 @MainActor
 struct WidgetView: View {
     let node: ResolvedNode
@@ -78,7 +78,9 @@ struct WidgetView: View {
         case "AnimatedBuilder": AnimatedBuilderView(node: node, model: model)
         case "Transform": TransformView(node: node, model: model)
         case "Video": VideoNodeView(node: node)
-        default: EmptyView()
+        default:
+            // A plugin or host widget; any other type draws nothing.
+            if let build = model.widgets.builder(for: node.type) { build(node, model) }
         }
     }
 }

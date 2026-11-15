@@ -35,11 +35,16 @@ public final class OrcaPageModel: ObservableObject {
     /// An action that threw and had no lifecycle `onError` to catch it. Dart
     /// leaves such a future unhandled; Swift reports it here and moves on.
     public var onError: ((Error) -> Void)?
+    /// Builders for the plugin and host widget types this page draws beyond
+    /// the SDK's own views.
+    public let widgets: WidgetBuilders
 
     public init(page: PageResponse, store: ElmStore = ElmStore(),
-                registry: WidgetRegistry = .shared, client: OrcaClient? = nil) {
+                registry: WidgetRegistry = .shared, client: OrcaClient? = nil,
+                widgets: WidgetBuilders = WidgetBuilders()) {
         self.renderer = PageRenderer(page: page, registry: registry)
         self.store = store
+        self.widgets = widgets
         self.executor = ActionExecutor(store: store, client: client)
         store.pageId = page.pageId
         store.seed(page.state)
