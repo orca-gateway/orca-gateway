@@ -6,6 +6,8 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.orcagateway.core.render.ResolvedNode
+import com.orcagateway.sdk.widgets.LifecycleTriggers
+import com.orcagateway.sdk.widgets.hasLifecycleTriggers
 
 /**
  * Progress (0..1, after its curve) of the nearest enclosing AnimatedBuilder;
@@ -21,6 +23,10 @@ internal val LocalOrcaAnimationProgress = compositionLocalOf<Double?> { null }
  *
  * [modifier] goes on the node's outermost layout: a parent uses it to force
  * a size, as a Flutter parent passes tight constraints.
+ *
+ * A node setting onInit, onVisible or an app trigger also gets
+ * [LifecycleTriggers] (Flutter's OrcaLifecycleWrapper), which draws nothing;
+ * other nodes are composed exactly as before.
  */
 @Composable
 public fun NodeView(id: String, model: OrcaPageModel, modifier: Modifier = Modifier) {
@@ -32,6 +38,7 @@ public fun NodeView(id: String, model: OrcaPageModel, modifier: Modifier = Modif
     // node is resolved again with it so its `tween` props move.
     val progress = LocalOrcaAnimationProgress.current
     val node = remember(observer, revision, progress) { model.resolve(id, progress) } ?: return
+    if (hasLifecycleTriggers(node)) LifecycleTriggers(node, model)
     WidgetView(node, model, modifier)
 }
 

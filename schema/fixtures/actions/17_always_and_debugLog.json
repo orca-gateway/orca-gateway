@@ -1,0 +1,138 @@
+{
+  "name": "always-and-debugLog",
+  "description": "always runs its action every time, even from the same widget and trigger; debugLog emits an effect with its resolved message (level debug and tag orca by default) and its data resolved per entry, never a timestamp or included state.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 0
+    },
+    "app": {}
+  },
+  "steps": [
+    {
+      "action": {
+        "type": "always",
+        "action": {
+          "type": "setState",
+          "key": "count",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "count"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "widgetId": "buy",
+        "trigger": "onTap"
+      }
+    },
+    {
+      "action": {
+        "type": "always",
+        "action": {
+          "type": "setState",
+          "key": "count",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "count"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "widgetId": "buy",
+        "trigger": "onTap"
+      }
+    },
+    {
+      "action": {
+        "type": "debugLog",
+        "message": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "scope": "page",
+            "key": "count"
+          },
+          "by": [
+            {
+              "type": "template",
+              "template": "count is {{value}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "action": {
+        "type": "debugLog",
+        "level": "warn",
+        "tag": "checkout",
+        "message": "cart opened",
+        "data": {
+          "count": {
+            "type": "state",
+            "scope": "page",
+            "key": "count"
+          },
+          "screen": {
+            "type": "static",
+            "value": "cart"
+          }
+        },
+        "includeState": true
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 2
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "debugLog",
+        "level": "debug",
+        "tag": "orca",
+        "message": "count is 2"
+      },
+      {
+        "type": "debugLog",
+        "level": "warn",
+        "tag": "checkout",
+        "message": "cart opened",
+        "data": {
+          "count": 2,
+          "screen": "cart"
+        }
+      }
+    ]
+  }
+}

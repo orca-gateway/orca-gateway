@@ -36,10 +36,14 @@ final class ModelRoundTripTests: XCTestCase {
 
     func testAllActionFixturesRoundTrip() throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 20, "action fixtures 01-15, 30-31, 45-47")
+        XCTAssertEqual(files.count, 24, "action fixtures 01-19, 30-31, 45-47")
         var kinds = Set<String>()
         for (name, fixture) in files {
-            var lists: [JSONValue] = [fixture["actions"]]
+            // A fixture runs either `actions` or `steps` [{action, source?, event?}].
+            let steps = fixture["steps"].arrayValue
+            XCTAssertNotEqual(fixture["actions"].isNull, steps == nil, "\(name): actions or steps, one of them")
+            var lists: [JSONValue] = fixture["actions"].isNull ? [] : [fixture["actions"]]
+            if let steps { lists.append(.array(steps.map { $0["action"] })) }
             if case .object(let responses) = fixture["serverResponses"] {
                 lists += responses.values.map { $0["actions"] }.filter { !$0.isNull }
             }

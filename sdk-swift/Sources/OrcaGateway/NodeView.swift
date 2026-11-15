@@ -37,7 +37,14 @@ private struct WatchedNode: View {
         // Reading the revision ties this body to the node's watches.
         let _ = observer.revision
         if let node = model.resolve(id, animationProgress: animationProgress) {
-            WidgetView(node: node, model: model)
+            // Only a node with a lifecycle trigger is wrapped (Flutter
+            // component_renderer.dart:230-255); the others keep their tree.
+            if let triggers = LifecycleTriggers(node.actions) {
+                WidgetView(node: node, model: model)
+                    .modifier(Lifecycle(node: node, model: model, triggers: triggers))
+            } else {
+                WidgetView(node: node, model: model)
+            }
         }
     }
 }

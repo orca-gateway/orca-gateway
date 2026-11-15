@@ -1,5 +1,6 @@
 #if canImport(SwiftUI)
 import Combine
+import os
 import SwiftUI
 
 /// A snackbar or toast on screen. Both are drawn as a floating message at the
@@ -69,20 +70,24 @@ public final class OrcaPageModel: ObservableObject {
     }
 
     /// Run the node's action for a trigger (`onTap`, `onLongPress`, ...), the
-    /// Flutter `fireAction`: nothing happens when the node has none. The run
-    /// is asynchronous (a server action waits on the network); the returned
-    /// task finishes when the action does, which tests await.
+    /// Flutter `fireAction`: nothing happens when the node has none. The
+    /// node and trigger are the run's source (what `once` is keyed by). The
+    /// run is asynchronous (a server action waits on the network); the
+    /// returned task finishes when the action does, which tests await.
     @discardableResult
     public func fire(_ trigger: String, on node: ResolvedNode,
                      eventData: [String: JSONValue]? = nil) -> Task<Void, Never>? {
         guard let action = node.actions[trigger] else { return nil }
-        return Task { await run(action, eventData: eventData) }
+        let source = ActionSource(widgetId: node.id, trigger: trigger)
+        return Task { await run(action, eventData: eventData, source: source) }
     }
 
-    /// Run one action to the end.
-    public func run(_ action: Action, eventData: [String: JSONValue]? = nil) async {
+    /// Run one action to the end; `source` is the widget and trigger that
+    /// fired it, when there is one.
+    public func run(_ action: Action, eventData: [String: JSONValue]? = nil,
+                    source: ActionSource? = nil) async {
         do {
-            try await executor.execute(action, eventData: eventData)
+            try await executor.execute(action, eventData: eventData, source: source)
         } catch {
             OrcaDebug.report(.error(message: "\(error)", context: "action \(action.kind) on \(page.pageId)"))
             onError?(error)
@@ -120,7 +125,8 @@ public final class OrcaPageModel: ObservableObject {
                 await run(.setState(Action.SetState(key: stateKey, value: .string(value))))
             }
             if let onChange {
-                await run(onChange, eventData: ["value": .string(value)])
+                await run(onChange, eventData: ["value": .string(value)],
+                          source: ActionSource(widgetId: node.id, trigger: "onChange"))
             }
         }
         textEdits = edit
@@ -148,9 +154,34 @@ public final class OrcaPageModel: ObservableObject {
                 message: effect.payload["message"]?.stringValue ?? "",
                 duration: Double(effect.payload["duration"]?.intValue ?? 4000) / 1000,
                 style: effect.type == "showSnackbar" ? .snackbar : .toast)
+        case "debugLog":
+            Self.log(effect)
+            effectHandler?(effect)
         default:
             effectHandler?(effect)
         }
+    }
+
+    /// A debugLog effect as a system log line, as Flutter writes
+    /// `developer.log` and `debugPrint`: subsystem com.orcagateway, the tag
+    /// as category, the message then the data as JSON. debug and info keep
+    /// their level, warn is `.default`, error `.error`. Public, as Flutter's
+    /// `debugPrint` prints it whole.
+    static func log(_ effect: ActionEffect) {
+        let payload = effect.payload
+        let logger = Logger(subsystem: "com.orcagateway", category: payload["tag"]?.stringValue ?? "orca")
+        var parts: [String] = []
+        if let message = payload["message"]?.stringValue { parts.append(message) }
+        if let data = payload["data"], let text = try? data.encoded() {
+            parts.append(String(decoding: text, as: UTF8.self))
+        }
+        let level: OSLogType = switch payload["level"]?.stringValue {
+        case "info": .info
+        case "warn": .default
+        case "error": .error
+        default: .debug
+        }
+        logger.log(level: level, "\(parts.joined(separator: " "), privacy: .public)")
     }
 
     func apply(_ mutation: ComponentMutation) {

@@ -17,6 +17,7 @@ import com.orcagateway.core.support.props
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -75,12 +76,16 @@ class ModelRoundTripTest {
     @Test
     fun allActionFixturesRoundTrip() {
         val files = Fixtures.files("actions")
-        assertEquals(20, files.size, "action fixtures 01-15, 30-31 and 45-47")
+        assertEquals(24, files.size, "action fixtures 01-19, 30-31 and 45-47")
         val kinds = HashSet<String>()
         for ((name, fixture) in files) {
             // Plugin action names a fixture registers handlers for (45-47).
             val handlers = fixture["handlers"].arrayValue.orEmpty().mapNotNull { it.stringValue }.toSet()
-            val lists = mutableListOf(fixture["actions"])
+            // A fixture runs either `actions` or `steps` [{action, source?, event?}].
+            val steps = fixture["steps"].arrayValue
+            assertNotEquals(fixture["actions"].isNull, steps == null, "$name: actions or steps, one of them")
+            val lists = if (fixture["actions"].isNull) mutableListOf<JsonValue>() else mutableListOf(fixture["actions"])
+            steps?.let { lists += JsonValue.Array(it.map { step -> step["action"] }) }
             fixture["serverResponses"].objectValue?.let { responses ->
                 lists += responses.values.map { it["actions"] }.filter { !it.isNull }
             }

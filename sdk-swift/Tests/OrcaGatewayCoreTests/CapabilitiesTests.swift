@@ -40,8 +40,9 @@ final class CapabilitiesTests: XCTestCase {
         let listed = Set((implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue))
         XCTAssertEqual(Set(GeneratedCapabilities.actionKinds), listed)
         XCTAssertTrue(listed.isSubset(of: Set(Action.kinds)))
-        XCTAssertEqual(listed.count, 17)
+        XCTAssertEqual(listed.count, 20)
         XCTAssertTrue(listed.isSuperset(of: ["switchTab", "openDrawer"]))
+        XCTAssertTrue(listed.isSuperset(of: ["once", "always", "debugLog"]))
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).
         XCTAssertEqual(ActionExecutor.kinds, listed.union(["replaceComponent"]))

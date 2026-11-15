@@ -371,6 +371,11 @@ function walkSingleAction(
           walkSingleAction(v, support, missing);
         }
       }
+    } else if (kind === "once" || kind === "always") {
+      // The wrapper's only field is its inner action: check it exactly as
+      // the same action unwrapped (its Values are walked there, once).
+      walkSingleAction(a.action, support, missing);
+      return;
     }
     // Walk any Value params nested in action fields (e.g. SetState.value).
     for (const [key, v] of Object.entries(a)) {

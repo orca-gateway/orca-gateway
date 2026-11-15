@@ -4,6 +4,7 @@ import com.orcagateway.core.client.ActionClient
 import com.orcagateway.core.client.OrcaActionException
 import com.orcagateway.core.debug.DevToolsEvent
 import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.core.json.DartFormat
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ActionList
@@ -20,6 +21,15 @@ import kotlin.coroutines.suspendCoroutine
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+
+/**
+ * Where an action chain started: the node and the trigger that fired it
+ * (Flutter `ActionSource`). `once` dedupes by it; nested runs inherit it.
+ */
+public data class ActionSource(public val widgetId: String, public val trigger: String) {
+    /** `widgetId::trigger`, the key a `once` records. */
+    public val dedupeKey: String get() = "$widgetId::$trigger"
+}
 
 /**
  * Runs a page's actions: state changes through the store, structural changes
@@ -58,6 +68,20 @@ public class ActionExecutor(
     private val reducer = ActionReducer()
     private var eventData: Map<String, JsonValue>? = null
     private val handlers = HashMap<String, OrcaActionHandler>()
+    private var source: ActionSource? = null
+
+    /**
+     * The [ActionSource.dedupeKey]s of the `once` wrappers that have run, for
+     * the life of this executor (the page model's). A `once` with a source
+     * runs its action the first time its key is seen and never again; one
+     * without a source (a run no widget fired) runs every time. `always`
+     * just runs its action.
+     *
+     * Flutter's known limit, kept: the key holds no id of the wrapper, so two
+     * `once` under one widget and trigger share it, and in
+     * `Sequential(Once(a), Once(b))` b never runs.
+     */
+    private val firedOnceKeys = HashSet<String>()
 
     /**
      * Run [handler] for every action of [type] (Dart `registerHandler`,
@@ -81,20 +105,25 @@ public class ActionExecutor(
     /**
      * Run one action. [eventData] feeds `V.event(...)` for this action and
      * everything it runs, as Dart's `execute(action, eventData:)` does.
+     * [source] is the widget and trigger that fired it, for `once`; nested
+     * runs inherit both, and both are restored when this returns.
      */
-    public suspend fun execute(action: Action, eventData: Map<String, JsonValue>? = null) {
-        val previous = this.eventData
+    public suspend fun execute(action: Action, eventData: Map<String, JsonValue>? = null, source: ActionSource? = null) {
+        val previousEventData = this.eventData
+        val previousSource = this.source
         if (eventData != null) this.eventData = eventData
+        if (source != null) this.source = source
         try {
             run(action)
         } finally {
-            this.eventData = previous
+            this.eventData = previousEventData
+            this.source = previousSource
         }
     }
 
     /** Run actions one after another (Dart `executeAll`). */
-    public suspend fun executeAll(actions: List<Action>, eventData: Map<String, JsonValue>? = null) {
-        for (action in actions) execute(action, eventData)
+    public suspend fun executeAll(actions: List<Action>, eventData: Map<String, JsonValue>? = null, source: ActionSource? = null) {
+        for (action in actions) execute(action, eventData, source)
     }
 
     // MARK: Handlers
@@ -159,6 +188,16 @@ public class ActionExecutor(
             }
 
             is Action.Lifecycle -> runLifecycle(action)
+
+            is Action.Once -> {
+                val key = source?.dedupeKey
+                if (key != null && !firedOnceKeys.add(key)) return
+                run(action.action)
+            }
+
+            is Action.Always -> run(action.action)
+
+            is Action.DebugLog -> runDebugLog(action)
 
             is Action.Navigate -> {
                 val resolver = this.resolver
@@ -288,6 +327,48 @@ public class ActionExecutor(
     }
 
     /**
+     * Dart's debugLog handler, as an effect: `{type: "debugLog", level, tag,
+     * message?, data?}` with the level (default debug) and the tag (default
+     * orca), the message resolved as text and `data` resolved entry by entry
+     * when it is an object, even a Value's (Dart's `rawData is Map`), else as
+     * one value; an entry that fails is "<unresolvable>". No timestamp and nothing
+     * from the include* flags: the effect is deterministic, and printing it
+     * is the host's job. Never throws, so a failing log cannot stop the
+     * group it sits in; only cancellation goes on up.
+     */
+    private suspend fun runDebugLog(log: Action.DebugLog) {
+        try {
+            val resolver = this.resolver
+            val payload = linkedMapOf<String, JsonValue>(
+                "level" to JsonValue.String(log.level ?: "debug"),
+                "tag" to JsonValue.String(log.tag ?: "orca"),
+            )
+            log.message?.takeUnless { it.isNull }?.let { raw ->
+                val message = try {
+                    resolver.resolveToString(raw)
+                } catch (e: Exception) {
+                    DartFormat.string(raw)
+                }
+                payload["message"] = JsonValue.String(message)
+            }
+            log.data?.takeUnless { it.isNull }?.let { raw ->
+                fun resolved(value: JsonValue): JsonValue = try {
+                    resolver.resolve(value)
+                } catch (e: Exception) {
+                    JsonValue.String("<unresolvable>")
+                }
+                val data = raw.objectValue?.let { entries -> JsonValue.Object(entries.mapValues { resolved(it.value) }) } ?: resolved(raw)
+                if (!data.isNull) payload["data"] = data
+            }
+            emit(ActionEffect("debugLog", payload))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return
+        }
+    }
+
+    /**
      * Emit the request, POST it, run what comes back. A refused call (a
      * status other than 200) shows its message in a snackbar and does not
      * throw, as in Dart; a transport failure throws.
@@ -321,12 +402,15 @@ public class ActionExecutor(
             "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
             "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
             "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
+            "once", "always", "debugLog",
         )
 
         /** True when the action and everything nested in it is implemented. */
         public fun implements(action: Action): Boolean = when (action) {
             is Action.ActionGroup -> action.actions.all(::implements)
             is Action.Lifecycle -> implements(action.action)
+            is Action.Once -> implements(action.action)
+            is Action.Always -> implements(action.action)
             is Action.ConditionalAction ->
                 action.branches.all { implements(it.then) } && (action.elseAction?.let(::implements) ?: true)
             else -> action.kind in kinds

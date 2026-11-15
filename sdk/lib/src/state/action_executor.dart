@@ -475,6 +475,15 @@ class ActionExecutor {
           }
         }
 
+        // The effect is deterministic (no timestamp); the include* flags
+        // only add to the log line below, never to the effect.
+        exec._emit('debugLog', {
+          'level': level,
+          'tag': tag,
+          'message': ?message,
+          'data': ?data,
+        });
+
         final entry = <String, dynamic>{
           'level': level,
           'tag': tag,
