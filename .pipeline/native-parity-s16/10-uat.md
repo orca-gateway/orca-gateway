@@ -4,7 +4,7 @@
 
 ### In one breath
 PR #34 is open: step 16, the plugin system on both native SDKs and Swift/Kotlin stubs in the CLI.
-Rebased on origin/main after PRs #30 and #31; every suite green locally, both example apps build.
+Rebased on main after PRs #30, #31 and #33, with the Linux Swift 5.10 fix; every suite green locally.
 C16.1 seen by hand on the iOS simulator and the Android emulator: the plugin badge draws and runs.
 The merge is yours; nothing is published (the SDKs and the CLI ship with their next release tags).
 
@@ -31,6 +31,10 @@ Auto-fix off, auto-merge off. Branch feat/native-parity-s16 on origin/main 81b4b
 task commits (T1-T14), the step 15 close note, the rebase follow-up `refactor(sdk-swift): one error view…` (R1) and
 the pipeline notes. At open (`get_status`): mergeable, 0 passing, 8 pending, 0 failing.
 The body is in the session scratchpad (`s16/pr-s16.md`).
+
+### Second rebase (2026-11-16)
+PR #33 merged and the Linux Swift 5.10 check failed. Rebased onto 82e9027 (R2 in 09), the last synchronous
+`@MainActor` core test made `async`, force-pushed with lease; the body's Tests and Rebases sections updated.
 
 ### What reviewers will find in the body
 - Why: the natives degraded unknown widgets and dropped `custom:` actions; Flutter had plugins.

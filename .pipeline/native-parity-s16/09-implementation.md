@@ -245,6 +245,17 @@ Review fit: the T9 message still named OrcaErrorView, fixed (reworded; trees ide
 Review quality: Swift kept BootErrorView as a copy of main's LoadError, fixed (LoadError internal with an optional
 retry, BootErrorView deleted; commit `refactor(sdk-swift): one error view…`; swift 325, SwiftUI 103 / 4 skips, app builds)
 
+#### R2 · Rebase onto origin/main 82e9027 (PR #33), and the Linux Swift 5.10 check
+CI's "Core tests (swift 5.10-jammy, linux)" failed: Linux test discovery cannot call a synchronous `@MainActor` test
+(`testC16_2_KindsStayTheBuiltInList`), now `async`; no other synchronous `@MainActor` test is left in the core tests.
+Rebase conflicts: FixturePathsTest.kt (render 41 from main, actions 18 from here) and OrcaApp.kt (main's retained
+ViewModel kept; the retained boot is made before the gate; plugins merged only while `plugins == null`, once per kept
+router or boot, so a rotation does not merge again; `widgets` defaults to `WidgetBuilders.shared` so main's A1.13
+probes still draw). Two recreation tests in OrcaAppPluginTest (red first: 2 widget reads became 4). No generated file
+changed. Old tip 6564b9e, new tip ecf949c.
+Review fit: pass
+Review quality: pass
+
 ### Hand checks (C16.1)
 Example server on :8094, app id `custom`. iOS simulator 04AFD6DE and Android emulator-5584: the three ColoredBadges are
 drawn by the app's BadgePlugin (the server keeps them because the caps advertise ColoredBadge); a tap on CUSTOM BADGE
@@ -253,6 +264,9 @@ runs hapticFeedback (light) and shows "Badge tapped!"; Trigger Haptic runs hapti
 `s16/hand-c16-1-ios.png`, `s16/hand-c16-1-android.png`.
 
 ### Test run
+After R2 (origin/main 82e9027): engine 740 · Flutter 308 · cli +27, analyze clean · Swift 0 warnings, `swift test`
+325 · SwiftUI on the iOS 18.5 simulator CI uses: pass; on iOS 26.5 (04AFD6DE) 157 run, 4 golden skips, 4 of main's tests
+fail as on origin/main alone (AppBarCardTests A1_9 ×3, ButtonTests D11) · Kotlin core 327, sdk 234 · both app builds.
 After the rebase onto origin/main 81b4bc1 (R1, below): engine `bun test` 738 pass · Flutter 306 · cli +27, analyze
 clean · Swift 0 warnings, `swift test` 325 · `xcodebuild test -only-testing:OrcaGatewayTests` 103 executed, 4 skipped
 (goldens), 0 failures · Kotlin core 327, sdk 176 · iOS and Android example builds succeed. Group 5 (before the
