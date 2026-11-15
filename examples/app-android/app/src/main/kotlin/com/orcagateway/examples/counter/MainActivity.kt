@@ -24,6 +24,10 @@ import java.net.URI
  * Any example app on that server runs here too: pass ORCA_APP_ID and
  * ORCA_PATH as intent extras (for example `basic-actions` and `home`, or
  * `server-actions` and `shop`), and ORCA_SERVER_URL for another server.
+ *
+ * An app with a navigation config (app id `navigation`) boots from it with
+ * the extra ORCA_BOOT set to `config`: the server's config says where the
+ * app starts, and ORCA_PATH is not used.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,7 +39,9 @@ class MainActivity : ComponentActivity() {
             apiKey = "demo-key",
             transport = OkHttpTransport(),
         )
-        val path = setting("ORCA_PATH", "home")
+        // The default app, `counter`, has no navigation config: it starts at a path.
+        // No path (null) is how a host asks OrcaApp to boot from the server's config.
+        val path = if (setting("ORCA_BOOT", "path") == "config") null else setting("ORCA_PATH", "home")
         setContent {
             MaterialTheme {
                 Surface { OrcaApp(client, path = path) }

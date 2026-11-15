@@ -92,6 +92,29 @@ ORCA_FALLBACK_POLICY=warn task example:dev:server      # or =require
 ORCA_MIN_SDK_VERSION=99.0.0 task example:dev:server
 ```
 
+### The navigation demo: booting from the server config
+
+The apps above start at the page you pass. An app with a navigation config can instead boot from
+it: the app asks the server for `/config`, seeds the config's `initialAppState` and opens its
+`initialRoute`, and every location goes through the config's routes (parameters, nested routes,
+redirects, a "Page not found" page for an unknown one). The `navigation` app in
+`examples/server/navigation.ts` is made for it. Set the extra `ORCA_BOOT` to `config`; `ORCA_PATH`
+is then not used. The host then calls `OrcaApp(client, path = null)`: a host that passes a path, or
+none at all (`OrcaApp(client)` opens `home`), fetches no config:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
+  --es ORCA_APP_ID navigation --es ORCA_BOOT config
+```
+
+It starts logged out on its welcome page; the protected route sends you to the login page until
+you log in. A route that is not one of the tabs is drawn under a top bar with a back arrow and
+the page's title. The tab bar itself is not drawn yet: the app runs as one stack.
+
+| Extra | Type | Default | What |
+|---|---|---|---|
+| `ORCA_BOOT` | string | `path` | `config` boots from the server's navigation config; anything else starts at `ORCA_PATH` |
+
 ## DevTools
 
 Debug builds connect to Orca DevTools on port 6363 of the Mac (start it with `task devtools:dev`)
