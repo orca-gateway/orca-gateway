@@ -57,7 +57,8 @@ final class OrcaBootModel: ObservableObject {
         /// The server demands an update; no page is ever fetched.
         case forceUpdate
         /// The app cannot start (a plugin conflict, Flutter's boot error):
-        /// the message shows and nothing is fetched.
+        /// Flutter's default error screen shows with this message, and
+        /// nothing is fetched.
         case failed(String)
     }
 
@@ -121,9 +122,9 @@ struct OrcaBootView<Content: View>: View {
             case .forceUpdate:
                 ForceUpdateView()
             case .failed(let message):
-                // No retry: a plugin conflict stays one.
-                LoadError(title: "Could not load this page", message: message, retry: nil)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Flutter's ArgumentError: its default screen, with the
+                // conflict's own words. No retry: a conflict stays one.
+                OrcaErrorView(error: OrcaPluginConflict(message: message), message: message)
             case .ready:
                 content()
             }
