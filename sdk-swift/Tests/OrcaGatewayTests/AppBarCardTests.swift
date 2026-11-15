@@ -173,6 +173,29 @@ final class AppBarCardTests: XCTestCase {
         XCTAssertLessThan(title.midX, Self.window.width / 2, "title still centred")
     }
 
+    /// A1.9: a Text title is drawn once, as Flutter draws it. With
+    /// centerTitle false it is the leading item and the system does not also
+    /// centre the plain navigation title (no dark text anywhere in the bar);
+    /// centred, it is the principal item, again alone.
+    func testA1_9ScaffoldTextTitleIsDrawnOnce() throws {
+        let start = try hostedScaffold(["automaticallyImplyLeading": false, "centerTitle": false], textTitle: "Hi")
+        let leading = try XCTUnwrap(start.bar.bounds(of: Pixels.isRed), "title not drawn")
+        XCTAssertLessThanOrEqual(leading.minX, 24, "title not at the leading edge: \(leading)")
+        XCTAssertNil(start.bar.bounds(of: Pixels.isInk), "a second title drawn in the bar")
+
+        let centred = try hostedScaffold(["automaticallyImplyLeading": false], textTitle: "Hi")
+        let middle = try XCTUnwrap(centred.bar.bounds(of: Pixels.isRed), "title not drawn")
+        XCTAssertEqual(middle.midX, Self.window.width / 2, accuracy: 2)
+        XCTAssertNil(centred.bar.bounds(of: Pixels.isInk), "a second title drawn in the bar")
+    }
+
+    /// A1.9: the page under a pushed one lends its Text title to the back
+    /// button, also when that title is drawn as the leading item.
+    func testA1_9TheBackButtonCarriesTheTitleOfThePageBelow() throws {
+        let pushed = try hostedScaffold(["centerTitle": false], textTitle: "Hi", depth: 2)
+        XCTAssertEqual(pushed.backTitle, "Hi")
+    }
+
     /// A1.9: in the navigation bar leadingWidth makes the leading slot that
     /// wide: the 20-wide leading is centred in a 100-wide box and a
     /// start-aligned title follows 16 after the box (40 + 20 + 40 + 16).
@@ -298,13 +321,17 @@ final class AppBarCardTests: XCTestCase {
         let pixels: Pixels
         /// The navigation bar: the rows of its yellow background.
         let barRect: CGRect
+        /// The title UIKit gives the top page's back button.
+        let backTitle: String?
         var bar: Pixels { pixels.rows(Int(barRect.minY)...Int(barRect.maxY) - 1) }
     }
 
     /// A Scaffold whose AppBar (`props`, a yellow background, a red 40x20
-    /// title and with `leading` a green 20x20 leading slot) is the bar of a
-    /// page pushed onto a NavigationStack, in a UIKit window at scale 1.
-    func hostedScaffold(_ props: [String: JSONValue], leading: Bool = false) throws -> Hosted {
+    /// title, or with `textTitle` a red Text, and with `leading` a green 20x20
+    /// leading slot) is the bar of a page pushed onto a NavigationStack,
+    /// `depth` times, in a UIKit window at scale 1.
+    func hostedScaffold(_ props: [String: JSONValue], leading: Bool = false, textTitle: String? = nil,
+                        depth: Int = 1) throws -> Hosted {
         var barProps = props
         barProps["backgroundColor"] = "#FFFF00"
         barProps["title"] = "title"
@@ -318,11 +345,14 @@ final class AppBarCardTests: XCTestCase {
                       props: ["appBar": "bar", "body": "body", "backgroundColor": "#FFFFFF"],
                       children: ["bar", "body"]),
             Self.node("bar", "AppBar", kind: "structure", childMode: "none", props: barProps, children: slots),
-            Self.node("title", "Container", props: ["color": "#FF0000", "width": 40, "height": 20]),
+            textTitle.map {
+                Self.node("title", "Text", kind: "primitive", childMode: "none",
+                          props: ["data": .string($0), "style": ["color": "#FF0000"]])
+            } ?? Self.node("title", "Container", props: ["color": "#FF0000", "width": 40, "height": 20]),
             Self.node("lead", "Container", props: ["color": "#00FF00", "width": 20, "height": 20]),
             Self.node("body", "Container", props: ["color": "#FFFFFF"]),
         ])
-        let root = NavigationStack(path: .constant([1])) {
+        let root = NavigationStack(path: .constant(Array(1...depth))) {
             Color.white.navigationDestination(for: Int.self) { _ in NodeView(id: "s", model: model) }
         }
         let host = UIHostingController(rootView: root)
@@ -340,7 +370,12 @@ final class AppBarCardTests: XCTestCase {
         }
         let pixels = try Pixels(XCTUnwrap(image.cgImage))
         let bar = try XCTUnwrap(pixels.bounds(of: Self.isYellow), "navigation bar not drawn")
-        return Hosted(pixels: pixels, barRect: bar)
+        return Hosted(pixels: pixels, barRect: bar, backTitle: Self.navigationBar(in: window)?.backItem?.title)
+    }
+
+    static func navigationBar(in view: UIView) -> UINavigationBar? {
+        if let bar = view as? UINavigationBar { return bar }
+        return view.subviews.lazy.compactMap(navigationBar(in:)).first
     }
     #endif
 }

@@ -66,7 +66,9 @@ func indexedSlots(_ node: ResolvedNode, _ name: String) -> [String] {
 
 /// Puts a Scaffold's AppBar into the navigation bar (Flutter `_buildAppBar`,
 /// SB:85-120, M3). The title is centred, or with `centerTitle` false a
-/// leading item (after the back button). A `leading` slot replaces the back
+/// leading item (after the back button) with a blank principal item, so the
+/// plain `navigationTitle` (kept for the next page's back button and
+/// VoiceOver) is not centred as well. A `leading` slot replaces the back
 /// button, `leadingWidth` sizes it (UIKit's bar margin stands in for
 /// Flutter's default 56 box), and `automaticallyImplyLeading` false hides
 /// the back button (SwiftUI then also turns off the swipe back, which
@@ -88,8 +90,13 @@ private struct AppBarChrome: ViewModifier {
                 .overlay(alignment: .top) { AppBarShadow(appBar: appBar) }
                 .navigationTitle(plainTitle(appBar))
                 .toolbar {
-                    if centresTitle(appBar) {
-                        ToolbarItem(placement: .principal) { title(appBar) }
+                    ToolbarItem(placement: .principal) {
+                        if centresTitle(appBar) {
+                            title(appBar)
+                        } else {
+                            // An empty item is dropped and the plain title centred instead.
+                            Color.clear.frame(width: 0, height: 0)
+                        }
                     }
                     #if os(iOS)
                     if appBar.slots["leading"] != nil || !centresTitle(appBar) {
