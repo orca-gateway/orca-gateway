@@ -1,0 +1,154 @@
+{
+  "name": "initial-app-state",
+  "description": "`initialAppState` is seeded into app state before the router is built; the fixture's `appState` is laid over it key by key. A rule on a seeded key holds, a rule on an overlaid key sees the overlay.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "initialAppState": {
+      "loggedIn": false,
+      "theme": "dark",
+      "cartCount": 2
+    },
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": []
+          },
+          {
+            "path": "login",
+            "requiredAppState": []
+          },
+          {
+            "path": "account",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "loggedIn",
+              "equals": false,
+              "to": "/login"
+            }
+          },
+          {
+            "path": "promo",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "theme",
+              "equals": "dark",
+              "to": "/home"
+            }
+          },
+          {
+            "path": "cart",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "cartCount",
+              "equals": 0,
+              "to": "/home"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "appState": {
+    "loggedIn": true,
+    "userName": "Ada"
+  },
+  "cases": [
+    {
+      "name": "the state is the seed with the overlay on top",
+      "location": "/home",
+      "expected": {
+        "kind": "page",
+        "location": "/home",
+        "redirected": false,
+        "pagePath": "home",
+        "routePath": "/home",
+        "params": {},
+        "stack": [
+          "home"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null,
+        "appState": {
+          "loggedIn": true,
+          "theme": "dark",
+          "cartCount": 2,
+          "userName": "Ada"
+        }
+      }
+    },
+    {
+      "name": "a rule on a seeded key holds",
+      "location": "/promo",
+      "expected": {
+        "kind": "page",
+        "location": "/home",
+        "redirected": true,
+        "pagePath": "home",
+        "routePath": "/home",
+        "params": {},
+        "stack": [
+          "home"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null,
+        "appState": {
+          "loggedIn": true,
+          "theme": "dark",
+          "cartCount": 2,
+          "userName": "Ada"
+        }
+      }
+    },
+    {
+      "name": "a rule on an overlaid key sees the overlay",
+      "location": "/account",
+      "expected": {
+        "kind": "page",
+        "location": "/account",
+        "redirected": false,
+        "pagePath": "account",
+        "routePath": "/account",
+        "params": {},
+        "stack": [
+          "account"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null,
+        "appState": {
+          "loggedIn": true,
+          "theme": "dark",
+          "cartCount": 2,
+          "userName": "Ada"
+        }
+      }
+    },
+    {
+      "name": "a seeded number that differs from the rule does not redirect",
+      "location": "/cart",
+      "expected": {
+        "kind": "page",
+        "location": "/cart",
+        "redirected": false,
+        "pagePath": "cart",
+        "routePath": "/cart",
+        "params": {},
+        "stack": [
+          "cart"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null,
+        "appState": {
+          "loggedIn": true,
+          "theme": "dark",
+          "cartCount": 2,
+          "userName": "Ada"
+        }
+      }
+    }
+  ]
+}

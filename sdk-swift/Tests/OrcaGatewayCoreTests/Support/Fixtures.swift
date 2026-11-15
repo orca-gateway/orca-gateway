@@ -26,13 +26,20 @@ enum Fixtures {
         try JSONValue.decode(data(relative))
     }
 
-    /// Fixture files of one set (`render` or `actions`), sorted by name.
+    /// Fixture files of one set (`render`, `actions` or `navigation`), sorted
+    /// by name.
     static func files(_ set: String) throws -> [(name: String, json: JSONValue)] {
         let dir = url("schema/fixtures/\(set)")
         let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
             .filter { $0.hasSuffix(".json") }
             .sorted()
         return try names.map { ($0, try json("schema/fixtures/\(set)/\($0)")) }
+    }
+
+    /// The navigation fixtures (`schema/fixtures/navigation/`): each file's
+    /// `config` is a real `/config` body, its `cases` the locations to resolve.
+    static func navigation() throws -> [(name: String, json: JSONValue)] {
+        try files("navigation")
     }
 }
 

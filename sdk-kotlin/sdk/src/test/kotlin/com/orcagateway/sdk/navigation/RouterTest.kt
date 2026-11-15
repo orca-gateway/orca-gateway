@@ -20,13 +20,22 @@ import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.models.NavConfig
+import com.orcagateway.core.models.NavFlow
+import com.orcagateway.core.models.NavRoute
 import com.orcagateway.core.models.PageResponse
+import com.orcagateway.core.models.RedirectRule
+import com.orcagateway.core.models.RouteTransitionDef
 import com.orcagateway.core.models.StateDefinition
 import com.orcagateway.core.models.StateScope
+import com.orcagateway.core.models.TabDef
+import com.orcagateway.core.navigation.RouteChangeEvent
+import com.orcagateway.core.navigation.RouteChangeType
 import com.orcagateway.sdk.OrcaApp
 import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.support.button
+import com.orcagateway.sdk.support.leaf
 import com.orcagateway.sdk.support.text
 import com.orcagateway.sdk.system.SystemActions
 import kotlinx.coroutines.CompletableDeferred
@@ -41,10 +50,12 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.net.URI
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
@@ -86,6 +97,33 @@ private class PageStub(
 }
 
 private fun state(key: String, scope: StateScope, initial: Long) = StateDefinition(key, scope, JsonValue.Int(initial))
+
+/**
+ * A `/config` body for the config router tests: `welcome`, `login`, `home`
+ * with the child `home/product/:id`, `account` (sent to `/login` while
+ * `loggedIn` is false) and `settings` (with a transition).
+ */
+private fun navConfig(
+    initialRoute: String = "/welcome",
+    initialAppState: Map<String, JsonValue> = mapOf("loggedIn" to JsonValue.Bool(false)),
+    tabs: List<TabDef> = emptyList(),
+) = NavConfig(
+    initialRoute = initialRoute,
+    tabs = tabs,
+    initialAppState = initialAppState,
+    flows = listOf(
+        NavFlow(
+            name = "main",
+            routes = listOf(
+                NavRoute("welcome"),
+                NavRoute("login"),
+                NavRoute("home", children = listOf(NavRoute("home/product/:id"))),
+                NavRoute("account", redirect = RedirectRule("loggedIn", JsonValue.Bool(false), "/login")),
+                NavRoute("settings", transition = RouteTransitionDef("fade")),
+            ),
+        ),
+    ),
+)
 
 /**
  * T6.4.2: navigation through the router, as the effects a page's actions
@@ -320,6 +358,296 @@ class RouterTest {
         compose.runOnIdle { shown = false }
         compose.waitForIdle()
         assertSame(own, router.system)
+    }
+
+    /**
+     * B9.6-UK: the host writes app state through the router and reads it
+     * back; every page the router has loaded holds it, not only the top one,
+     * and a widget reading the key resolves to the new value.
+     */
+    @Test
+    fun b9_6_hostReadsAndWritesAppState() = runBlocking {
+        val cart = leaf("0", "Text", mapOf("data" to JsonValue.obj("type" to "state", "scope" to "app", "key" to "cart")))
+        val stub = PageStub(
+            state = mapOf("home" to listOf(state("cart", StateScope.App, 0))),
+            nodes = mapOf("home" to listOf(cart), "product" to listOf(cart)),
+        )
+        val router = router(stub)
+        val home = loaded(router, router.root)
+        router.navigate("product")
+        val product = loaded(router, router.stack[0])
+        var homeRedraws = 0
+        var productRedraws = 0
+        home.store.subscribe(listOf("cart")) { homeRedraws++ }
+        product.store.subscribe(listOf("cart")) { productRedraws++ }
+        assertEquals(JsonValue.Int(0), product.resolve("0")?.get("data"))
+
+        router.setAppState("cart", JsonValue.Int(7))
+        assertEquals(mapOf("cart" to JsonValue.Int(7)), router.appState)
+        assertEquals(JsonValue.Int(7), product.store.state.app["cart"])
+        assertEquals(JsonValue.Int(7), home.store.state.app["cart"]) // lower in the stack
+        assertEquals(JsonValue.Int(7), product.resolve("0")?.get("data"))
+        assertEquals(JsonValue.Int(7), home.resolve("0")?.get("data"))
+        assertEquals(1 to 1, homeRedraws to productRedraws)
+
+        // The bulk form keeps the other keys; a page's own commit still reaches the router.
+        router.setAppState(mapOf("user" to JsonValue.String("amy"), "cart" to JsonValue.Int(8)))
+        assertEquals(mapOf("cart" to JsonValue.Int(8), "user" to JsonValue.String("amy")), router.appState)
+        assertEquals(router.appState, home.store.state.app)
+        assertEquals(router.appState, product.store.state.app)
+        product.run(Action.SetState(key = "cart", scope = StateScope.App, value = JsonValue.Int(9)))
+        assertEquals(JsonValue.Int(9), router.appState["cart"])
+
+        // A page loaded later starts from the written scope.
+        router.navigate("about")
+        val about = loaded(router, router.stack[1])
+        assertEquals(JsonValue.obj("cart" to 9, "user" to "amy"), stub.appState(2))
+        assertEquals(router.appState, about.store.state.app)
+    }
+
+    /**
+     * B9.6-UK (Swift `test_B9_6_hostWriteDuringAPageLoadIsKept`): a page
+     * whose fetch began before the host wrote joins with the host's value,
+     * and its own app definitions fill only the keys still unset.
+     */
+    @Test
+    fun b9_6_hostWriteDuringAPageLoadIsKept() = runBlocking {
+        val welcome = CompletableDeferred<Unit>()
+        val stub = PageStub(
+            state = mapOf(
+                "welcome" to listOf(
+                    StateDefinition("loggedIn", StateScope.App, JsonValue.Bool(false)),
+                    state("cart", StateScope.App, 1),
+                ),
+            ),
+            holds = mapOf("welcome" to welcome),
+        )
+        val router = OrcaRouter(stub.client, navConfig())
+        val loader = router.loader(router.root)
+        val load = launch(start = CoroutineStart.UNDISPATCHED) {
+            loader.loadIfNeeded(ApplicationProvider.getApplicationContext<Context>())
+        }
+        assertEquals(JsonValue.obj("loggedIn" to false), stub.appState(0)) // fetched with the scope before the write
+
+        router.setAppState("loggedIn", JsonValue.Bool(true))
+        welcome.complete(Unit)
+        load.join()
+        val model = (loader.phase as? OrcaPageLoader.Phase.Loaded)?.model ?: fail("welcome did not load: ${loader.phase}")
+        val scope = mapOf("loggedIn" to JsonValue.Bool(true), "cart" to JsonValue.Int(1))
+        assertEquals(scope, router.appState)
+        assertEquals(scope, model.store.state.app)
+    }
+
+    /** A not-found route's path drops the query only, as Swift's does: a `#fragment` stays in it. */
+    @Test
+    fun c4_aNotFoundRoutesPathDropsOnlyTheQuery() {
+        val router = OrcaRouter(PageStub().client, navConfig())
+        router.navigate("/missing#top?x=1")
+        assertTrue(router.top.isNotFound)
+        assertEquals("missing#top", router.top.path)
+        assertEquals("/missing#top?x=1", router.top.location)
+    }
+
+    /** The table is readable by the host (Swift's `table`): the config's with one, null without. */
+    @Test
+    fun c8_theTableIsExposed() {
+        val config = navConfig()
+        assertSame(config, OrcaRouter(PageStub().client, config).table?.config)
+        assertNull(router().table)
+    }
+
+    /** B9.7-UK: one event per change of the top location: boot, push, replace, pop; none when it stays. */
+    @Test
+    fun b9_7_onRouteChangedBootPushReplacePop() {
+        val events = mutableListOf<RouteChangeEvent>()
+        val router = OrcaRouter(PageStub().client, navConfig(), onRouteChanged = { events += it })
+        assertEquals(listOf(RouteChangeEvent("/welcome", null, RouteChangeType.Push)), events)
+
+        router.navigate("/home")
+        router.navigate("/home/product/3?tab=specs")
+        assertEquals(
+            listOf(
+                RouteChangeEvent("/home", "/welcome", RouteChangeType.Push),
+                RouteChangeEvent("/home/product/3?tab=specs", "/home", RouteChangeType.Push),
+            ),
+            events.drop(1),
+        )
+
+        router.goBack()
+        assertEquals(RouteChangeEvent("/home", "/home/product/3?tab=specs", RouteChangeType.Pop), events.last())
+        router.navigate("/settings", replace = true)
+        assertEquals(RouteChangeEvent("/settings", "/home", RouteChangeType.Replace), events.last())
+        assertEquals(5, events.size)
+
+        // The top location stays: replaced by itself, pushed over itself, back on an empty stack.
+        router.navigate("/settings", replace = true)
+        router.goBack()
+        assertEquals(5, events.size)
+        router.navigate("/settings")
+        assertEquals(1, router.stack.size)
+        assertEquals(5, events.size)
+
+        // A stack the host sets shorter is a pop.
+        router.navigate("/home")
+        router.navigate("/login")
+        router.stack = router.stack.take(1)
+        assertEquals(RouteChangeEvent("/settings", "/login", RouteChangeType.Pop), events.last())
+        assertEquals(8, events.size)
+    }
+
+    /** B9.7-UK: the event comes after the redirect, with the final location, at boot and on navigate. */
+    @Test
+    fun b9_7_onRouteChangedCarriesTheFinalLocationAfterARedirect() {
+        val events = mutableListOf<RouteChangeEvent>()
+        val router = OrcaRouter(PageStub().client, navConfig(initialRoute = "/account"), onRouteChanged = { events += it })
+        assertEquals(listOf(RouteChangeEvent("/login", null, RouteChangeType.Push)), events)
+
+        router.navigate("/home")
+        router.navigate("/account")
+        assertEquals(RouteChangeEvent("/login", "/home", RouteChangeType.Push), events.last())
+
+        router.setAppState("loggedIn", JsonValue.Bool(true))
+        assertEquals(3, events.size) // a state change does not navigate
+        router.navigate("/account", replace = true)
+        assertEquals(RouteChangeEvent("/account", "/login", RouteChangeType.Replace), events.last())
+    }
+
+    /** B9.7-UK without a config: no boot event for a callback set later, then the same rules. */
+    @Test
+    fun b9_7_onRouteChangedWithoutAConfig() {
+        val events = mutableListOf<RouteChangeEvent>()
+        val router = router()
+        router.onRouteChanged = { events += it }
+        assertEquals(emptyList(), events)
+
+        router.navigate("/about")
+        router.navigate("checkout", replace = true)
+        router.navigate("checkout", replace = true)
+        router.navigate("product")
+        router.goBack()
+        router.goBack()
+        assertEquals(
+            listOf(
+                RouteChangeEvent("/about", "/home", RouteChangeType.Push),
+                RouteChangeEvent("/checkout", "/about", RouteChangeType.Replace),
+                RouteChangeEvent("/product", "/checkout", RouteChangeType.Push),
+                RouteChangeEvent("/checkout", "/product", RouteChangeType.Pop),
+            ),
+            events,
+        )
+    }
+
+    /** The config's initial route (not `home`) is the first page, and `initialAppState` is seeded before it is requested. */
+    @Test
+    fun c1_configBootShowsTheInitialRouteWithTheSeededAppState() = runBlocking {
+        val stub = PageStub()
+        val router = OrcaRouter(stub.client, navConfig())
+        assertEquals("welcome", router.root.path)
+        assertEquals("/welcome", router.root.location)
+        assertEquals(emptyList(), router.stack)
+        assertEquals(mapOf("loggedIn" to JsonValue.Bool(false)), router.appState)
+        assertEquals(emptyList(), stub.requests) // the router itself fetches nothing
+
+        val welcome = loaded(router, router.root)
+        assertEquals(listOf("welcome"), stub.requests.map { it.url.path.substringAfterLast("/page/") })
+        assertEquals(JsonValue.obj("loggedIn" to false), stub.appState(0))
+        assertEquals(JsonValue.Bool(false), welcome.store.state.app["loggedIn"])
+    }
+
+    /** A nested initial route is shown as GoRouter `go` shows it: the parent chain as root + stack. */
+    @Test
+    fun c2_configBootOnANestedRouteGivesRootAndStack() {
+        val router = OrcaRouter(PageStub().client, navConfig(initialRoute = "/home/product/3?tab=specs"))
+        assertEquals("home", router.root.path)
+        assertEquals("/home", router.root.location)
+        assertEquals(listOf("home/product/3"), router.stack.map { it.path })
+        assertEquals("/home/product/3?tab=specs", router.top.location)
+    }
+
+    /** A redirect on the initial route lands on its target; logged in, on the route itself. */
+    @Test
+    fun c3_configBootFollowsTheRedirectOfTheInitialRoute() {
+        val out = OrcaRouter(PageStub().client, navConfig(initialRoute = "/account"))
+        assertEquals("login", out.root.path)
+        assertEquals("/login", out.root.location)
+
+        val loggedIn = navConfig(initialRoute = "/account", initialAppState = mapOf("loggedIn" to JsonValue.Bool(true)))
+        assertEquals("account", OrcaRouter(PageStub().client, loggedIn).root.path)
+    }
+
+    /** An unknown location is a not-found route, at boot, pushed and replaced, and the router requests nothing for it. */
+    @Test
+    fun c4_anUnknownLocationIsANotFoundRoute() {
+        val stub = PageStub()
+        val boot = OrcaRouter(stub.client, navConfig(initialRoute = "/nowhere"))
+        assertTrue(boot.root.isNotFound)
+        assertEquals("/nowhere", boot.root.location)
+
+        val router = OrcaRouter(stub.client, navConfig())
+        assertFalse(router.root.isNotFound)
+        router.navigate("/missing?x=1")
+        assertEquals(listOf(true), router.stack.map { it.isNotFound })
+        assertEquals("/missing?x=1", router.top.location)
+        router.navigate("/nope", replace = true)
+        assertTrue(router.root.isNotFound)
+        assertEquals("/nope", router.root.location)
+        assertEquals(emptyList(), router.stack)
+        assertEquals(emptyList(), stub.requests)
+    }
+
+    /**
+     * With a config, `navigate` resolves the location: a push adds one page
+     * (the top of the chain), `replace` shows the whole chain, the redirect
+     * rule reads the app state of the moment, and only the top entry carries
+     * the title and the transition.
+     */
+    @Test
+    fun c5_navigateWithAConfigResolvesTheLocation() {
+        val router = OrcaRouter(PageStub().client, navConfig())
+        router.navigate("home/product/3") // no leading slash, as a page action may send it
+        assertEquals(listOf("home/product/3"), router.stack.map { it.path })
+        assertEquals("/home/product/3", router.top.location)
+
+        router.navigate("/account")
+        assertEquals("login", router.top.path)
+        router.setAppState("loggedIn", JsonValue.Bool(true))
+        router.navigate("/account")
+        assertEquals("account", router.top.path)
+
+        router.navigate("/home/product/4", replace = true)
+        assertEquals("home", router.root.path)
+        assertEquals(listOf("home/product/4"), router.stack.map { it.path })
+
+        router.navigate("/settings")
+        assertEquals(RouteTransitionDef("fade"), router.top.transition)
+        assertNull(router.root.transition)
+        assertNull(router.top.scaffoldTitle) // no tabs: no title bar
+    }
+
+    /** In a config with tabs, a route outside every tab carries its fallback title; a tab route carries none. */
+    @Test
+    fun c6_scaffoldTitleIsCarriedForANonTabRoute() {
+        val tabs = listOf(TabDef("home", "Home", "home", "/home"))
+        val router = OrcaRouter(PageStub().client, navConfig(initialRoute = "/home", tabs = tabs))
+        assertNull(router.root.scaffoldTitle)
+
+        router.navigate("/settings")
+        assertEquals("Settings", router.top.scaffoldTitle)
+        router.navigate("/home/product/3")
+        assertNull(router.top.scaffoldTitle)
+        router.navigate("/settings", replace = true)
+        assertEquals("Settings", router.root.scaffoldTitle)
+    }
+
+    /** A route made from a path alone, as before: its location is the path with a leading slash. */
+    @Test
+    fun c7_aPlainRouteHasItsPathAsLocation() {
+        val route = OrcaRoute("/about")
+        assertEquals("about", route.path)
+        assertEquals("/about", route.location)
+        assertNull(route.scaffoldTitle)
+        assertNull(route.transition)
+        assertFalse(route.isNotFound)
     }
 
     /** A home page whose one button copies `ORCA-42`. */

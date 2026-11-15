@@ -26,6 +26,10 @@ import java.net.URI
  * `server-actions` and `shop`), and ORCA_SERVER_URL for another server.
  * The boolean extras ORCA_OFFLINE and ORCA_SESSIONS turn on OrcaApp's
  * version check and session tracking; both are off by default.
+ *
+ * An app with a navigation config (app id `navigation`) boots from it with
+ * the extra ORCA_BOOT set to `config`: the server's config says where the
+ * app starts, and ORCA_PATH is not used.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,7 +41,9 @@ class MainActivity : ComponentActivity() {
             apiKey = "demo-key",
             transport = OkHttpTransport(),
         )
-        val path = setting("ORCA_PATH", "home")
+        // The default app, `counter`, has no navigation config: it starts at a path.
+        // No path (null) is how a host asks OrcaApp to boot from the server's config.
+        val path = if (setting("ORCA_BOOT", "path") == "config") null else setting("ORCA_PATH", "home")
         val offline = intent.getBooleanExtra("ORCA_OFFLINE", false)
         val sessions = intent.getBooleanExtra("ORCA_SESSIONS", false)
         setContent {

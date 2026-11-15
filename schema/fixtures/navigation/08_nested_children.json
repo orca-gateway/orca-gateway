@@ -1,0 +1,154 @@
+{
+  "name": "nested-children",
+  "description": "A child carries its full path and is matched under its parent. A location that matches a child shows the page chain from the parent down, so `stack` lists every page bottom to top and `pagePath` is the top one; params of every level are collected.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "home/product/:id",
+                "requiredAppState": [],
+                "children": [
+                  {
+                    "path": "home/product/:id/reviews",
+                    "requiredAppState": []
+                  }
+                ]
+              },
+              {
+                "path": "home/about",
+                "requiredAppState": []
+              }
+            ]
+          },
+          {
+            "path": "shop/:shopId",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "shop/:shopId/item/:itemId",
+                "requiredAppState": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "the parent alone",
+      "location": "/home",
+      "expected": {
+        "kind": "page",
+        "location": "/home",
+        "redirected": false,
+        "pagePath": "home",
+        "routePath": "/home",
+        "params": {},
+        "stack": [
+          "home"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a child shows over its parent",
+      "location": "/home/product/3",
+      "expected": {
+        "kind": "page",
+        "location": "/home/product/3",
+        "redirected": false,
+        "pagePath": "home/product/3",
+        "routePath": "/home/product/:id",
+        "params": {
+          "id": "3"
+        },
+        "stack": [
+          "home",
+          "home/product/3"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a grandchild shows over both",
+      "location": "/home/product/3/reviews",
+      "expected": {
+        "kind": "page",
+        "location": "/home/product/3/reviews",
+        "redirected": false,
+        "pagePath": "home/product/3/reviews",
+        "routePath": "/home/product/:id/reviews",
+        "params": {
+          "id": "3"
+        },
+        "stack": [
+          "home",
+          "home/product/3",
+          "home/product/3/reviews"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a static child",
+      "location": "/home/about",
+      "expected": {
+        "kind": "page",
+        "location": "/home/about",
+        "redirected": false,
+        "pagePath": "home/about",
+        "routePath": "/home/about",
+        "params": {},
+        "stack": [
+          "home",
+          "home/about"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "params of the parent and the child",
+      "location": "/shop/9/item/4",
+      "expected": {
+        "kind": "page",
+        "location": "/shop/9/item/4",
+        "redirected": false,
+        "pagePath": "shop/9/item/4",
+        "routePath": "/shop/:shopId/item/:itemId",
+        "params": {
+          "shopId": "9",
+          "itemId": "4"
+        },
+        "stack": [
+          "shop/9",
+          "shop/9/item/4"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "an unknown child of a known parent",
+      "location": "/home/nope",
+      "expected": {
+        "kind": "error",
+        "location": "/home/nope",
+        "redirected": false
+      }
+    }
+  ]
+}

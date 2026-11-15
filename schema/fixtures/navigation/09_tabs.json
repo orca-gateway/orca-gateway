@@ -1,0 +1,165 @@
+{
+  "name": "tabs",
+  "description": "With tabs, a route whose path equals a tab's initialRoute or lies under it belongs to that tab and resolves with the tab's index; a tab with no route of its own gets one at its initialRoute. A route outside every tab has no tab index and is drawn over the tabs with a title bar.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "tabs": [
+      {
+        "id": "home",
+        "label": "Home",
+        "icon": "circle",
+        "initialRoute": "/home"
+      },
+      {
+        "id": "search",
+        "label": "Search",
+        "icon": "circle",
+        "initialRoute": "/search"
+      },
+      {
+        "id": "more",
+        "label": "More",
+        "icon": "circle",
+        "initialRoute": "/more"
+      }
+    ],
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "home/product/:id",
+                "requiredAppState": []
+              }
+            ]
+          },
+          {
+            "path": "search",
+            "requiredAppState": []
+          },
+          {
+            "path": "search/results",
+            "requiredAppState": []
+          },
+          {
+            "path": "settings",
+            "requiredAppState": []
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "the first tab",
+      "location": "/home",
+      "expected": {
+        "kind": "page",
+        "location": "/home",
+        "redirected": false,
+        "pagePath": "home",
+        "routePath": "/home",
+        "params": {},
+        "stack": [
+          "home"
+        ],
+        "tabIndex": 0,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a child of a tab route stays in the tab",
+      "location": "/home/product/3",
+      "expected": {
+        "kind": "page",
+        "location": "/home/product/3",
+        "redirected": false,
+        "pagePath": "home/product/3",
+        "routePath": "/home/product/:id",
+        "params": {
+          "id": "3"
+        },
+        "stack": [
+          "home",
+          "home/product/3"
+        ],
+        "tabIndex": 0,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "the second tab",
+      "location": "/search",
+      "expected": {
+        "kind": "page",
+        "location": "/search",
+        "redirected": false,
+        "pagePath": "search",
+        "routePath": "/search",
+        "params": {},
+        "stack": [
+          "search"
+        ],
+        "tabIndex": 1,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a sibling route under a tab's path is in the tab, without the tab page under it",
+      "location": "/search/results",
+      "expected": {
+        "kind": "page",
+        "location": "/search/results",
+        "redirected": false,
+        "pagePath": "search/results",
+        "routePath": "/search/results",
+        "params": {},
+        "stack": [
+          "search/results"
+        ],
+        "tabIndex": 1,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a tab with no route of its own",
+      "location": "/more",
+      "expected": {
+        "kind": "page",
+        "location": "/more",
+        "redirected": false,
+        "pagePath": "more",
+        "routePath": "/more",
+        "params": {},
+        "stack": [
+          "more"
+        ],
+        "tabIndex": 2,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a route outside every tab",
+      "location": "/settings",
+      "expected": {
+        "kind": "page",
+        "location": "/settings",
+        "redirected": false,
+        "pagePath": "settings",
+        "routePath": "/settings",
+        "params": {},
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": "Settings"
+      }
+    }
+  ]
+}

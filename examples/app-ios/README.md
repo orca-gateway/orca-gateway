@@ -59,6 +59,23 @@ scheme, or pass them to `simctl launch`:
 SIMCTL_CHILD_ORCA_APP_ID=server-actions SIMCTL_CHILD_ORCA_PATH=shop xcrun simctl launch booted com.orcagateway.examples.counter
 ```
 
+### Boot from the navigation config
+
+The apps above start at a path the host gives. Set `ORCA_BOOT=config` and the host calls
+`OrcaApp(client:path:)` with `path: nil`, so the app asks the server for its navigation config first
+(`OrcaApp(client:)` alone still opens the page `home` and fetches no config): the
+config's `initialRoute` is the first page, its `initialAppState` is seeded before that page is
+requested, redirects apply, an unknown location shows "Page not found", and a route outside the
+tabs gets a title bar with a back button. `ORCA_PATH` is not read in this mode. The `navigation`
+demo app (`examples/server/navigation.ts`) is made for it:
+
+```bash
+SIMCTL_CHILD_ORCA_APP_ID=navigation SIMCTL_CHILD_ORCA_BOOT=config xcrun simctl launch booted com.orcagateway.examples.counter
+```
+
+The default `counter` app has no navigation config, which is why the default stays `ORCA_PATH=home`.
+Tabs and the drawer are not drawn yet: a config with tabs runs as one stack.
+
 ## Version check and sessions
 
 Two switches turn on what `OrcaApp` does besides drawing pages. `1` or `true` turns each on. Add
@@ -69,6 +86,9 @@ pass them to `simctl launch` as `SIMCTL_CHILD_*`:
 |---|---|
 | `ORCA_OFFLINE` | `enableOffline`: a version check before the first page |
 | `ORCA_SESSIONS` | `enableSessionTracking`: a session start and end as the app comes and goes |
+
+Both work with `ORCA_BOOT=config` too: the version check then comes before the navigation config
+is asked for, and a force update loads neither the config nor a page.
 
 **Force update.** Start the server with `ORCA_FORCE_UPDATE=1` (from source:
 `ORCA_FORCE_UPDATE=1 task example:dev:server`; Docker: add `-e ORCA_FORCE_UPDATE=1`), then launch

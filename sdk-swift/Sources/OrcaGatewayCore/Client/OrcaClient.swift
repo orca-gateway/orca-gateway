@@ -112,6 +112,21 @@ public struct OrcaClient: @unchecked Sendable {
         return try? body["page"].decode(PageResponse.self)
     }
 
+    /// `GET /api/v1/app/{appId}/config` with the device headers (Dart
+    /// `fetchConfig`): the navigation config, with the body's text kept in
+    /// `rawBody`. No capability handshake: Flutter sends one plain GET.
+    public func fetchConfig() async throws -> NavConfig {
+        let response = try await send(HTTPRequest(
+            method: "GET", url: try endpointURL("config"), headers: headers))
+        let text = String(decoding: response.body, as: UTF8.self)
+        guard response.status == 200 else {
+            throw OrcaClientError.http(status: response.status, body: text)
+        }
+        var config = try JSONValue.decode(response.body).decode(NavConfig.self)
+        config.rawBody = text
+        return config
+    }
+
     /// `POST /api/v1/app/{appId}/action` with `{action, params?, pageState?,
     /// appState?}`, returning the actions the server sent back (Dart
     /// `executeAction`). Server actions skip the capability handshake: the

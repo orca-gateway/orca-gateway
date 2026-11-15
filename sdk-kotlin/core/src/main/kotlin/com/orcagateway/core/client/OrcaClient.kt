@@ -5,6 +5,7 @@ import com.orcagateway.core.debug.DevToolsEvent
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
+import com.orcagateway.core.models.NavConfig
 import com.orcagateway.core.models.PageResponse
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -125,6 +126,22 @@ public class OrcaClient(
             }
         }
         return page to PageLoadTiming(start, server, received, OrcaDebug.now() - start)
+    }
+
+    /**
+     * `GET /api/v1/app/{appId}/config` with the device headers (Dart
+     * `fetchConfig`): the navigation config, with the body text kept in
+     * `rawBody`. No capability handshake, as in Flutter: the engine never
+     * checks capabilities on this route.
+     *
+     * Any status but 200 throws [OrcaClientException.Http]; a body that is
+     * not a config throws a [SerializationException].
+     */
+    public suspend fun fetchConfig(): NavConfig {
+        val response = send(HttpRequest("GET", endpointUrl("config"), headers))
+        val body = response.body.decodeToString()
+        if (response.status != 200) throw OrcaClientException.Http(response.status, body)
+        return NavConfig.fromJson(JsonValue.parse(body), rawBody = body)
     }
 
     /**

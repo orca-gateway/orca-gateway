@@ -1,0 +1,307 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/navigation-fixture.json",
+  "title": "Navigation conformance fixture",
+  "description": "Executable spec for route resolution. Every Orca SDK (Flutter, Swift, Kotlin) loads these files, builds its route table from `config`, seeds app state from `config.initialAppState` with `appState` laid over it, resolves each case's `location` as a `go` (replace) navigation and asserts `expected`. The Flutter SDK is the oracle: an expected value is what its real router shows.",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "config",
+    "cases"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "config": {
+      "$ref": "#/definitions/Config"
+    },
+    "appState": {
+      "type": "object",
+      "description": "Laid over `config.initialAppState` key by key, after the seed and before any case is resolved."
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/Case"
+      }
+    }
+  },
+  "definitions": {
+    "Config": {
+      "type": "object",
+      "description": "A GET /api/v1/app/:appId/config body as the engine serves it (core/app.ts getNavConfig).",
+      "required": [
+        "initialRoute",
+        "flows"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "appId": {
+          "type": "string"
+        },
+        "appName": {
+          "type": "string"
+        },
+        "initialRoute": {
+          "type": "string",
+          "description": "With a leading slash, e.g. `/home`. Must resolve to a page with the seeded state."
+        },
+        "tabs": {
+          "type": "array",
+          "items": {
+            "$ref": "navigation-config.schema.json#/definitions/TabDefinition"
+          }
+        },
+        "drawerItems": {
+          "type": "array",
+          "items": {
+            "$ref": "navigation-config.schema.json#/definitions/DrawerItemDefinition"
+          }
+        },
+        "initialAppState": {
+          "type": "object"
+        },
+        "tabBarComponents": {
+          "type": "array",
+          "items": {
+            "$ref": "component-node.schema.json#"
+          }
+        },
+        "drawerComponents": {
+          "type": "array",
+          "items": {
+            "$ref": "component-node.schema.json#"
+          }
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Flow"
+          }
+        }
+      }
+    },
+    "Flow": {
+      "type": "object",
+      "required": [
+        "name",
+        "routes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "isStatic": {
+          "type": "boolean"
+        },
+        "pages": {
+          "type": "object",
+          "description": "Pre-rendered page responses of a static flow, keyed by page path."
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Route"
+          }
+        }
+      }
+    },
+    "Route": {
+      "type": "object",
+      "description": "One route as core/flow.ts collectRouteInfo emits it.",
+      "required": [
+        "path",
+        "requiredAppState"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^[^/]",
+          "description": "No leading slash; `:name` is a param segment. A child carries its full path (`home/product/:id`)."
+        },
+        "requiredAppState": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "isDynamic": {
+          "type": "boolean"
+        },
+        "redirect": {
+          "type": "object",
+          "required": [
+            "when",
+            "equals",
+            "to"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "when": {
+              "type": "string",
+              "description": "App state key."
+            },
+            "equals": {
+              "description": "The redirect applies while appState[when] equals this value."
+            },
+            "to": {
+              "type": "string",
+              "description": "Target location, with a leading slash."
+            }
+          }
+        },
+        "transition": {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "duration": {
+              "type": "integer"
+            },
+            "curve": {
+              "type": "string"
+            }
+          }
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Route"
+          }
+        }
+      }
+    },
+    "Case": {
+      "type": "object",
+      "required": [
+        "name",
+        "location",
+        "expected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "The location asked for, with a leading slash and an optional query."
+        },
+        "expected": {
+          "$ref": "#/definitions/Expected"
+        }
+      }
+    },
+    "Expected": {
+      "type": "object",
+      "required": [
+        "kind",
+        "location",
+        "redirected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "page",
+            "error"
+          ],
+          "description": "`page`: a page is shown and requested. `error`: the router's not-found screen, no page request."
+        },
+        "location": {
+          "type": "string",
+          "description": "Final location after the redirect, query included when it survives."
+        },
+        "redirected": {
+          "type": "boolean",
+          "description": "True when the final location's path differs from the asked one's."
+        },
+        "pagePath": {
+          "type": "string",
+          "description": "Page request path of the top page: the final location without its leading slash and query."
+        },
+        "routePath": {
+          "type": "string",
+          "description": "Full matched pattern with a leading slash, e.g. `/home/product/:id`."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Path params of every matched level."
+        },
+        "stack": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Page request paths bottom to top after a `go`: the parent chain of a nested route, then the page itself."
+        },
+        "tabIndex": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Index into config.tabs of the tab that shows the page; null without tabs and for a route outside every tab."
+        },
+        "scaffoldTitle": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Fallback title of the title bar a non-tab route is wrapped in (the page's own title wins once loaded); null when the page is not wrapped."
+        },
+        "appState": {
+          "type": "object",
+          "description": "Optional: the whole app state at resolve time."
+        }
+      },
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "page"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "pagePath",
+          "routePath",
+          "params",
+          "stack",
+          "tabIndex",
+          "scaffoldTitle"
+        ]
+      },
+      "else": {
+        "propertyNames": {
+          "enum": [
+            "kind",
+            "location",
+            "redirected"
+          ]
+        }
+      }
+    }
+  }
+}

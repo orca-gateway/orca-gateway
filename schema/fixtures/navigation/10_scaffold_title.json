@@ -1,0 +1,225 @@
+{
+  "name": "scaffold-title",
+  "description": "A non-tab route in a config with tabs is wrapped with a title bar. Its fallback title is the label of the drawer item whose route equals the path, else the last path segment with its first letter upper-cased, or the segment before it when the last one is a `:param`. A child of a non-tab route is not wrapped.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "tabs": [
+      {
+        "id": "home",
+        "label": "Home",
+        "icon": "circle",
+        "initialRoute": "/home"
+      },
+      {
+        "id": "search",
+        "label": "Search",
+        "icon": "circle",
+        "initialRoute": "/search"
+      }
+    ],
+    "drawerItems": [
+      {
+        "id": "settings",
+        "label": "Preferences",
+        "icon": "settings",
+        "route": "/settings"
+      },
+      {
+        "id": "help",
+        "label": "Help Center",
+        "route": "/help"
+      }
+    ],
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": []
+          },
+          {
+            "path": "search",
+            "requiredAppState": []
+          },
+          {
+            "path": "settings",
+            "requiredAppState": []
+          },
+          {
+            "path": "help",
+            "requiredAppState": []
+          },
+          {
+            "path": "profile",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "profile/edit",
+                "requiredAppState": []
+              }
+            ]
+          },
+          {
+            "path": "order/:id",
+            "requiredAppState": []
+          },
+          {
+            "path": "team/:teamId/member/:memberId",
+            "requiredAppState": []
+          },
+          {
+            "path": "my-orders",
+            "requiredAppState": []
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "the drawer label",
+      "location": "/settings",
+      "expected": {
+        "kind": "page",
+        "location": "/settings",
+        "redirected": false,
+        "pagePath": "settings",
+        "routePath": "/settings",
+        "params": {},
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": "Preferences"
+      }
+    },
+    {
+      "name": "a drawer label of several words",
+      "location": "/help",
+      "expected": {
+        "kind": "page",
+        "location": "/help",
+        "redirected": false,
+        "pagePath": "help",
+        "routePath": "/help",
+        "params": {},
+        "stack": [
+          "help"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": "Help Center"
+      }
+    },
+    {
+      "name": "the last segment capitalised",
+      "location": "/profile",
+      "expected": {
+        "kind": "page",
+        "location": "/profile",
+        "redirected": false,
+        "pagePath": "profile",
+        "routePath": "/profile",
+        "params": {},
+        "stack": [
+          "profile"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": "Profile"
+      }
+    },
+    {
+      "name": "only the first letter is upper-cased",
+      "location": "/my-orders",
+      "expected": {
+        "kind": "page",
+        "location": "/my-orders",
+        "redirected": false,
+        "pagePath": "my-orders",
+        "routePath": "/my-orders",
+        "params": {},
+        "stack": [
+          "my-orders"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": "My-orders"
+      }
+    },
+    {
+      "name": "the segment before a trailing param",
+      "location": "/order/12",
+      "expected": {
+        "kind": "page",
+        "location": "/order/12",
+        "redirected": false,
+        "pagePath": "order/12",
+        "routePath": "/order/:id",
+        "params": {
+          "id": "12"
+        },
+        "stack": [
+          "order/12"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": "Order"
+      }
+    },
+    {
+      "name": "the segment before the last of two params",
+      "location": "/team/1/member/2",
+      "expected": {
+        "kind": "page",
+        "location": "/team/1/member/2",
+        "redirected": false,
+        "pagePath": "team/1/member/2",
+        "routePath": "/team/:teamId/member/:memberId",
+        "params": {
+          "teamId": "1",
+          "memberId": "2"
+        },
+        "stack": [
+          "team/1/member/2"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": "Member"
+      }
+    },
+    {
+      "name": "a child of a non-tab route is not wrapped",
+      "location": "/profile/edit",
+      "expected": {
+        "kind": "page",
+        "location": "/profile/edit",
+        "redirected": false,
+        "pagePath": "profile/edit",
+        "routePath": "/profile/edit",
+        "params": {},
+        "stack": [
+          "profile",
+          "profile/edit"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a tab route is not wrapped",
+      "location": "/home",
+      "expected": {
+        "kind": "page",
+        "location": "/home",
+        "redirected": false,
+        "pagePath": "home",
+        "routePath": "/home",
+        "params": {},
+        "stack": [
+          "home"
+        ],
+        "tabIndex": 0,
+        "scaffoldTitle": null
+      }
+    }
+  ]
+}

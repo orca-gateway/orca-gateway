@@ -1,0 +1,91 @@
+{
+  "name": "no-tabs-no-scaffold",
+  "description": "Without tabs nothing is wrapped: every route is a plain stack route with no tab index and no fallback title, drawer items or not.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "drawerItems": [
+      {
+        "id": "settings",
+        "label": "Preferences",
+        "icon": "settings",
+        "route": "/settings"
+      }
+    ],
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": []
+          },
+          {
+            "path": "settings",
+            "requiredAppState": []
+          },
+          {
+            "path": "order/:id",
+            "requiredAppState": []
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "a route named by a drawer item",
+      "location": "/settings",
+      "expected": {
+        "kind": "page",
+        "location": "/settings",
+        "redirected": false,
+        "pagePath": "settings",
+        "routePath": "/settings",
+        "params": {},
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a param route",
+      "location": "/order/12",
+      "expected": {
+        "kind": "page",
+        "location": "/order/12",
+        "redirected": false,
+        "pagePath": "order/12",
+        "routePath": "/order/:id",
+        "params": {
+          "id": "12"
+        },
+        "stack": [
+          "order/12"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "the initial route",
+      "location": "/home",
+      "expected": {
+        "kind": "page",
+        "location": "/home",
+        "redirected": false,
+        "pagePath": "home",
+        "routePath": "/home",
+        "params": {},
+        "stack": [
+          "home"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "name": "tab-prefix-unreachable",
+  "description": "With tabs, a route is a tab route when its path equals a tab's initialRoute or starts with it plus a slash, and a top-level route only when its path starts with no tab's initialRoute as a plain string. `homework` beside tab `/home` is neither (not under `/home/`, but it does start with `/home`), so it is in the config and still unreachable.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "tabs": [
+      {
+        "id": "home",
+        "label": "Home",
+        "icon": "circle",
+        "initialRoute": "/home"
+      },
+      {
+        "id": "search",
+        "label": "Search",
+        "icon": "circle",
+        "initialRoute": "/search"
+      }
+    ],
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": []
+          },
+          {
+            "path": "homework",
+            "requiredAppState": []
+          },
+          {
+            "path": "search",
+            "requiredAppState": []
+          },
+          {
+            "path": "settings",
+            "requiredAppState": []
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "a route that only shares a tab's string prefix is unreachable",
+      "location": "/homework",
+      "expected": {
+        "kind": "error",
+        "location": "/homework",
+        "redirected": false
+      }
+    },
+    {
+      "name": "the tab itself resolves",
+      "location": "/home",
+      "expected": {
+        "kind": "page",
+        "location": "/home",
+        "redirected": false,
+        "pagePath": "home",
+        "routePath": "/home",
+        "params": {},
+        "stack": [
+          "home"
+        ],
+        "tabIndex": 0,
+        "scaffoldTitle": null
+      }
+    },
+    {
+      "name": "a route with no tab prefix resolves",
+      "location": "/settings",
+      "expected": {
+        "kind": "page",
+        "location": "/settings",
+        "redirected": false,
+        "pagePath": "settings",
+        "routePath": "/settings",
+        "params": {},
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "scaffoldTitle": "Settings"
+      }
+    }
+  ]
+}
