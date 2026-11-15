@@ -42,7 +42,8 @@ public struct OrcaClient: @unchecked Sendable {
     /// Seconds a whole request may take, send to answer, before it fails with
     /// URLError(.timedOut), which OrcaErrorInfo shows as Connection Failed.
     /// Flutter's `timeout` (30 s by default), here enforced on every request
-    /// the client sends, whatever the transport.
+    /// the client sends. A custom transport's `send` must honour task
+    /// cancellation, or the timeout error waits until the transport answers.
     public var timeout: TimeInterval
     /// The advertised vector and its hash, shared by every copy of this client
     /// so a copy made earlier (a router's) sees later registrations.

@@ -49,7 +49,8 @@ public struct HTTPResponse: Equatable, Sendable {
 }
 
 /// The seam between OrcaClient and the network, so the handshake and headers
-/// are tested against a stub on any platform.
+/// are tested against a stub on any platform. `send` must honour task
+/// cancellation, or the client's timeout error waits until the transport answers.
 public protocol HTTPTransport: Sendable {
     func send(_ request: HTTPRequest) async throws -> HTTPResponse
 }
