@@ -68,6 +68,15 @@ public class OrcaClient private constructor(
     /** The vector the client was made with, before any extension. */
     private val baseCapabilities: CapabilityVector,
     public val transport: HttpTransport,
+    /**
+     * How long one request may take, send to answer, in milliseconds: Dart
+     * `timeout`, 30 s by default. Every request the client sends carries it
+     * ([HttpRequest.timeoutMillis]) and the transport enforces it; past it
+     * the request throws the transport's timeout error (OkHttp's
+     * `InterruptedIOException`), which [OrcaErrorInfo] shows as Connection
+     * Failed.
+     */
+    public val timeoutMillis: Long,
     private val extensions: Extensions,
 ) : ActionClient {
     public constructor(
@@ -79,7 +88,10 @@ public class OrcaClient private constructor(
         device: DeviceInfo = DeviceInfo(),
         capabilities: CapabilityVector = CapabilityVector.current,
         transport: HttpTransport,
-    ) : this(baseUrl, appId, apiKey, environment, deviceId, device, capabilities, transport, Extensions())
+        timeoutMillis: Long = 30_000,
+    ) : this(
+        baseUrl, appId, apiKey, environment, deviceId, device, capabilities, transport, timeoutMillis, Extensions(),
+    )
 
     /**
      * The advertised vector: the one the client was made with plus the
@@ -108,8 +120,10 @@ public class OrcaClient private constructor(
         device: DeviceInfo = this.device,
         capabilities: CapabilityVector = this.baseCapabilities,
         transport: HttpTransport = this.transport,
-    ): OrcaClient =
-        OrcaClient(baseUrl, appId, apiKey, environment, deviceId, device, capabilities, transport, extensions)
+        timeoutMillis: Long = this.timeoutMillis,
+    ): OrcaClient = OrcaClient(
+        baseUrl, appId, apiKey, environment, deviceId, device, capabilities, transport, timeoutMillis, extensions,
+    )
 
     /**
      * Dart `registerCapabilityExtensions`
@@ -268,13 +282,15 @@ public class OrcaClient private constructor(
      * event, never the `error` one. [OrcaDebugOptions.includeBodies] on adds
      * [requestBody] (by default the request's JSON body; a page fetch passes
      * its app state, as Dart does) and the response as [bodyJson] (none when
-     * the transport failed).
+     * the transport failed). Each request goes out with [timeoutMillis]
+     * unless it has its own.
      */
     internal suspend fun send(
-        request: HttpRequest,
+        built: HttpRequest,
         handshake: Boolean = false,
-        requestBody: () -> JsonValue? = { request.body?.let(::bodyJson) },
+        requestBody: () -> JsonValue? = { built.body?.let(::bodyJson) },
     ): HttpResponse {
+        val request = if (built.timeoutMillis == null) built.copy(timeoutMillis = timeoutMillis) else built
         if (!OrcaDebug.isEnabled) return transport.send(request)
         val options = OrcaDebug.options
         val start = OrcaDebug.now()
