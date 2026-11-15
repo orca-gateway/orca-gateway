@@ -2,17 +2,28 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://orcagateway.com/schemas/action-fixture.json",
   "title": "Action conformance fixture",
-  "description": "Executable spec for the client-side action executor. Every Orca SDK (Flutter, Swift, Kotlin) loads these files, seeds state, runs `actions` in order, and asserts the resulting state and the emitted effects. Effects are data: what the executor asked the host to do, with every Value already resolved.",
+  "description": "Executable spec for the client-side action executor. Every Orca SDK (Flutter, Swift, Kotlin) loads these files, seeds state, runs `actions` (or `steps`) in order, and asserts the resulting state and the emitted effects. Effects are data: what the executor asked the host to do, with every Value already resolved.",
   "type": "object",
   "required": [
     "name",
     "description",
     "pageId",
     "state",
-    "actions",
     "expected"
   ],
   "additionalProperties": false,
+  "oneOf": [
+    {
+      "required": [
+        "actions"
+      ]
+    },
+    {
+      "required": [
+        "steps"
+      ]
+    }
+  ],
   "properties": {
     "name": {
       "type": "string"
@@ -31,7 +42,7 @@
         "object",
         "null"
       ],
-      "description": "Event payload available to V.event(...) while the actions run."
+      "description": "Event payload available to V.event(...) while the actions run (a step's own `event` replaces it for that step)."
     },
     "serverResponses": {
       "type": "object",
@@ -64,8 +75,17 @@
     "actions": {
       "type": "array",
       "minItems": 1,
+      "description": "Actions run in order with the fixture's `event` and no widget source.",
       "items": {
         "$ref": "action.schema.json#"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Steps run in order, each as if fired by `source` (so once can dedupe per widget and trigger) with its own `event`.",
+      "items": {
+        "$ref": "#/definitions/Step"
       }
     },
     "expected": {
@@ -112,6 +132,39 @@
         }
       }
     },
+    "Step": {
+      "type": "object",
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "action.schema.json#"
+        },
+        "source": {
+          "type": "object",
+          "description": "The widget and trigger that fired the action. Absent: no source, so once runs every time.",
+          "required": [
+            "widgetId",
+            "trigger"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "widgetId": {
+              "type": "string"
+            },
+            "trigger": {
+              "type": "string"
+            }
+          }
+        },
+        "event": {
+          "type": "object",
+          "description": "Event payload for this step, in place of the fixture-level `event`."
+        }
+      }
+    },
     "Effect": {
       "type": "object",
       "required": [
@@ -129,12 +182,13 @@
             "share",
             "serverAction",
             "switchTab",
-            "openDrawer"
+            "openDrawer",
+            "debugLog"
           ]
         }
       },
       "additionalProperties": true,
-      "description": "navigate {route, replace, params?} \u00b7 goBack {} \u00b7 showSnackbar {message, duration} \u00b7 showToast {message, duration} \u00b7 openUrl {url} \u00b7 copyToClipboard {text} \u00b7 share {text, subject?} \u00b7 serverAction {id, params?} \u00b7 switchTab {tabId} \u00b7 openDrawer {}"
+      "description": "navigate {route, replace, params?} \u00b7 goBack {} \u00b7 showSnackbar {message, duration} \u00b7 showToast {message, duration} \u00b7 openUrl {url} \u00b7 copyToClipboard {text} \u00b7 share {text, subject?} \u00b7 serverAction {id, params?} \u00b7 switchTab {tabId} \u00b7 openDrawer {} \u00b7 debugLog {level, tag, message?, data?}"
     },
     "HandlerEffect": {
       "type": "object",

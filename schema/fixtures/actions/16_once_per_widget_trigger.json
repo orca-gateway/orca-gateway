@@ -1,0 +1,200 @@
+{
+  "name": "once-per-widget-trigger",
+  "description": "once runs its action one time per (widgetId, trigger): a second run from the same widget and trigger does nothing; another trigger or another widget runs; without a source it runs every time.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "sameTap": 0,
+      "otherTrigger": 0,
+      "otherWidget": 0,
+      "noSource": 0
+    },
+    "app": {}
+  },
+  "steps": [
+    {
+      "action": {
+        "type": "once",
+        "action": {
+          "type": "setState",
+          "key": "sameTap",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "sameTap"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "widgetId": "buy",
+        "trigger": "onTap"
+      }
+    },
+    {
+      "action": {
+        "type": "once",
+        "action": {
+          "type": "setState",
+          "key": "sameTap",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "sameTap"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "widgetId": "buy",
+        "trigger": "onTap"
+      }
+    },
+    {
+      "action": {
+        "type": "once",
+        "action": {
+          "type": "setState",
+          "key": "otherTrigger",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "otherTrigger"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "widgetId": "buy",
+        "trigger": "onLongPress"
+      }
+    },
+    {
+      "action": {
+        "type": "once",
+        "action": {
+          "type": "setState",
+          "key": "otherWidget",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "otherWidget"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "widgetId": "cancel",
+        "trigger": "onTap"
+      }
+    },
+    {
+      "action": {
+        "type": "once",
+        "action": {
+          "type": "setState",
+          "key": "noSource",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "noSource"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "action": {
+        "type": "once",
+        "action": {
+          "type": "setState",
+          "key": "noSource",
+          "value": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "noSource"
+            },
+            "by": [
+              {
+                "type": "add",
+                "by": {
+                  "type": "static",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "sameTap": 1,
+        "otherTrigger": 1,
+        "otherWidget": 1,
+        "noSource": 2
+      },
+      "app": {}
+    },
+    "effects": []
+  }
+}

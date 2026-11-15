@@ -1,7 +1,7 @@
 // Conformance runner for `schema/fixtures/actions/*.json` (Epic 23b, 23b.5).
 //
-// Each fixture seeds page/app state, runs its actions through the real
-// ActionExecutor (no BuildContext, so nothing is drawn), then asserts the
+// Each fixture seeds page/app state, runs its actions (or steps) through the
+// real ActionExecutor (no BuildContext, so nothing is drawn), then asserts the
 // resulting state and the effects the executor emitted as data. The Flutter
 // SDK runs these first; the Swift and Kotlin SDKs load the same files.
 //
@@ -108,11 +108,32 @@ void main() {
         );
       }
 
+      // `actions` run with the fixture's event and no source. `steps` run in
+      // order, each with the widget and trigger that fired it (`source`, so
+      // once can dedupe) and its own `event` in place of the fixture's.
       final event = fx['event'];
-      for (final action in fx['actions'] as List) {
+      final fixtureEvent = event is Map
+          ? Map<String, dynamic>.from(event)
+          : null;
+      final steps =
+          fx['steps'] as List? ??
+          [
+            for (final action in fx['actions'] as List) {'action': action},
+          ];
+      for (final step in steps.cast<Map>()) {
+        final source = step['source'];
+        final stepEvent = step['event'];
         await executor.execute(
-          Map<String, dynamic>.from(action as Map),
-          eventData: event is Map ? Map<String, dynamic>.from(event) : null,
+          Map<String, dynamic>.from(step['action'] as Map),
+          eventData: stepEvent is Map
+              ? Map<String, dynamic>.from(stepEvent)
+              : fixtureEvent,
+          source: source is Map
+              ? ActionSource(
+                  widgetId: source['widgetId'] as String,
+                  trigger: source['trigger'] as String,
+                )
+              : null,
         );
       }
 
