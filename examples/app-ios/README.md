@@ -86,6 +86,33 @@ in place of the system one. The drawer follows in the same release. The `tabs` d
 SIMCTL_CHILD_ORCA_APP_ID=tabs SIMCTL_CHILD_ORCA_BOOT=config xcrun simctl launch booted com.orcagateway.examples.counter
 ```
 
+## Deep links
+
+The app registers the URL scheme `orcacounter` (`Info.plist` beside the project, merged into the
+generated one) and holds no link code: `OrcaApp` receives the link and navigates to it. A link
+needs routes to go to, so launch one of the `ORCA_BOOT=config` demo apps (`navigation` or `tabs`,
+above) first, then open a link:
+
+```bash
+xcrun simctl openurl <device id> "orcacounter:///home/product/42"
+```
+
+`<device id>` is the simulator's id from `xcrun simctl list devices`, or `booted`. The SDK keeps
+the URL's path and query and drops the scheme and the host, so write the link with three slashes:
+in `orcacounter://product/42`, `product` is the host and the location is `/42`. Send it while the
+app runs: a link that starts the closed app starts it without the `SIMCTL_CHILD_*` settings, so on
+the default `counter` app, which has no routes.
+
+The host passes `onDeeplink` only to print a line per link, which `simctl launch --console` (or the
+Xcode console) shows:
+
+```
+OrcaCounter deeplink: incoming=orcacounter:///home/product/42 resolvedLocation=/home/product/42 wasRedirected=false isColdStart=false
+```
+
+A location no route matches shows "Page not found"; a protected route of `navigation` redirects to
+the login page while logged out (`wasRedirected=true`).
+
 ## Plugins
 
 The app registers two plugins, the Swift twins of the Flutter example's: `BadgePlugin` draws the

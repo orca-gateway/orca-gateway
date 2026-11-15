@@ -17,6 +17,9 @@ import UIKit
 /// seeded. Use it with ORCA_APP_ID=navigation (`examples/server/navigation.ts`);
 /// ORCA_PATH is not read then. The two switches above work in both modes.
 ///
+/// The app opens `orcacounter://` links (see "Deep links" in the README) and
+/// prints one `OrcaCounter deeplink:` line for each.
+///
 /// ORCA_APP_ID=custom shows the two plugins below at work.
 @main
 struct OrcaCounterApp: App {
@@ -42,6 +45,7 @@ struct OrcaCounterApp: App {
                 client: client, path: path,
                 enableOffline: Self.isOn("ORCA_OFFLINE"),
                 enableSessionTracking: Self.isOn("ORCA_SESSIONS"),
+                onDeeplink: Self.logDeeplink,
                 plugins: [BadgePlugin(), DeviceActionsPlugin()])
         }
     }
@@ -51,6 +55,15 @@ struct OrcaCounterApp: App {
     /// `simctl launch`) to use another address.
     static var serverURL: URL {
         URL(string: setting("ORCA_SERVER_URL", "http://localhost:8080"))!
+    }
+
+    /// One line per `orcacounter://` link the app opened (the scheme is in
+    /// Info.plist; OrcaApp receives the link itself), in the Xcode console or
+    /// the terminal of `simctl launch --console`.
+    static func logDeeplink(_ event: DeeplinkEvent) {
+        print("OrcaCounter deeplink: incoming=\(event.incoming.absoluteString) "
+            + "resolvedLocation=\(event.resolvedLocation) wasRedirected=\(event.wasRedirected) "
+            + "isColdStart=\(event.isColdStart)")
     }
 
     static func setting(_ key: String, _ fallback: String) -> String {
