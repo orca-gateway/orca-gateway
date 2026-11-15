@@ -3,11 +3,11 @@
 ## Front page
 
 ### In one breath
-group 1 of 4 · tasks: 3 green, 0 blocked · the contract for step 2 is in place
-Action fixtures can run steps with a widget source; fixtures 16-19 pin once, always, debugLog,
-onInit-once and the scroll event values; Flutter runs all 19 green and emits a debugLog effect.
-The engine's capability filter now looks inside once and always. Native pins count 19 fixtures.
-The Swift and Kotlin fixture runners stay red until group 2 (planned, nothing pushed).
+group 2 of 4 · tasks: 6 green, 0 blocked · fixtures 16-19 now green on all three SDKs
+Both native executors know which widget and trigger fired an action (ActionSource), and run once,
+always and debugLog as Flutter does; capabilities advertise the three kinds (15 → 18).
+Demo page `lifecycle` on parity-a is ready for the hand checks after group 4.
+Group 3 (lifecycle triggers) is already running on both SDKs.
 
 ### New for you
 nothing new
@@ -17,7 +17,7 @@ none
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 2 (both executors and the demo page), already running. (default: go)
+2. Next: group 3 (onInit, onVisible, background and foreground), already running. (default: go)
 
 ## Appendix
 
@@ -69,6 +69,48 @@ Review fit: pass · Review quality: pass
 engine 743 pass 0 fail · Flutter 309 passed, analyze clean · Swift core: all green except ActionFixtureTests
 (expected until S-exec) · Kotlin core: all green except ActionFixtureTest (expected until K-exec). No UI file
 changed.
+
+### Group 2
+Commits: D1 fe1d439, S-exec 1c65566, K-exec 74f5831 (staged by path). Nothing pushed. Group 1's card approved under
+the standing rule (defaults).
+
+#### Task S-exec · Swift executor source, once, always, debugLog
+Files: `sdk-swift/Sources/OrcaGatewayCore/State/ActionExecutor.swift` · `.../Tests/OrcaGatewayCoreTests/ActionFixtureTests.swift` ·
+`.../CapabilitiesTests.swift` · `sdk-swift/capabilities.json` · `.../Capabilities/Generated.swift`
+Cases: A2.5 sw (fx 16), A2.6 sw (fx 17), A2.1 sw (fx 18), A2.4 sw (fx 19) → green (`swift test` 306, 0 failures,
+no warnings). Red first: no ActionSource (build), and the old runner failed on 16-19.
+Changed: public ActionSource {widgetId, trigger, dedupeKey}; execute/executeAll take a defaulted source, inherited by
+nested runs and restored by the eventData defer; once with per-executor fired keys (Flutter's shared-key limit
+documented), always, debugLog emitting {level, tag, message?, data?}; kinds +3, implements looks inside
+once/always; the runner runs steps; 4 per-case and 4 unit tests; capabilities 15 → 18, regenerated.
+Decisions: debugLog data object resolved per entry as Dart; no "<unresolvable>" branch (the Swift resolver never
+throws; documented).
+Review fit: pass · Review quality: pass
+
+#### Task K-exec · Kotlin executor source, once, always, debugLog
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/state/ActionExecutor.kt` · `.../state/ActionFixtureTest.kt` ·
+`sdk-kotlin/capabilities.json` · `.../capabilities/Generated.kt` · `.../capabilities/CapabilitiesTest.kt`
+Cases: A2.5 kt, A2.6 kt, A2.1 kt, A2.4 kt → green (`./gradlew build` core 309, sdk 219, lint clean; the Swift ==
+Kotlin kinds check green). Red first except A2.4 (fx 19 passed once the runner read steps).
+Changed: the same as S-exec in Kotlin (source restored in finally; debugLog never throws, cancellation
+propagates); a unit test covers a nested execute from perform.
+Decisions: a message that fails to resolve falls back to its raw text, as Dart's toString(); Generated.swift as
+written from the Swift list (byte-identical to the Swift task's own run; the generator rerun shows no diff).
+Review fit: pass · Review quality: pass
+
+#### Task D1 · Demo page lifecycle on parity-a
+Files: `examples/server/parity-a.ts` · `examples/server/index.ts`
+Cases: A2.2 hand, A2.3 hand → page ready (GET /api/v1/app/parity-a/page/lifecycle 200, 88 components; 404 before;
+`bun test` 743 pass)
+Changed: page `lifecycle`: onInit/onVisible counters with a debugLog (level info, tag parity); onBackground/
+onForeground on one Column and onAppBackground/onAppForeground on another; a 200x160 SingleChildScrollView of 30
+lines showing offset, maxExtent, atEnd, delta, the last trigger and begin/end counts; once, always and +1
+buttons. index.ts: one URL line. Built with the file's existing helpers, .new() and V.* only.
+Review fit: pass · Review quality: pass
+
+#### Group 2 test run
+engine 743 pass · Flutter 309 (no file changed since group 1) · Swift `swift test` 306, 0 failures · Kotlin
+`./gradlew build` core 309, sdk 219, lint clean · generators: no diff.
 
 ### Blocked
 none
