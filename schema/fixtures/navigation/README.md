@@ -113,7 +113,7 @@ app, in order; sessions are independent of each other.
 
 | File | Behaviour |
 |---|---|
-| `12_tab_sessions` | switching away and back restores a tab's stack and fetches nothing; a reselect pops to the root; a tab is fetched on its first visit |
+| `12_tab_sessions` | switching away and back restores a tab's stack and fetches nothing; a reselect pops to the root; a tab is fetched on its first visit; `go` inside a tab keeps the pages it still needs |
 | `13_tab_index_state` | `_tabIndex` follows taps, `go` and `switchTab`; setting it switches the tab; the same value or a non-int does nothing |
 | `14_switch_tab` | `switchTab` lands on the tab's root and drops routes over the shell; an unknown id does nothing |
 
@@ -122,8 +122,8 @@ app, in order; sessions are independent of each other.
 | SDK | Runner | Command |
 |---|---|---|
 | Flutter | `sdk/test/conformance/navigation_fixtures_test.dart` | `cd sdk && flutter test test/conformance/navigation_fixtures_test.dart` |
-| Swift | the core's fixture tests, `RouteTable(config).resolve(location, appState)` per case | `cd sdk-swift && swift test` |
-| Kotlin | the core's fixture tests, same call | `cd sdk-kotlin && ./gradlew :core:test` |
+| Swift | the core's fixture tests: `RouteTable(config).resolve(location, appState)` per case, `TabShell(table)` per session step | `cd sdk-swift && swift test` |
+| Kotlin | the core's fixture tests, same calls | `cd sdk-kotlin && ./gradlew :core:test` |
 
 Each runner walks up from its working directory to `schema/fixtures/navigation`, runs every file and every
 case, and checks how many files it found (Flutter: at least six, each well formed) so an empty or missing
