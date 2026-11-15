@@ -86,7 +86,7 @@ final class AppBootTests: XCTestCase {
         ]
     }
 
-    /// `path` nil is the config boot; a host says so, it is not the default.
+    /// `path` nil is the config boot, a path opens that page.
     private func boot(_ stub: BootStub, path: String?,
                       onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) -> OrcaAppBoot
     {
@@ -183,18 +183,41 @@ final class AppBootTests: XCTestCase {
         router.navigate(to: "about")
         XCTAssertEqual(events, [RouteChangeEvent(location: "/about", previousLocation: "/shop", type: .push)])
 
-        // No path argument at all: `home`, as before the config boot existed.
+        // The path `home`, which was the default before the config boot was.
         let plainStub = BootStub(config: config())
-        let plain = OrcaAppBoot(client: BootStub.client(plainStub))
+        let plain = OrcaAppBoot(client: BootStub.client(plainStub), path: "home")
         let home = try ready(plain)  // ready at once here too
         await plain.startIfNeeded()
         XCTAssertTrue(try ready(plain) === home)
         XCTAssertNil(home.table)
         XCTAssertEqual(home.root.path, "home")
         _ = try await loaded(home, home.root)
-        XCTAssertEqual(plainStub.configRequests.count, 0, "the default asks for no config")
+        XCTAssertEqual(plainStub.configRequests.count, 0, "a path asks for no config")
         XCTAssertEqual(plainStub.requests.count, 1)
         XCTAssertTrue(plainStub.requests[0].url.path.hasSuffix("/page/home"))
+    }
+
+    /// No `path` argument at all is the config boot, as Flutter's `OrcaApp`:
+    /// the config is the first request and its initial route the first page.
+    func test_B9_1_noPathIsTheConfigBoot() async throws {
+        let stub = BootStub(config: config())
+        let boot = OrcaAppBoot(client: BootStub.client(stub))
+        guard case .loading = boot.phase else { return XCTFail("the default boot starts loading") }
+        XCTAssertEqual(stub.requests.count, 0)
+
+        await boot.startIfNeeded()
+        let router = try ready(boot)
+        XCTAssertEqual(stub.requests.count, 1)
+        XCTAssertTrue(stub.requests[0].url.path.hasSuffix("/api/v1/app/fixture-app/config"),
+                      "the default asks for the config first")
+        XCTAssertNotNil(router.table)
+        XCTAssertEqual(router.root.location, "/welcome")
+
+        _ = try await loaded(router, router.root)
+        XCTAssertEqual(stub.configRequests.count, 1)
+        XCTAssertEqual(stub.pageRequests.count, 1)
+        XCTAssertTrue(stub.pageRequests[0].url.path.hasSuffix("/page/welcome"),
+                      "the first page is the config's initial route, not home")
     }
 
     func test_B9_1_aFailedConfigFetchCanBeRetried() async throws {

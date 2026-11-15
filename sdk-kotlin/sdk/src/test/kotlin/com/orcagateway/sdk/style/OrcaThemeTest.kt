@@ -181,7 +181,7 @@ class OrcaThemeTest {
             ),
         )
         compose.setContent {
-            CompositionLocalProvider(LocalOrcaTheme provides theme) { OrcaApp(stub.client) }
+            CompositionLocalProvider(LocalOrcaTheme provides theme) { OrcaApp(stub.client, path = "home") }
         }
 
         compose.waitUntil(5_000) { count("Nested go") > 0 }

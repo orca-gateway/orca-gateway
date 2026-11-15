@@ -201,20 +201,18 @@ public class OrcaAppBoot(
  *
  *     OrcaApp(OrcaClient(URI("https://api.example.com"), appId = "counter", transport = OkHttpTransport()))
  *
- * By default the app starts at the page `home`, and so does any [path] the
- * host gives: no config is fetched and every path is a page.
+ * By default, with no [path], the app boots from the server's navigation
+ * config ([OrcaAppBoot]), as Flutter's `OrcaApp` does, and so gets the
+ * server's navigation (routes, redirects, initial app state): a spinner
+ * while `/config` is fetched (once), then the config's `initialRoute` with
+ * its `initialAppState`, every location going through the config's routes;
+ * a failed fetch shows an error with a retry. A config with tabs is drawn as
+ * a tab shell ([TabShellScreen]): a bottom bar, and one stack per tab.
  *
- * `path = null` is the way to get the server's navigation (routes,
- * redirects, initial app state): the app boots from the server's navigation
- * config ([OrcaAppBoot]):
+ * A [path] the host gives opens that one page instead: no config is fetched
+ * and every path is a page.
  *
- *     OrcaApp(client, path = null)
- *
- * a spinner while `/config` is fetched (once), then the config's
- * `initialRoute` with its `initialAppState`, every location going through
- * the config's routes; a failed fetch shows an error with a retry. A config
- * with tabs is drawn as a tab shell ([TabShellScreen]): a bottom bar, and
- * one stack per tab.
+ *     OrcaApp(client, path = "home")
  *
  * [onRouteChanged] is called once per change of the location on top (see
  * [OrcaRouter.onRouteChanged]); the one given at the first composition is
@@ -240,7 +238,7 @@ public class OrcaAppBoot(
 public fun OrcaApp(
     client: OrcaClient,
     modifier: Modifier = Modifier,
-    path: String? = "home",
+    path: String? = null,
     system: SystemActions? = null,
     onRouteChanged: ((RouteChangeEvent) -> Unit)? = null,
     enableOffline: Boolean = false,

@@ -63,7 +63,7 @@ SIMCTL_CHILD_ORCA_APP_ID=server-actions SIMCTL_CHILD_ORCA_PATH=shop xcrun simctl
 
 The apps above start at a path the host gives. Set `ORCA_BOOT=config` and the host calls
 `OrcaApp(client:path:)` with `path: nil`, so the app asks the server for its navigation config first
-(`OrcaApp(client:)` alone still opens the page `home` and fetches no config): the
+(this is what `OrcaApp(client:)` alone does; the host passes a path in the other mode): the
 config's `initialRoute` is the first page, its `initialAppState` is seeded before that page is
 requested, redirects apply, an unknown location shows "Page not found", and a route outside the
 tabs gets a title bar with a back button. `ORCA_PATH` is not read in this mode. The `navigation`

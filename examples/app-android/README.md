@@ -99,8 +99,8 @@ it: the app asks the server for `/config`, seeds the config's `initialAppState` 
 `initialRoute`, and every location goes through the config's routes (parameters, nested routes,
 redirects, a "Page not found" page for an unknown one). The `navigation` app in
 `examples/server/navigation.ts` is made for it. Set the extra `ORCA_BOOT` to `config`; `ORCA_PATH`
-is then not used. The host then calls `OrcaApp(client, path = null)`: a host that passes a path, or
-none at all (`OrcaApp(client)` opens `home`), fetches no config:
+is then not used. The host then calls `OrcaApp` with no path (`OrcaApp(client)`, the default): a
+host that passes a path fetches no config:
 
 ```bash
 adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \

@@ -78,7 +78,7 @@ class OrcaBootTest {
     @Test
     fun c15_1_aForceUpdateAnswerShowsTheForceUpdateScreenAndFetchesNoPage() {
         val engine = BootEngine("""{"flows":{"home":1},"forceUpdate":true}""")
-        compose.setContent { OrcaApp(client(engine), enableOffline = true) }
+        compose.setContent { OrcaApp(client(engine), path = "home", enableOffline = true) }
 
         waitForText("Update required. Please update the app.")
         compose.onNodeWithTag("orca.forceUpdate").assertIsDisplayed()
@@ -91,7 +91,7 @@ class OrcaBootTest {
     @Test
     fun c15_1_aFreshAnswerBootsAndThePageLoads() {
         val engine = BootEngine("""{"flows":{}}""")
-        compose.setContent { OrcaApp(client(engine), enableOffline = true) }
+        compose.setContent { OrcaApp(client(engine), path = "home", enableOffline = true) }
 
         waitForText("Counter Example")
         compose.onNodeWithText("Counter Example").assertIsDisplayed()
@@ -123,7 +123,7 @@ class OrcaBootTest {
     @Test
     fun c15_1_withoutEnableOfflineNoVersionRequestIsMade() {
         val engine = BootEngine("""{"flows":{},"forceUpdate":true}""")
-        compose.setContent { OrcaApp(client(engine)) }
+        compose.setContent { OrcaApp(client(engine), path = "home") }
 
         waitForText("Counter Example")
 
@@ -134,7 +134,7 @@ class OrcaBootTest {
     @Test
     fun c15_1_aClientWithoutADeviceIdGetsTheOneSavedInSharedPreferences() {
         val engine = BootEngine("""{"flows":{}}""")
-        compose.setContent { OrcaApp(client(engine)) }
+        compose.setContent { OrcaApp(client(engine), path = "home") }
 
         waitForText("Counter Example")
 
@@ -146,7 +146,7 @@ class OrcaBootTest {
     @Test
     fun c15_1_aClientWithADeviceIdKeepsIt() {
         val engine = BootEngine("""{"flows":{}}""")
-        compose.setContent { OrcaApp(client(engine, deviceId = "host-id")) }
+        compose.setContent { OrcaApp(client(engine, deviceId = "host-id"), path = "home") }
 
         waitForText("Counter Example")
 
