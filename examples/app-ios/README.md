@@ -59,6 +59,23 @@ scheme, or pass them to `simctl launch`:
 SIMCTL_CHILD_ORCA_APP_ID=server-actions SIMCTL_CHILD_ORCA_PATH=shop xcrun simctl launch booted com.orcagateway.examples.counter
 ```
 
+### Boot from the navigation config
+
+The apps above start at a path the host gives. Set `ORCA_BOOT=config` and the host calls
+`OrcaApp(client:path:)` with `path: nil`, so the app asks the server for its navigation config first
+(`OrcaApp(client:)` alone still opens the page `home` and fetches no config): the
+config's `initialRoute` is the first page, its `initialAppState` is seeded before that page is
+requested, redirects apply, an unknown location shows "Page not found", and a route outside the
+tabs gets a title bar with a back button. `ORCA_PATH` is not read in this mode. The `navigation`
+demo app (`examples/server/navigation.ts`) is made for it:
+
+```bash
+SIMCTL_CHILD_ORCA_APP_ID=navigation SIMCTL_CHILD_ORCA_BOOT=config xcrun simctl launch booted com.orcagateway.examples.counter
+```
+
+The default `counter` app has no navigation config, which is why the default stays `ORCA_PATH=home`.
+Tabs and the drawer are not drawn yet: a config with tabs runs as one stack.
+
 ## DevTools
 
 Debug builds connect to Orca DevTools on `ws://localhost:6363` (start it with `task devtools:dev`)

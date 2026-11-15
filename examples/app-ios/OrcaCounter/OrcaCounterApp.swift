@@ -8,6 +8,11 @@ import SwiftUI
 /// ORCA_PATH (for example `basic-actions` and `home`, or `server-actions`
 /// and `shop`) in the scheme, or as SIMCTL_CHILD_ORCA_APP_ID and
 /// SIMCTL_CHILD_ORCA_PATH for `simctl launch`.
+///
+/// ORCA_BOOT=config starts from the server's navigation config instead of a
+/// path (the host passes `path: nil`): its `initialRoute` is the first page and its `initialAppState` is
+/// seeded. Use it with ORCA_APP_ID=navigation (`examples/server/navigation.ts`);
+/// ORCA_PATH is not read then.
 @main
 struct OrcaCounterApp: App {
     init() {
@@ -24,10 +29,13 @@ struct OrcaCounterApp: App {
 
     var body: some Scene {
         WindowGroup {
-            OrcaApp(
-                client: OrcaClient(baseURL: Self.serverURL, appId: Self.setting("ORCA_APP_ID", "counter"),
-                                   apiKey: "demo-key"),
-                path: Self.setting("ORCA_PATH", "home"))
+            let client = OrcaClient(baseURL: Self.serverURL, appId: Self.setting("ORCA_APP_ID", "counter"),
+                                    apiKey: "demo-key")
+            if Self.setting("ORCA_BOOT", "path") == "config" {
+                OrcaApp(client: client, path: nil)
+            } else {
+                OrcaApp(client: client, path: Self.setting("ORCA_PATH", "home"))
+            }
         }
     }
 
