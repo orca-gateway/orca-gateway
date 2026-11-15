@@ -40,11 +40,36 @@ final class TabShellTests: XCTestCase {
         ]
     }
 
-    /// Tabs `/feed` (with a child), `/search`, `/profile`; `/settings` outside
-    /// them; the server tab bar when asked.
-    private func config(serverBar: Bool = false) -> JSONValue {
+    /// A server drawer: a `Drawer` 280 wide holding a Column with a button
+    /// that switches to the tab `search` and a Text.
+    private var serverDrawer: JSONValue {
+        [
+            ["id": "drawer", "type": "Drawer", "kind": "layout", "childMode": "single",
+             "props": ["width": 280, "backgroundColor": "#FAFAFA"], "children": ["menu"], "watches": []],
+            ["id": "menu", "type": "Column", "kind": "layout", "childMode": "multi",
+             "props": [:], "children": ["toSearch", "about"], "watches": []],
+            ["id": "toSearch", "type": "TextButton", "kind": "button", "childMode": "single",
+             "props": [:], "children": ["toSearchLabel"], "watches": [],
+             "actions": ["onTap": ["type": "switchTab", "tabId": "search"]]],
+            ["id": "toSearchLabel", "type": "Text", "kind": "primitive", "childMode": "none",
+             "props": ["data": "Search"], "children": [], "watches": []],
+            ["id": "about", "type": "Text", "kind": "primitive", "childMode": "none",
+             "props": ["data": "About"], "children": [], "watches": []],
+        ]
+    }
+
+    /// Tabs `/feed` (with a child), `/search`, `/profile`; `/settings` and
+    /// `/help` outside them; the server tab bar, the default drawer's items
+    /// and the server drawer when asked.
+    private func config(serverBar: Bool = false, drawerItems: Bool = false,
+                        serverDrawer: Bool = false) -> JSONValue {
         [
             "initialRoute": "/feed",
+            "drawerItems": drawerItems ? [
+                ["id": "settings", "label": "Settings", "icon": "settings", "route": "/settings"],
+                ["id": "help", "label": "Help", "route": "/help"],
+            ] : [],
+            "drawerComponents": serverDrawer ? self.serverDrawer : [],
             "tabs": [
                 ["id": "feed", "label": "Feed", "icon": "home", "initialRoute": "/feed"],
                 ["id": "search", "label": "Search", "icon": "search", "initialRoute": "/search"],
@@ -53,7 +78,7 @@ final class TabShellTests: XCTestCase {
             "tabBarComponents": serverBar ? self.serverBar : [],
             "flows": [["name": "main", "routes": [
                 ["path": "feed", "children": [["path": "feed/item/:id"]]],
-                ["path": "search"], ["path": "profile"], ["path": "settings"],
+                ["path": "search"], ["path": "profile"], ["path": "settings"], ["path": "help"],
             ]]],
         ]
     }
@@ -316,6 +341,282 @@ final class TabShellTests: XCTestCase {
             router.navigate(to: "/settings")
             try await settle()
             XCTAssertEqual(pages(stub), ["feed", "profile", "settings"])
+        }
+    }
+
+    // MARK: - B10.5-S
+
+    func test_B10_5_thePanelFollowsTheFingerTowardItsEdgeAndClosesPastHalfOrOnAFling() {
+        let panel = DrawerPanelModel(edge: .leading, width: 300)
+        // Translations run from the leading to the trailing side.
+        XCTAssertEqual(panel.offset(translation: 0), 0)
+        XCTAssertEqual(panel.offset(translation: -120), -120, "it follows the finger toward its edge")
+        XCTAssertEqual(panel.offset(translation: 80), 0, "and does not leave its edge")
+        XCTAssertEqual(panel.offset(translation: -900), -300, "nor travel further than its width")
+        XCTAssertEqual(panel.progress(translation: 0), 1)
+        XCTAssertEqual(panel.progress(translation: -150), 0.5)
+        XCTAssertEqual(panel.progress(translation: -900), 0)
+        XCTAssertEqual(panel.closedOffset, -300)
+
+        XCTAssertEqual(panel.dragEnded(translation: -100, velocity: 0), .open, "below the threshold")
+        XCTAssertEqual(panel.dragEnded(translation: -151, velocity: 0), .closed, "past half its width")
+        XCTAssertEqual(panel.dragEnded(translation: -20, velocity: -400), .closed, "a fling toward the edge")
+        XCTAssertEqual(panel.dragEnded(translation: -200, velocity: 400), .open, "a fling back")
+        XCTAssertEqual(panel.dragEnded(translation: 120, velocity: 0), .open, "the wrong way")
+
+        // A drag in from the screen edge opens.
+        XCTAssertTrue(panel.edgeDragOpens(translation: 60, velocity: 0))
+        XCTAssertTrue(panel.edgeDragOpens(translation: 10, velocity: 400))
+        XCTAssertFalse(panel.edgeDragOpens(translation: 10, velocity: 0))
+        XCTAssertFalse(panel.edgeDragOpens(translation: -60, velocity: -400))
+    }
+
+    func test_B10_5_aTrailingPanelMirrorsTheLeadingOne() {
+        let panel = DrawerPanelModel(edge: .trailing, width: 300)
+        XCTAssertEqual(panel.offset(translation: 120), 120)
+        XCTAssertEqual(panel.offset(translation: -80), 0)
+        XCTAssertEqual(panel.offset(translation: 900), 300)
+        XCTAssertEqual(panel.progress(translation: 150), 0.5)
+        XCTAssertEqual(panel.closedOffset, 300)
+        XCTAssertEqual(panel.dragEnded(translation: 100, velocity: 0), .open)
+        XCTAssertEqual(panel.dragEnded(translation: 151, velocity: 0), .closed)
+        XCTAssertEqual(panel.dragEnded(translation: 20, velocity: 400), .closed)
+        XCTAssertEqual(panel.dragEnded(translation: 200, velocity: -400), .open)
+        XCTAssertEqual(panel.dragEnded(translation: -120, velocity: 0), .open)
+        XCTAssertTrue(panel.edgeDragOpens(translation: -60, velocity: 0))
+        XCTAssertFalse(panel.edgeDragOpens(translation: 60, velocity: 400))
+    }
+
+    func test_B10_5_withADrawerEveryTabPageHasTheMenuAndTheTabsLabelAsTitle() async throws {
+        let router = try await router(BootStub(config: config(drawerItems: true)))
+        XCTAssertTrue(router.hasDrawer)
+        let model = TabShellModel(router: router)
+        let feed = router.root
+        XCTAssertEqual(model.menuTitle(for: feed), "Feed")
+        XCTAssertTrue(model.opensDrawerByEdge(for: feed), "a tab's root has no back swipe")
+
+        // Any depth inside a tab.
+        router.navigate(to: "/feed/item/7")
+        let item = router.top
+        XCTAssertEqual(model.menuTitle(for: item), "Feed")
+        XCTAssertFalse(model.opensDrawerByEdge(for: item), "the leading edge is the back swipe's")
+
+        // Not a route over the shell.
+        router.navigate(to: "/settings")
+        XCTAssertNil(model.menuTitle(for: router.top))
+        XCTAssertFalse(model.opensDrawerByEdge(for: router.top))
+
+        router.selectTab(2)
+        XCTAssertEqual(model.menuTitle(for: router.root), "Profile")
+        XCTAssertEqual(model.menuTitle(for: feed), "Feed", "a tab left behind keeps its own label")
+
+        // No drawer in the config: no bar, no menu.
+        let plain = try await self.router(BootStub(config: config()))
+        let none = TabShellModel(router: plain)
+        XCTAssertNil(none.menuTitle(for: plain.root))
+        XCTAssertFalse(none.opensDrawerByEdge(for: plain.root))
+        XCTAssertNil(none.drawer)
+        XCTAssertEqual(none.drawerRows, [])
+    }
+
+    func test_B10_5_theMenuButtonAndTheOpenDrawerActionOpenTheShellDrawer() async throws {
+        let router = try await router(BootStub(config: config(drawerItems: true)))
+        let host = DrawerHost()
+        let model = TabShellModel(router: router, drawers: host)
+        XCTAssertNil(host.open)
+
+        // The menu button.
+        model.openDrawer()
+        XCTAssertTrue(router.isDrawerOpen)
+        XCTAssertEqual(host.open?.id, DrawerHost.shellPanel)
+        XCTAssertEqual(host.open?.edge, .leading)
+
+        // A tap on the scrim, a swipe, escape: the host dismisses its panel.
+        host.dismiss()
+        XCTAssertNil(host.open)
+        XCTAssertFalse(router.isDrawerOpen)
+
+        // The `openDrawer` action from a tab's page.
+        let loader = router.loader(for: router.root)
+        await loader.loadIfNeeded()
+        guard case .loaded(let feed) = loader.phase else { return XCTFail("feed did not load") }
+        await feed.run(.openDrawer)
+        XCTAssertTrue(router.isDrawerOpen)
+        XCTAssertEqual(host.open?.id, DrawerHost.shellPanel)
+        XCTAssertNil(router.pageDrawerRequest)
+
+        // The router closes it: the panel goes.
+        router.closeDrawer()
+        XCTAssertNil(host.open)
+        XCTAssertFalse(router.isDrawerOpen)
+    }
+
+    func test_B10_5_theDefaultDrawerListsTheItemsAndARowTapClosesItAndPushes() async throws {
+        let stub = BootStub(config: config(drawerItems: true))
+        let router = try await router(stub)
+        let host = DrawerHost()
+        let model = TabShellModel(router: router, drawers: host)
+        XCTAssertNil(model.drawer, "no drawerComponents: the default list")
+        XCTAssertEqual(model.drawerHeader, "Menu")
+        XCTAssertEqual(model.drawerRows.map(\.label), ["Settings", "Help"])
+        XCTAssertEqual(model.drawerRows.map(\.route), ["/settings", "/help"])
+        XCTAssertEqual(model.drawerRows.map(\.symbol),
+                       [IconNames.symbol(for: "settings"), IconNames.symbol(for: nil)])
+
+        var events: [RouteChangeEvent] = []
+        router.onRouteChanged = { events.append($0) }
+        model.openDrawer()
+        model.tap(model.drawerRows[0])
+        XCTAssertFalse(router.isDrawerOpen, "the tap closes the drawer")
+        XCTAssertNil(host.open)
+        XCTAssertEqual(router.top.path, "settings")
+        XCTAssertEqual(events.map(\.type), [.push], "then pushes the item's route")
+        XCTAssertEqual(router.overRoutes, [router.top], "which lies over the shell")
+        XCTAssertEqual(router.currentTab, 0)
+        XCTAssertTrue(model.barHidden)
+
+        // Over the shell there is no shell drawer to open.
+        model.openDrawer()
+        XCTAssertFalse(router.isDrawerOpen)
+        XCTAssertNil(host.open)
+        XCTAssertEqual(pages(stub), [], "the drawer itself fetches nothing")
+    }
+
+    func test_B10_5_drawerComponentsAreTheDrawerAndItsSwitchTabRowSwitchesTheTab() async throws {
+        let stub = BootStub(config: config(drawerItems: true, serverDrawer: true))
+        let router = try await router(stub)
+        var effects: [String] = []
+        router.onEffect = { effects.append($0.type) }
+        let host = DrawerHost()
+        let model = TabShellModel(router: router, drawers: host)
+        let drawer = try XCTUnwrap(model.drawer, "drawerComponents win over drawerItems")
+        XCTAssertEqual(drawer.page.page.pageId, "__shell__")
+        XCTAssertEqual(drawer.tree?.type, "Drawer")
+        XCTAssertEqual(drawer.tree?.props["width"], 280)
+        XCTAssertEqual(model.menuTitle(for: router.root), "Feed")
+
+        router.openDrawer()
+        XCTAssertEqual(host.open?.id, DrawerHost.shellPanel)
+        let row = try XCTUnwrap(drawer.page.resolve("toSearch"))
+        await drawer.page.fire("onTap", on: row)?.value
+        XCTAssertEqual(router.currentTab, 1)
+        XCTAssertEqual(router.root.path, "search")
+        XCTAssertEqual(effects, ["switchTab"])
+        XCTAssertFalse(router.isDrawerOpen, "the change of location closes the drawer")
+        XCTAssertNil(host.open)
+        XCTAssertEqual(model.menuTitle(for: router.root), "Search")
+        XCTAssertEqual(pages(stub), [])
+    }
+
+    func test_B10_5_onePanelIsOpenAtATime() async throws {
+        let router = try await router(BootStub(config: config(drawerItems: true)))
+        let host = DrawerHost()
+        var closed = 0
+        host.present(id: "page", edge: .trailing, onClose: { closed += 1 }) { AnyView(EmptyView()) }
+        XCTAssertEqual(host.open?.id, "page")
+        XCTAssertEqual(host.open?.edge, .trailing)
+
+        // The shell drawer takes the page drawer's place.
+        let model = TabShellModel(router: router, drawers: host)
+        model.openDrawer()
+        XCTAssertEqual(host.open?.id, DrawerHost.shellPanel)
+        XCTAssertEqual(closed, 1)
+
+        // And a page drawer the shell drawer's: the router is told.
+        host.present(id: "page", edge: .leading, onClose: { closed += 1 }) { AnyView(EmptyView()) }
+        XCTAssertEqual(host.open?.id, "page")
+        XCTAssertFalse(router.isDrawerOpen)
+
+        // Removing a panel that is not the open one changes nothing.
+        host.remove("other")
+        XCTAssertEqual(host.open?.id, "page")
+        host.remove("page")
+        XCTAssertNil(host.open)
+        XCTAssertEqual(closed, 1, "its owner took it away: no callback")
+    }
+
+    // MARK: - B10.8-S
+
+    func test_B10_8_tabSwitchesAndDrawerCyclesRequestNothingAndKeepEachPagesModelAndState() async throws {
+        let stub = BootStub(config: config(drawerItems: true))
+        let router = try await router(stub)
+        let host = DrawerHost()
+        let model = TabShellModel(router: router, drawers: host)
+        let feedRoute = router.root
+        let feedLoader = router.loader(for: feedRoute)
+        await feedLoader.loadIfNeeded()
+        guard case .loaded(let feed) = feedLoader.phase else { return XCTFail("feed did not load") }
+        feed.store.dispatch(["count": 1])
+
+        model.select(1)
+        let searchRoute = router.root
+        let searchLoader = router.loader(for: searchRoute)
+        await searchLoader.loadIfNeeded()
+        guard case .loaded(let search) = searchLoader.phase else { return XCTFail("search did not load") }
+        search.store.dispatch(["query": "orca"])
+        XCTAssertEqual(pages(stub), ["feed", "search"])
+
+        for _ in 0..<3 {
+            model.openDrawer()
+            XCTAssertEqual(host.open?.id, DrawerHost.shellPanel)
+            host.dismiss()
+            model.select(0)
+            model.openDrawer()
+            router.closeDrawer()
+            model.openDrawer()
+            model.select(1)  // the switch closes it
+            XCTAssertNil(host.open)
+        }
+
+        XCTAssertEqual(pages(stub), ["feed", "search"], "no page was asked for again")
+        XCTAssertTrue(router.loader(for: feedRoute) === feedLoader)
+        XCTAssertTrue(router.loader(for: searchRoute) === searchLoader)
+        guard case .loaded(let feedAgain) = feedLoader.phase,
+              case .loaded(let searchAgain) = searchLoader.phase else {
+            return XCTFail("the pages are still loaded")
+        }
+        XCTAssertTrue(feedAgain === feed)
+        XCTAssertTrue(searchAgain === search)
+        XCTAssertEqual(feed.store.value("count"), 1)
+        XCTAssertEqual(search.store.value("query"), "orca")
+    }
+
+    func test_B10_8_theHostedShellWithADrawerKeepsItsPagesAcrossSwitchesAndDrawerCycles() async throws {
+        let stub = BootStub(config: config(drawerItems: true))
+        let router = try await router(stub)
+        try await hosting(OrcaApp(router: router)) {
+            let feedRoute = router.root
+            let feedLoader = router.loader(for: feedRoute)
+            guard case .loaded(let feed) = feedLoader.phase else {
+                return XCTFail("the first tab's page is loaded by the shell")
+            }
+            feed.store.dispatch(["count": 1])
+            router.selectTab(1)
+            try await settle()
+            XCTAssertEqual(pages(stub), ["feed", "search"])
+
+            for _ in 0..<2 {
+                router.openDrawer()
+                try await settle()
+                XCTAssertTrue(router.isDrawerOpen)
+                router.closeDrawer()
+                try await settle()
+                router.selectTab(0)
+                try await settle()
+                router.openDrawer()
+                try await settle()
+                router.selectTab(1)
+                try await settle()
+                XCTAssertFalse(router.isDrawerOpen)
+            }
+
+            XCTAssertEqual(pages(stub), ["feed", "search"], "no page was asked for again")
+            XCTAssertTrue(router.loader(for: feedRoute) === feedLoader)
+            guard case .loaded(let again) = feedLoader.phase else {
+                return XCTFail("the first tab's page is still loaded")
+            }
+            XCTAssertTrue(again === feed)
+            XCTAssertEqual(feed.store.value("count"), 1)
         }
     }
 }

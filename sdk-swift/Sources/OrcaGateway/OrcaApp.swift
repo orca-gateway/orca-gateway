@@ -228,16 +228,26 @@ public struct OrcaApp: View {
 
 /// A router on screen: the tab shell while it has one (a config with tabs,
 /// showing a tab), else one stack (no tabs, a host path, or after a `go` to
-/// a route outside the tabs).
+/// a route outside the tabs). Over it lies the drawer layer: the one place a
+/// drawer is drawn (the shell's and each page Scaffold's), so a panel covers
+/// the navigation and tab bars too. The host is not observed here: a drawer
+/// opening redraws the layer, not the pages.
 @MainActor
 private struct RouterRoot: View {
     @ObservedObject var router: OrcaRouter
+    @State private var drawers = DrawerHost()
 
     var body: some View {
-        if router.hasShell {
-            TabShellView(router: router)
-        } else {
-            RouteStack(router: router)
+        ZStack {
+            Group {
+                if router.hasShell {
+                    TabShellView(router: router, drawers: drawers)
+                } else {
+                    RouteStack(router: router)
+                }
+            }
+            .environment(\.orcaDrawerHost, drawers)
+            DrawerHostLayer(host: drawers)
         }
     }
 }
@@ -249,7 +259,7 @@ private struct RouteStack: View {
 
     var body: some View {
         NavigationStack(path: $router.stack) {
-            RoutePage(router: router, route: router.root)
+            RoutePage(router: router, route: router.root, isStackRoot: true)
                 .id(router.root.id)
                 .navigationDestination(for: OrcaRoute.self) { route in
                     RoutePage(router: router, route: route)
@@ -271,11 +281,13 @@ extension OrcaRoute {
 }
 
 /// One route: its page, or "Page not found" for a location no route matches
-/// (no loader is made for it, so nothing is fetched).
+/// (no loader is made for it, so nothing is fetched). `isStackRoot`: the first
+/// page of its NavigationStack, where no back swipe takes the leading edge.
 @MainActor
 struct RoutePage: View {
     let router: OrcaRouter
     let route: OrcaRoute
+    var isStackRoot = false
 
     var body: some View {
         if route.isNotFound {
@@ -288,6 +300,7 @@ struct RoutePage: View {
             .accessibilityIdentifier("orca.notFound")
         } else {
             LoadedRoutePage(route: route, loader: router.loader(for: route))
+                .environment(\.orcaPage, OrcaPageContext(router: router, route: route, isStackRoot: isStackRoot))
         }
     }
 }
@@ -319,7 +332,7 @@ private struct LoadedRoutePage: View {
 
 /// The navigation bar of a route outside the tabs: an inline title; the
 /// NavigationStack adds the back button when the route is pushed.
-private struct TitleBar: ViewModifier {
+struct TitleBar: ViewModifier {
     let title: String?
 
     func body(content: Content) -> some View {

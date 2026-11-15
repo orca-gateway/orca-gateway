@@ -143,6 +143,114 @@ final class StructureWidgetTests: XCTestCase {
         XCTAssertEqual(model.resolve("page")?.slots["drawer"], "drawer")
     }
 
+    // MARK: B10.5-S (the page Scaffold's drawer and endDrawer)
+
+    func test_B10_5_S_aPageDrawerRequestOpensTheLeadingPanelAndIsCleared() throws {
+        let model = try scaffoldDrawersModel()
+        let router = OrcaRouter(client: BootStub.client(BootStub(config: [:])), path: "inbox")
+        let host = DrawerHost()
+        let drawers = ScaffoldDrawers(node: try XCTUnwrap(model.resolve("page")), model: model,
+                                      host: host, router: router, route: router.root.id)
+        XCTAssertEqual(drawers.slot(.leading), "drawer")
+        XCTAssertEqual(drawers.slot(.trailing), "end_drawer")
+
+        // No request: nothing opens.
+        drawers.answerRequest()
+        XCTAssertNil(host.open)
+
+        // `openDrawer` where there is no shell drawer asks the page on top.
+        router.openDrawer()
+        XCTAssertEqual(router.pageDrawerRequest, router.root.id)
+        drawers.answerRequest()
+        XCTAssertEqual(host.open?.id, drawers.panelId(.leading))
+        XCTAssertEqual(host.open?.edge, .leading)
+        XCTAssertNil(router.pageDrawerRequest, "the page that opened its drawer clears the request")
+        XCTAssertTrue(drawers.isOpen(.leading))
+
+        // A request for another route is not this page's.
+        host.dismiss()
+        router.navigate(to: "detail")
+        router.openDrawer()
+        drawers.answerRequest()
+        XCTAssertNil(host.open)
+        XCTAssertEqual(router.pageDrawerRequest, router.top.id)
+
+        // A Scaffold with no drawer clears its request and opens nothing.
+        let bare = try scaffoldDrawersModel(drawers: false)
+        let none = ScaffoldDrawers(node: try XCTUnwrap(bare.resolve("page")), model: bare,
+                                   host: host, router: router, route: router.top.id)
+        XCTAssertNil(none.slot(.leading))
+        none.answerRequest()
+        XCTAssertNil(host.open)
+        XCTAssertNil(router.pageDrawerRequest)
+    }
+
+    func test_B10_5_S_theScaffoldsDrawerAndEndDrawerOpenAndCloseOneAtATime() throws {
+        let model = try scaffoldDrawersModel()
+        let host = DrawerHost()
+        let drawers = ScaffoldDrawers(node: try XCTUnwrap(model.resolve("page")), model: model,
+                                      host: host, router: nil, route: nil)
+        XCTAssertFalse(drawers.isOpen(.leading))
+
+        drawers.open(.leading)
+        XCTAssertEqual(host.open?.edge, .leading)
+        XCTAssertTrue(drawers.isOpen(.leading))
+        // A tap on the scrim, a swipe, escape.
+        host.dismiss()
+        XCTAssertNil(host.open)
+        XCTAssertFalse(drawers.isOpen(.leading))
+
+        drawers.open(.trailing)
+        XCTAssertEqual(host.open?.id, drawers.panelId(.trailing))
+        XCTAssertEqual(host.open?.edge, .trailing)
+        // The other one takes its place.
+        drawers.open(.leading)
+        XCTAssertTrue(drawers.isOpen(.leading))
+        XCTAssertFalse(drawers.isOpen(.trailing))
+        // Closing the one that is not open changes nothing.
+        drawers.close(.trailing)
+        XCTAssertTrue(drawers.isOpen(.leading))
+        drawers.close(.leading)
+        XCTAssertNil(host.open)
+
+        // Without a host (a page drawn outside OrcaApp) nothing opens.
+        let alone = ScaffoldDrawers(node: try XCTUnwrap(model.resolve("page")), model: model,
+                                    host: nil, router: nil, route: nil)
+        alone.open(.leading)
+        XCTAssertFalse(alone.isOpen(.leading))
+        XCTAssertFalse(alone.showsMenu(.leading))
+    }
+
+    func test_B10_5_S_anAppBarWithNoLeadingOrActionsGetsTheMenuButtons() throws {
+        let drawerHost = DrawerHost()
+        func drawers(_ model: OrcaPageModel) throws -> ScaffoldDrawers {
+            ScaffoldDrawers(node: try XCTUnwrap(model.resolve("page")), model: model,
+                            host: drawerHost, router: nil, route: nil)
+        }
+        // Fixture 61: an AppBar with a title only.
+        let plain = try drawers(scaffoldDrawersModel())
+        XCTAssertTrue(plain.showsMenu(.leading))
+        XCTAssertTrue(plain.showsMenu(.trailing))
+        // The page's own leading widget and actions stay.
+        let own = try drawers(scaffoldDrawersModel(appBar: ["title": "title", "leading": "title", "action_0": "title"]))
+        XCTAssertFalse(own.showsMenu(.leading))
+        XCTAssertFalse(own.showsMenu(.trailing))
+        // No drawers: no buttons. No AppBar: none either.
+        let none = try drawers(scaffoldDrawersModel(drawers: false))
+        XCTAssertFalse(none.showsMenu(.leading))
+        XCTAssertFalse(none.showsMenu(.trailing))
+        let barless = try drawers(scaffoldDrawersModel(appBar: nil))
+        XCTAssertFalse(barless.showsMenu(.leading))
+        XCTAssertFalse(barless.showsMenu(.trailing))
+
+        // The hosted panel is the slot's Drawer, at its own width.
+        plain.open(.trailing)
+        let panel = try XCTUnwrap(drawerHost.open)
+        let frames = host(width: 390, height: 600) { panel.content().record("panel") }
+        XCTAssertEqual(frames["panel"]?.width, 320)
+        XCTAssertEqual(frames["panel"]?.height, 600)
+    }
+
     // MARK: B10.C-S
 
     func test_B10_C_S_thirtyOneWidgetsAreAdvertisedWithTheThreeNewOnes() {
@@ -250,6 +358,43 @@ final class StructureWidgetTests: XCTestCase {
                  "props": ["data": "Inbox"], "children": [], "watches": []],
                 ["id": "bare", "type": "Drawer", "kind": "layout", "childMode": "single",
                  "props": [:], "children": [], "watches": []],
+            ],
+        ]).decode(PageResponse.self))
+    }
+
+    /// Fixture 61: a Scaffold with an AppBar, a body, a `drawer` and an
+    /// `endDrawer`; `appBar` gives the AppBar's slots, nil for no AppBar.
+    private func scaffoldDrawersModel(drawers: Bool = true,
+                                      appBar: [String: JSONValue]? = ["title": "title"]) throws -> OrcaPageModel {
+        var slots: [String: JSONValue] = ["body": "body"]
+        if drawers {
+            slots["drawer"] = "drawer"
+            slots["endDrawer"] = "end_drawer"
+        }
+        if appBar != nil { slots["appBar"] = "bar" }
+        return OrcaPageModel(page: try JSONValue.object([
+            "pageId": "p", "title": "T", "state": [],
+            "components": [
+                ["id": "page", "type": "Scaffold", "kind": "structure", "childMode": "none",
+                 "props": .object(slots), "children": ["bar", "body", "drawer", "end_drawer"], "watches": []],
+                ["id": "bar", "type": "AppBar", "kind": "structure", "childMode": "none",
+                 "props": .object(appBar ?? [:]), "children": ["title"], "watches": []],
+                ["id": "title", "type": "Text", "kind": "primitive", "childMode": "none",
+                 "props": ["data": "Inbox"], "children": [], "watches": []],
+                ["id": "body", "type": "Text", "kind": "primitive", "childMode": "none",
+                 "props": ["data": "Messages"], "children": [], "watches": []],
+                ["id": "drawer", "type": "Drawer", "kind": "layout", "childMode": "single",
+                 "props": ["backgroundColor": "#FAFAFA", "elevation": 16, "width": 280],
+                 "children": ["menu"], "watches": []],
+                ["id": "menu", "type": "Column", "kind": "layout", "childMode": "multi",
+                 "props": [:], "children": ["menu_inbox"], "watches": []],
+                ["id": "menu_inbox", "type": "Text", "kind": "primitive", "childMode": "none",
+                 "props": ["data": "Inbox"], "children": [], "watches": []],
+                ["id": "end_drawer", "type": "Drawer", "kind": "layout", "childMode": "single",
+                 "props": ["backgroundColor": "#263238", "elevation": 4, "width": 320],
+                 "children": ["filters_title"], "watches": []],
+                ["id": "filters_title", "type": "Text", "kind": "primitive", "childMode": "none",
+                 "props": ["data": "Filters"], "children": [], "watches": []],
             ],
         ]).decode(PageResponse.self))
     }

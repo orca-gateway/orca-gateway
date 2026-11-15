@@ -44,7 +44,10 @@ final class ShellTree {
 
 /// What the tab shell shows, read from the router: the tab items, the
 /// selected tab, each tab's `NavigationStack` path, whether the bar is the
-/// server's and where it is hidden. `TabShellView` only draws this.
+/// server's and where it is hidden, and the shell drawer (its rows or its
+/// server tree, which pages get the menu button, and the panel it presents
+/// on the app's drawer host while the router has it open). `TabShellView`
+/// only draws this.
 @MainActor
 final class TabShellModel: ObservableObject {
     /// One item of the default tab bar.
@@ -57,19 +60,89 @@ final class TabShellModel: ObservableObject {
         let symbol: String
     }
 
+    /// One row of the default drawer (`drawerItems`).
+    struct DrawerRow: Identifiable, Equatable {
+        /// The item's id in the config.
+        let id: String
+        let label: String
+        /// The SF Symbol of the item's Material icon name (`IconNames`).
+        let symbol: String
+        /// The location a tap pushes.
+        let route: String
+    }
+
     let router: OrcaRouter
     let items: [Item]
     /// The server tab bar (`tabBarComponents`); nil for the default bar.
     let bar: ShellTree?
+    /// The server drawer (`drawerComponents`); nil for the default list or
+    /// no drawer.
+    let drawer: ShellTree?
+    /// The default drawer's rows; empty without `drawerItems`.
+    let drawerRows: [DrawerRow]
+    /// The default drawer's header (Flutter `OrcaShell._buildDefaultDrawer`).
+    let drawerHeader = "Menu"
+    private var drawerOpen: AnyCancellable?
 
-    init(router: OrcaRouter) {
+    /// `drawers`: where the shell drawer is shown while the router has it
+    /// open; nil shows none.
+    init(router: OrcaRouter, drawers: DrawerHost? = nil) {
         self.router = router
         items = router.tabs.enumerated().map { index, tab in
             Item(index: index, id: tab.id, label: tab.label, symbol: IconNames.symbol(for: tab.icon))
         }
-        let components = router.table?.config.tabBarComponents ?? []
+        let config = router.table?.config
+        let components = config?.tabBarComponents ?? []
         bar = components.isEmpty ? nil : ShellTree(components: components, router: router)
+        let tree = router.hasDrawer ? config?.drawerComponents ?? [] : []
+        drawer = tree.isEmpty ? nil : ShellTree(components: tree, router: router)
+        drawerRows = router.hasDrawer ? (config?.drawerItems ?? []).map {
+            DrawerRow(id: $0.id, label: $0.label, symbol: IconNames.symbol(for: $0.icon), route: $0.route)
+        } : []
+        guard router.hasDrawer, let drawers else { return }
+        // The router says when the shell drawer is open; the host shows it.
+        drawerOpen = router.$isDrawerOpen.removeDuplicates().sink { [weak self, weak router, weak drawers] open in
+            guard open else {
+                drawers?.remove(DrawerHost.shellPanel)
+                return
+            }
+            drawers?.present(id: DrawerHost.shellPanel, edge: .leading,
+                             onClose: { router?.closeDrawer() }) {
+                AnyView(Group { if let self { ShellDrawerView(model: self) } })
+            }
+        }
     }
+
+    // MARK: The shell drawer
+
+    /// The title of the top bar a tab's page gets under a shell drawer: its
+    /// tab's label, beside the menu button. Nil without a drawer and for a
+    /// route over the shell: no bar, no menu.
+    func menuTitle(for route: OrcaRoute) -> String? {
+        guard router.hasDrawer, let index = router.tabStacks.firstIndex(where: { $0.contains(route) }),
+              items.indices.contains(index) else { return nil }
+        return items[index].label
+    }
+
+    /// A drag from the leading screen edge opens the shell drawer: at a
+    /// tab's first page, where no back swipe takes that edge.
+    func opensDrawerByEdge(for route: OrcaRoute) -> Bool {
+        router.hasDrawer && router.tabStacks.contains { $0.first == route }
+    }
+
+    /// The menu button, and the edge drag.
+    func openDrawer() {
+        router.openDrawer()
+    }
+
+    /// A tap on a row of the default drawer: close the drawer, then push the
+    /// item's route (Flutter pops the drawer, then `GoRouter.push`).
+    func tap(_ row: DrawerRow) {
+        router.closeDrawer()
+        router.navigate(to: row.route)
+    }
+
+    // MARK: The tabs
 
     /// The server's tree is drawn in place of the system tab bar.
     var usesServerBar: Bool { bar != nil }
@@ -125,9 +198,9 @@ struct TabShellView: View {
     @ObservedObject var router: OrcaRouter
     @StateObject private var model: TabShellModel
 
-    init(router: OrcaRouter) {
+    init(router: OrcaRouter, drawers: DrawerHost? = nil) {
         self.router = router
-        _model = StateObject(wrappedValue: TabShellModel(router: router))
+        _model = StateObject(wrappedValue: TabShellModel(router: router, drawers: drawers))
     }
 
     var body: some View {
@@ -192,7 +265,7 @@ private struct TabStack: View {
         if let root = model.root(of: index) {
             NavigationStack(path: Binding(get: { model.path(of: index) },
                                           set: { model.setPath(index, $0) })) {
-                RoutePage(router: router, route: root)
+                RoutePage(router: router, route: root, isStackRoot: true)
                     .id(root.id)
                     .modifier(ShellBar(model: model, route: root))
                     .navigationDestination(for: OrcaRoute.self) { route in
@@ -206,16 +279,34 @@ private struct TabStack: View {
     }
 }
 
-/// The tab bar as one page of a tab's stack sees it: the system bar, hidden
-/// over the shell and under a server bar; the server bar below a tab's page.
+/// The shell's bars as one page of a tab's stack sees them. The tab bar: the
+/// system bar, hidden over the shell and under a server bar; the server bar
+/// below a tab's page. Under a shell drawer, the top bar of a tab's page: its
+/// tab's label and a leading menu button. A page whose own AppBar is the
+/// navigation bar keeps its title, and gets the menu button only when it set
+/// no leading item (`PageChrome`). At a tab's first page a drag from the
+/// leading edge opens the drawer too, unless the page has a drawer there.
 @MainActor
 private struct ShellBar: ViewModifier {
     let model: TabShellModel
     let route: OrcaRoute
+    /// What the page drawn here says about its own bar and drawer.
+    @State private var page = PageChrome()
 
     func body(content: Content) -> some View {
         let server = model.showsServerBar(for: route)
+        let menu = model.menuTitle(for: route)
+        let page = $page
         content
+            .overlay(alignment: .leading) {
+                if model.opensDrawerByEdge(for: route), !self.page.hasLeadingDrawer {
+                    DrawerEdgeGrip(edge: .leading) { model.openDrawer() }
+                }
+            }
+            .onPreferenceChange(PageChromeKey.self) { page.wrappedValue = $0 }
+            .modifier(ShellMenuBar(title: self.page.hasBar ? nil : menu,
+                                   showsMenu: menu != nil && !self.page.hasLeadingItem,
+                                   open: { model.openDrawer() }))
             #if os(iOS)
             .toolbar(server || model.hidesBar(for: route) ? .hidden : .automatic, for: .tabBar)
             #endif
@@ -224,6 +315,75 @@ private struct ShellBar: ViewModifier {
                     ShellTreeView(tree: bar)
                 }
             }
+    }
+}
+
+/// The top bar the shell gives a tab's page under a drawer: an inline title
+/// and the menu button as the leading item.
+private struct ShellMenuBar: ViewModifier {
+    let title: String?
+    let showsMenu: Bool
+    let open: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(TitleBar(title: title))
+            #if os(iOS)
+            .toolbar {
+                if showsMenu {
+                    ToolbarItem(placement: .navigationBarLeading) { DrawerMenuButton(open: open) }
+                }
+            }
+            #endif
+    }
+}
+
+/// The shell drawer's content: the server tree (its root `Drawer` gives the
+/// panel its width and colour), else the default list, the Swift side of
+/// Flutter's `OrcaShell._buildDefaultDrawer`: a blue "Menu" header, then one
+/// row per item, icon and label.
+@MainActor
+struct ShellDrawerView: View {
+    let model: TabShellModel
+
+    var body: some View {
+        if let tree = model.drawer {
+            ShellTreeView(tree: tree)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(model.drawerHeader)
+                    .font(.system(size: 24))
+                    .foregroundColor(.white)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+                    .background(Props.color(hex: "#1976D2").ignoresSafeArea(edges: [.top, .horizontal]))
+                    .accessibilityAddTraits(.isHeader)
+                    .padding(.bottom, 8)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(model.drawerRows) { row in
+                            Button { model.tap(row) } label: {
+                                HStack(spacing: 16) {
+                                    Image(systemName: row.symbol)
+                                        .font(.system(size: 20))
+                                        .frame(width: 24, height: 24)
+                                        .foregroundColor(.secondary)
+                                        .accessibilityHidden(true)
+                                    Text(row.label).font(.system(size: 16)).foregroundColor(.primary)
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.horizontal, 16)
+                                .frame(minHeight: 56)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: drawerDefaultWidth, maxHeight: .infinity, alignment: .top)
+            .background(systemBackground.ignoresSafeArea())
+        }
     }
 }
 

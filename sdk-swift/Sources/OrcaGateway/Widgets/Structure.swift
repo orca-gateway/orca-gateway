@@ -11,14 +11,24 @@ import AppKit
 /// centred, leading item, `action_N` items on the trailing side);
 /// `floatingActionButton` floats bottom-trailing; `bottomNavigationBar` and
 /// `persistentFooterButton_N` sit above the bottom safe area. The `drawer`
-/// and `endDrawer` slots and bottom sheets are not drawn yet.
+/// slot is a panel at the leading edge and `endDrawer` one at the trailing
+/// edge, shown by the app's drawer host over everything (`ScaffoldDrawers`):
+/// a drag from the screen edge opens one (the leading edge only on the first
+/// page of a stack, where no back swipe takes it), the `openDrawer` action
+/// the leading one, and an AppBar with no leading widget (no actions) gets a
+/// menu button for it, as Flutter's AppBar does. Bottom sheets are not drawn
+/// yet.
 @MainActor
 struct ScaffoldView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
+    @Environment(\.orcaDrawerHost) private var drawerHost
+    @Environment(\.orcaPage) private var page
 
     var body: some View {
         let appBar = node.slots["appBar"].flatMap(model.resolve)
+        let drawers = ScaffoldDrawers(node: node, model: model, host: drawerHost,
+                                      router: page?.router, route: page?.route.id)
         ZStack(alignment: .bottomTrailing) {
             if let background = Props.color(node["backgroundColor"]) {
                 background.ignoresSafeArea()
@@ -34,7 +44,31 @@ struct ScaffoldView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBars }
-        .modifier(AppBarChrome(appBar: appBar, model: model))
+        .overlay(alignment: .leading) {
+            if drawers.hosts(.leading), page?.isStackRoot ?? true {
+                DrawerEdgeGrip(edge: .leading) { drawers.open(.leading) }
+            }
+        }
+        .overlay(alignment: .trailing) {
+            if drawers.hosts(.trailing) {
+                DrawerEdgeGrip(edge: .trailing) { drawers.open(.trailing) }
+            }
+        }
+        .background {
+            if let router = page?.router {
+                PageDrawerRequests(router: router, drawers: drawers)
+            }
+        }
+        .onDisappear {
+            drawers.close(.leading)
+            drawers.close(.trailing)
+        }
+        .preference(key: PageChromeKey.self, value: PageChrome(
+            hasBar: appBar?.type == "AppBar",
+            hasLeadingItem: appBar?.type == "AppBar"
+                && (appBar?.slots["leading"] != nil || drawers.showsMenu(.leading)),
+            hasLeadingDrawer: drawers.hosts(.leading)))
+        .modifier(AppBarChrome(appBar: appBar, model: model, drawers: drawers))
         // Flutter's Scaffold lays out its slots with fresh, loose
         // constraints, so an axis forced on the Scaffold (the warn banner's
         // stretched Column) reaches neither the AppBar title nor the body.
@@ -61,6 +95,83 @@ struct ScaffoldView: View {
     }
 }
 
+/// A Scaffold's `drawer` and `endDrawer` slots without their drawing: which
+/// it has, the panel each presents on the app's drawer host, and what opens
+/// and closes them, so a test can run them without a touch.
+@MainActor
+struct ScaffoldDrawers {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+    /// The app's drawer host; nil for a page drawn outside `OrcaApp`, where
+    /// no drawer opens.
+    let host: DrawerHost?
+    let router: OrcaRouter?
+    /// The route this page is drawn for: the id `pageDrawerRequest` names.
+    let route: OrcaRoute.ID?
+
+    /// The node in the `drawer` slot (leading) or the `endDrawer` slot.
+    func slot(_ edge: DrawerEdge) -> String? {
+        node.slots[edge == .leading ? "drawer" : "endDrawer"]
+    }
+
+    /// The Scaffold has a drawer at that edge and a host to show it.
+    func hosts(_ edge: DrawerEdge) -> Bool {
+        host != nil && slot(edge) != nil
+    }
+
+    /// The id of that drawer's panel on the host.
+    func panelId(_ edge: DrawerEdge) -> String {
+        "\(ObjectIdentifier(model).hashValue)/\(node.id)/\(edge == .leading ? "drawer" : "endDrawer")"
+    }
+
+    func isOpen(_ edge: DrawerEdge) -> Bool {
+        host?.open?.id == panelId(edge)
+    }
+
+    /// Show that drawer: the slot's node, normally a `Drawer`, which gives
+    /// the panel its width and colour.
+    func open(_ edge: DrawerEdge) {
+        guard let host, let id = slot(edge) else { return }
+        let model = self.model
+        host.present(id: panelId(edge), edge: edge) { AnyView(NodeView(id: id, model: model)) }
+    }
+
+    func close(_ edge: DrawerEdge) {
+        host?.remove(panelId(edge))
+    }
+
+    /// `openDrawer` asked this page for its drawer (`pageDrawerRequest`
+    /// names its route): clear the request and open the leading drawer. A
+    /// Scaffold with none clears the request and opens nothing.
+    func answerRequest() {
+        guard let router, let route, router.pageDrawerRequest == route else { return }
+        router.pageDrawerRequest = nil
+        open(.leading)
+    }
+
+    /// The AppBar gets a menu button for that drawer: it is the navigation
+    /// bar and has no leading widget (for the end drawer: no actions).
+    func showsMenu(_ edge: DrawerEdge) -> Bool {
+        guard hosts(edge), let appBar = node.slots["appBar"].flatMap(model.resolve),
+              appBar.type == "AppBar" else { return false }
+        return edge == .leading ? appBar.slots["leading"] == nil : indexedSlots(appBar, "action").isEmpty
+    }
+}
+
+/// Opens a Scaffold's drawer when the router asks its page for one. Only
+/// this view follows the router, so a route change redraws no Scaffold.
+@MainActor
+private struct PageDrawerRequests: View {
+    @ObservedObject var router: OrcaRouter
+    let drawers: ScaffoldDrawers
+
+    var body: some View {
+        Color.clear
+            .onAppear { drawers.answerRequest() }
+            .onChange(of: router.pageDrawerRequest) { _ in drawers.answerRequest() }
+    }
+}
+
 /// `name_0`, `name_1`, ... slot ids in order, stopping at the first gap (the
 /// Flutter builders read indexed slots this way).
 func indexedSlots(_ node: ResolvedNode, _ name: String) -> [String] {
@@ -69,12 +180,14 @@ func indexedSlots(_ node: ResolvedNode, _ name: String) -> [String] {
     return ids
 }
 
-/// Puts a Scaffold's AppBar into the navigation bar. A slot that is not an
+/// Puts a Scaffold's AppBar into the navigation bar, with a menu button for
+/// a drawer where the AppBar left the place free. A slot that is not an
 /// AppBar is drawn above the body instead.
 @MainActor
 private struct AppBarChrome: ViewModifier {
     let appBar: ResolvedNode?
     let model: OrcaPageModel
+    let drawers: ScaffoldDrawers
 
     func body(content: Content) -> some View {
         if let appBar, appBar.type == "AppBar" {
@@ -94,10 +207,18 @@ private struct AppBarChrome: ViewModifier {
                         ToolbarItem(placement: .navigationBarLeading) {
                             NodeView(id: leading, model: model)
                         }
+                    } else if drawers.showsMenu(.leading) {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            DrawerMenuButton { drawers.open(.leading) }
+                        }
                     }
                     if !actions.isEmpty {
                         ToolbarItemGroup(placement: .navigationBarTrailing) {
                             ForEach(actions, id: \.self) { NodeView(id: $0, model: model) }
+                        }
+                    } else if drawers.showsMenu(.trailing) {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            DrawerMenuButton { drawers.open(.trailing) }
                         }
                     }
                     #endif
@@ -310,8 +431,8 @@ private struct NavIcon: View {
 /// the system background), `width` wide (default 304, never wider than the
 /// space there is) and as tall as its parent, with `elevation` (default 1,
 /// Material 3) as a shadow. No child draws the empty panel. Sliding it in
-/// from the side is the host's work; met as an ordinary child it draws in
-/// place.
+/// from the side is the drawer host's work (`DrawerPanel`); met as an
+/// ordinary child it draws in place.
 @MainActor
 struct DrawerView: View {
     let node: ResolvedNode
@@ -323,18 +444,21 @@ struct DrawerView: View {
             Color.clear
             ChildView(node: node, model: model)
         }
-        .frame(maxWidth: Props.number(node["width"]) ?? 304, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: Props.number(node["width"]) ?? drawerDefaultWidth, maxHeight: .infinity, alignment: .topLeading)
         // The Material Drawer forces its own size on its child.
         .environment(\.orcaTight, [.horizontal, .vertical])
+        // As a panel at a screen edge its surface runs under the status bar
+        // and the home indicator; its child stays inside the safe area.
         .background(
             Rectangle()
                 .fill(Props.color(node["backgroundColor"]) ?? systemBackground)
-                .shadow(color: Color.black.opacity(elevation > 0 ? 0.18 : 0), radius: elevation, x: 0, y: 0))
+                .shadow(color: Color.black.opacity(elevation > 0 ? 0.18 : 0), radius: elevation, x: 0, y: 0)
+                .ignoresSafeArea())
     }
 }
 
 /// The platform's background colour, light or dark.
-private var systemBackground: Color {
+var systemBackground: Color {
     #if canImport(UIKit)
     Color(UIColor.systemBackground)
     #elseif canImport(AppKit)
