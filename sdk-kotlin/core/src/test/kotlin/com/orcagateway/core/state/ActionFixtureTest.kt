@@ -168,8 +168,8 @@ class ActionFixtureTest {
     fun implementsLooksInsideOnceAndAlways() {
         assertTrue(ActionExecutor.implements(Action.Once(Action.GoBack)))
         assertTrue(ActionExecutor.implements(Action.Always(Action.DebugLog())))
-        assertFalse(ActionExecutor.implements(Action.Once(Action.OpenDrawer)))
-        assertFalse(ActionExecutor.implements(Action.Always(Action.ActionGroup(actions = listOf(Action.OpenDrawer)))))
+        assertFalse(ActionExecutor.implements(Action.Once(Action.AnimateForward("fade"))))
+        assertFalse(ActionExecutor.implements(Action.Always(Action.ActionGroup(actions = listOf(Action.AnimateForward("fade"))))))
     }
 
     @Test

@@ -108,7 +108,7 @@ final class ActionFixtureTests: XCTestCase {
     func testImplementsLooksInsideOnceAndAlways() {
         XCTAssertTrue(ActionExecutor.implements(.once(.init(action: .goBack))))
         XCTAssertTrue(ActionExecutor.implements(.always(.init(action: .debugLog(.init())))))
-        XCTAssertFalse(ActionExecutor.implements(.once(.init(action: .openDrawer))))
+        XCTAssertFalse(ActionExecutor.implements(.once(.init(action: .animateForward(.init(animationId: "a"))))))
         XCTAssertFalse(ActionExecutor.implements(.always(.init(action: .once(.init(action: .refetchPage))))))
     }
 
