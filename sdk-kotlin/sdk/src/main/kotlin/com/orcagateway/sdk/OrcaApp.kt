@@ -127,7 +127,16 @@ public class OrcaPageLoader(
  * Snackbars and toasts are handled by the page; `openUrl`, the clipboard and
  * share go to [system], by default the device's own ([SystemActions.android]).
  * The router is made once, like Swift's `StateObject`, and closed with this
- * composition: a new activity starts again at [path].
+ * composition: a new activity starts again at [path]. A [client] without a
+ * device id gets the one saved in SharedPreferences (`DeviceIdentity`,
+ * [SharedPreferencesKeyValueStore]), made on first run, as Flutter does
+ * whether or not sessions are tracked.
+ *
+ * @param enableOffline runs the version check at boot: a forceUpdate answer
+ * shows the force-update screen and no page is fetched. The static-flow
+ * cache, saved config and `preload()` arrive with plan step 14.
+ * @param enableSessionTracking posts a session start when the app comes to
+ * the foreground and an end when it leaves, queued offline when unsent.
  */
 @Composable
 public fun OrcaApp(
@@ -135,10 +144,13 @@ public fun OrcaApp(
     modifier: Modifier = Modifier,
     path: String = "home",
     system: SystemActions? = null,
+    enableOffline: Boolean = false,
+    enableSessionTracking: Boolean = false,
 ) {
-    val router = remember { OrcaRouter(client, path, system) }
+    val context = LocalContext.current
+    val router = remember { OrcaRouter(client.identified(SharedPreferencesKeyValueStore(context)), path, system) }
     DisposableEffect(router) { onDispose { router.close() } }
-    OrcaApp(router, modifier)
+    OrcaApp(router, modifier, enableOffline, enableSessionTracking)
 }
 
 /**
@@ -151,9 +163,25 @@ public fun OrcaApp(
  *
  * The router is the one source of truth: the system back gesture pops the
  * router, and the [NavHost] follows the router's stack.
+ *
+ * The router's client is used as the host built it: to send the device id
+ * OrcaApp(client) gives, build the client with
+ * `deviceId = DeviceIdentity.resolve(SharedPreferencesKeyValueStore(context))`.
+ * [enableOffline] and [enableSessionTracking] are those of OrcaApp(client).
  */
 @Composable
-public fun OrcaApp(router: OrcaRouter, modifier: Modifier = Modifier) {
+public fun OrcaApp(
+    router: OrcaRouter,
+    modifier: Modifier = Modifier,
+    enableOffline: Boolean = false,
+    enableSessionTracking: Boolean = false,
+) {
+    OrcaBootView(router.client, enableOffline, enableSessionTracking, modifier) { OrcaNavHost(router, modifier) }
+}
+
+/** The router's pages on a [NavHost], once the boot let the app run. */
+@Composable
+private fun OrcaNavHost(router: OrcaRouter, modifier: Modifier) {
     val context = LocalContext.current
     DisposableEffect(router, context) {
         val filled = if (router.system == null) SystemActions.android(context) else null
