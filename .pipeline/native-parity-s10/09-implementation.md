@@ -3,22 +3,21 @@
 ## Front page
 
 ### In one breath
-group 4 of 5 · tasks: 15 green, 0 blocked · cases: 27 of 36 green · all four suites green
-T13 / T14 tab shells: `OrcaApp` draws a tab bar with one kept stack per tab; server tab bar.
-T15 demo apps `tabs` and `tabs-server`, held to what both native SDKs can draw.
-Android back pops inside a tab and is not handled at a tab root.
-engine 743 · Flutter +321 · Swift core 252, UI 106 · Kotlin core 249, sdk 169.
+group 5 of 5 · tasks: 17 green, 0 blocked · cases: 36 of 36 green · all four suites green
+T16 Swift drawers: shell drawer and page Scaffold drawers drawn on iOS (plan decision 1).
+T17 Kotlin drawers: M3 modal drawer for the shell, drawer and endDrawer for a page Scaffold.
+Opening or closing a drawer, or switching tabs, asks the server for nothing and keeps each page.
+engine 743 · Flutter +321 · Swift core 252, UI 118 · Kotlin core 249, sdk 189.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided: on macOS, where `swift test` runs, the shell uses a plain stand-in for `TabView`
-(the real one is checked by hand on the simulator) · Android keeps visited pages composed,
-unplaced, so text and scroll survive a switch.
+2 auto-decided: Kotlin, with both page drawers, opens only the leading one by swipe ·
+the Kotlin shell sheet follows the router's value after a drag took its animation.
 
 ### Questions for you
-1. Next: group 5 (drawers on both SDKs, state kept across switches)? (default: go)
+1. Approve the stage? Hand-checks on simulator and emulator follow in stage 10. (default: go)
 
 ## Appendix
 
@@ -189,7 +188,32 @@ sdk-swift/capabilities.json.
 Review fit: the test's action walker missed nested actions, fixed
 Review quality: pass
 
+### Group 5
+
+#### T16 · Swift drawer: shell drawer, page drawers
+Files: sdk-swift/Sources/OrcaGateway/Widgets/DrawerPanel.swift (new) · OrcaApp.swift · Navigation/TabShellView.swift ·
+Widgets/Structure.swift · Tests: TabShellTests.swift (17) · StructureWidgetTests.swift (13)
+Cases: B10.5-S, B10.6-S, B10.8-S → green (Swift UI 118)
+Changed: `DrawerHost` in `RouterRoot` draws one panel with scrim over the whole app; `ShellBar` shows the tab label,
+menu button and a 16 pt edge grip; `ShellDrawerView` draws `drawerComponents` or the default list; a page Scaffold's
+`drawer` / `endDrawer` open from AppBar buttons, edge grips and `pageDrawerRequest`.
+Decisions: edge-open decides on release · a page with its own drawer keeps the leading button and edge
+Review fit: pass
+Review quality: TitleBar duplicate, modal trait placement, width constant, fixed
+
+#### T17 · Kotlin drawer: shell drawer, page drawers
+Files: sdk-kotlin/sdk/.../OrcaApp.kt · navigation/TabShellScreen.kt · widgets/Structure.kt ·
+Tests: TabShellScreenTest.kt (+7) · widgets/StructureTest.kt (new, 13)
+Cases: B10.5-K, B10.6-K, B10.8-K → green (Kotlin sdk 189)
+Changed: `ShellDrawer` (M3 `ModalNavigationDrawer`) with `ShellTopBar`, `DefaultDrawer` or the server tree; back closes
+an open shell drawer; `ScaffoldWidget` wraps its frame in two `PageDrawer`s and answers `pageDrawerRequest`.
+Decisions: router sync by the sheet's settled value · only the leading page drawer opens by swipe
+Review fit: sheet could stay open when the router closed it mid-drag, fixed (new test, re-review pass)
+Review quality: pass
+
 ### Test run
+group 5: `swift test` core 252, UI 118, 0 failures, 0 warnings · `./gradlew build` successful, core 249, sdk 189,
+0 failed · engine and Flutter unchanged since group 4 (743, +321).
 group 4: `bun test` 743 pass 0 fail · `swift test` core 252, UI 106, 0 failures, 0 warnings · `./gradlew build`
 successful, core 249, sdk 169, 0 failed · both example apps build · Flutter unchanged (+321).
 group 3: `swift test` core 252, UI 97, 0 failures, 0 warnings · `./gradlew build` successful, core 249, sdk 162,
@@ -214,5 +238,7 @@ none
   its own path if its location redirects; Kotlin closes loaders of dropped routes, Swift forgets them (as before).
 - Hand-check must cover the real iOS `TabView` (tap, reselect, bar hiding over a pushed route, the server bar's place),
   since `swift test` runs a stand-in. A toast or snackbar fired from a server shell tree is not drawn on either SDK.
-- No Kotlin test yet for the bar's stop-at-gap rule or its tap (T17 writes `StructureTest.kt`).
+- Drawer notes for the PR: system back does not close a page Scaffold drawer (Kotlin); `OrcaPageView` outside
+  `OrcaApp` has no drawer host (Swift); a `pageDrawerRequest` to a page with no drawer stays until its route leaves;
+  iOS edge-open is a 16 pt strip deciding on release; the two Kotlin menu buttons have different descriptions.
 - `hasShell` always equals `currentTab != nil` in both twins (could be computed).
