@@ -24,6 +24,8 @@ import java.net.URI
  * Any example app on that server runs here too: pass ORCA_APP_ID and
  * ORCA_PATH as intent extras (for example `basic-actions` and `home`, or
  * `server-actions` and `shop`), and ORCA_SERVER_URL for another server.
+ * The boolean extras ORCA_OFFLINE and ORCA_SESSIONS turn on OrcaApp's
+ * version check and session tracking; both are off by default.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,9 +38,13 @@ class MainActivity : ComponentActivity() {
             transport = OkHttpTransport(),
         )
         val path = setting("ORCA_PATH", "home")
+        val offline = intent.getBooleanExtra("ORCA_OFFLINE", false)
+        val sessions = intent.getBooleanExtra("ORCA_SESSIONS", false)
         setContent {
             MaterialTheme {
-                Surface { OrcaApp(client, path = path) }
+                Surface {
+                    OrcaApp(client, path = path, enableOffline = offline, enableSessionTracking = sessions)
+                }
             }
         }
     }
