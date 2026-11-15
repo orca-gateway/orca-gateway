@@ -117,22 +117,43 @@ public final class OrcaPageLoader: ObservableObject {
 @MainActor
 public struct OrcaApp: View {
     @StateObject private var router: OrcaRouter
+    @StateObject private var boot: OrcaBootModel
 
-    public init(client: OrcaClient, path: String = "home", system: SystemActions? = nil) {
-        _router = StateObject(wrappedValue: OrcaRouter(client: client, path: path, system: system))
+    /// A client without a device id gets the one saved in UserDefaults
+    /// (`DeviceIdentity`, made on first run).
+    /// - Parameters:
+    ///   - enableOffline: run the version check at boot; a forceUpdate answer
+    ///     shows the force-update screen and loads no page. The static-flow
+    ///     cache, the saved config and `preload()` arrive with plan step 14.
+    ///   - enableSessionTracking: send a session start when the app comes to
+    ///     the foreground and an end when it goes to the background.
+    public init(client: OrcaClient, path: String = "home", system: SystemActions? = nil,
+                enableOffline: Bool = false, enableSessionTracking: Bool = false) {
+        _router = StateObject(wrappedValue: OrcaRouter(
+            client: client.identified(by: UserDefaultsKeyValueStore()), path: path, system: system))
+        _boot = StateObject(wrappedValue: OrcaBootModel(
+            enableOffline: enableOffline, enableSessionTracking: enableSessionTracking))
     }
 
-    public init(router: @autoclosure @escaping () -> OrcaRouter) {
+    /// The router's client is used as the host built it: to send a device
+    /// id, set `client.deviceId = DeviceIdentity.resolve(UserDefaultsKeyValueStore())`.
+    /// The options are those of `init(client:)`.
+    public init(router: @autoclosure @escaping () -> OrcaRouter,
+                enableOffline: Bool = false, enableSessionTracking: Bool = false) {
         _router = StateObject(wrappedValue: router())
+        _boot = StateObject(wrappedValue: OrcaBootModel(
+            enableOffline: enableOffline, enableSessionTracking: enableSessionTracking))
     }
 
     public var body: some View {
-        NavigationStack(path: $router.stack) {
-            RoutePage(loader: router.loader(for: router.root))
-                .id(router.root.id)
-                .navigationDestination(for: OrcaRoute.self) { route in
-                    RoutePage(loader: router.loader(for: route))
-                }
+        OrcaBootView(boot: boot, client: router.client) {
+            NavigationStack(path: $router.stack) {
+                RoutePage(loader: router.loader(for: router.root))
+                    .id(router.root.id)
+                    .navigationDestination(for: OrcaRoute.self) { route in
+                        RoutePage(loader: router.loader(for: route))
+                    }
+            }
         }
     }
 }
