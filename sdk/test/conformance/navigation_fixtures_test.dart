@@ -15,8 +15,18 @@
 // action executor, the state manager) and reads back, after the boot and after
 // every step, the visible location, the shell's tab index, the app state keys
 // the fixture names and the page paths requested during that step.
+//
+// Links (native parity step 11, case L-F): a file may instead carry `links`,
+// each one URL handed to a fresh app the way the platform hands it to Flutter.
+// Cold: the URL is the platform's default route name before the app is pumped.
+// Warm: the app is shown at `startAt`, then a `pushRouteInformation` call
+// arrives on the `flutter/navigation` channel. `onDeeplink` is set and what it
+// receives is recorded. Flutter's location is compared in the fixture's form
+// (path and query); where a documented Flutter quirk differs from `expected`,
+// the case says so under `flutter` and that is what Flutter is held to.
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -38,6 +48,7 @@ const _caseIds = <String, String>{
   '12': 'B10.2-F',
   '13': 'B10.3-F',
   '14': 'B10.3-F',
+  '15': 'L-F',
 };
 
 const _pageKeys = [
@@ -55,6 +66,26 @@ const _errorKeys = ['kind', 'location', 'redirected'];
 
 const _sessionKeys = {'name', 'boot', 'steps'};
 const _observedKeys = {'location', 'tabIndex', 'appState', 'pageRequests'};
+
+/// Keys of a link case, the required ones and the optional ones.
+const _linkRequiredKeys = {'name', 'link', 'coldStart', 'expected'};
+const _linkOptionalKeys = {'startAt', 'appState', 'flutter'};
+const _linkExpectedKeys = {
+  'kind',
+  'location',
+  'redirected',
+  'stack',
+  'tabIndex',
+  'pageRequests',
+  'event',
+};
+const _linkEventKeys = {
+  'resolvedLocation',
+  'pathParameters',
+  'queryParameters',
+  'wasRedirected',
+  'isColdStart',
+};
 
 /// Keys a step carries per op, `expected` included.
 const _stepKeys = <String, Set<String>>{
@@ -103,13 +134,31 @@ List<String> _stackOf(List<RouteMatchBase> matches) {
 
 String _pathOf(String location) => Uri.parse(location).path;
 
+/// A URL in the form the link fixtures compare: its path and its query,
+/// nothing else. An empty path is "/", a trailing slash is dropped.
+String _linkLocation(String url) {
+  final uri = Uri.parse(url);
+  var path = uri.path.isEmpty ? '/' : uri.path;
+  if (path.length > 1 && path.endsWith('/')) {
+    path = path.substring(0, path.length - 1);
+  }
+  return uri.query.isEmpty ? path : '$path?${uri.query}';
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   final files = fixtureFiles('navigation');
 
-  test('B9.10-F · the family holds at least six well-formed fixtures', () {
-    expect(files.length, greaterThanOrEqualTo(6));
+  test('B9.10-F · the family holds at least fifteen well-formed fixtures', () {
+    expect(files.length, greaterThanOrEqualTo(15));
+    expect(
+      files.where(
+        (f) => (jsonDecode(f.readAsStringSync()) as Map).containsKey('links'),
+      ),
+      isNotEmpty,
+      reason: 'L-F: one file at least carries links',
+    );
     for (final file in files) {
       final name = file.uri.pathSegments.last;
       final fx = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
@@ -123,10 +172,80 @@ void main() {
         expect(fx['appState'], isA<Map>(), reason: '$name appState');
       }
       expect(
-        fx.containsKey('cases') || fx.containsKey('sessions'),
+        fx.containsKey('cases') ||
+            fx.containsKey('sessions') ||
+            fx.containsKey('links'),
         isTrue,
-        reason: '$name carries cases, sessions or both',
+        reason: '$name carries cases, sessions or links',
       );
+      if (fx.containsKey('links')) {
+        expect(fx.keys.toSet(), {
+          'name',
+          'description',
+          'config',
+          'links',
+        }, reason: '$name: a links file carries links alone');
+        final links = fx['links'];
+        expect(links, isA<List>(), reason: '$name links');
+        expect(links as List, isNotEmpty, reason: '$name links');
+        for (final l in links) {
+          final label = '$name · ${(l as Map)['name']}';
+          expect(l.keys.toSet(), containsAll(_linkRequiredKeys), reason: label);
+          expect(
+            l.keys.toSet().difference(_linkRequiredKeys),
+            everyElement(isIn(_linkOptionalKeys)),
+            reason: label,
+          );
+          expect(l['name'], isA<String>(), reason: label);
+          expect(l['link'], isA<String>(), reason: label);
+          expect(l['coldStart'], isA<bool>(), reason: label);
+          if (l.containsKey('startAt')) {
+            expect(l['startAt'], startsWith('/'), reason: label);
+            expect(l['coldStart'], isFalse, reason: '$label: startAt is warm');
+          }
+          if (l.containsKey('appState')) {
+            expect(l['appState'], isA<Map>(), reason: label);
+          }
+          final e = l['expected'];
+          expect(e, isA<Map>(), reason: label);
+          expect((e as Map).keys.toSet(), _linkExpectedKeys, reason: label);
+          expect(e['kind'], anyOf('page', 'error'), reason: label);
+          expect(e['location'], startsWith('/'), reason: label);
+          expect(e['redirected'], isA<bool>(), reason: label);
+          expect(e['stack'], isA<List>(), reason: label);
+          expect(
+            (e['stack'] as List).isEmpty,
+            e['kind'] == 'error',
+            reason: '$label: a stack for a page, none for an error',
+          );
+          expect(e['tabIndex'], anyOf(isNull, isA<int>()), reason: label);
+          expect(e['pageRequests'], isA<List>(), reason: label);
+          final event = e['event'];
+          if (event != null) {
+            expect(event, isA<Map>(), reason: label);
+            expect((event as Map).keys.toSet(), _linkEventKeys, reason: label);
+            expect(event['isColdStart'], l['coldStart'], reason: label);
+          }
+          if (l.containsKey('flutter')) {
+            final f = l['flutter'];
+            expect(f, isA<Map>(), reason: label);
+            expect((f as Map)['why'], isA<String>(), reason: '$label: why');
+            expect(f['why'] as String, isNotEmpty, reason: '$label: why');
+            final over = f.keys.toSet()..remove('why');
+            expect(over, isNotEmpty, reason: '$label: flutter overrides');
+            expect(over, everyElement(isIn(_linkExpectedKeys)), reason: label);
+            final fe = f['event'];
+            if (fe != null) {
+              expect(fe, isA<Map>(), reason: label);
+              expect(
+                (fe as Map).keys,
+                everyElement(isIn(_linkEventKeys)),
+                reason: label,
+              );
+            }
+          }
+        }
+      }
       final sessions = fx['sessions'];
       if (fx.containsKey('sessions')) {
         expect(sessions, isA<List>(), reason: '$name sessions');
@@ -375,6 +494,135 @@ void main() {
           actual,
           equals(expected),
           reason: 'observed: ${jsonEncode(actual)}',
+        );
+      });
+    }
+
+    final links = ((fx['links'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+    for (final l in links) {
+      testWidgets('$id · $name · ${fx['name']} · ${l['name']}', (tester) async {
+        final client = _StubClient();
+        final manager = StateManager();
+        // The app boots with the case's app state laid over the seed, so a
+        // cold link is redirected (or not) by the state the case names.
+        final json = Map<String, dynamic>.from(fx['config'] as Map);
+        json['initialAppState'] = <String, dynamic>{
+          ...?(json['initialAppState'] as Map?)?.cast<String, dynamic>(),
+          ...?(l['appState'] as Map?)?.cast<String, dynamic>(),
+        };
+        final config = NavConfig.fromJson(json);
+        final link = l['link'] as String;
+        final cold = l['coldStart'] as bool;
+
+        // 'route <location>' and 'deeplink' in the order they are called.
+        final calls = <String>[];
+        final events = <OrcaDeeplinkEvent>[];
+
+        if (cold) {
+          // The link opened the app: it is the platform's default route name.
+          tester.platformDispatcher.defaultRouteNameTestValue = link;
+          addTearDown(tester.platformDispatcher.clearDefaultRouteNameTestValue);
+        }
+        await tester.pumpWidget(
+          OrcaApp(
+            client: client,
+            appId: 'fixture-app',
+            preloadedConfig: config,
+            stateManager: manager,
+            onRouteChanged: (e) => calls.add('route ${e.location}'),
+            onDeeplink: (e) {
+              calls.add('deeplink');
+              events.add(e);
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final router = GoRouter.of(tester.element(find.byType(Navigator).first));
+
+        if (!cold) {
+          final startAt = l['startAt'] as String?;
+          if (startAt != null && startAt != config.initialRoute) {
+            router.go(startAt);
+            await tester.pumpAndSettle();
+          }
+          expect(events, isEmpty, reason: 'no link yet, no callback');
+          client.requests.clear();
+          calls.clear();
+          // The link arrives as the platform sends it to a running app.
+          await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+            'flutter/navigation',
+            const JSONMethodCodec().encodeMethodCall(
+              MethodCall('pushRouteInformation', <String, dynamic>{
+                'location': link,
+                'state': null,
+              }),
+            ),
+            (_) {},
+          );
+          await tester.pumpAndSettle();
+        }
+
+        final matches = router.routerDelegate.currentConfiguration;
+        final raw = matches.uri.toString();
+        final shells = tester.widgetList<OrcaShell>(find.byType(OrcaShell));
+        final onstage = tester.widgetList<OrcaPage>(find.byType(OrcaPage));
+        if (matches.isError) {
+          expect(onstage, isEmpty, reason: 'no page on the error screen');
+          expect(find.text('Page Not Found'), findsOneWidget);
+          expect(find.text('Go to home page'), findsOneWidget);
+        } else {
+          expect(onstage.map((p) => '/${p.path}'), [
+            _pathOf(_linkLocation(raw)),
+          ], reason: 'the visible page is the router location');
+        }
+
+        expect(events.length, lessThanOrEqualTo(1), reason: 'once at most');
+        Object? event;
+        if (events.isNotEmpty) {
+          final e = events.single;
+          expect(e.incoming.toString(), link, reason: 'the link as given');
+          // The callback comes after onRouteChanged, for the same location.
+          final at = calls.indexOf('deeplink');
+          expect(at, greaterThan(0), reason: 'calls: $calls');
+          expect(calls[at - 1], 'route ${e.resolvedLocation}');
+          event = <String, dynamic>{
+            'resolvedLocation': e.resolvedLocation,
+            'pathParameters': e.pathParameters,
+            'queryParameters': e.queryParameters,
+            'wasRedirected': e.wasRedirected,
+            'isColdStart': e.isColdStart,
+          };
+        }
+
+        final actual = <String, dynamic>{
+          'kind': matches.isError ? 'error' : 'page',
+          'location': _linkLocation(raw),
+          'redirected':
+              _pathOf(_linkLocation(raw)) != _pathOf(_linkLocation(link)),
+          'stack': matches.isError ? <String>[] : _stackOf(matches.matches),
+          'tabIndex': shells.isEmpty
+              ? null
+              : shells.single.navigationShell.currentIndex,
+          'pageRequests': List<String>.from(client.requests),
+          'event': event,
+        };
+
+        // What Flutter is held to: `expected`, with the case's documented
+        // Flutter differences laid over it (an event key by key, or null).
+        final expected = Map<String, dynamic>.from(l['expected'] as Map);
+        final over = Map<String, dynamic>.from((l['flutter'] as Map?) ?? {})
+          ..remove('why');
+        over.forEach((key, value) {
+          expected[key] = key == 'event' && value is Map
+              ? {...expected['event'] as Map, ...value}
+              : value;
+        });
+
+        expect(
+          actual,
+          equals(expected),
+          reason: 'observed (location raw: $raw): ${jsonEncode(actual)}',
         );
       });
     }

@@ -21,8 +21,12 @@ Source: plan step 11, rows B11.1 to B11.4, and a read of the Flutter SDK (go_rou
 
 Flutter quirks read from the code, not pinned by any test (we do not copy them, section 2):
 (q1) `pathParameters` is always empty. (q2) On iOS a cold launch reports `isColdStart: false`. (q3) A link that arrives
-before the router exists is never routed. (q4) A link to the location already on screen gives no callback and its
-pending entry leaks into the next navigation. (q5) `resolvedLocation` is the whole URL when not redirected.
+during boot, before the router exists, is dropped, and `onDeeplink` then fires for the initial route with
+`wasRedirected: true, isColdStart: false`. (q4) Only when the delivered string equals the location on screen character
+for character: no callback, and its pending entry leaks into the next navigation (a full URL to the same route does
+call back). (q5) `resolvedLocation` is the whole URL when not redirected. (q6) `wasRedirected` compares the raw path,
+so a trailing slash or an empty path reads as a redirect.
+q3, q4 and q6 are as observed on the real `OrcaApp` by the fixture runner (task T1), not only read from the code.
 
 ## 2. Decisions
 
@@ -34,7 +38,8 @@ pending entry leaks into the next navigation. (q5) `resolvedLocation` is the who
 - D3 Event, both SDKs: `DeeplinkEvent { incoming (URL/URI as given), resolvedLocation (final location, D1 form),
   pathParameters (the matched route's real params; differs from q1), queryParameters (final location's),
   wasRedirected (path comparison), isColdStart }`. Fired once per link, after the navigation settled and after
-  `onRouteChanged`.
+  `onRouteChanged`. `wasRedirected` compares the D1-normalised paths (the link's location path with the final one), so
+  a trailing slash or an empty path is not a redirect and it is true only when a redirect rule ran (differs from q6).
 - D4 `isColdStart` is true when the link is what opened the app: it arrived before the router showed its first route
   (Android: it is the launch Intent's data, read once and not again after a recreation; iOS: delivered before the
   first route appeared). True on iOS too (differs from q2). A link during boot is held and applied (differs from q3).
@@ -48,7 +53,7 @@ pending entry leaks into the next navigation. (q5) `resolvedLocation` is the who
 - D8 Contract: the navigation fixture schema gains `links` (name, config, `link`, `coldStart`, `appState`, expected
   location / redirected / kind / stack / tabIndex / pageRequested and the event). Flutter runs them through its real
   platform channel path (`defaultRouteNameTestValue` for cold, a `pushRouteInformation` message for warm) and is
-  compared on the D1 form of its location; where a quirk (q1, q2, q5) makes Flutter differ, the fixture says so in a
+  compared on the D1 form of its location; where a quirk (q1, q4, q5, q6) makes Flutter differ, the fixture says so in a
   `flutter` override and the README lists it. Native SDKs must match `expected` exactly.
 
 ## 3. Cases

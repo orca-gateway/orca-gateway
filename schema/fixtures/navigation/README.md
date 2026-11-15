@@ -117,17 +117,86 @@ app, in order; sessions are independent of each other.
 | `13_tab_index_state` | `_tabIndex` follows taps, `go` and `switchTab`; setting it switches the tab; the same value or a non-int does nothing |
 | `14_switch_tab` | `switchTab` lands on the tab's root and drops routes over the shell; an unknown id does nothing |
 
+## Links
+
+A link case is one URL handed to a fresh app, the way the platform hands over a deep link, and what the app
+shows and reports once it has settled. A file that carries `links` carries nothing else beside its `config`.
+
+```jsonc
+"links": [
+  {
+    "name": "a param route outside the tabs",
+    "link": "orcashop://open/order/7?gift=1", // the URL as the platform delivers it
+    "coldStart": false,                       // true: the link opened the app
+    "startAt": "/home",                       // warm only: what the app shows when the link arrives;
+                                              // default config.initialRoute
+    "appState": { "loggedIn": true },         // optional: laid over config.initialAppState before the boot
+    "expected": {
+      "kind": "page",                         // "page" | "error" (the not-found screen)
+      "location": "/order/7?gift=1",          // final location: path and query
+      "redirected": false,                    // final path differs from the link's location path
+      "stack": ["order/7"],                   // as after a go; [] for kind error
+      "tabIndex": null,                       // index into config.tabs, or null
+      "pageRequests": ["order/7"],            // cold: every request since the start; warm: the ones the link adds
+      "event": {                              // what the deep link callback receives; null: it is not called
+        "resolvedLocation": "/order/7?gift=1",
+        "pathParameters": { "id": "7" },
+        "queryParameters": { "gift": "1" },
+        "wasRedirected": false,
+        "isColdStart": false
+      }
+    },
+    "flutter": {                              // optional: where the Flutter SDK is known to differ
+      "why": "q1 ... q5 ...",               // names the quirk (q1 to q6, below)
+      "event": { "resolvedLocation": "orcashop://open/order/7?gift=1", "pathParameters": {} }
+    }
+  }
+]
+```
+
+The location of a link is its path and its query, nothing else: scheme, host and fragment are dropped, an empty
+path is `/`, a trailing slash is dropped. `https://shop.example/account?tab=2#x` and `app://host/account?tab=2`
+are both `/account?tab=2`; `app://account` has host `account` and location `/`. The app goes to that location
+as a `go`, so the stack and the tab come from the config and the asked route's redirect rule is applied once,
+exactly as in the `cases` files. A cold link starts the app at the link's location: the initial route is never
+shown or requested. The callback is called once, after the navigation and after the route change callback.
+
+How the Flutter runner drives a link, on the real `OrcaApp` with `onDeeplink` set: cold, the link is the
+platform's default route name before the app is pumped; warm, the app is brought to `startAt` and a
+`pushRouteInformation` call is delivered on the `flutter/navigation` channel. Flutter keeps the whole URL as
+its router location, so the runner reduces it to path and query before comparing `location`.
+
+Native SDKs must match `expected` exactly and ignore `flutter`. The Flutter runner holds Flutter to `expected`
+with the `flutter` values laid over it (`event` key by key, or `null`). An override is only written for one of
+these documented quirks of the Flutter SDK, which the native SDKs do not copy:
+
+| Quirk | What Flutter does | In the fixture |
+|---|---|---|
+| q1 | `pathParameters` is always empty | override on every link that ends on a param route |
+| q2 | on iOS a cold launch reports `isColdStart: false` | not pinned: a widget test cannot be iOS's engine; the cold cases run the Android path |
+| q3 | a link that arrives during boot, before the router exists, is dropped; `onDeeplink` then fires for the initial route with `wasRedirected: true, isColdStart: false` | not pinned: link cases boot from a ready config |
+| q4 | only when the delivered string equals the location on screen character for character: no callback (and the next navigation is reported as that link) | `event: null` override on the bare-path case; a full URL to the same route does call back |
+| q5 | `resolvedLocation` is the whole URL when the link is not redirected | override on every link that is not redirected |
+| q6 | `wasRedirected` compares the raw path, so a trailing slash or an empty path reads as a redirect | `wasRedirected: true` override on the trailing-slash case and on the empty-path case |
+
+In `expected`, `event.wasRedirected` compares the link's location path (normalised as above) with the final path,
+so it always equals `redirected`: it is true only when a redirect rule ran.
+
+| File | Behaviour |
+|---|---|
+| `15_deep_links` | a link's location; warm and cold; tab, nested child, param route; redirect while logged out; unknown link; a link to the location on screen |
+
 ## Running it
 
 | SDK | Runner | Command |
 |---|---|---|
 | Flutter | `sdk/test/conformance/navigation_fixtures_test.dart` | `cd sdk && flutter test test/conformance/navigation_fixtures_test.dart` |
-| Swift | the core's fixture tests: `RouteTable(config).resolve(location, appState)` per case, `TabShell(table)` per session step | `cd sdk-swift && swift test` |
+| Swift | the core's fixture tests: `RouteTable(config).resolve(location, appState)` per case, `TabShell(table)` per session step, the router's link entry per link | `cd sdk-swift && swift test` |
 | Kotlin | the core's fixture tests, same calls | `cd sdk-kotlin && ./gradlew :core:test` |
 
 Each runner walks up from its working directory to `schema/fixtures/navigation`, runs every file and every
-case, and checks how many files it found (Flutter: at least six, each well formed) so an empty or missing
-directory fails the build.
+case, session and link, and checks how many files it found (Flutter: at least fifteen, each well formed, one at
+least with links) so an empty or missing directory fails the build.
 
 ## Adding a fixture
 
