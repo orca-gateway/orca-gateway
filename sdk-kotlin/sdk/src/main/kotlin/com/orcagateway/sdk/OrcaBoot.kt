@@ -21,6 +21,7 @@ import com.orcagateway.core.client.DeviceIdentity
 import com.orcagateway.core.client.KeyValueStore
 import com.orcagateway.core.client.OfflineSessionStore
 import com.orcagateway.core.client.OrcaClient
+import com.orcagateway.core.client.OrcaErrorInfo
 import com.orcagateway.core.client.VersionCheckResult
 import com.orcagateway.core.client.VersionChecker
 
@@ -77,22 +78,25 @@ internal class OrcaBoot(private val client: OrcaClient, enableOffline: Boolean, 
         /** The server demands an update; no page is ever fetched. */
         ForceUpdate,
 
-        /** [prepare] threw ([failure] says why); nothing is ever fetched. */
+        /** [prepare] threw ([error], [failure] says why); nothing is ever fetched. */
         Failed,
     }
 
     var phase: Phase by mutableStateOf(if (enableOffline) Phase.Checking else Phase.Ready)
         private set
 
-    /** The message of what [prepare] threw, once [phase] is [Phase.Failed]. */
-    var failure: String? = null
+    /** What [prepare] threw, once [phase] is [Phase.Failed]. */
+    var error: IllegalArgumentException? = null
         private set
+
+    /** The message of [error]. */
+    val failure: String? get() = error?.let { it.message ?: it.toString() }
 
     init {
         try {
             prepare()
         } catch (e: IllegalArgumentException) {
-            failure = e.message ?: e.toString()
+            error = e
             phase = Phase.Failed
         }
     }
@@ -110,8 +114,11 @@ internal class OrcaBoot(private val client: OrcaClient, enableOffline: Boolean, 
 
 /**
  * OrcaApp's root: the page spinner while the version check runs, the
- * force-update screen when the server demands one, the error view with the
- * message when [prepare] threw, else [content], which is built only then.
+ * force-update screen when the server demands one, the error screen when
+ * [prepare] threw, else [content], which is built only then. The error screen
+ * is Flutter's for what was thrown (an `ArgumentError` there: its default
+ * branch, "Something Went Wrong") with the conflict's own message, so a
+ * developer sees what conflicts, and no retry: nothing would change.
  * [prepare] runs once per [client], before anything is fetched. With
  * [enableSessionTracking], sessions are tracked here, around all four, with
  * [client]'s device id (the saved one when it has none) and an offline
@@ -139,7 +146,9 @@ internal fun OrcaBootView(
             CircularProgressIndicator()
         }
         OrcaBoot.Phase.ForceUpdate -> ForceUpdateScreen(modifier)
-        OrcaBoot.Phase.Failed -> ErrorView("Could not load this page", boot.failure ?: "", modifier)
+        OrcaBoot.Phase.Failed -> boot.error?.let {
+            OrcaErrorView(OrcaErrorInfo.from(it).copy(message = boot.failure.orEmpty()), modifier)
+        }
         OrcaBoot.Phase.Ready -> content()
     }
 }
