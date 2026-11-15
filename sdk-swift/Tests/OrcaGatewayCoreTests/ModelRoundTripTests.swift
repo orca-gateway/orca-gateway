@@ -151,7 +151,87 @@ final class ModelRoundTripTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(count, 9, "Value objects in fixtures 01-39")
     }
 
+    // MARK: B9.1-CS the navigation fixtures' configs are /config bodies
+
+    func testB9_1_CS_EveryNavigationFixtureConfigDecodes() throws {
+        let files = try Fixtures.navigation()
+        XCTAssertEqual(files.count, 11, "navigation fixtures 01-11")
+        var routes = 0
+        for (name, fixture) in files {
+            let json = fixture["config"]
+            guard case .object(let object) = json else {
+                XCTFail("\(name): config is not an object")
+                continue
+            }
+            let config = try decodeModel(NavConfig.self, from: json)
+            assertJSONEqual(config.raw, json, name)
+            XCTAssertNil(config.rawBody, name)
+            XCTAssertEqual(config.initialRoute, object["initialRoute"]?.stringValue ?? "/", name)
+            XCTAssertEqual(config.tabs.count, object["tabs"]?.arrayValue?.count ?? 0, name)
+            XCTAssertEqual(config.tabs.map(\.initialRoute),
+                           (object["tabs"]?.arrayValue ?? []).compactMap { $0["initialRoute"].stringValue }, name)
+            XCTAssertEqual(config.drawerItems.count, object["drawerItems"]?.arrayValue?.count ?? 0, name)
+            assertJSONEqual(.object(config.initialAppState), object["initialAppState"] ?? .object([:]), name)
+            let flows = object["flows"]?.arrayValue ?? []
+            XCTAssertEqual(config.flows.map(\.name), flows.compactMap { $0["name"].stringValue }, name)
+            for (flow, raw) in zip(config.flows, flows) {
+                XCTAssertEqual(paths(flow.routes), rawPaths(raw["routes"]), name)
+                routes += paths(flow.routes).count
+            }
+        }
+        XCTAssertGreaterThan(routes, 11)
+    }
+
+    func testB9_1_CS_AMissingRequiredKeyIsADecodeError() {
+        let noTabId: JSONValue = ["tabs": [["label": "Home", "icon": "home", "initialRoute": "/home"]]]
+        XCTAssertThrowsError(try decodeModel(NavConfig.self, from: noTabId)) {
+            XCTAssertTrue($0 is DecodingError, "\($0)")
+        }
+        let noPath: JSONValue = ["flows": [["name": "main", "routes": [["requiredAppState": []]]]]]
+        XCTAssertThrowsError(try decodeModel(NavConfig.self, from: noPath))
+        let noFlowName: JSONValue = ["flows": [["routes": []]]]
+        XCTAssertThrowsError(try decodeModel(NavConfig.self, from: noFlowName))
+        let noRedirectTarget: JSONValue = [
+            "flows": [["name": "m", "routes": [["path": "a", "redirect": ["when": "k", "equals": 1]]]]]
+        ]
+        XCTAssertThrowsError(try decodeModel(NavConfig.self, from: noRedirectTarget))
+        let noTransitionType: JSONValue = [
+            "flows": [["name": "m", "routes": [["path": "a", "transition": ["duration": 100]]]]]
+        ]
+        XCTAssertThrowsError(try decodeModel(NavConfig.self, from: noTransitionType))
+    }
+
+    func testB9_1_CS_AnEmptyConfigTakesTheFlutterDefaults() throws {
+        let config = try decodeModel(NavConfig.self, from: [:])
+        XCTAssertEqual(config.initialRoute, "/")
+        XCTAssertEqual(config.tabs, [])
+        XCTAssertEqual(config.drawerItems, [])
+        XCTAssertEqual(config.initialAppState, [:])
+        XCTAssertEqual(config.tabBarComponents, [])
+        XCTAssertEqual(config.drawerComponents, [])
+        XCTAssertEqual(config.flows, [])
+        let flow = try decodeModel(NavFlow.self, from: ["name": "main"])
+        XCTAssertEqual(flow, NavFlow(name: "main"))
+        XCTAssertNil(flow.version)
+        XCTAssertFalse(flow.isStatic)
+        XCTAssertNil(flow.pages)
+        let route = try decodeModel(NavRoute.self, from: ["path": "home", "transition": ["type": "fade"]])
+        XCTAssertEqual(route.children, [])
+        XCTAssertNil(route.redirect)
+        XCTAssertFalse(route.isDynamic)
+        XCTAssertEqual(route.transition, RouteTransitionDef(type: "fade", duration: 300, curve: "easeInOut"))
+    }
+
     // MARK: helpers
+
+    /// Every route path of a tree, a node before its children.
+    private func paths(_ routes: [NavRoute]) -> [String] {
+        routes.flatMap { [$0.path] + paths($0.children) }
+    }
+
+    private func rawPaths(_ routes: JSONValue) -> [String] {
+        (routes.arrayValue ?? []).flatMap { [$0["path"].stringValue ?? "?"] + rawPaths($0["children"]) }
+    }
 
     private func isUnknown(_ action: Action) -> Bool {
         if case .unknown = action { return true }

@@ -169,6 +169,119 @@ final class OrcaClientTests: XCTestCase {
         XCTAssertEqual(try c.pageURL("/shop/cart").absoluteString, "http://h:1/api/v1/app/a/page/shop/cart")
     }
 
+    // MARK: B9.1-CS /config is requested with the device headers and decoded
+
+    /// A `/config` body as `App.getNavConfig` serves it: unknown members
+    /// (`appId`, `appName`, `requiredAppState`), route paths without a leading
+    /// slash, a child with its full path, a static flow with its pages.
+    static let configBody = #"""
+        {"appId": "shop", "appName": "Shop", "initialRoute": "/home",
+         "tabs": [{"id": "home", "label": "Home", "icon": "home", "initialRoute": "/home"},
+                  {"id": "cart", "label": "Cart", "icon": "cart", "initialRoute": "/cart"}],
+         "drawerItems": [{"id": "settings", "label": "Settings", "icon": "gear", "route": "/settings"},
+                         {"id": "about", "label": "About", "route": "/about"}],
+         "initialAppState": {"loggedIn": false, "ratio": 4.0, "user": {"name": "amr"}},
+         "tabBarComponents": [{"id": "bar", "type": "Text", "kind": "primitive", "childMode": "none",
+                               "props": {"data": "bar"}, "children": [], "watches": []}],
+         "drawerComponents": [{"id": "drw", "type": "Text", "kind": "primitive", "childMode": "none",
+                               "props": {"data": "drawer"}, "children": [], "watches": []}],
+         "flows": [
+           {"name": "main", "routes": [
+              {"path": "home", "requiredAppState": [], "children": [
+                 {"path": "home/product/:id", "requiredAppState": [], "isDynamic": true,
+                  "transition": {"type": "slide", "duration": 150, "curve": "linear"}}]},
+              {"path": "cart", "requiredAppState": ["loggedIn"],
+               "redirect": {"when": "loggedIn", "equals": false, "to": "/login"},
+               "transition": {"type": "fade"}},
+              {"path": "login", "requiredAppState": []}]},
+           {"name": "onboarding", "version": 3, "isStatic": true,
+            "routes": [{"path": "welcome", "requiredAppState": []}],
+            "pages": {"welcome": {"pageId": "welcome", "title": "Welcome", "state": [], "components": [
+              {"id": "t", "type": "Text", "kind": "primitive", "childMode": "none",
+               "props": {"data": "Hi"}, "children": [], "watches": []}]}}}]}
+        """#
+
+    func testB9_1_CS_FetchConfigRequestsConfigWithTheDeviceHeadersAndDecodesIt() async throws {
+        // The stub's page route would answer an unknown hash with 412: the
+        // config route has no handshake, so it is one plain GET.
+        let stub = StubEngine(page: Data(Self.configBody.utf8))
+        stub.negotiates = false
+        var c = client(stub, device: DeviceInfo(screenWidth: 393, locale: "en_US"))
+        c.apiKey = "demo-key"
+        c.deviceId = "device-1"
+        let config = try await c.fetchConfig()
+
+        let requests = stub.requests
+        XCTAssertEqual(requests.map(\.method), ["GET"])
+        XCTAssertEqual(requests[0].url.absoluteString, "http://localhost:8080/api/v1/app/counter/config")
+        XCTAssertNil(requests[0].body)
+        XCTAssertEqual(requests[0].headers, c.headers)
+        XCTAssertEqual(requests[0].headers["x-orca-platform"], "iOS")
+        XCTAssertEqual(requests[0].headers["x-orca-screen-width"], "393")
+        XCTAssertEqual(requests[0].headers["x-orca-locale"], "en_US")
+        XCTAssertEqual(requests[0].headers["x-orca-device-id"], "device-1")
+        XCTAssertEqual(requests[0].headers["Authorization"], "Bearer demo-key")
+        XCTAssertEqual(requests[0].headers["x-orca-caps-hash"], c.capsHash)
+
+        XCTAssertEqual(config.initialRoute, "/home")
+        XCTAssertEqual(config.tabs, [
+            TabDef(id: "home", label: "Home", icon: "home", initialRoute: "/home"),
+            TabDef(id: "cart", label: "Cart", icon: "cart", initialRoute: "/cart"),
+        ])
+        XCTAssertEqual(config.drawerItems, [
+            DrawerItemDef(id: "settings", label: "Settings", icon: "gear", route: "/settings"),
+            DrawerItemDef(id: "about", label: "About", icon: nil, route: "/about"),
+        ])
+        XCTAssertEqual(config.initialAppState["loggedIn"], .bool(false))
+        assertDouble(config.initialAppState["ratio"], 4.0)
+        XCTAssertEqual(config.initialAppState["user"]?["name"], "amr")
+        XCTAssertEqual(config.tabBarComponents.map(\.id), ["bar"])
+        XCTAssertEqual(config.drawerComponents.map(\.id), ["drw"])
+
+        XCTAssertEqual(config.flows.map(\.name), ["main", "onboarding"])
+        let main = config.flows[0]
+        XCTAssertNil(main.version)
+        XCTAssertFalse(main.isStatic)
+        XCTAssertNil(main.pages)
+        XCTAssertEqual(main.routes.map(\.path), ["home", "cart", "login"])
+        XCTAssertEqual(main.routes[0].children, [
+            NavRoute(path: "home/product/:id",
+                     transition: RouteTransitionDef(type: "slide", duration: 150, curve: "linear"),
+                     isDynamic: true)
+        ])
+        XCTAssertNil(main.routes[0].redirect)
+        XCTAssertNil(main.routes[0].transition)
+        XCTAssertFalse(main.routes[0].isDynamic)
+        XCTAssertEqual(main.routes[1].redirect, RedirectRule(when: "loggedIn", equals: .bool(false), to: "/login"))
+        XCTAssertEqual(main.routes[1].transition, RouteTransitionDef(type: "fade", duration: 300, curve: "easeInOut"))
+
+        let onboarding = config.flows[1]
+        XCTAssertEqual(onboarding.version, 3)
+        XCTAssertTrue(onboarding.isStatic)
+        XCTAssertEqual(onboarding.routes.map(\.path), ["welcome"])
+        XCTAssertEqual(onboarding.pages?.keys.sorted(), ["welcome"])
+        XCTAssertEqual(onboarding.pages?["welcome"]?.title, "Welcome")
+        XCTAssertEqual(onboarding.pages?["welcome"]?.components.map(\.id), ["t"])
+
+        XCTAssertEqual(config.rawBody, Self.configBody)
+        XCTAssertEqual(config.raw["appName"], "Shop")
+        assertJSONEqual(config.raw, try JSONValue.decode(Data(Self.configBody.utf8)))
+    }
+
+    func testB9_1_CS_FetchConfigThrowsOnA404AndA500LikeFetchPage() async throws {
+        for (status, text) in [(404, #"{"error":"App not found"}"#), (500, "boom")] {
+            let stub = StubEngine(page: Data())
+            stub.forced = HTTPResponse(status: status, body: Data(text.utf8))
+            do {
+                _ = try await client(stub).fetchConfig()
+                XCTFail("expected an error for \(status)")
+            } catch let error as OrcaClientError {
+                XCTAssertEqual(error, .http(status: status, body: text))
+            }
+            XCTAssertEqual(stub.requests.count, 1)
+        }
+    }
+
     // MARK: T2.2 headers
 
     func testHeadersMatchTheFlutterClient() throws {
