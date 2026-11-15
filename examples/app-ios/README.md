@@ -99,16 +99,33 @@ xcrun simctl openurl <device id> "orcacounter:///home/product/42"
 
 `<device id>` is the simulator's id from `xcrun simctl list devices`, or `booted`. The SDK keeps
 the URL's path and query and drops the scheme and the host, so write the link with three slashes:
-in `orcacounter://product/42`, `product` is the host and the location is `/42`. Send it while the
-app runs: a link that starts the closed app starts it without the `SIMCTL_CHILD_*` settings, so on
-the default `counter` app, which has no routes.
+in `orcacounter://product/42`, `product` is the host and the location is `/42`.
 
-The host passes `onDeeplink` only to print a line per link, which `simctl launch --console` (or the
-Xcode console) shows:
+A link also starts the closed app, but without the `SIMCTL_CHILD_*` settings, so on the default
+`counter` app, which has no routes. To start a config demo app by a link, give the settings to the
+simulator itself first (they stay until the simulator shuts down or `launchctl unsetenv`):
+
+```bash
+xcrun simctl spawn <device id> launchctl setenv ORCA_APP_ID navigation
+xcrun simctl spawn <device id> launchctl setenv ORCA_BOOT config
+# only for a server elsewhere: xcrun simctl spawn <device id> launchctl setenv ORCA_SERVER_URL http://<address>:8080
+xcrun simctl terminate <device id> com.orcagateway.examples.counter
+xcrun simctl openurl <device id> "orcacounter:///home/product/42"
+```
+
+The host passes `onDeeplink` only to log a line per link. It goes to the system log (`NSLog`),
+because an app that a link started has no console. Start this before you open the link:
+
+```bash
+xcrun simctl spawn <device id> log stream --predicate 'eventMessage CONTAINS "OrcaCounter deeplink"'
+```
 
 ```
 OrcaCounter deeplink: incoming=orcacounter:///home/product/42 resolvedLocation=/home/product/42 wasRedirected=false isColdStart=false
 ```
+
+`isColdStart=true` on the link that started the app. The Xcode console and
+`simctl launch --console` show the line too.
 
 A location no route matches shows "Page not found"; a protected route of `navigation` redirects to
 the login page while logged out (`wasRedirected=true`).

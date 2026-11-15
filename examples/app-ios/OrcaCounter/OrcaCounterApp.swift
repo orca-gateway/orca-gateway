@@ -58,12 +58,14 @@ struct OrcaCounterApp: App {
     }
 
     /// One line per `orcacounter://` link the app opened (the scheme is in
-    /// Info.plist; OrcaApp receives the link itself), in the Xcode console or
-    /// the terminal of `simctl launch --console`.
+    /// Info.plist; OrcaApp receives the link itself). NSLog, not print: an app
+    /// that a link started has no console, and the system log is read with
+    /// `simctl spawn <device id> log stream` (see the README).
     static func logDeeplink(_ event: DeeplinkEvent) {
-        print("OrcaCounter deeplink: incoming=\(event.incoming.absoluteString) "
+        let line = "OrcaCounter deeplink: incoming=\(event.incoming.absoluteString) "
             + "resolvedLocation=\(event.resolvedLocation) wasRedirected=\(event.wasRedirected) "
-            + "isColdStart=\(event.isColdStart)")
+            + "isColdStart=\(event.isColdStart)"
+        NSLog("%@", line)
     }
 
     static func setting(_ key: String, _ fallback: String) -> String {
