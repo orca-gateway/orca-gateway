@@ -20,12 +20,15 @@ public enum GeneratedCapabilities {
     public static let widgets: [String] = [
         "AnimatedBuilder",
         "AppBar",
+        "BottomNavItem",
+        "BottomNavigationBar",
         "Card",
         "Center",
         "ClipRRect",
         "Column",
         "Container",
         "Divider",
+        "Drawer",
         "ElevatedButton",
         "Expanded",
         "FallbackPrompt",
@@ -131,5 +134,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "10aad557d11f329a2857d3f6c6e294d757ea7166d69d543aa7661c808a18f472"
+    public static let capsHash = "341de73030069b161ff2b179dd684ed751cc9b3c42d711c49464f533fd31c467"
 }

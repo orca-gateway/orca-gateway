@@ -78,6 +78,9 @@ struct WidgetView: View {
         case "AnimatedBuilder": AnimatedBuilderView(node: node, model: model)
         case "Transform": TransformView(node: node, model: model)
         case "Video": VideoNodeView(node: node)
+        case "BottomNavigationBar": BottomNavigationBarView(node: node, model: model)
+        case "BottomNavItem": BottomNavItemView(node: node)
+        case "Drawer": DrawerView(node: node, model: model)
         default: EmptyView()
         }
     }

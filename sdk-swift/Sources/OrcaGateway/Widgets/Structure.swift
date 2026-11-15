@@ -1,12 +1,17 @@
 #if canImport(SwiftUI)
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Scaffold: `body` fills the screen; an `appBar` slot holding an AppBar
 /// becomes the navigation bar of the enclosing NavigationStack (title
 /// centred, leading item, `action_N` items on the trailing side);
 /// `floatingActionButton` floats bottom-trailing; `bottomNavigationBar` and
-/// `persistentFooterButton_N` sit above the bottom safe area. Drawers and
-/// bottom sheets are not drawn yet.
+/// `persistentFooterButton_N` sit above the bottom safe area. The `drawer`
+/// and `endDrawer` slots and bottom sheets are not drawn yet.
 @MainActor
 struct ScaffoldView: View {
     let node: ResolvedNode
@@ -166,5 +171,176 @@ struct CardView: View {
                         radius: elevation, x: 0, y: elevation / 2))
             .padding(Props.insets(node["margin"]) ?? EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
     }
+}
+/// Flutter `BottomNavigationBar` (`_buildBottomNavigationBar`) without its
+/// drawing: the items, the selected index and what a tap does, so a test can
+/// run a tap without a touch.
+@MainActor
+struct BottomNavBar {
+    /// One `BottomNavItem` node. Its props are read raw, not resolved, as
+    /// the Flutter builder reads `itemNode.props`.
+    struct Item: Equatable, Identifiable {
+        let id: String
+        let icon: String?
+        let activeIcon: String?
+        let label: String
+
+        /// The Material icon name to draw: `activeIcon` on the selected item
+        /// when it has one.
+        func iconName(selected: Bool) -> String? {
+            selected ? activeIcon ?? icon : icon
+        }
+    }
+
+    let node: ResolvedNode
+    let model: OrcaPageModel
+
+    /// The nodes named by `item_0` ... `item_9`, in order, stopping at the
+    /// first slot that is absent or names no node (Flutter breaks there too).
+    var items: [Item] {
+        var items: [Item] = []
+        for id in indexedSlots(node, "item").prefix(10) {
+            guard let props = model.renderer.nodes[id]?.props else { break }
+            items.append(Item(id: id, icon: props["icon"]?.stringValue,
+                              activeIcon: props["activeIcon"]?.stringValue,
+                              label: props["label"]?.stringValue ?? ""))
+        }
+        return items
+    }
+
+    /// The resolved `currentIndex` (default 0), kept inside the items.
+    var currentIndex: Int {
+        min(max(node["currentIndex"]?.dartInt ?? 0, 0), max(items.count - 1, 0))
+    }
+
+    /// A tap on item `index`, in Flutter's order: when the raw `currentIndex`
+    /// prop is a state Value, write the index into that key (app scope into
+    /// app state, anything else into page state); then fire `onChange` with
+    /// `eventData: {value: index}`. The returned task is the `onChange` run,
+    /// nil when the node has none.
+    @discardableResult
+    func select(_ index: Int) -> Task<Void, Never>? {
+        if case .object(let raw)? = model.renderer.nodes[node.id]?.props["currentIndex"],
+           raw["type"]?.stringValue == "state", let key = raw["key"]?.stringValue {
+            model.store.dispatch([key: .int(index)],
+                                 scope: raw["scope"]?.stringValue == "app" ? .app : .page)
+        }
+        return model.fire("onChange", on: node, eventData: ["value": .int(index)])
+    }
+}
+
+/// BottomNavigationBar drawn as an iOS tab bar: equal-width items, icon over
+/// label, the selected one in `selectedItemColor` (default the accent
+/// colour), the others in `unselectedItemColor` (default grey), on
+/// `backgroundColor` (default the system background). No items draws nothing.
+@MainActor
+struct BottomNavigationBarView: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+
+    var body: some View {
+        let bar = BottomNavBar(node: node, model: model)
+        let items = bar.items
+        if !items.isEmpty {
+            let current = bar.currentIndex
+            let selectedColor = Props.color(node["selectedItemColor"]) ?? Color.accentColor
+            let unselectedColor = Props.color(node["unselectedItemColor"]) ?? Props.color(hex: "#8E8E93")
+            HStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    let selected = index == current
+                    Button {
+                        bar.select(index)
+                    } label: {
+                        VStack(spacing: 2) {
+                            NavIcon(name: item.iconName(selected: selected), size: 24)
+                            if !item.label.isEmpty {
+                                Text(item.label).font(.system(size: 10, weight: .medium)).lineLimit(1)
+                            }
+                        }
+                        .foregroundColor(selected ? selectedColor : unselectedColor)
+                        .frame(maxWidth: .infinity, minHeight: 49)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(item.label)
+                    .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .background((Props.color(node["backgroundColor"]) ?? systemBackground)
+                .ignoresSafeArea(edges: .bottom))
+            .overlay(alignment: .top) {
+                Rectangle().fill(Color.black.opacity(0.12)).frame(height: 0.5)
+            }
+        }
+    }
+}
+
+/// A BottomNavItem outside a bar (Flutter `_buildBottomNavItem`): its icon,
+/// then its label when it has one.
+@MainActor
+struct BottomNavItemView: View {
+    let node: ResolvedNode
+
+    var body: some View {
+        let label = node["label"]?.stringValue ?? ""
+        HStack(spacing: 4) {
+            NavIcon(name: node["icon"]?.stringValue, size: 24)
+            if !label.isEmpty { Text(label) }
+        }
+    }
+}
+
+/// A Material icon name as its SF Symbol in a `size` box, as `IconNodeView`.
+private struct NavIcon: View {
+    let name: String?
+    let size: CGFloat
+
+    var body: some View {
+        Image(systemName: IconNames.symbol(for: name))
+            .font(.system(size: size * 0.83))
+            .rotationEffect(.degrees(IconNames.isRotated(name) ? 90 : 0))
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Flutter `Drawer`, the panel only: its child on `backgroundColor` (default
+/// the system background), `width` wide (default 304, never wider than the
+/// space there is) and as tall as its parent, with `elevation` (default 1,
+/// Material 3) as a shadow. No child draws the empty panel. Sliding it in
+/// from the side is the host's work; met as an ordinary child it draws in
+/// place.
+@MainActor
+struct DrawerView: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+
+    var body: some View {
+        let elevation = Props.number(node["elevation"]) ?? 1
+        ZStack(alignment: .topLeading) {
+            Color.clear
+            ChildView(node: node, model: model)
+        }
+        .frame(maxWidth: Props.number(node["width"]) ?? 304, maxHeight: .infinity, alignment: .topLeading)
+        // The Material Drawer forces its own size on its child.
+        .environment(\.orcaTight, [.horizontal, .vertical])
+        .background(
+            Rectangle()
+                .fill(Props.color(node["backgroundColor"]) ?? systemBackground)
+                .shadow(color: Color.black.opacity(elevation > 0 ? 0.18 : 0), radius: elevation, x: 0, y: 0))
+    }
+}
+
+/// The platform's background colour, light or dark.
+private var systemBackground: Color {
+    #if canImport(UIKit)
+    Color(UIColor.systemBackground)
+    #elseif canImport(AppKit)
+    Color(NSColor.windowBackgroundColor)
+    #else
+    Color.white
+    #endif
 }
 #endif
