@@ -213,7 +213,10 @@ struct UnsupportedWidgetPlaceholderView: View {
             }
         }
         .modifier(FillsForcedWidth())
-        .padding(16)
+        // The 16-point padding plus the border's 1-point width: Flutter's
+        // Container adds the border's width to its padding, as ContainerView's
+        // borderInset.
+        .padding(16 + 1)
         .background(accent.opacity(0.06))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(accent.opacity(0.35), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))

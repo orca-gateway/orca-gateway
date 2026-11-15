@@ -34,6 +34,15 @@ final class UnsupportedWidgetPlaceholderTests: XCTestCase {
     static let link: RGB = (37, 99, 235)
     static let white: RGB = (255, 255, 255)
 
+    /// How far, in pixels at scale 2, a drawn left edge may sit from where
+    /// it is laid out: the anti-aliased first column.
+    static let edge: CGFloat = 1
+
+    /// The title and the reason as the card styles them.
+    static let titleText = Text("Google Maps").font(.system(size: 15, weight: .semibold))
+        .foregroundColor(Props.color(hex: "#374151"))
+    static let reasonText = Text(fixtureReason).font(.system(size: 13)).foregroundColor(Props.color(hex: "#6B7280"))
+
     /// Fixture 17's node as the engine emits it (`expected[0]`).
     func fixtureNode() throws -> [String: JSONValue] {
         let url = swiftRoot.deletingLastPathComponent()
@@ -84,6 +93,13 @@ final class UnsupportedWidgetPlaceholderTests: XCTestCase {
     func assertNear(_ p: (r: UInt8, g: UInt8, b: UInt8, a: UInt8), _ c: RGB, _ what: String,
                     file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(near(p, c), "\(what): \(p) is not \(c)", file: file, line: line)
+    }
+
+    /// Where the ink of `text` starts when it is drawn alone at 0 on the
+    /// card's fill, in pixels at scale 2: its first glyph's side bearing.
+    func bearing(_ text: Text, _ colour: RGB) throws -> CGFloat {
+        let pixels = try draw(text.fixedSize().background(Props.color(hex: "#6B7280").opacity(0.06)))
+        return try XCTUnwrap(pixels.bounds { near($0, colour, 12) }, "no ink").minX
     }
 
     /// The first of `points` whose pixel is not `colour`, described; nil
@@ -185,33 +201,34 @@ final class UnsupportedWidgetPlaceholderTests: XCTestCase {
         assertNear(pixels.pixel(w - 1, midY), Self.border, "the right border")
         assertNear(pixels.pixel(w / 2, 0), Self.border, "the top border")
         assertNear(pixels.pixel(w / 2, h - 1), Self.border, "the bottom border")
-        // The 16-point padding holds only the fill: a line 8 points in on
+        // The 17-point inset holds only the fill: a line 8 points in on
         // each side (from 2 points in along it: the border's edge is smoothed).
         let padding = (4..<w - 4).flatMap { [($0, 2 * 8), ($0, h - 2 * 8)] }
             + (2 * 8..<h - 2 * 8).flatMap { [(2 * 8, $0), (w - 2 * 8, $0)] }
         XCTAssertNil(firstOff(pixels, padding, Self.fill), "the padding")
 
-        // The first row: the grey icon in its 20-point box at 16, an
-        // 8-point gap, then the title.
-        let row = pixels.rows(2 * 16...2 * 36)
-        let iconBox = (2 * 16..<2 * 36)
+        // The first row: the grey icon in its 20-point box at 17 (the
+        // 16-point padding plus the 1-point border, which Flutter's Container
+        // adds to its padding), an 8-point gap, then the title at 45.
+        let row = pixels.rows(2 * 17...2 * 37)
+        let iconBox = (2 * 17..<2 * 37)
         XCTAssertTrue(iconBox.contains { x in (0..<row.height).contains { near(row.pixel(x, $0), Self.accent, 12) } },
                       "no grey icon")
-        let gap = (2 * 36..<2 * 44).flatMap { x in (0..<row.height).map { (x, $0) } }
+        let gap = (2 * 37..<2 * 45).flatMap { x in (0..<row.height).map { (x, $0) } }
         XCTAssertNil(firstOff(row, gap, Self.fill), "the gap")
         let title = try XCTUnwrap(row.bounds { near($0, Self.title, 12) }, "no #374151 title")
-        XCTAssertGreaterThanOrEqual(title.minX, 2 * 44)
-        XCTAssertLessThanOrEqual(title.minX, 2 * 46)
+        let titleBearing = try bearing(Self.titleText, Self.title)
+        XCTAssertEqual(title.minX, 2 * 45 + titleBearing, accuracy: Self.edge, "the title")
 
-        // Below it the grey reason, then the blue link, both from the padding's edge.
+        // Below it the grey reason, then the blue link, both at the inset
+        // (the link's underline starts where its words are laid out).
         let below = pixels.rows(2 * 40...h - 1)
         let reason = try XCTUnwrap(below.bounds { near($0, Self.accent, 12) }, "no grey reason")
         let link = try XCTUnwrap(below.bounds { near($0, Self.link, 16) }, "no blue link")
         XCTAssertLessThan(reason.maxY, link.minY, "the link is under the reason")
-        for left in [reason.minX, link.minX] {
-            XCTAssertGreaterThanOrEqual(left, 2 * 16)
-            XCTAssertLessThanOrEqual(left, 2 * 19)
-        }
+        let reasonBearing = try bearing(Self.reasonText, Self.accent)
+        XCTAssertEqual(reason.minX, 2 * 17 + reasonBearing, accuracy: Self.edge, "the reason")
+        XCTAssertEqual(link.minX, 2 * 17, accuracy: Self.edge, "the link")
         // Underlined: one blue row runs the width of the words.
         let underline = (Int(link.minY)..<Int(link.maxY)).map { y in
             (Int(link.minX)..<Int(link.maxX)).filter { near(below.pixel($0, y), Self.link, 40) }.count
@@ -221,10 +238,10 @@ final class UnsupportedWidgetPlaceholderTests: XCTestCase {
 
     func testC18_4_WithoutAnIconTheTitleStartsAtThePadding() throws {
         let pixels = try draw(try placeholder(["iconName": nil]).view)
-        let row = pixels.rows(2 * 16...2 * 36)
+        let row = pixels.rows(2 * 17...2 * 37)
         let title = try XCTUnwrap(row.bounds { near($0, Self.title, 12) }, "no #374151 title")
-        XCTAssertGreaterThanOrEqual(title.minX, 2 * 16)
-        XCTAssertLessThanOrEqual(title.minX, 2 * 18)
+        let titleBearing = try bearing(Self.titleText, Self.title)
+        XCTAssertEqual(title.minX, 2 * 17 + titleBearing, accuracy: Self.edge, "the title")
     }
 
     func testC18_4_TheCardHugsItsContentAndFillsAWidthItsParentForces() throws {
