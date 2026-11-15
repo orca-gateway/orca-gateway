@@ -3,22 +3,22 @@
 ## Front page
 
 ### In one breath
-group 4 of 7 · tasks: 7 green, 0 blocked · cases: 16 of 26 green · every suite green
-S-box: a Swift Container insets its child by the border width; the clip spares box shadows.
-K-router: OrcaApp(client) keeps its page stack across a rotation (ViewModel), matches the
-restored NavHost entries instead of popping to the root, and tells the AppBar it can go back.
-Group 5 started early on both sides (K-bar needs only K-router; S-bar uses the free Swift tree).
+group 5 of 7 · tasks: 9 green, 0 blocked · cases: 20 of 26 green · every suite green
+S-bar: Swift AppBar puts the title at the leading edge, a leading slot replaces the back button,
+which can be hidden; sizes leadingWidth, draws a shadow; 56 high standalone; Card tint and clip.
+K-bar: Kotlin AppBar shows a back arrow on pushed pages, 56 high, Flutter's leading geometry and
+shadow; Card tint and clip. Three Kotlin goldens re-recorded: only the bar height moved.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided: the host's system actions are set on the router while it is shown, not at
-construction (a retained router never keeps an old activity); no new Gradle artifact needed.
+3 auto-decided: no AppBar shadow without shadowColor on both (Flutter M3; Kotlin fixed after commit)
+Swift hides swipe-back with the back button (hand check); the M3 AppBar elevation tint is not drawn.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 5 (S-bar, K-bar: AppBar back arrow, height, shadow; Card tint, clip)? (default: go)
+2. Next: finish group 6 (S-button running, K-button in review) then group 7? (default: go)
 
 ## Appendix
 
@@ -204,6 +204,51 @@ Not done: nothing
 engine 739 pass 0 fail (no engine file changed since G3) · Swift macOS `swift test` green · iOS (DA7254F5) UI 79 +
 core 234, 0 failures, goldens unchanged · Kotlin `./gradlew build` successful (sdk 166, core 228, lint clean).
 Flutter: no file changed.
+
+
+### Group 5
+Commits: K-bar 7829473 + fix b99fc9c, S-bar 6488fcb (staged by path). Nothing pushed. Group 4's card approved
+under the standing rule. Group 6's K-button started after K-bar's commit, S-button after S-bar's.
+
+#### Task K-bar · Kotlin AppBar, back arrow, Card
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Structure.kt` · `sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/widgets/AppBarCardTest.kt` (new) · `sdk-kotlin/sdk/src/test/resources/goldens/{counter-home,degrade-warn,native-widgets-home}.png`
+Cases: A1.9 kt, A1.11 kt (Card) → green (AppBarCardTest 8/0; `./gradlew build` sdk 180, core 228, lint clean;
+baseline 166 + 228). 6 of 7 red first (the root-shows-no-arrow guard passed before); the fix's test red first.
+Changed: AppBar default height 56; back arrow (Icons.AutoMirrored.Filled.ArrowBack, "Back") → LocalOrcaNavigation
+.goBack() when the page can pop, automaticallyImplyLeading is not false and no leading slot; leading box
+leadingWidth × bar height, title 16 past it; elevation + shadowColor → Modifier.shadow (none without
+shadowColor). Card: a Box (shadow + shape background) that clips only when clipBehavior is sent; surfaceTint
+overlay by the M3 table. Goldens: only the bar height moved (rows match the old ones shifted 0/8/16 px at 2x).
+Decisions: 1. Flutter geometry by cancelling M3's 4dp insets (padding(end = 8).offset(x = -4)) · 2. the Card Box
+keeps Surface's content colour, touch blocking and traversal group · 3. the bar's shadow is read through its
+inspector in the test (a software canvas draws no shadows) · 4. no AppBar shadow without shadowColor
+(app_bar.dart:2541 `_AppBarDefaultsM3.shadowColor` transparent; ThemeData() is M3).
+Review fit: pass; after commit the main session found the black default shadow (Flutter M3: transparent),
+fixed in b99fc9c, re-review pass
+Review quality: pass
+Not done: the M3 AppBar surface tint by elevation (not drawn on either SDK).
+
+#### Task S-bar · Swift AppBar and Card
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Structure.swift` · `sdk-swift/Tests/OrcaGatewayTests/AppBarCardTests.swift` (new)
+Cases: A1.9 sw, A1.11 sw (Card), D4 → green (12 tests, all red first; macOS `swift test` 78 UI + 234 core; iOS UI
+91/0, core 234/0, goldens unchanged, 0 warnings).
+Changed: AppBarChrome: centerTitle false → title in a `.navigationBarLeading` item after the back button; a
+leading slot replaces the back button; automaticallyImplyLeading false hides it; leadingWidth sizes the leading
+item; elevation + shadowColor → a shadow strip at the top of the content (AppBarShadow, shared). AppBarView: 56
+high, Flutter's toolbar layout (leading box leadingWidth ?? 56, title 16 after it). CardView: tint by the M3
+table; clip only when sent, not the shadow; orcaPadding.
+Decisions: 1. no shadow without shadowColor (Flutter M3; the brief's black default was wrong) · 2. the strip is
+`elevation` pt tall, shadowColor at 25% fading to clear; no global UINavigationBarAppearance · 3. in the nav bar
+leadingWidth applies only when sent (UIKit's margin stands in for 56).
+Review fit: pass
+Review quality: pass
+Not done: M3 AppBar elevation tint; Card default colour stays white; hiding the back button also turns off
+swipe-back (doc comment; hand check).
+
+#### Group 5 test run
+engine 739 pass 0 fail (no engine file changed) · Swift macOS `swift test` 78 UI + 234 core green · iOS (DA7254F5)
+UI 91 + core 234, 0 failures, goldens unchanged · Kotlin `./gradlew build` successful (sdk 180, core 228, lint
+clean; K-button's uncommitted files were in the tree and green). Flutter: no file changed.
 
 ### Test run
 engine 739 pass 0 fail · Flutter +248 all passed · Swift macOS 234 tests 0 failures · Kotlin core 228, sdk 132,
