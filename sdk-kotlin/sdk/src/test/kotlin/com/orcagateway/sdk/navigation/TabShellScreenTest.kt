@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
@@ -60,9 +61,10 @@ import kotlin.test.assertTrue
  * "Settings" (pushes `/settings`, outside the tabs) and "Open drawer" (the
  * `openDrawer` action); `search` has a TextField bound to no state key;
  * `more` is forty rows in a scroll view.
- * Every request is kept.
+ * Every request is kept. With [appBars] every page is a Scaffold whose
+ * AppBar is titled "bar of name", over that body.
  */
-private class ShellPages : HttpTransport {
+private class ShellPages(private val appBars: Boolean = false) : HttpTransport {
     val requests = mutableListOf<HttpRequest>()
 
     /** The page paths asked for, in order. */
@@ -77,7 +79,22 @@ private class ShellPages : HttpTransport {
         return HttpResponse(200, body = Json.encodeToString(PageResponse.serializer(), page).encodeToByteArray())
     }
 
-    private fun nodes(name: String): List<ComponentNode> = when (name) {
+    private fun nodes(name: String): List<ComponentNode> {
+        val body = body(name)
+        if (!appBars) return body
+        return listOf(
+            structure("sc", "Scaffold", mapOf("appBar" to "ab", "body" to body.first().id)),
+            structure("ab", "AppBar", mapOf("title" to "abt")),
+            text("abt", "bar of $name"),
+        ) + body
+    }
+
+    private fun structure(id: String, type: String, slots: Map<String, String>) = ComponentNode(
+        id, type, ComponentNode.Kind.Structure, ComponentNode.ChildMode.None,
+        slots.mapValues { JsonValue.String(it.value) }, slots.values.toList(),
+    )
+
+    private fun body(name: String): List<ComponentNode> = when (name) {
         "home" -> listOf(
             column("c", "t", "go", "set", "od"),
             text("t", "home page"),
@@ -192,6 +209,12 @@ class TabShellScreenTest {
     private fun tapScrim() {
         compose.onNodeWithContentDescription(CLOSE_DRAWER).performTouchInput { click(Offset(width - 4f, height / 2f)) }
         compose.waitForIdle()
+    }
+
+    /** The back arrows on screen: a kept page under the one on top is composed, and not shown. */
+    private fun backArrows(): Int {
+        compose.waitForIdle()
+        return compose.onAllNodes(hasContentDescription("Back")).fetchSemanticsNodes().count { it.layoutInfo.isPlaced }
     }
 
     private fun backIsHandled(): Boolean {
@@ -347,6 +370,54 @@ class TabShellScreenTest {
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         awaitShown("home page")
         assertFalse(backIsHandled())
+    }
+
+    /**
+     * The AppBar of a page pushed inside a tab shows the implied back arrow,
+     * and it pops inside the tab; the AppBar of a tab's root shows none.
+     */
+    @Test
+    fun seam_anAppBarInsideATabShowsABackArrowOnAPushedPageOnlyAndItPopsInsideTheTab() {
+        val pages = ShellPages(appBars = true)
+        val router = show(pages)
+        awaitShown("bar of home")
+        assertEquals(0, backArrows())
+
+        compose.onNodeWithText("Go").performClick()
+        awaitShown("bar of home/product/3")
+        assertEquals(1, backArrows())
+        compose.onNodeWithTag(tabTag(0)).assertIsDisplayed()
+
+        compose.onNodeWithContentDescription("Back").performClick()
+        awaitShown("bar of home")
+        assertEquals(emptyList(), router.stack)
+        assertEquals(0, router.currentTab)
+        assertEquals(0, backArrows())
+
+        // The root of another tab has none either.
+        tapTab(1)
+        awaitShown("bar of search")
+        assertEquals(0, backArrows())
+    }
+
+    /**
+     * The AppBar of a route over the shell shows the implied back arrow,
+     * under the one of the route's title bar, and it pops the route.
+     */
+    @Test
+    fun seam_anAppBarOnARouteOverTheShellShowsABackArrowThatPopsTheRoute() {
+        val pages = ShellPages(appBars = true)
+        val router = show(pages)
+
+        compose.onNodeWithText("Settings").performClick()
+        awaitShown("bar of settings")
+        // The title bar's and the AppBar's.
+        assertEquals(2, backArrows())
+
+        compose.onAllNodes(hasContentDescription("Back"))[1].performClick()
+        awaitShown("bar of home")
+        assertEquals(emptyList(), router.overRoutes)
+        assertEquals(0, backArrows())
     }
 
     /**
