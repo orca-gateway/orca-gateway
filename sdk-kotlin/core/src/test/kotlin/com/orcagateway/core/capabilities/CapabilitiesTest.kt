@@ -52,12 +52,15 @@ class CapabilitiesTest {
      * S9.13: Android draws the iOS set, the 15 core widgets plus the ten S9
      * added and then AnimatedBuilder, Transform and Video, and the generated vector is the regenerated list (sorted as the
      * generator sorts, hashed as the engine hashes), not a hand edit.
+     *
+     * B10.C-K: S10 adds Drawer, BottomNavigationBar and BottomNavItem, so the
+     * pin moves from 28 to 31 (a pin moved to the new truth).
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame28WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame31WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(28, kotlin.size)
+        assertEquals(31, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -66,6 +69,9 @@ class CapabilitiesTest {
             "AnimatedBuilder", "Transform", "Video",
         )
         assertTrue(kotlin.containsAll(added), "missing: ${added - kotlin.toSet()}")
+        val s10 = setOf("BottomNavItem", "BottomNavigationBar", "Drawer")
+        assertTrue(kotlin.containsAll(s10), "missing: ${s10 - kotlin.toSet()}")
+        assertTrue(GeneratedCapabilities.widgets.containsAll(s10), "not advertised: ${s10 - GeneratedCapabilities.widgets.toSet()}")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
