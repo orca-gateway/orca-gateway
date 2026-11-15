@@ -109,8 +109,8 @@ public final class OrcaPageLoader: ObservableObject {
     }
 }
 
-/// How an `OrcaApp` starts. With a path (`home` when none is given) the
-/// router is ready at once and nothing is fetched here. With `path: nil` the
+/// How an `OrcaApp` starts. With a path the router is ready at once and
+/// nothing is fetched here. With no path (the default, `path: nil`) the
 /// app boots from the server config, as Flutter's `OrcaApp._initializeOnlineOnly`: `fetchConfig`, then a router
 /// seeded with `initialAppState` showing `initialRoute`.
 @MainActor
@@ -127,9 +127,9 @@ public final class OrcaAppBoot: ObservableObject {
     private let onRouteChanged: ((RouteChangeEvent) -> Void)?
     private var started = false
 
-    /// `path` defaults to `home`. An explicit `path: nil` boots from the
-    /// config: call `startIfNeeded()`.
-    public init(client: OrcaClient, path: String? = "home", system: SystemActions? = nil,
+    /// `path` defaults to nil, the boot from the config: call
+    /// `startIfNeeded()`. A path opens that page and fetches no config.
+    public init(client: OrcaClient, path: String? = nil, system: SystemActions? = nil,
                 onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) {
         self.client = client
         self.system = system
@@ -187,17 +187,17 @@ public final class OrcaAppBoot: ObservableObject {
 /// with tabs is drawn as a tab bar with one NavigationStack per tab
 /// (`TabShellView`).
 ///
-/// With a `path` no config is fetched and every path is a page. The default
-/// is `home`: `OrcaApp(client:)` opens the page `home`, as it always has.
+/// With no `path` (the default, as in the Flutter SDK) the app gets the
+/// server's navigation (routes, redirects, initial app state): it fetches
+/// the navigation config first, its `initialRoute` is the first page and its
+/// `initialAppState` is seeded before that page is asked for.
 ///
-/// `path: nil` is the way to get the server's navigation (routes, redirects,
-/// initial app state): the app fetches the navigation config first, its
-/// `initialRoute` is the first page and its `initialAppState` is seeded
-/// before that page is asked for.
+/// With a `path` no config is fetched and every path is a page: the app
+/// opens that one page.
 ///
-///     OrcaApp(client: OrcaClient(baseURL: url, appId: "counter", apiKey: "demo-key"))
+///     OrcaApp(client: OrcaClient(baseURL: url, appId: "navigation", apiKey: "demo-key"))
+///     OrcaApp(client: OrcaClient(baseURL: url, appId: "counter", apiKey: "demo-key"), path: "home")
 ///     OrcaApp(client: OrcaClient(baseURL: url, appId: "server-actions", apiKey: "demo-key"), path: "shop")
-///     OrcaApp(client: OrcaClient(baseURL: url, appId: "navigation", apiKey: "demo-key"), path: nil)
 @MainActor
 public struct OrcaApp: View {
     @StateObject private var boot: OrcaAppBoot
@@ -206,8 +206,8 @@ public struct OrcaApp: View {
     /// A client without a device id gets the one saved in UserDefaults
     /// (`DeviceIdentity`, made on first run).
     /// - Parameters:
-    ///   - path: the first page; nil boots from the server's navigation
-    ///     config (see above).
+    ///   - path: the first page; nil, the default, boots from the server's
+    ///     navigation config (see above).
     ///   - enableOffline: run the version check at boot, before the config
     ///     or any page is asked for; a forceUpdate answer shows the
     ///     force-update screen and loads neither. The static-flow cache, the
@@ -215,7 +215,7 @@ public struct OrcaApp: View {
     ///   - enableSessionTracking: send a session start when the app comes to
     ///     the foreground and an end when it goes to the background.
     ///   - onRouteChanged: told of every route change, the first route included.
-    public init(client: OrcaClient, path: String? = "home", system: SystemActions? = nil,
+    public init(client: OrcaClient, path: String? = nil, system: SystemActions? = nil,
                 enableOffline: Bool = false, enableSessionTracking: Bool = false,
                 onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) {
         _boot = StateObject(wrappedValue: OrcaAppBoot(

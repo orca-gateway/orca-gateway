@@ -65,7 +65,7 @@ class OrcaAppTest {
     @Test
     fun theCounterLoadsThroughTheHandshakeAndCounts() {
         val engine = StubEngine()
-        compose.setContent { OrcaApp(client(engine)) }
+        compose.setContent { OrcaApp(client(engine), path = "home") }
 
         compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("Counter Example") > 0 }
         compose.onNodeWithText("Counter Example").assertIsDisplayed()
@@ -83,7 +83,7 @@ class OrcaAppTest {
     @Test
     fun aFailedLoadShowsTheErrorAndRetries() {
         val engine = StubEngine(failWith = 500)
-        compose.setContent { OrcaApp(client(engine)) }
+        compose.setContent { OrcaApp(client(engine), path = "home") }
 
         compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("Could not load this page") > 0 }
         compose.onNodeWithText("HTTP 500: {\"error\":\"boom\"}").assertIsDisplayed()
@@ -111,6 +111,19 @@ class OrcaAppTest {
         assertEquals("393", engine.configRequests.single().headers["x-orca-screen-width"])
     }
 
+    /** No path is the default: `OrcaApp(client)` asks `/config` first, as Flutter's OrcaApp does. */
+    @Test
+    fun b9_1_withoutAPathTheAppBootsFromTheConfig() {
+        val engine = ConfigEngine(config(initialRoute = "/welcome"))
+        compose.setContent { OrcaApp(engine.client) }
+
+        compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("welcome page") > 0 }
+
+        assertTrue(engine.requests.first().url.path.endsWith("/config"))
+        assertEquals(1, engine.configRequests.size)
+        assertEquals(listOf("welcome"), engine.pageRequests)
+    }
+
     @Test
     fun b9_1_aHostPathSkipsTheConfig() {
         val engine = ConfigEngine(config(initialRoute = "/welcome"))
@@ -121,8 +134,8 @@ class OrcaAppTest {
             if (explicit) {
                 OrcaApp(engine.client, path = "settings", onRouteChanged = { events += it })
             } else {
-                // No path at all: the page `home`, as before the config boot existed.
-                OrcaApp(byDefault.client, onRouteChanged = { events += it })
+                // The path `home`, which was the default before the config boot became it.
+                OrcaApp(byDefault.client, path = "home", onRouteChanged = { events += it })
             }
         }
 

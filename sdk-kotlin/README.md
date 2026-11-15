@@ -40,7 +40,8 @@ The app needs `minSdk = 24` or higher and Compose turned on (the Kotlin Compose 
 is a working setup. The SDK's manifest adds the `INTERNET` permission for you.
 
 Then make `OrcaApp` the activity's content. It loads the page at `path` from your Orca server and
-follows the page's navigation, the system back gesture included:
+follows the page's navigation, the system back gesture included. Without a `path`, `OrcaApp(client)`
+boots from the server's navigation config instead (see "Navigation from the server config"):
 
 ```kotlin
 import android.os.Bundle
@@ -133,9 +134,10 @@ setContent { OrcaApp(router) }
   gesture. Showing the location that is already on top reports nothing. It can also be set later
   (`router.onRouteChanged = ...`), and works on a router built from a path.
 
-`OrcaRouter(client, path = "home")` and `OrcaApp(client, path = "home")` work as before: no
-config, every path is a page. `OrcaApp(client)` fetching the config itself, the "page not found"
-screen and the title bar follow in the next change; tabs and the drawer come after that.
+`OrcaApp(client)`, with no path, fetches the config itself and boots from it, as the Flutter SDK
+does: the config's `initialRoute` and `initialAppState`, its routes, the "Page not found" screen,
+the title bar and the tabs. `OrcaRouter(client, path = "home")` and `OrcaApp(client, path = "home")`
+open that one page: no config, every path is a page.
 
 ## Styling buttons
 
