@@ -68,12 +68,15 @@ public object GeneratedCapabilities {
     public val actionKinds: List<String> = listOf(
         "actionGroup",
         "addComponent",
+        "always",
         "conditionalAction",
         "copyToClipboard",
+        "debugLog",
         "deleteComponent",
         "goBack",
         "lifecycle",
         "navigate",
+        "once",
         "openDrawer",
         "openUrl",
         "serverAction",
@@ -136,5 +139,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "341de73030069b161ff2b179dd684ed751cc9b3c42d711c49464f533fd31c467"
+    public const val capsHash: String = "f175041a24e0e0130a79235d21ab6687367a87cef3371e35d077bdd62282ee39"
 }
