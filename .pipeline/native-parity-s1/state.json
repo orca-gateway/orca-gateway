@@ -4,7 +4,7 @@
   "idea": "Native parity step 1 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): polish the widgets Swift and Kotlin already draw so they honour Flutter's props: Text line height, word spacing, overline, decoration style and colour, overflow, justify, absolute left/right under RTL; Container border inset; ElevatedButton elevation and padding; Stack passthrough; Image fitWidth/fitHeight/scaleDown and repeat; read-only TextField focusable, hint/helper/error styles, dense; AppBar elevation, shadow, leadingWidth, centerTitle, implied back button; Row/Column textDirection and verticalDirection; Center factors; button autofocus and tooltip; Card tint and clip; scroll reverse/primary/shrinkWrap; Kotlin router survives rotation. Test cases A1.1-A1.13 in phase-a-tests.md. In sdk-swift and sdk-kotlin",
   "kind": "feature",
   "created_at": "2026-11-15T18:18:35Z",
-  "updated_at": "2026-11-15T19:45:46Z",
+  "updated_at": "2026-11-15T19:58:51Z",
   "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "draft",
-      "rounds": 4,
-      "card": "cards/09-r3.md"
+      "rounds": 5,
+      "card": "cards/09-r4.md"
     },
     "10": {
       "status": "pending"

@@ -3,22 +3,22 @@
 ## Front page
 
 ### In one breath
-group 3 of 7 · tasks: 5 green, 0 blocked · cases: 14 of 26 green · every suite green
-S-flex: Swift Row/Column read textDirection and verticalDirection for their own layout only;
-Center sizes by its factors; scroll views honour reverse and shrinkWrap; absolute padding.
-K-flex: the same on Compose, positions computed from the props, not the page direction.
-K-router (group 4) started early: the Kotlin tree was free and it depends on nothing in group 3.
+group 4 of 7 · tasks: 7 green, 0 blocked · cases: 16 of 26 green · every suite green
+S-box: a Swift Container insets its child by the border width; the clip spares box shadows.
+K-router: OrcaApp(client) keeps its page stack across a rotation (ViewModel), matches the
+restored NavHost entries instead of popping to the root, and tells the AppBar it can go back.
+Group 5 started early on both sides (K-bar needs only K-router; S-bar uses the free Swift tree).
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided: Swift reverse on iOS 16 scrolls to the end but short content stays at the start;
-`primary` is a documented no-op on both; Row baseline in Swift FlexLayout left as before (top).
+2 auto-decided: the host's system actions are set on the router while it is shown, not at
+construction (a retained router never keeps an old activity); no new Gradle artifact needed.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 4 (S-box Container border inset, K-router kept across rotation)? (default: go)
+2. Next: group 5 (S-bar, K-bar: AppBar back arrow, height, shadow; Card tint, clip)? (default: go)
 
 ## Appendix
 
@@ -159,6 +159,51 @@ For later: Row baseline alignment in Swift FlexLayout (no case row covers it).
 engine 739 pass 0 fail (no engine file changed) · Swift macOS `swift test` green · iOS (DA7254F5) UI 75 + core
 234, 0 failures, goldens unchanged · Kotlin `./gradlew build` successful at c184b56 (K-flex's run; lint clean); the
 full Kotlin counts are re-run with group 4 (K-router is using the tree now). Flutter: no file changed.
+
+
+### Group 4
+Commits: K-router 6ff7679, S-box 6a7f87f (staged by path). Nothing pushed. Group 3's card approved under the
+standing rule. Group 5's K-bar was started after K-router's commit and S-bar after S-box's (one Swift and one
+Kotlin task at a time, as before).
+
+#### Task K-router · Kotlin router retained, can-pop local
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/OrcaApp.kt` · `…/sdk/navigation/OrcaRouter.kt` · `sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/OrcaAppTest.kt` (libs.versions.toml and build.gradle.kts unchanged)
+Cases: A1.13 kt → green (7 new `a1_13_kt_*` tests through a HostActivity recreated with Robolectric
+`ActivityController.recreate()`; OrcaAppTest 9/9; `./gradlew build` sdk 166/0, core 228/0, lint clean; baseline
+sdk 159). 5 red first; the outside-OrcaApp default passed once the local existed; the host-system test was added
+after green.
+Changed: OrcaApp(client) keeps its router in an internal `RetainedRouter` ViewModel (closed in onCleared); the
+host's `system` is set on the router by a DisposableEffect while shown; OrcaApp(router) saves the pushed route
+ids next to the NavController (rememberSaveable) and after a recreation keeps the shared bottom, pops the rest,
+pushes the missing; `OrcaNavigation(router?, canPop)` + `LocalOrcaNavigation` (default: no router, can-pop false).
+Decisions: 1. ViewModel keyed by `currentCompositeKeyHashCode` (two OrcaApp in one activity get two routers) ·
+2. route ids saved with rememberSaveable because NavController.currentBackStack is @RestrictTo (lint) · 3. the
+host's `system` is no longer passed to the router's constructor (no public signature changed) · 4.
+lifecycle-viewmodel-compose comes with navigation-compose; nothing declared.
+Review fit: pass
+Review quality: pass
+Not done: the AppBar arrow (K-bar, group 5); the rotation check on the emulator (hand, at the end of the step).
+
+#### Task S-box · Swift Container border inset, clip
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Box.swift` · `sdk-swift/Tests/OrcaGatewayTests/BoxTests.swift` (new) (golden native-widgets-home unchanged: it still passes)
+Cases: A1.4 sw, D4 → green (4 tests: a 4pt border insets by 4, border + padding 10 insets by 14, the clip cuts
+the child but not the shadow, padding/margin left stay left in RTL; macOS `swift test` green; iOS UI 79/0, core
+234/0, goldens unchanged, 0 warnings). All 4 red first.
+Changed: BoxDecorationProps `borderInset` (the border width, default 1); ContainerView insets the child by the
+border plus `orcaPadding(padding)`; ClipIf moved inside the background so it clips the padded child and the
+shadows stay outside; margin via `orcaPadding`.
+Decisions: 1. a border with style none still insets by its width (Flutter's Border.dimensions ignores the style) ·
+2. the border inset is its own `.padding(width)` (0 for a plain Container: no layout change) · 3. clipBehavior
+with no decoration clips to a rectangle (existing behaviour; Flutter asserts there).
+Review fit: pass
+Review quality: the test borrowed a `FlexLayoutTests()` instance and added its own frames struct instead of the
+shared `Pixels`, fixed
+Not done: nothing
+
+#### Group 4 test run
+engine 739 pass 0 fail (no engine file changed since G3) · Swift macOS `swift test` green · iOS (DA7254F5) UI 79 +
+core 234, 0 failures, goldens unchanged · Kotlin `./gradlew build` successful (sdk 166, core 228, lint clean).
+Flutter: no file changed.
 
 ### Test run
 engine 739 pass 0 fail · Flutter +248 all passed · Swift macOS 234 tests 0 failures · Kotlin core 228, sdk 132,
