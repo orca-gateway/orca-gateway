@@ -244,10 +244,16 @@ struct SizedBoxView: View {
 /// IntrinsicHeight, IntrinsicWidth when horizontal) hugs the content on the
 /// scroll axis. `primary` only feeds iOS's status-bar tap in Flutter;
 /// SwiftUI has no switch for it, so it is not read (a known difference).
+/// A node with onScrollBegin, onScrolling or onScrollEnd gets
+/// ScrollTriggers; the others keep their tree.
 @MainActor
 struct ScrollNodeView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
+
+    /// Whether iOS 18 / macOS 15 read the scroll phase; tests turn it off
+    /// to run the iOS 16-17 path on a newer simulator.
+    static var usesScrollPhase = true
 
     var body: some View {
         let horizontal = node["scrollDirection"]?.stringValue == "horizontal"
@@ -260,8 +266,24 @@ struct ScrollNodeView: View {
 
     @ViewBuilder
     private func scroll(_ horizontal: Bool) -> some View {
+        if node.actions.keys.contains(where: ScrollEvent.triggers.contains) {
+            let triggers = ScrollTriggers(node: node, model: model, horizontal: horizontal,
+                                          reverse: node["reverse"]?.boolValue == true, phased: Self.phased)
+            if triggers.phased {
+                scrollView(horizontal) { content }.modifier(triggers)
+            } else {
+                scrollView(horizontal) { ScrollTriggers.probe(content) }.modifier(triggers)
+            }
+        } else {
+            scrollView(horizontal) { content }
+        }
+    }
+
+    @ViewBuilder
+    private func scrollView<Content: View>(_ horizontal: Bool, @ViewBuilder content: () -> Content) -> some View {
         let axis: Axis.Set = horizontal ? .horizontal : .vertical
         let end: UnitPoint = horizontal ? .trailing : .bottom
+        let content = content()
         if node["reverse"]?.boolValue != true {
             ScrollView(axis) { content }
         } else if #available(iOS 17, macOS 14, *) {
@@ -277,6 +299,213 @@ struct ScrollNodeView: View {
     private var content: some View {
         ChildView(node: node, model: model)
             .orcaPadding(node["padding"])
+    }
+
+    /// The scroll phase is there (iOS 18, macOS 15) and in use.
+    private static var phased: Bool {
+        guard usesScrollPhase else { return false }
+        if #available(iOS 18, macOS 15, *) { return true }
+        return false
+    }
+}
+
+/// onScrollBegin, onScrolling and onScrollEnd of a scroll view's node,
+/// Flutter `wrapScrollNotifier` (builder_helpers.dart:46-71): each sample
+/// of the offset along the view's axis, the content's length and the
+/// view's goes through a ScrollObserver with whether a scroll is in
+/// progress, and the triggers it yields fire with their payload, in points
+/// (Flutter's logical pixels). Draws nothing.
+///
+/// - iOS 18 / macOS 15 (`phased`): the ScrollGeometry (offset and content
+///   counted from the content insets' start) and the ScrollPhase: a scroll
+///   is in progress while the phase is scrolling (a drag, its fling, an
+///   animation).
+/// - iOS 16-17: the content's frame in the view's coordinate space
+///   (`probe`, a GeometryReader inside the scroll view) and the view's size.
+///   A scroll is in progress while a simultaneous DragGesture is active
+///   (begin as the finger starts dragging) and until the offset has held
+///   still for ScrollTracker.settleDelay (the end of a fling, or of any
+///   other move).
+struct ScrollTriggers: ViewModifier {
+    static let space = "orca-scroll"
+
+    let node: ResolvedNode
+    let model: OrcaPageModel
+    let horizontal: Bool
+    let reverse: Bool
+    let phased: Bool
+    @State private var tracker = ScrollTracker()
+    @GestureState private var dragging = false
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, macOS 15, *), phased {
+            content
+                .onScrollGeometryChange(for: ScrollMetrics.self) { [horizontal, reverse] geometry in
+                    Self.metrics(geometry, horizontal: horizontal, reverse: reverse)
+                } action: { old, new in
+                    fire(tracker.see(new, after: old))
+                }
+                .onScrollPhaseChange { _, phase in
+                    fire(tracker.phase(scrolling: phase.isScrolling))
+                }
+        } else {
+            content
+                .background(GeometryReader { geometry in
+                    Color.clear.preference(key: ScrollProbe.self, value: ScrollProbe(viewport: geometry.size))
+                })
+                .coordinateSpace(name: Self.space)
+                .onPreferenceChange(ScrollProbe.self) { probe in
+                    guard let frame = probe.content, let viewport = probe.viewport else { return }
+                    let metrics = ScrollMetrics(offset: horizontal ? -frame.minX : -frame.minY,
+                                                contentExtent: horizontal ? frame.width : frame.height,
+                                                viewportExtent: horizontal ? viewport.width : viewport.height,
+                                                reverse: reverse)
+                    fire(tracker.probe(metrics, then: fire))
+                }
+                // An outer watched scroll view reads its own content, not this one's.
+                .transformPreference(ScrollProbe.self) { $0 = ScrollProbe() }
+                .simultaneousGesture(DragGesture().updating($dragging) { _, state, _ in state = true })
+                .onChange(of: dragging) { active in
+                    fire(tracker.drag(active, then: fire))
+                }
+                // A view that is gone fires no end (a disposed Flutter ScrollPosition sends no ScrollEnd).
+                .onAppear { tracker.start() }
+                .onDisappear { tracker.stop() }
+        }
+    }
+
+    /// iOS 16-17: `content` reporting its frame in the scroll view's space.
+    static func probe<V: View>(_ content: V) -> some View {
+        content.background(GeometryReader { geometry in
+            Color.clear.preference(key: ScrollProbe.self,
+                                   value: ScrollProbe(content: geometry.frame(in: .named(space))))
+        })
+    }
+
+    @available(iOS 18, macOS 15, *)
+    private static func metrics(_ geometry: ScrollGeometry, horizontal: Bool, reverse: Bool) -> ScrollMetrics {
+        let insets = geometry.contentInsets
+        return horizontal
+            ? ScrollMetrics(offset: geometry.contentOffset.x + insets.leading,
+                            contentExtent: geometry.contentSize.width + insets.leading + insets.trailing,
+                            viewportExtent: geometry.containerSize.width, reverse: reverse)
+            : ScrollMetrics(offset: geometry.contentOffset.y + insets.top,
+                            contentExtent: geometry.contentSize.height + insets.top + insets.bottom,
+                            viewportExtent: geometry.containerSize.height, reverse: reverse)
+    }
+
+    private func fire(_ events: [ScrollEvent]) {
+        for event in events { model.fire(event.trigger, on: node, eventData: event.eventData) }
+    }
+}
+
+/// iOS 16-17: the scroll content's frame in its view's space and the
+/// view's size, each from a GeometryReader.
+struct ScrollProbe: PreferenceKey, Equatable {
+    var content: CGRect?
+    var viewport: CGSize?
+
+    static let defaultValue = ScrollProbe()
+
+    static func reduce(value: inout ScrollProbe, nextValue: () -> ScrollProbe) {
+        let next = nextValue()
+        value.content = next.content ?? value.content
+        value.viewport = next.viewport ?? value.viewport
+    }
+}
+
+/// One watched scroll view's ScrollObserver and what it last saw, kept in
+/// the view's state across redraws (a reference: a sample redraws
+/// nothing). A scroll is in progress while the scroll phase says so
+/// (iOS 18), or while a finger drags or the offset moved less than
+/// `settleDelay` ago (iOS 16-17).
+@MainActor
+final class ScrollTracker {
+    /// How long the offset holds still before a scroll ends on iOS 16-17:
+    /// a fling moves it every frame until it stops.
+    static let settleDelay: TimeInterval = 0.15
+
+    private var observer = ScrollObserver()
+    private var metrics: ScrollMetrics?
+    private var scrollPhase = false
+    private var dragging = false
+    private var moving = false
+    private var settle: Task<Void, Never>?
+    /// iOS 16-17: the view has disappeared; no settle wait starts.
+    private var stopped = false
+
+    private var inProgress: Bool { scrollPhase || dragging || moving }
+
+    /// iOS 16-17: the view is on screen again after `stop`. The scroll that
+    /// was in progress is dropped, firing nothing; the view's last sample
+    /// stays, so its next scroll begins from there (a new Flutter scroll
+    /// has a new ScrollStart).
+    func start() {
+        guard stopped else { return }
+        stopped = false
+        moving = false
+        dragging = false
+        observer = ScrollObserver()
+        _ = metrics.map { observer.observe($0, inProgress: false) }
+    }
+
+    /// iOS 16-17: the view has gone: the settle wait is cancelled, and none
+    /// starts until it appears again (a @GestureState reset that follows
+    /// the disappearance included), so no onScrollEnd fires for it.
+    func stop() {
+        stopped = true
+        settle?.cancel()
+        settle = nil
+    }
+
+    /// iOS 18: a new sample; `old`, where the view stood before it, is the
+    /// first sample when there was none (the geometry's first change).
+    func see(_ new: ScrollMetrics, after old: ScrollMetrics) -> [ScrollEvent] {
+        let first = metrics == nil ? see(old) : []
+        return first + see(new)
+    }
+
+    /// iOS 18: the scroll phase is scrolling, or no longer.
+    func phase(scrolling: Bool) -> [ScrollEvent] {
+        scrollPhase = scrolling
+        return again()
+    }
+
+    /// iOS 16-17: a sample from the probe. A new offset is a scroll in
+    /// progress until it settles; `fire` gets the end.
+    func probe(_ new: ScrollMetrics, then fire: @escaping ([ScrollEvent]) -> Void) -> [ScrollEvent] {
+        if let metrics, metrics.offset != new.offset { moving = true; awaitSettle(fire) }
+        return see(new)
+    }
+
+    /// iOS 16-17: a finger starts dragging the view (the scroll begins) or
+    /// lifts (it ends once the view settles).
+    func drag(_ active: Bool, then fire: @escaping ([ScrollEvent]) -> Void) -> [ScrollEvent] {
+        dragging = active
+        guard !active else { return again() }
+        moving = true
+        awaitSettle(fire)
+        return []
+    }
+
+    private func see(_ new: ScrollMetrics) -> [ScrollEvent] {
+        metrics = new
+        return observer.observe(new, inProgress: inProgress)
+    }
+
+    private func again() -> [ScrollEvent] {
+        metrics.map(see) ?? []
+    }
+
+    private func awaitSettle(_ fire: @escaping ([ScrollEvent]) -> Void) {
+        settle?.cancel()
+        guard !stopped else { return }
+        settle = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.settleDelay * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            moving = false
+            fire(again())
+        }
     }
 }
 

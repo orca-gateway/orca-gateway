@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "slug": "native-parity-s2",
+  "idea": "Native parity step 2 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): lifecycle and triggers on both native SDKs: onInit and onVisible once per mount, onBackground/onForeground (and onApp aliases), onScrollBegin/onScrolling/onScrollEnd with offset and extent in the event value, once per widget and trigger, always, debugLog as an effect. Test cases A2.1-A2.6 in phase-a-tests.md. In sdk-swift and sdk-kotlin, with the action fixtures and Flutter's debugLog effect",
+  "kind": "feature",
+  "created_at": "2026-11-15T21:54:26Z",
+  "updated_at": "2026-11-15T23:15:22Z",
+  "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
+  "current": "10",
+  "stages": {
+    "01": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 2, cases: phase-a-tests.md rows A2.1-A2.6"
+    },
+    "02": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 2, cases: phase-a-tests.md rows A2.1-A2.6"
+    },
+    "03": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 2, cases: phase-a-tests.md rows A2.1-A2.6"
+    },
+    "04": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 2, cases: phase-a-tests.md rows A2.1-A2.6"
+    },
+    "05": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 2, cases: phase-a-tests.md rows A2.1-A2.6"
+    },
+    "06": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 2, cases: phase-a-tests.md rows A2.1-A2.6"
+    },
+    "07": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 2, cases: phase-a-tests.md rows A2.1-A2.6"
+    },
+    "08": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-15T22:07:19Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 08's eight questions are minor (commands as found; commits per task; one gate per group; serial groups per build tree; fixture runners red only inside the slice; A2.2 and A2.6 corrected to Flutter as the brief allows, A2.6 keeps the approved wording; ProcessLifecycleOwner; no refire on pop-back as Flutter), all defaults"
+    },
+    "09": {
+      "status": "approved",
+      "rounds": 3,
+      "card": "cards/09-r3.md",
+      "approved_at": "2026-11-15T23:15:22Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 4's two questions are minor (no blocked task; next is stage 10: rebase on main, iPhone hand checks, suites, open the PR, the user merges), defaults"
+    },
+    "10": {
+      "status": "draft",
+      "rounds": 1
+    },
+    "11": {
+      "status": "pending"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": true
+  }
+}

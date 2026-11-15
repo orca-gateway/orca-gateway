@@ -1,5 +1,6 @@
 package com.orcagateway.sdk.widgets
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -10,7 +11,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
@@ -19,10 +23,14 @@ import androidx.compose.ui.layout.MeasurePolicy
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.orcagateway.core.render.ResolvedNode
+import com.orcagateway.core.render.ScrollEvent
+import com.orcagateway.core.render.ScrollMetrics
+import com.orcagateway.core.render.ScrollObserver
 import com.orcagateway.sdk.ChildView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.style.Insets
@@ -112,7 +120,8 @@ internal fun SizedBoxWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
  * IntrinsicHeight (IntrinsicWidth) around the view, which then hugs its
  * content within its limits; this view already does, so it changes
  * nothing. `primary` hands the view to the iOS status-bar tap in Flutter
- * and has no Android counterpart: it is ignored.
+ * and has no Android counterpart: it is ignored. A node with a scroll
+ * trigger gets [ScrollTriggers]; the others keep their tree.
  */
 @Composable
 internal fun ScrollWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -122,6 +131,7 @@ internal fun ScrollWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
     BoxWithConstraints(modifier, propagateMinConstraints = true) {
         val bounded = if (horizontal) constraints.hasBoundedWidth else constraints.hasBoundedHeight
         val state = rememberScrollState()
+        if (node.actions.keys.any { it in ScrollEvent.TRIGGERS }) ScrollTriggers(node, model, state)
         val scroll = when {
             !bounded -> Modifier
             horizontal -> Modifier.horizontalScroll(state, reverseScrolling = reverse)
@@ -130,6 +140,31 @@ internal fun ScrollWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
         val content = scroll.scrolledContent(horizontal, reverse).padding(insets.paddingValues())
         Box(content, propagateMinConstraints = true) {
             ChildView(node, model)
+        }
+    }
+}
+
+/**
+ * onScrollBegin, onScrolling and onScrollEnd of a scroll view's node,
+ * Flutter `wrapScrollNotifier`: each change of [state]'s offset, extent,
+ * viewport or `isScrollInProgress` goes through a [ScrollObserver], whose
+ * triggers fire with their payload. ScrollState counts pixels; the payload
+ * is in dp, Flutter's logical pixels. It draws nothing.
+ */
+@Composable
+private fun ScrollTriggers(node: ResolvedNode, model: OrcaPageModel, state: ScrollState) {
+    val current = rememberUpdatedState(node)
+    val density = LocalDensity.current.density.toDouble()
+    LaunchedEffect(model, state, density) {
+        val observer = ScrollObserver()
+        snapshotFlow {
+            ScrollMetrics(
+                offset = state.value / density,
+                maxExtent = state.maxValue / density,
+                viewportDimension = state.viewportSize / density,
+            ) to state.isScrollInProgress
+        }.collect { (metrics, inProgress) ->
+            for (event in observer.observe(metrics, inProgress)) model.fire(event.trigger, current.value, event.eventData)
         }
     }
 }

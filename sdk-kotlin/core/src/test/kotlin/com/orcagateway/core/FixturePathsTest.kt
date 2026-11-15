@@ -11,7 +11,7 @@ class FixturePathsTest {
     @Test
     fun theConformanceFixturesAreReachable() {
         assertEquals(43, Fixtures.renderFiles().size)
-        assertEquals(20, Fixtures.actionFiles().size)
+        assertEquals(24, Fixtures.actionFiles().size)
     }
 
     /** B9.1-CK: the navigation fixture family is reachable, all 15 files of it (11 of cases, 3 of sessions, 1 of links). */

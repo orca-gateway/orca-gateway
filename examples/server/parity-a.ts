@@ -1,5 +1,17 @@
 import { App, Flow, PageDefinition } from "../../engine/src/core";
-import { V, TV, SetState, Navigate, GoBack, type Widget } from "../../engine/src/types";
+import {
+  V,
+  TV,
+  SetState,
+  Navigate,
+  GoBack,
+  Sequential,
+  DebugLog,
+  Once,
+  Always,
+  type Action,
+  type Widget,
+} from "../../engine/src/types";
 import {
   Scaffold,
   AppBar,
@@ -26,8 +38,8 @@ import {
 // Native parity, Phase A (pipeline native-parity). One app, one page per plan
 // step, each the "torture" page for the props that step brings to Swift and
 // Kotlin, so the same page can be compared on Flutter, iOS and Android.
-// Pages: polish (step 1). Later steps add lifecycle, layout, effects, lists,
-// forms, rich and overlays: one page constant each, one entry in `routes`.
+// Pages: polish (step 1), lifecycle (step 2). Later steps add layout, effects,
+// lists, forms, rich and overlays: one page constant each, one entry in `routes`.
 // Images come from picsum.photos; offline they draw "!" in their box. Only
 // widgets all three SDKs draw (no Wrap: the native SDKs lack it and the
 // capability filter would hoist its children into the parent).
@@ -421,12 +433,160 @@ const polishNoBackPage = PageDefinition.create({
     }),
 });
 
+// ── Step 2 · lifecycle: onInit, onVisible, app background / foreground, scroll
+//    triggers, once / always / debugLog (A2.1-A2.6) ────────────────────────────
+
+/** SetState key = key + 1 (page scope). */
+function bump(key: string) {
+  return SetState(key, V.transform(V.pageState(key), [TV.add(V.static(1))]));
+}
+
+/** A Text "label: <page state value>", with `decimals` decimals when given. */
+function shows(label: string, key: string, decimals?: number): Widget {
+  const format = decimals === undefined ? [] : [TV.toFixed(decimals)];
+  return Text.new({ data: V.transform(V.pageState(key), [...format, TV.template(`${label}: {{value}}`)]) });
+}
+
+/** The scroll event (offset, maxExtent, atEnd, + delta) into page state, with the trigger's name. */
+function scrollEvent(trigger: string, ...more: Action[]) {
+  return Sequential(
+    SetState("scrollLast", V.static(trigger)),
+    SetState("scrollOffset", V.event("offset")),
+    SetState("scrollMaxExtent", V.event("maxExtent")),
+    SetState("scrollAtEnd", V.event("atEnd")),
+    ...more,
+  );
+}
+
+const lifecyclePage = PageDefinition.create({
+  id: "lifecycle",
+  title: "Lifecycle",
+  state: [
+    { key: "inits", scope: "page", initial: 0 },
+    { key: "visibles", scope: "page", initial: 0 },
+    { key: "backgrounds", scope: "page", initial: 0 },
+    { key: "foregrounds", scope: "page", initial: 0 },
+    { key: "appBackgrounds", scope: "page", initial: 0 },
+    { key: "appForegrounds", scope: "page", initial: 0 },
+    { key: "scrollLast", scope: "page", initial: "none" },
+    { key: "scrollOffset", scope: "page", initial: 0 },
+    { key: "scrollMaxExtent", scope: "page", initial: 0 },
+    { key: "scrollAtEnd", scope: "page", initial: false },
+    { key: "scrollDelta", scope: "page", initial: 0 },
+    { key: "scrollBegins", scope: "page", initial: 0 },
+    { key: "scrollEnds", scope: "page", initial: 0 },
+    { key: "onceCount", scope: "page", initial: 0 },
+    { key: "alwaysCount", scope: "page", initial: 0 },
+    { key: "redraws", scope: "page", initial: 0 },
+  ],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({ title: Text.new({ data: "Lifecycle (step 2)" }) }),
+      body: SingleChildScrollView.new({
+        child: Padding.new({
+          padding: EdgeInsets.all(16),
+          child: Column.new({
+            crossAxisAlignment: "start",
+            children: [
+              section(
+                "A2.1 / A2.2 onInit and onVisible run once per mount: both read 1, also after +1 below",
+                Column.new({
+                  crossAxisAlignment: "start",
+                  actions: {
+                    onInit: bump("inits"),
+                    onVisible: Sequential(
+                      bump("visibles"),
+                      DebugLog({
+                        level: "info",
+                        tag: "parity",
+                        message: V.transform(V.pageState("visibles"), [TV.template("visible {{value}}")]),
+                      }),
+                    ),
+                  },
+                  children: [shows("onInit ran", "inits"), shows("onVisible ran", "visibles")],
+                }),
+                SizedBox.new({ height: 4 }),
+                caption('onVisible also logs "visible 1" (debugLog, level info, tag parity)'),
+              ),
+              section(
+                "A2.3 Send the app to the background and reopen it: each count goes up by one",
+                Column.new({
+                  crossAxisAlignment: "start",
+                  actions: { onBackground: bump("backgrounds"), onForeground: bump("foregrounds") },
+                  children: [shows("onBackground", "backgrounds"), shows("onForeground", "foregrounds")],
+                }),
+                SizedBox.new({ height: 8 }),
+                Column.new({
+                  crossAxisAlignment: "start",
+                  actions: { onAppBackground: bump("appBackgrounds"), onAppForeground: bump("appForegrounds") },
+                  children: [shows("onAppBackground", "appBackgrounds"), shows("onAppForeground", "appForegrounds")],
+                }),
+                SizedBox.new({ height: 4 }),
+                caption("All four read 0 on open (no foreground on launch)"),
+              ),
+              section(
+                "A2.4 Scroll the box: offset, maxExtent, atEnd and delta follow it live",
+                shows("last trigger", "scrollLast"),
+                shows("offset", "scrollOffset", 1),
+                shows("maxExtent", "scrollMaxExtent", 1),
+                shows("atEnd", "scrollAtEnd"),
+                shows("delta (onScrolling)", "scrollDelta", 1),
+                shows("onScrollBegin ran", "scrollBegins"),
+                shows("onScrollEnd ran", "scrollEnds"),
+                SizedBox.new({ height: 8 }),
+                Container.new({
+                  width: 200,
+                  height: 160,
+                  decoration: { border: { width: 1, color: grey } },
+                  child: SingleChildScrollView.new({
+                    actions: {
+                      onScrollBegin: scrollEvent("onScrollBegin", bump("scrollBegins")),
+                      onScrolling: scrollEvent("onScrolling", SetState("scrollDelta", V.event("delta"))),
+                      onScrollEnd: scrollEvent("onScrollEnd", bump("scrollEnds")),
+                    },
+                    child: numbered(30),
+                  }),
+                }),
+              ),
+              section(
+                "A2.5 / A2.6 once counts to 1 and stops; always counts every tap; +1 only redraws",
+                shows("once", "onceCount"),
+                shows("always", "alwaysCount"),
+                shows("redraws", "redraws"),
+                SizedBox.new({ height: 8 }),
+                Column.new({
+                  crossAxisAlignment: "start",
+                  gap: 8,
+                  children: [
+                    ElevatedButton.new({
+                      child: Text.new({ data: "once" }),
+                      actions: { onTap: Once(bump("onceCount")) },
+                    }),
+                    ElevatedButton.new({
+                      child: Text.new({ data: "always" }),
+                      actions: { onTap: Always(bump("alwaysCount")) },
+                    }),
+                    OutlinedButton.new({
+                      child: Text.new({ data: "+1 (redraw)" }),
+                      actions: { onTap: bump("redraws") },
+                    }),
+                  ],
+                }),
+              ),
+            ],
+          }),
+        }),
+      }),
+    }),
+});
+
 const parityFlow = Flow.create({
   name: "parity",
   routes: [
     { path: "polish", page: polishPage },
     { path: "polish-pushed", page: polishPushedPage },
     { path: "polish-no-back", page: polishNoBackPage },
+    { path: "lifecycle", page: lifecyclePage },
   ],
 });
 
