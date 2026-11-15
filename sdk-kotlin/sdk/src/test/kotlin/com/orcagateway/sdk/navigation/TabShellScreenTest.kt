@@ -1,7 +1,9 @@
 package com.orcagateway.sdk.navigation
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
@@ -36,14 +38,18 @@ import com.orcagateway.core.models.NavFlow
 import com.orcagateway.core.models.NavRoute
 import com.orcagateway.core.models.PageResponse
 import com.orcagateway.core.models.TabDef
+import com.orcagateway.core.plugins.OrcaActionHandler
 import com.orcagateway.sdk.OrcaApp
 import com.orcagateway.sdk.OrcaPageLoader
+import com.orcagateway.sdk.OrcaPlugin
+import com.orcagateway.sdk.WidgetBuilder
 import com.orcagateway.sdk.support.button
 import com.orcagateway.sdk.support.column
 import com.orcagateway.sdk.support.leaf
 import com.orcagateway.sdk.support.row
 import com.orcagateway.sdk.support.text
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -461,6 +467,54 @@ class TabShellScreenTest {
         compose.runOnUiThread { router.goBack() }
         awaitShown("more page")
         compose.onNodeWithText("To more").assertIsDisplayed()
+    }
+
+    /**
+     * Seam of C16.1 with B10.4-K: the shell's server trees get OrcaApp's
+     * plugins as its pages do. A plugin widget in `tabBarComponents` is kept
+     * and drawn with the plugin's builder, and a custom action tapped there
+     * runs its handler; the tab page beside it draws the plugin widget too.
+     */
+    @Test
+    fun seam_aServerTabBarDrawsPluginWidgetsAndRunsCustomActionsAsATabPageDoes() {
+        val bar = listOf(
+            row("bar", "badge", "rate"),
+            leaf("badge", "ShellBadge"),
+            button("rate", "TextButton", "rate-label", mapOf("onTap" to Action.Custom(JsonValue.obj("type" to "custom:rateApp")))),
+            text("rate-label", "Rate"),
+        )
+        val badge: WidgetBuilder = { node, _, modifier -> BasicText("badge of ${node.id}", modifier.testTag("shell-badge-${node.id}")) }
+        val plugin = object : OrcaPlugin {
+            override val name: String = "badge"
+            override val widgets: Map<String, WidgetBuilder> = mapOf("ShellBadge" to badge)
+        }
+        val rated = mutableListOf<JsonObject>()
+        // The first tab's page is one plugin widget.
+        val pages = object : HttpTransport {
+            override suspend fun send(request: HttpRequest): HttpResponse {
+                val name = request.url.path.substringAfterLast("/page/")
+                val page = PageResponse(pageId = name, title = name, state = emptyList(), components = listOf(leaf("page", "ShellBadge")))
+                return HttpResponse(200, body = Json.encodeToString(PageResponse.serializer(), page).encodeToByteArray())
+            }
+        }
+        val client = OrcaClient(URI("http://stub.invalid"), appId = "fixture-app", device = DeviceInfo(osVersion = "test"), transport = pages)
+        val router = OrcaRouter(client, tabConfig(tabBarComponents = bar))
+        compose.setContent {
+            OrcaApp(
+                router,
+                plugins = listOf(plugin),
+                customActions = mapOf("rateApp" to OrcaActionHandler { action, _ -> rated += action }),
+            )
+        }
+
+        // The tab page, loaded through the router's loader.
+        compose.waitUntil(5_000) { tagCount("shell-badge-page") == 1 }
+        // The server tab bar.
+        compose.onNodeWithTag("shell-badge-badge").assertIsDisplayed()
+        compose.onNodeWithText("Rate").performClick()
+        compose.waitForIdle()
+        assertEquals(1, rated.size)
+        assertEquals("\"custom:rateApp\"", rated.single()["type"].toString())
     }
 
     /**

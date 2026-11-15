@@ -344,6 +344,82 @@ final class TabShellTests: XCTestCase {
         }
     }
 
+    // MARK: - Seam: the shell's server trees and the plugin system (step 16)
+
+    func test_seam_aServerTabBarDrawsPluginWidgetsAndRunsCustomActionsAsATabPageDoes() async throws {
+        @MainActor final class Ran {
+            var drawn: [String] = []
+            var rated: [JSONValue] = []
+            func rate(_ action: JSONValue) { rated.append(action) }
+        }
+        struct ShellBadgePlugin: OrcaPlugin {
+            let ran: Ran
+            let name = "badge"
+            var widgets: [String: OrcaWidgetBuilder] {
+                ["ShellBadge": { [ran] node, _ in
+                    ran.drawn.append(node.id)
+                    return AnyView(EmptyView())
+                }]
+            }
+        }
+        // A server tab bar and a server drawer, each a plugin widget and a
+        // button with a custom action.
+        func tree(_ prefix: String) -> JSONValue {
+            [
+                ["id": .string(prefix), "type": "Row", "kind": "layout", "childMode": "multi", "props": [:],
+                 "children": [.string("\(prefix)Badge"), .string("\(prefix)Rate")], "watches": []],
+                ["id": .string("\(prefix)Badge"), "type": "ShellBadge", "kind": "primitive", "childMode": "none",
+                 "props": [:], "children": [], "watches": []],
+                ["id": .string("\(prefix)Rate"), "type": "TextButton", "kind": "button", "childMode": "single",
+                 "props": [:], "children": [.string("\(prefix)Label")], "watches": [],
+                 "actions": ["onTap": ["type": "custom:rateApp"]]],
+                ["id": .string("\(prefix)Label"), "type": "Text", "kind": "primitive", "childMode": "none",
+                 "props": ["data": "Rate"], "children": [], "watches": []],
+            ]
+        }
+        guard case .object(var config) = self.config(drawerItems: true) else { return XCTFail("the config") }
+        config["tabBarComponents"] = tree("bar")
+        config["drawerComponents"] = tree("drawer")
+
+        let ran = Ran()
+        let host = OrcaPluginHost(
+            plugins: [ShellBadgePlugin(ran: ran)],
+            customActions: ["rateApp": { [ran] action, _ in await ran.rate(action) }],
+            widgets: WidgetBuilders())
+        let boot = OrcaAppBoot(client: BootStub.client(BootStub(config: .object(config))), path: nil,
+                               system: SystemRecorder().actions(), onRouteChanged: nil, plugins: host)
+        await boot.startIfNeeded()
+        guard case .ready(let router) = boot.phase else { return XCTFail("not ready: \(boot.phase)") }
+
+        // The tab page, loaded through the router's loader.
+        let loader = router.loader(for: router.root)
+        await loader.loadIfNeeded()
+        guard case .loaded(let feed) = loader.phase else { return XCTFail("feed did not load") }
+        XCTAssertEqual(feed.widgets.types, ["ShellBadge"])
+        await feed.run(try JSONValue.object(["type": "custom:rateApp"]).decode(Action.self))
+        XCTAssertEqual(ran.rated, [["type": "custom:rateApp"]])
+
+        // The shell's server trees: the same widgets and handlers.
+        let model = TabShellModel(router: router)
+        var rated = 1
+        for (prefix, shell) in [("bar", model.bar), ("drawer", model.drawer)] {
+            let shell = try XCTUnwrap(shell, prefix)
+            let badge = try XCTUnwrap(shell.page.resolve("\(prefix)Badge"))
+            XCTAssertEqual(badge.type, "ShellBadge", "\(prefix): not degraded to a FallbackPrompt")
+            XCTAssertEqual(shell.tree?.first { $0.id == "\(prefix)Badge" }?.type, "ShellBadge")
+            let builder = try XCTUnwrap(shell.page.widgets.builder(for: "ShellBadge"), "\(prefix): the builder")
+            _ = builder(badge, shell.page)
+            XCTAssertEqual(ran.drawn.last, "\(prefix)Badge")
+
+            let button = try XCTUnwrap(shell.page.resolve("\(prefix)Rate"))
+            await shell.page.fire("onTap", on: button)?.value
+            rated += 1
+            XCTAssertEqual(ran.rated.count, rated, "\(prefix): the custom action ran")
+            XCTAssertEqual(ran.rated.last, ["type": "custom:rateApp"])
+        }
+        XCTAssertEqual(ran.drawn, ["barBadge", "drawerBadge"])
+    }
+
     // MARK: - B10.5-S
 
     func test_B10_5_thePanelFollowsTheFingerTowardItsEdgeAndClosesPastHalfOrOnAFling() {

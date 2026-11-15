@@ -52,9 +52,11 @@ import androidx.compose.ui.unit.sp
 import com.orcagateway.core.models.ComponentNode
 import com.orcagateway.core.models.DrawerItemDef
 import com.orcagateway.core.models.PageResponse
+import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.StoreState
 import com.orcagateway.sdk.NodeView
+import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.RoutePage
 import com.orcagateway.sdk.style.IconNames
@@ -296,8 +298,9 @@ private fun KeptPages(router: OrcaRouter) {
 /**
  * A server tree of the tab shell (`tabBarComponents`, `drawerComponents`)
  * as a page model: no page state, the router's app state, page id
- * `__shell__` (Flutter's `OrcaShell` renders them so). Unknown widgets
- * degrade as on a page.
+ * `__shell__` (Flutter's `OrcaShell` renders them so). It gets the plugins,
+ * custom actions and host widgets of the router's OrcaApp, as a page does
+ * ([OrcaPageLoader]). Unknown widgets degrade as on a page.
  *
  * Building one only reads the router: the model starts on the app state of
  * that moment, so a node bound to `_tabIndex` is right on the first frame.
@@ -310,8 +313,9 @@ internal class ShellTree(private val router: OrcaRouter, nodes: List<ComponentNo
     val model: OrcaPageModel = OrcaPageModel(
         PageResponse(pageId = SHELL_PAGE_ID, title = "", components = nodes),
         store = ElmStore(StoreState(app = router.appState)),
+        registry = router.plugins?.registry ?: WidgetRegistry.shared,
         client = router.client,
-    )
+    ).also { router.plugins?.install(it) }
 
     private var following: AutoCloseable? = null
 
