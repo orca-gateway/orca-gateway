@@ -12,8 +12,8 @@ export interface DrawerProps {
 
 export class Drawer extends SingleChildLayout {
   readonly type = "Drawer";
-  /** No native iOS counterpart (Epic 23b); SwiftUI degrades it via the caps vector. */
-  static readonly targets = ["flutter", "web", "android"] as const;
+  /** All four platforms: SwiftUI has no system drawer, so the iOS SDK draws it as a swipeable side panel. */
+  static readonly targets = ["flutter", "web", "android", "ios"] as const;
   private props: Omit<DrawerProps, "child" | "actions">;
 
   private constructor(opts: DrawerProps) {
