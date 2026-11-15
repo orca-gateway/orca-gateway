@@ -152,12 +152,14 @@ const mainFlow = Flow.create({
   ],
 });
 
-// ── App (change forceUpdate to true to test force-update screen) ─
+// ── App ─────────────────────────────────────────────────────
+// ORCA_FORCE_UPDATE=1 makes GET /version answer forceUpdate: true, so an SDK
+// started with offline mode on shows its force-update screen.
 
 export const staticFlowsApp = App.create({
   id: "static-flows",
   name: "Static Flows Demo",
-  forceUpdate: false,
+  forceUpdate: process.env.ORCA_FORCE_UPDATE === "1",
   navigation: {
     initialRoute: "/home",
   },
