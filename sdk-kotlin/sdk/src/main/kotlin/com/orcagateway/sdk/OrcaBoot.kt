@@ -61,10 +61,12 @@ internal fun OrcaClient.identified(store: KeyValueStore): OrcaClient =
  * boot in sdk/lib/src/widgets/orca_app.dart the natives have so far: with
  * `enableOffline`, the version check of `OrcaApp.preload`; a forceUpdate
  * answer blocks the app, any other answer boots it. Without it the app is
- * ready at once and asks nothing. [phase] is Compose state. Swift twin
- * `OrcaBootModel`.
+ * ready at once and asks nothing. First of all [prepare] runs (OrcaApp's
+ * plugin merge): an [IllegalArgumentException] from it fails the boot, as
+ * Flutter's `_initialize` lands a throw in its boot error, and nothing is
+ * ever asked. [phase] is Compose state. Swift twin `OrcaBootModel`.
  */
-internal class OrcaBoot(private val client: OrcaClient, enableOffline: Boolean) {
+internal class OrcaBoot(private val client: OrcaClient, enableOffline: Boolean, prepare: () -> Unit = {}) {
     enum class Phase {
         /** The version check runs; the spinner shows. */
         Checking,
@@ -74,10 +76,26 @@ internal class OrcaBoot(private val client: OrcaClient, enableOffline: Boolean) 
 
         /** The server demands an update; no page is ever fetched. */
         ForceUpdate,
+
+        /** [prepare] threw ([failure] says why); nothing is ever fetched. */
+        Failed,
     }
 
     var phase: Phase by mutableStateOf(if (enableOffline) Phase.Checking else Phase.Ready)
         private set
+
+    /** The message of what [prepare] threw, once [phase] is [Phase.Failed]. */
+    var failure: String? = null
+        private set
+
+    init {
+        try {
+            prepare()
+        } catch (e: IllegalArgumentException) {
+            failure = e.message ?: e.toString()
+            phase = Phase.Failed
+        }
+    }
 
     /**
      * Runs the version check once, with no local versions yet (the static
@@ -92,10 +110,12 @@ internal class OrcaBoot(private val client: OrcaClient, enableOffline: Boolean) 
 
 /**
  * OrcaApp's root: the page spinner while the version check runs, the
- * force-update screen when the server demands one, else [content], which is
- * built only then. With [enableSessionTracking], sessions are tracked here,
- * around all three, with [client]'s device id (the saved one when it has
- * none) and an offline queue in SharedPreferences. Swift twin `OrcaBootView`.
+ * force-update screen when the server demands one, the error view with the
+ * message when [prepare] threw, else [content], which is built only then.
+ * [prepare] runs once per [client], before anything is fetched. With
+ * [enableSessionTracking], sessions are tracked here, around all four, with
+ * [client]'s device id (the saved one when it has none) and an offline
+ * queue in SharedPreferences. Swift twin `OrcaBootView`.
  */
 @Composable
 internal fun OrcaBootView(
@@ -103,10 +123,11 @@ internal fun OrcaBootView(
     enableOffline: Boolean,
     enableSessionTracking: Boolean,
     modifier: Modifier,
+    prepare: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val boot = remember(client) { OrcaBoot(client, enableOffline) }
+    val boot = remember(client) { OrcaBoot(client, enableOffline, prepare) }
     LaunchedEffect(boot) { boot.start() }
     if (enableSessionTracking) {
         val store = remember(context) { SharedPreferencesKeyValueStore(context) }
@@ -118,6 +139,7 @@ internal fun OrcaBootView(
             CircularProgressIndicator()
         }
         OrcaBoot.Phase.ForceUpdate -> ForceUpdateScreen(modifier)
+        OrcaBoot.Phase.Failed -> ErrorView("Could not load this page", boot.failure ?: "", modifier)
         OrcaBoot.Phase.Ready -> content()
     }
 }
