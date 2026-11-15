@@ -4,7 +4,7 @@
   "idea": "Native parity step 9 (Phase B of /Users/amrebada/.claude/plans/native-parity/plan.md): app config, routes, redirects and shared state on sdk-swift and sdk-kotlin. Fetch /config; server-chosen initial route; NavConfig model, route matcher (:param, nested children) and redirect evaluator in both pure cores; new shared fixture family schema/fixtures/navigation/ passed by Flutter, Swift and Kotlin; initialAppState seeded; host reads/writes app state; onRouteChanged; non-tab routes wrapped in Scaffold+AppBar with back button and live title; demo config in examples/server. Test cases B9.1-B9.10 in phase-b-tests.md",
   "kind": "feature",
   "created_at": "2026-11-15T18:17:26Z",
-  "updated_at": "2026-11-15T18:35:18Z",
+  "updated_at": "2026-11-15T18:42:40Z",
   "active_session": "fe23fb0a-f62c-4a83-a51f-655a2e0bf8ff",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "draft",
-      "rounds": 2,
-      "card": "cards/09-r1.md"
+      "rounds": 3,
+      "card": "cards/09-r2.md"
     },
     "10": {
       "status": "pending"

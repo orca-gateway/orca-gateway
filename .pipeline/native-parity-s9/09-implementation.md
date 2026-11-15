@@ -3,23 +3,22 @@
 ## Front page
 
 ### In one breath
-group 1 of 5 · tasks: 2 green, 0 blocked · cases: 7 of 31 legs green · bun 738 · Flutter +303
-T1 Navigation fixtures: 11 files, 56 cases, a schema and a README, all passing on Flutter's router.
-T2 Demo app: `navigation` on the example server, with tabs, a redirect and a nested route.
-Flutter applies a route's redirect rule once per navigation, not as a chain; the brief is corrected.
+group 2 of 5 · tasks: 4 green, 0 blocked · cases: 9 of 31 legs green · Swift 239 · Kotlin 367
+T3 Swift core: `NavConfig` and its parts decode a `/config` body; `fetchConfig()` fetches it.
+T4 Kotlin core: the same model and `fetchConfig()`, same names and defaults.
+Both decode every navigation fixture's config; the file count is pinned at 11 on each side.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided: redirect applied once, as go_router 16.3.0 does · fixtures with tabs carry two
-tabs (one tab crashes Flutter's default bar) · no JSON Schema validator added to the repo.
+2 auto-decided: `fetchConfig` is one plain GET with no capability handshake, as Dart · the
+models only decode; the raw body is kept for Phase C's offline cache.
 
 ### Questions for you
 1. No task is blocked. (default: nothing to retry)
-2. Next: group 2, `NavConfig` and `fetchConfig` in both cores? (default: go)
-3. Schema validation of the fixtures in CI needs a validator dependency: leave it out, as for the
-   action fixtures. (default: leave out)
+2. Next: group 3, `RouteTable` in both cores against the fixtures? (default: go)
+3. A typed encoder for `NavConfig` is left out until Phase C needs one. (default: leave out)
 
 ## Appendix
 
@@ -42,8 +41,27 @@ Review fit: pass
 Review quality: pass
 Not done: `tsc --noEmit` is not a gate here (an existing tsconfig error)
 
+### Group 2
+#### Task T3 · Swift core: NavConfig model, fetchConfig
+Files: `sdk-swift/Sources/OrcaGatewayCore/Models/NavConfig.swift` (new) · `sdk-swift/Sources/OrcaGatewayCore/Client/OrcaClient.swift` · `sdk-swift/Tests/OrcaGatewayCoreTests/OrcaClientTests.swift` · `sdk-swift/Tests/OrcaGatewayCoreTests/ModelRoundTripTests.swift` · `sdk-swift/Tests/OrcaGatewayCoreTests/Support/Fixtures.swift`
+Cases: B9.1-CS → green (`swift test`: 239 tests, 0 failures; 5 new, red first as a compile error) · baseline unchanged (234 → 239)
+Changed: `NavConfig`, `TabDef`, `DrawerItemDef`, `NavFlow`, `NavRoute`, `RedirectRule`, `RouteTransitionDef` as public Decodable / Equatable / Sendable structs with Dart's defaults, `raw` and `rawBody` kept, `NavFlow.pages` kept · `fetchConfig() async throws -> NavConfig`: one GET with the client's headers, non-200 as `OrcaClientError.http` · tests: URL, headers, decode, 404 / 500; every navigation fixture config decodes; count pinned at 11
+Decisions: 1. no capability handshake, a 412 is a plain HTTP error, as Dart · 2. Decodable only; writing back goes through `raw` / `rawBody` · 3. absent `flows`, `routes`, `equals` default as Dart; required keys throw
+Review fit: pass
+Review quality: pass
+Not done: nothing
+
+#### Task T4 · Kotlin core: NavConfig model, fetchConfig
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/models/NavConfig.kt` (new) · `.../core/client/OrcaClient.kt` · `.../core/client/OrcaClientTest.kt` · `.../core/support/Fixtures.kt` · `.../core/FixturePathsTest.kt`
+Cases: B9.1-CK → green (`./gradlew build`: BUILD SUCCESSFUL, core 235, sdk 132; red first as a compile error) · baseline unchanged (core 228 + 7 new)
+Changed: the seven public data classes with Dart's defaults and `NavConfig.fromJson(json, rawBody)` · `suspend fun fetchConfig(): NavConfig` · 6 client tests · `Fixtures.navigation` / `navigationFiles()` · the navigation count pinned at 11 and every fixture config decoded
+Decisions: 1. `RedirectRule.when` with backticks, the same name as Swift and Dart · 2. plain GET, no caps-412 retry, as Dart · 3. decode-only models
+Review fit: the new count pin sat inside an existing test, fixed (its own test, the existing one back to baseline)
+Review quality: the same finding, fixed
+Not done: a config failure still reads "Failed to fetch page: <status>" in the exception message (Dart says "config"); status and body are right
+
 ### Test run
-`cd engine && bun test` · 738 pass, 0 fail · `cd sdk && flutter test` · +303 All tests passed · `flutter analyze` · No issues found · failures: none
+`cd sdk-swift && swift test` · Executed 239 tests, with 0 failures · `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL, core 235, sdk 132 · group 1: `bun test` 738 pass, `flutter test` +303 · failures: none
 
 ### Blocked
 none
