@@ -202,6 +202,48 @@ describe("demo server (examples/server/index.ts)", () => {
     expect(afterText).not.toContain("Buy milk");
   }, 30_000);
 
+  test("B9.4-D the navigation app: /config carries the initial route, app state, tabs, drawer item, redirect and nested child; its pages render", async () => {
+    const r = await startDemo();
+    const app = `${r.base}/api/v1/app/navigation`;
+
+    const configRes = await fetch(`${app}/config`, { headers: KEY });
+    expect(configRes.status).toBe(200);
+    const config = (await configRes.json()) as {
+      initialRoute: string;
+      initialAppState?: Record<string, unknown>;
+      tabs?: { id: string; initialRoute: string }[];
+      drawerItems?: { label: string; route: string }[];
+      flows: { name: string; routes: RouteInfoJson[] }[];
+    };
+    interface RouteInfoJson {
+      path: string;
+      redirect?: { when: string; equals: unknown; to: string };
+      children?: RouteInfoJson[];
+    }
+
+    expect(config.initialRoute).toBe("/welcome");
+    expect(config.initialAppState).toEqual({ loggedIn: false, userName: "" });
+    expect(config.tabs?.map((t) => [t.id, t.initialRoute])).toEqual([
+      ["home", "/home"],
+      ["account", "/account"],
+    ]);
+    expect(config.drawerItems?.map((d) => [d.label, d.route])).toEqual([["Settings", "/settings"]]);
+
+    const routes = config.flows.flatMap((f) => f.routes);
+    const account = routes.find((route) => route.path === "account");
+    expect(account?.redirect).toEqual({ when: "loggedIn", equals: false, to: "/login" });
+    const home = routes.find((route) => route.path === "home");
+    expect(home?.children?.map((c) => c.path)).toEqual(["home/product/:id"]);
+
+    const product = await fetch(`${app}/page/home/product/42`, { headers: KEY });
+    expect(product.status).toBe(200);
+    expect(await product.text()).toContain("Product 42");
+
+    const welcome = await fetch(`${app}/page/welcome`, { headers: KEY });
+    expect(welcome.status).toBe(200);
+    await welcome.body?.cancel();
+  }, 30_000);
+
   test("I4 the compiled binary, run outside the repo, prints the startup line, serves todo and stops on SIGTERM", async () => {
     const dir = mkdtempSync(join(tmpdir(), "orca-demo-server-"));
     try {

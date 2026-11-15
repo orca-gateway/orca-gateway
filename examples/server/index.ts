@@ -9,6 +9,7 @@ import { customApp } from "./custom";
 import { capabilityDemoApp } from "./capability-demo";
 import { nativeWidgetsApp } from "./native-widgets";
 import { todoApp } from "./todo";
+import { navigationApp } from "./navigation";
 import { recoveryMiddleware } from "../../engine/src/middlewares/recovery";
 import { loggingMiddleware } from "../../engine/src/middlewares/logging";
 import { corsMiddleware } from "../../engine/src/middlewares/cors";
@@ -19,7 +20,7 @@ import enginePackage from "../../engine/package.json";
 
 // ── Register middleware on each app ──────────────────────────
 
-const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp];
+const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp, navigationApp];
 
 for (const app of apps) {
   app
@@ -93,3 +94,4 @@ console.log("  - capability:     /api/v1/app/capability-demo/page/negotiation  (
 console.log("  - capability:     /api/v1/app/capability-demo/page/degrade  (a Checkbox iOS lacks)");
 console.log("  - native-widgets: /api/v1/app/native-widgets/page/home");
 console.log("  - todo:           /api/v1/app/todo/page/home");
+console.log("  - navigation:     /api/v1/app/navigation/config");

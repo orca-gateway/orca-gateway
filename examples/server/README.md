@@ -46,5 +46,6 @@ The server runs on `http://localhost:8080` by default.
 | `static-flows.ts`     | Offline-capable static flow definitions with versioning       |
 | `capability-demo.ts`  | Capability negotiation and safe degradation fallbacks         |
 | `custom.ts`           | Custom widget types and custom action handlers                |
+| `navigation.ts`       | Config-driven navigation: initial route, tabs, a nested route, a login redirect, shared app state |
 | `orca_google_map.ts`  | Google Maps integration via the map plugin                    |
 | `index.ts`            | Entry point — registers all examples into a single engine     |
