@@ -51,7 +51,8 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 4's two questions are minor (no blocked task; next is stage 10: rebase on main, iPhone hand checks, suites, open the PR, the user merges), defaults"
     },
     "10": {
-      "status": "pending"
+      "status": "draft",
+      "rounds": 1
     },
     "11": {
       "status": "pending"
