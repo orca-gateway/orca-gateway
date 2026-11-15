@@ -121,30 +121,15 @@ struct OrcaBootView<Content: View>: View {
             case .forceUpdate:
                 ForceUpdateView()
             case .failed(let message):
-                BootErrorView(message: message)
+                // No retry: a plugin conflict stays one.
+                LoadError(title: "Could not load this page", message: message, retry: nil)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .ready:
                 content()
             }
         }
         .orcaSessionTracking(boot.sessionTracker(client: client))
         .task { await boot.start(client: client) }
-    }
-}
-
-/// The error a page that cannot load shows (RoutePage), with the reason the
-/// app cannot start and no retry: a plugin conflict stays one.
-struct BootErrorView: View {
-    let message: String
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Text("Could not load this page").font(.headline)
-            Text(message).font(.footnote).foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityIdentifier("orca.bootError")
     }
 }
 

@@ -377,18 +377,21 @@ private struct TitleBar: ViewModifier {
     }
 }
 
-/// What a failed fetch shows: the reason and a retry.
-private struct LoadError: View {
+/// The SDK's error view (a failed fetch, an app that cannot start): the
+/// reason, and "Try again" when there is a `retry`.
+struct LoadError: View {
     let title: String
     let message: String
-    let retry: () -> Void
+    let retry: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 12) {
             Text(title).font(.headline)
             Text(message).font(.footnote).foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Try again", action: retry)
+            if let retry {
+                Button("Try again", action: retry)
+            }
         }
         .padding(24)
     }
