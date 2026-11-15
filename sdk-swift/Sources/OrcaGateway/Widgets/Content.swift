@@ -1,26 +1,97 @@
 #if canImport(SwiftUI)
 import SwiftUI
 
-/// Flutter `Text`. Where the parent forces the width (TightAxes: a
-/// stretched Column, a Container that fills), the text spans it and
+/// Flutter `Text` (PB:30-48). Where the parent forces the width (TightAxes:
+/// a stretched Column, a Container that fills), the text spans it and
 /// `textAlign` places the lines, as Flutter lays a Text out in a tight box.
+/// `overflow` (else `style.overflow`, else clip) as Flutter: on one line
+/// (`softWrap` false) clip cuts at the box edge, fade fades the last
+/// ellipsis-width, ellipsis truncates, visible paints past the box; with
+/// `maxLines` clip, fade and visible stop after that many lines with no
+/// ellipsis. TextKit.swift holds the parts SwiftUI's Text lacks.
 @MainActor
 struct TextNodeView: View {
     let node: ResolvedNode
     @Environment(\.orcaTight) private var tight
+    @Environment(\.layoutDirection) private var direction
 
     var body: some View {
         let style = TextStyleProps(node["style"])
-        let alignment = Props.textAlignment(node["textAlign"])
-        let maxLines = node["maxLines"]?.intValue
-        // SwiftUI truncates with an ellipsis whatever `overflow` says.
-        style.apply(Text(Props.text(node["data"])))
+        let alignment = Props.textAlignment(node["textAlign"], direction: direction)
+        lineBox(style)
             .multilineTextAlignment(alignment ?? .leading)
-            .lineLimit(node["softWrap"]?.boolValue == false ? 1 : maxLines)
             .background(style.background)
             .frame(maxWidth: tight.contains(.horizontal) ? .infinity : nil,
                    alignment: Props.frameAlignment(alignment))
             .accessibilityLabel(node["semanticsLabel"]?.stringValue.map { Text($0) } ?? Text(Props.text(node["data"])))
+    }
+
+    /// Flutter `height` (TextKit `extraLeading`): the room between lines,
+    /// and half of it above the first and below the last. Without `height`
+    /// the lines alone, no modifier added.
+    @ViewBuilder
+    private func lineBox(_ style: TextStyleProps) -> some View {
+        if style.height != nil {
+            let extra = style.extraLeading
+            lines(style, lineSpacing: max(extra, 0))
+                .lineSpacing(max(extra, 0))
+                .padding(.vertical, extra / 2)
+        } else {
+            lines(style, lineSpacing: 0)
+        }
+    }
+
+    @ViewBuilder
+    private func lines(_ style: TextStyleProps, lineSpacing: CGFloat) -> some View {
+        let data = Props.text(node["data"])
+        let maxLines = node["maxLines"]?.intValue.flatMap { $0 > 0 ? $0 : nil }
+        let oneLine = node["softWrap"]?.boolValue == false
+        #if canImport(UIKit)
+        if node["textAlign"]?.stringValue == "justify" {
+            JustifiedText(style: style, data: data, lines: oneLine ? 1 : maxLines ?? 0,
+                          ellipsis: overflow(style) == "ellipsis", lineSpacing: lineSpacing)
+        } else {
+            wrapped(style.styledText(data), style: style, maxLines: maxLines, oneLine: oneLine)
+        }
+        #else
+        wrapped(style.styledText(data), style: style, maxLines: maxLines, oneLine: oneLine)
+        #endif
+    }
+
+    /// `overflow`, else `style.overflow`, else Flutter's default clip.
+    private func overflow(_ style: TextStyleProps) -> String {
+        node["overflow"]?.stringValue ?? style.overflow ?? "clip"
+    }
+
+    @ViewBuilder
+    private func wrapped(_ text: some View, style: TextStyleProps, maxLines: Int?, oneLine: Bool) -> some View {
+        if oneLine {
+            switch overflow(style) {
+            case "ellipsis":
+                text.lineLimit(1)
+            case "visible":
+                OneLineLayout { text }
+            case "fade":
+                ViewThatFits(in: .horizontal) {
+                    text
+                    OneLineLayout { text }.clipped().mask { FadeMask(width: style.ellipsisWidth) }
+                }
+            default:
+                OneLineLayout { text }.clipped()
+            }
+        } else if let maxLines {
+            if overflow(style) == "ellipsis" {
+                text.lineLimit(maxLines)
+            } else {
+                LineCutLayout {
+                    text
+                    text.lineLimit(maxLines).hidden()
+                }
+                .clipped()
+            }
+        } else {
+            text
+        }
     }
 }
 

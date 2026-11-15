@@ -51,6 +51,15 @@ enum Props {
         return EdgeInsets(top: side("top"), leading: side("left"), bottom: side("bottom"), trailing: side("right"))
     }
 
+    /// Flutter `EdgeInsets` are absolute: `left` is the left side in either
+    /// layout direction. The same insets in SwiftUI's leading/trailing terms
+    /// for `direction`; `fallback` (in the same absolute terms) when absent.
+    static func insets(_ value: JSONValue?, direction: LayoutDirection, fallback: EdgeInsets = EdgeInsets()) -> EdgeInsets {
+        var insets = insets(value) ?? fallback
+        if direction == .rightToLeft { swap(&insets.leading, &insets.trailing) }
+        return insets
+    }
+
     /// `w100`...`w900`, `normal` (w400), `bold` (w700); nil inherits.
     static func fontWeight(_ value: JSONValue?) -> Font.Weight? {
         switch value?.stringValue {
@@ -88,10 +97,16 @@ enum Props {
         value?.stringValue != "min"
     }
 
-    static func textAlignment(_ value: JSONValue?) -> TextAlignment? {
+    /// Flutter `TextAlign` (PB:400-410): `left` and `right` are absolute (they
+    /// do not flip in right-to-left), `start` and `end` follow `direction`.
+    /// `justify` lines up as `start` here; TextNodeView justifies on iOS.
+    static func textAlignment(_ value: JSONValue?, direction: LayoutDirection = .leftToRight) -> TextAlignment? {
+        let rightToLeft = direction == .rightToLeft
         switch value?.stringValue {
-        case "left", "start", "justify": return .leading
-        case "right", "end": return .trailing
+        case "start", "justify": return .leading
+        case "end": return .trailing
+        case "left": return rightToLeft ? .trailing : .leading
+        case "right": return rightToLeft ? .leading : .trailing
         case "center": return .center
         default: return nil
         }
@@ -157,8 +172,32 @@ enum Props {
     }
 }
 
-/// Flutter `TextStyleData` applied to a SwiftUI `Text`.
+extension View {
+    /// Padding from a Flutter `EdgeInsets` `{top, right, bottom, left}`, its
+    /// sides absolute: `left` stays on the left in right-to-left (D4).
+    /// `fallback` (absolute too) when the value is absent.
+    func orcaPadding(_ value: JSONValue?, fallback: EdgeInsets = EdgeInsets()) -> some View {
+        modifier(AbsolutePadding(value: value, fallback: fallback))
+    }
+}
+
+private struct AbsolutePadding: ViewModifier {
+    let value: JSONValue?
+    let fallback: EdgeInsets
+    @Environment(\.layoutDirection) private var direction
+
+    func body(content: Content) -> some View {
+        content.padding(Props.insets(value, direction: direction, fallback: fallback))
+    }
+}
+
+/// Flutter `TextStyleData` applied to a SwiftUI `Text` (BH:96-170). The
+/// line box, word spacing and the lines SwiftUI cannot draw are in TextKit.swift.
 struct TextStyleProps {
+    enum DecorationStyle: String {
+        case solid, double, dotted, dashed, wavy
+    }
+
     var size: CGFloat?
     var weight: Font.Weight?
     var family: String?
@@ -169,6 +208,13 @@ struct TextStyleProps {
     var underline = false
     var strikethrough = false
     var decorationColor: Color?
+    /// Flutter `height`: the line box is `height` x fontSize.
+    var height: CGFloat?
+    var wordSpacing: CGFloat?
+    var overline = false
+    var decorationStyle = DecorationStyle.solid
+    /// `clip`, `fade`, `ellipsis` or `visible`; the Text's own `overflow` wins.
+    var overflow: String?
 
     init(_ value: JSONValue?) {
         guard case .object(let s)? = value else { return }
@@ -179,9 +225,15 @@ struct TextStyleProps {
         color = Props.color(s["color"])
         background = Props.color(s["backgroundColor"])
         letterSpacing = Props.number(s["letterSpacing"])
-        underline = s["decoration"]?.stringValue == "underline"
-        strikethrough = s["decoration"]?.stringValue == "lineThrough"
+        let decoration = s["decoration"]?.stringValue
+        underline = decoration == "underline"
+        strikethrough = decoration == "lineThrough"
+        overline = decoration == "overline"
         decorationColor = Props.color(s["decorationColor"])
+        decorationStyle = s["decorationStyle"]?.stringValue.flatMap(DecorationStyle.init(rawValue:)) ?? .solid
+        height = Props.number(s["height"])
+        wordSpacing = Props.number(s["wordSpacing"])
+        overflow = s["overflow"]?.stringValue
     }
 
     var font: Font? {
@@ -197,14 +249,19 @@ struct TextStyleProps {
         return weight.map { base.weight($0) } ?? base
     }
 
+    /// Font, colour, spacing and the underline or line-through SwiftUI
+    /// draws itself: solid, dotted and dashed (`Text.LineStyle`). Overline,
+    /// double and wavy are drawn by `DecorationRenderer` where it exists.
     func apply(_ text: Text) -> Text {
         var t = text
         if let font { t = t.font(font) }
         if italic { t = t.italic() }
         if let color { t = t.foregroundColor(color) }
         if let letterSpacing { t = t.kerning(letterSpacing) }
-        if underline { t = t.underline(true, color: decorationColor) }
-        if strikethrough { t = t.strikethrough(true, color: decorationColor) }
+        guard underline || strikethrough, !rendersLines else { return t }
+        let pattern: Text.LineStyle.Pattern = decorationStyle == .dotted ? .dot : decorationStyle == .dashed ? .dash : .solid
+        if underline { t = t.underline(true, pattern: pattern, color: decorationColor) }
+        if strikethrough { t = t.strikethrough(true, pattern: pattern, color: decorationColor) }
         return t
     }
 }
