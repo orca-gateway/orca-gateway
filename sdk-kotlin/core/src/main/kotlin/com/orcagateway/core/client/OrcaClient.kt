@@ -70,11 +70,12 @@ public class OrcaClient private constructor(
     public val transport: HttpTransport,
     /**
      * How long one request may take, send to answer, in milliseconds: Dart
-     * `timeout`, 30 s by default. Every request the client sends carries it
-     * ([HttpRequest.timeoutMillis]) and the transport enforces it; past it
-     * the request throws the transport's timeout error (OkHttp's
-     * `InterruptedIOException`), which [OrcaErrorInfo] shows as Connection
-     * Failed.
+     * `timeout` (sdk/lib/src/client/orca_client.dart), 30 s by default,
+     * which Flutter declares but never applies; here every request the
+     * client sends carries it ([HttpRequest.timeoutMillis]) and the
+     * transport enforces it. Past it the request throws the transport's
+     * timeout error (OkHttp's `InterruptedIOException`), which
+     * [OrcaErrorInfo] shows as Connection Failed.
      */
     public val timeoutMillis: Long,
     private val extensions: Extensions,

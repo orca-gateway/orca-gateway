@@ -64,7 +64,9 @@ public data class HttpResponse(
  * Implementations may be called from any thread and concurrently (Swift
  * `Sendable`), must not block the calling thread, lowercase the response's
  * header names, and throw when no response arrives at all. Any status,
- * 4xx and 5xx included, is a response, not an exception.
+ * 4xx and 5xx included, is a response, not an exception. A custom transport
+ * must apply [HttpRequest.timeoutMillis] itself: the core, having no
+ * coroutines library, cannot enforce it.
  */
 public interface HttpTransport {
     public suspend fun send(request: HttpRequest): HttpResponse
