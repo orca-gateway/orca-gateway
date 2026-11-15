@@ -12,12 +12,15 @@ final class PageStub: HTTPTransport, @unchecked Sendable {
     private var _requests: [HTTPRequest] = []
     private let state: [String: [JSONValue]]
     private let actionBody: String?
+    private let watching: [String: String]
 
     /// `state` gives each path its state definitions; any other path is a
-    /// page with none.
-    init(state: [String: [JSONValue]] = [:], actionBody: String? = nil) {
+    /// page with none. `watching` gives a path's Text an app key to show
+    /// (`V.appState(key)`) instead of the path's name.
+    init(state: [String: [JSONValue]] = [:], actionBody: String? = nil, watching: [String: String] = [:]) {
         self.state = state
         self.actionBody = actionBody
+        self.watching = watching
     }
 
     var requests: [HTTPRequest] {
@@ -39,11 +42,17 @@ final class PageStub: HTTPTransport, @unchecked Sendable {
             return HTTPResponse(status: 200, body: Data((actionBody ?? #"{"actions":[]}"#).utf8))
         }
         let name = path.components(separatedBy: "/page/").last ?? ""
+        var data = JSONValue.string(name)
+        var watches: [JSONValue] = []
+        if let key = watching[name] {
+            data = ["type": "state", "scope": "app", "key": .string(key)]
+            watches = [.string(key)]
+        }
         let page: JSONValue = [
             "pageId": .string(name), "title": .string(name),
             "state": .array(state[name] ?? []),
             "components": [["id": "0", "type": "Text", "kind": "primitive", "childMode": "none",
-                            "props": ["data": .string(name)], "children": [], "watches": []]],
+                            "props": ["data": data], "children": [], "watches": .array(watches)]],
         ]
         return HTTPResponse(status: 200, body: try page.encoded())
     }
@@ -211,6 +220,270 @@ final class RouterTests: XCTestCase {
         XCTAssertEqual(recorder.copied, ["ORCA-42"])
         XCTAssertEqual(recorder.shared, [["Look", "Orca"], ["Plain", nil]])
         XCTAssertFalse(recorder.actions().perform(ActionEffect("navigate", ["route": "x"])))
+    }
+
+    // MARK: - Step 9: config, app state, onRouteChanged
+
+    /// Tabs `/home` and `/cart`, a nested child, a protected route, and two
+    /// routes outside the tabs (drawn with a title bar).
+    private func config(initialRoute: String = "/welcome", loggedIn: Bool = false, tabs: Bool = false)
+        -> NavConfig
+    {
+        NavConfig(
+            initialRoute: initialRoute,
+            tabs: tabs ? [TabDef(id: "home", label: "Home", icon: "home", initialRoute: "/home"),
+                          TabDef(id: "cart", label: "Cart", icon: "cart", initialRoute: "/cart")] : [],
+            initialAppState: ["loggedIn": .bool(loggedIn)],
+            flows: [NavFlow(name: "main", routes: [
+                NavRoute(path: "welcome"),
+                NavRoute(path: "home", children: [NavRoute(path: "home/product/:id")]),
+                NavRoute(path: "cart"),
+                NavRoute(path: "login"),
+                NavRoute(path: "settings", transition: RouteTransitionDef(type: "fade")),
+                NavRoute(path: "account",
+                         redirect: RedirectRule(when: "loggedIn", equals: false, to: "/login")),
+            ])])
+    }
+
+    private func router(_ config: NavConfig, _ stub: PageStub = PageStub(),
+                        onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) -> OrcaRouter
+    {
+        OrcaRouter(client: PageStub.client(stub), config: config, system: SystemRecorder().actions(),
+                   onRouteChanged: onRouteChanged)
+    }
+
+    func test_B9_6_hostReadsAndWritesAppState() async throws {
+        let stub = PageStub(state: ["home": [["key": "cart", "scope": "app", "initial": 0]]],
+                            watching: ["home": "cart", "product": "cart"])
+        let router = router(stub)
+        let home = try await loaded(router, router.root)
+        router.navigate(to: "product")
+        let product = try await loaded(router, router.stack[0])
+        router.navigate(to: "about")  // on the stack, never loaded
+        XCTAssertEqual(product.resolve("0")?["data"], 0)
+
+        var redraws = 0
+        let watching = home.store.subscribe(["cart"]) { _ in redraws += 1 }
+        defer { watching.cancel() }
+
+        router.setAppState("cart", 5)
+        XCTAssertEqual(router.appState["cart"], 5)
+        XCTAssertEqual(product.store.state.app["cart"], 5)
+        XCTAssertEqual(home.store.state.app["cart"], 5, "a page lower in the stack holds it too")
+        XCTAssertEqual(product.resolve("0")?["data"], 5)
+        XCTAssertEqual(home.resolve("0")?["data"], 5)
+        XCTAssertEqual(redraws, 1, "a widget watching the key redraws")
+
+        router.setAppState(["cart": 6, "user": "amr"])
+        XCTAssertEqual(router.appState, ["cart": 6, "user": "amr"])
+        XCTAssertEqual(home.store.state.app, ["cart": 6, "user": "amr"])
+        XCTAssertEqual(product.store.state.app, ["cart": 6, "user": "amr"])
+        XCTAssertEqual(home.store.state.page, [:])
+
+        // A page's own write still reaches the host, and a page loaded later
+        // starts from the scope the host wrote.
+        await product.run(.setState(.init(key: "cart", scope: .app, value: 7)))
+        XCTAssertEqual(router.appState["cart"], 7)
+        let about = try await loaded(router, router.stack[1])
+        XCTAssertEqual(PageStub.appState(stub.requests.last!), ["cart": 7, "user": "amr"])
+        XCTAssertEqual(about.store.state.app, ["cart": 7, "user": "amr"])
+    }
+
+    func test_B9_6_hostWritesAppStateBeforeAnyPageLoaded() async throws {
+        let stub = PageStub()
+        let router = router(config(), stub)
+        router.setAppState("loggedIn", true)
+        XCTAssertEqual(router.appState, ["loggedIn": true])
+        _ = try await loaded(router, router.root)
+        XCTAssertEqual(PageStub.appState(stub.requests[0]), ["loggedIn": true])
+    }
+
+    /// A page whose fetch began before the host wrote: it joins with the
+    /// host's value, and its own app definitions fill only unset keys.
+    func test_B9_6_hostWriteDuringAPageLoadIsKept() throws {
+        let router = router(config())
+        let body = #"{"pageId":"welcome","title":"","state":[{"key":"cart","scope":"app","initial":1}],"components":[]}"#
+        let page = try JSONDecoder().decode(PageResponse.self, from: Data(body.utf8))
+        let fetchedWith = router.appState
+        router.setAppState("loggedIn", true)
+
+        let model = OrcaPageModel(page: page, store: ElmStore(app: fetchedWith))
+        router.attach(model)
+        XCTAssertEqual(router.appState, ["loggedIn": true, "cart": 1])
+        XCTAssertEqual(model.store.state.app, ["loggedIn": true, "cart": 1])
+    }
+
+    func test_B9_7_onRouteChangedBootPushReplacePop() {
+        var events: [RouteChangeEvent] = []
+        let router = router(config(loggedIn: true)) { events.append($0) }
+        XCTAssertEqual(events, [RouteChangeEvent(location: "/welcome", previousLocation: nil, type: .push)])
+
+        router.navigate(to: "/home")
+        router.navigate(to: "/home/product/3?ref=a")
+        router.navigate(to: "/cart", replace: true)
+        router.navigate(to: "/login")
+        router.goBack()
+        router.navigate(to: "/settings")
+        router.navigate(to: "/account")
+        router.stack = []  // a back swipe to the root sets the path directly
+        XCTAssertEqual(Array(events.dropFirst()), [
+            RouteChangeEvent(location: "/home", previousLocation: "/welcome", type: .push),
+            RouteChangeEvent(location: "/home/product/3?ref=a", previousLocation: "/home", type: .push),
+            RouteChangeEvent(location: "/cart", previousLocation: "/home/product/3?ref=a", type: .replace),
+            RouteChangeEvent(location: "/login", previousLocation: "/cart", type: .push),
+            RouteChangeEvent(location: "/cart", previousLocation: "/login", type: .pop),
+            RouteChangeEvent(location: "/settings", previousLocation: "/cart", type: .push),
+            RouteChangeEvent(location: "/account", previousLocation: "/settings", type: .push),
+            RouteChangeEvent(location: "/cart", previousLocation: "/account", type: .pop),
+        ])
+    }
+
+    func test_B9_7_onRouteChangedNoEventForAnUnchangedLocation() {
+        var events: [RouteChangeEvent] = []
+        let router = router(config()) { events.append($0) }
+        events = []
+        router.goBack()  // nothing to pop
+        router.navigate(to: "/welcome", replace: true)  // the same location by itself
+        router.navigate(to: "")
+        XCTAssertEqual(events, [])
+        XCTAssertEqual(router.top.location, "/welcome")
+
+        // The same location pushed over itself is a new page, not a new
+        // location (Flutter drops the same URI twice).
+        router.navigate(to: "/welcome")
+        XCTAssertEqual(router.stack.count, 1)
+        XCTAssertEqual(events, [])
+        router.goBack()
+        XCTAssertEqual(events, [])
+    }
+
+    func test_B9_7_onRouteChangedCarriesTheFinalLocationOfARedirect() {
+        var events: [RouteChangeEvent] = []
+        let router = router(config(initialRoute: "/account")) { events.append($0) }
+        XCTAssertEqual(events, [RouteChangeEvent(location: "/login", previousLocation: nil, type: .push)])
+        XCTAssertEqual(router.root.path, "login")
+
+        router.navigate(to: "/home")
+        router.navigate(to: "/account?tab=2")  // logged out: redirected
+        XCTAssertEqual(router.top.path, "login")
+        XCTAssertEqual(events.last, RouteChangeEvent(location: "/login", previousLocation: "/home", type: .push))
+
+        router.setAppState("loggedIn", true)
+        XCTAssertEqual(events.count, 3, "a state change does not re-run the redirect")
+        router.navigate(to: "account?tab=2", replace: true)
+        XCTAssertEqual(router.root.path, "account")
+        XCTAssertEqual(events.last,
+                       RouteChangeEvent(location: "/account?tab=2", previousLocation: "/login", type: .replace))
+    }
+
+    func test_B9_7_onRouteChangedWithoutAConfig() {
+        var events: [RouteChangeEvent] = []
+        let router = router()
+        router.onRouteChanged = { events.append($0) }  // set after boot: later events only
+        router.navigate(to: "about")
+        router.navigate(to: "/product")
+        router.goBack()
+        router.navigate(to: "checkout", replace: true)
+        router.goBack()
+        XCTAssertEqual(events, [
+            RouteChangeEvent(location: "/about", previousLocation: "/home", type: .push),
+            RouteChangeEvent(location: "/product", previousLocation: "/about", type: .push),
+            RouteChangeEvent(location: "/about", previousLocation: "/product", type: .pop),
+            RouteChangeEvent(location: "/checkout", previousLocation: "/about", type: .replace),
+        ])
+    }
+
+    func testConfigBootShowsTheInitialRouteWithTheSeededAppState() async throws {
+        let stub = PageStub()
+        let router = router(config(), stub)
+        XCTAssertEqual(router.root.path, "welcome")
+        XCTAssertEqual(router.root.location, "/welcome")
+        XCTAssertEqual(router.stack, [])
+        XCTAssertFalse(router.root.isNotFound)
+        XCTAssertEqual(router.appState, ["loggedIn": false])
+        XCTAssertEqual(stub.requests.count, 0, "the router itself fetches nothing")
+
+        let welcome = try await loaded(router, router.root)
+        XCTAssertEqual(stub.requests.count, 1)
+        XCTAssertTrue(stub.requests[0].url.path.hasSuffix("/page/welcome"))
+        XCTAssertEqual(PageStub.appState(stub.requests[0]), ["loggedIn": false])
+        XCTAssertEqual(welcome.store.state.app, ["loggedIn": false])
+    }
+
+    func testConfigBootOnANestedRouteGivesRootAndStack() {
+        let router = router(config(initialRoute: "/home/product/3?ref=a"))
+        XCTAssertEqual(router.root.path, "home")
+        XCTAssertEqual(router.root.location, "/home")
+        XCTAssertEqual(router.stack.map(\.path), ["home/product/3"])
+        XCTAssertEqual(router.top.location, "/home/product/3?ref=a")
+    }
+
+    func testConfigBootFollowsARedirectOnTheInitialRoute() {
+        XCTAssertEqual(router(config(initialRoute: "/account")).root.path, "login")
+        XCTAssertEqual(router(config(initialRoute: "/account", loggedIn: true)).root.path, "account")
+    }
+
+    func testAnUnknownLocationIsANotFoundRoute() async {
+        let stub = PageStub()
+        let boot = router(config(initialRoute: "/nowhere"), stub)
+        XCTAssertTrue(boot.root.isNotFound)
+        XCTAssertEqual(boot.root.location, "/nowhere")
+
+        var events: [RouteChangeEvent] = []
+        let router = router(config(), stub) { events.append($0) }
+        router.navigate(to: "/missing/page?x=1")
+        XCTAssertEqual(router.stack.count, 1)
+        XCTAssertTrue(router.top.isNotFound)
+        XCTAssertEqual(router.top.location, "/missing/page?x=1")
+        XCTAssertEqual(events.last,
+                       RouteChangeEvent(location: "/missing/page?x=1", previousLocation: "/welcome", type: .push))
+        router.goBack()
+        XCTAssertEqual(router.top.path, "welcome")
+
+        router.navigate(to: "/missing", replace: true)
+        XCTAssertTrue(router.root.isNotFound)
+        XCTAssertEqual(router.stack, [])
+        await Task.yield()
+        XCTAssertEqual(stub.requests.count, 0, "nothing is fetched for an unknown location")
+    }
+
+    func testNavigateWithAConfigPushesOnePageAndReplaceShowsTheChain() {
+        let router = router(config(loggedIn: true))
+        router.navigate(to: "/home/product/3")
+        XCTAssertEqual(router.root.path, "welcome")
+        XCTAssertEqual(router.stack.map(\.path), ["home/product/3"], "a push adds the top page only")
+
+        router.navigate(to: "/login")
+        router.navigate(to: "/home/product/4?ref=b", replace: true)
+        XCTAssertEqual(router.root.path, "home")
+        XCTAssertEqual(router.stack.map(\.path), ["home/product/4"])
+        XCTAssertEqual(router.stack.map(\.location), ["/home/product/4?ref=b"])
+    }
+
+    func testScaffoldTitleAndTransitionAreCarriedByTheTopRoute() {
+        let router = router(config(initialRoute: "/home", tabs: true))
+        XCTAssertNil(router.root.scaffoldTitle, "a tab route has no title bar")
+
+        router.navigate(to: "/settings")
+        XCTAssertEqual(router.top.scaffoldTitle, "Settings")
+        XCTAssertEqual(router.top.transition, RouteTransitionDef(type: "fade"))
+        router.navigate(to: "/home/product/3")
+        XCTAssertNil(router.top.scaffoldTitle)
+        XCTAssertNil(router.top.transition)
+
+        router.navigate(to: "/login", replace: true)
+        XCTAssertEqual(router.root.scaffoldTitle, "Login")
+        XCTAssertNil(self.router(config(initialRoute: "/settings")).root.scaffoldTitle,
+                     "without tabs no route is wrapped")
+    }
+
+    func testARouteMadeFromAPathKeepsItsDefaults() {
+        let route = OrcaRoute("/about")
+        XCTAssertEqual(route.path, "about")
+        XCTAssertEqual(route.location, "/about")
+        XCTAssertNil(route.scaffoldTitle)
+        XCTAssertNil(route.transition)
+        XCTAssertFalse(route.isNotFound)
     }
 }
 #endif

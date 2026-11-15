@@ -60,6 +60,49 @@ An app on the iOS simulator reaches a server on your Mac at `http://localhost:<p
 `Info.plist`. The [iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios)
 runs every app of the example server.
 
+## Routes, app state and route changes
+
+`OrcaRouter` can boot from the app's config (`GET /api/v1/app/:appId/config`) instead of a fixed
+path. It seeds the config's `initialAppState`, then shows `initialRoute`; from then on every
+location goes through the config's routes: a redirect rule is applied (once), a nested route
+opened with `replace` is shown over its parent pages, and a location no route matches becomes a
+route with `isNotFound` set, for which no page is requested.
+
+```swift
+let client = OrcaClient(baseURL: url, appId: "shop", apiKey: "demo-key")
+let config = try await client.fetchConfig()
+let router = OrcaRouter(client: client, config: config) { event in
+    // Once per change of location, after any redirect. The first event has
+    // no previousLocation; type is .push, .replace or .pop (a back swipe too).
+    analytics.screen(event.location, from: event.previousLocation, type: event.type)
+}
+
+// Later, in a view:
+OrcaApp(router: router)
+```
+
+`onRouteChanged` is also a property of the router, on a router made with a `path` too; a callback
+set after `init` sees the changes that follow. The same location twice gives no event.
+
+App state is one scope shared by every page. The host reads it as `router.appState` and writes it
+with `setAppState`; the write reaches every page already loaded, so widgets watching the key
+redraw, and it is sent with the next page request:
+
+```swift
+router.setAppState("loggedIn", true)
+router.setAppState(["loggedIn": true, "userName": "Amr"])
+let loggedIn = router.appState["loggedIn"]?.boolValue ?? false
+```
+
+A redirect rule reads app state when a navigation happens; writing the state does not move the
+user, so navigate after a login (`router.navigate(to: "/home", replace: true)`).
+
+`router.top` is the route on screen: `path` (the page request path), `location` (leading slash
+and query), `isNotFound`, and `scaffoldTitle`, the fallback title of a route outside the tabs.
+`OrcaApp(client:)` booting from the config by itself, the "Page not found" page and the title bar
+follow in the next step; until then `OrcaApp(router:)` draws a router made as above, and a config
+with tabs runs as one stack.
+
 ## Layout
 
 | Target | What | Platforms |
