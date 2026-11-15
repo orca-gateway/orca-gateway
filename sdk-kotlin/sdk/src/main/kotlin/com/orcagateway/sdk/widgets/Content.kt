@@ -6,11 +6,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
@@ -19,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
@@ -41,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.style.IconNames
 import com.orcagateway.sdk.style.Props
 import com.orcagateway.sdk.style.TextStyleProps
 
@@ -181,6 +188,81 @@ internal fun FallbackPromptWidget(node: ResolvedNode, model: OrcaPageModel, modi
                     ),
                 )
             }
+        }
+    }
+}
+
+/** Flutter's reason when the node sends none. */
+private const val UNSUPPORTED_REASON = "This widget runs in the compiled mobile app and cannot preview here."
+
+/**
+ * Flutter's UnsupportedWidgetPlaceholder (`_buildUnsupportedWidgetPlaceholder`):
+ * a known widget that cannot run here, kept apart from FallbackPrompt's
+ * unknown one. A grey card (#6B7280 at 6%, a 1 px border of it at 35%,
+ * corners of 8, padding 16 plus the border, as Flutter's Container adds
+ * it), as wide as its widest line: the `iconName` icon through [IconNames]
+ * (20, in the accent) and the title, `displayName` or else `widgetType`
+ * (15 semibold, one line with an ellipsis); `reason` or Flutter's default
+ * (13); and when `docsUrl` is set "Learn more" (13 semibold, blue,
+ * underlined), which opens it through the URL policy as FallbackPrompt's
+ * call to action does ([OrcaPageModel.openLink]). Styles merge onto the
+ * surrounding text style.
+ */
+@Composable
+internal fun UnsupportedWidgetPlaceholderWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
+    val accent = Props.hex("#6B7280")
+    val widgetType = Props.text(node["widgetType"])
+    val title = node["displayName"]?.stringValue?.takeIf { it.isNotEmpty() } ?: widgetType
+    val icon = node["iconName"]?.stringValue?.let { IconNames.vector(it) }
+    val reason = node["reason"]?.stringValue ?: UNSUPPORTED_REASON
+    val docsUrl = node["docsUrl"]?.stringValue?.takeIf { it.isNotEmpty() }
+    val shape = RoundedCornerShape(8.dp)
+    val uriHandler = LocalUriHandler.current
+    val base = LocalTextStyle.current
+    Column(
+        modifier
+            .background(accent.copy(alpha = 0.06f), shape)
+            .border(1.dp, accent.copy(alpha = 0.35f), shape)
+            .padding(17.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = accent)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                title,
+                modifier = Modifier.weight(1f, fill = false),
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 1,
+                style = base.merge(TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Props.hex("#374151"))),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(reason, style = base.merge(TextStyle(fontSize = 13.sp, color = accent)))
+        if (docsUrl != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Learn more",
+                // Flutter's GestureDetector: a tap, no ripple.
+                modifier = Modifier.clickable(interactionSource = null, indication = null) {
+                    model.openLink(docsUrl) { link ->
+                        // No app on the device opens it: nothing to do.
+                        try {
+                            uriHandler.openUri(link)
+                        } catch (_: IllegalArgumentException) {
+                        }
+                    }
+                },
+                style = base.merge(
+                    TextStyle(
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Props.hex("#2563EB"),
+                        textDecoration = TextDecoration.Underline,
+                    ),
+                ),
+            )
         }
     }
 }
