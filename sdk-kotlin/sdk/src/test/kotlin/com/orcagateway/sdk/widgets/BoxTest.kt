@@ -155,6 +155,37 @@ class BoxTest {
     }
 
     /**
+     * A1.4: a Container's border insets its child by the border's width,
+     * as Flutter adds `BoxDecoration.padding` to the padding: a 4 border
+     * puts a solid child 4 in, a 4 border with padding 10 puts it 14 in.
+     */
+    @Test
+    fun a1_4_aBorderInsetsTheChildByItsWidth() {
+        val border = mapOf("border" to mapOf("width" to 4, "color" to "#000000"))
+        val solid = mapOf("width" to 20, "height" to 20, "color" to "#0000FF")
+        boxPage(
+            300.dp, 400.dp,
+            column("root", "bordered", "padded", props = mapOf("crossAxisAlignment" to JsonValue.String("start"))),
+            container("bordered", "c1", props = mapOf("decoration" to border)),
+            container("padded", "c2", props = mapOf("decoration" to border, "padding" to all(10))),
+            container("c1", props = solid),
+            container("c2", props = solid),
+        )
+
+        val bordered = bounds("bordered")
+        val c1 = bounds("c1")
+        assertEquals(DpRect(bordered.left + 4.dp, bordered.top + 4.dp, bordered.left + 24.dp, bordered.top + 24.dp), c1)
+        assertEquals(28.dp, bordered.width)
+        assertEquals(28.dp, bordered.height)
+
+        val padded = bounds("padded")
+        val c2 = bounds("c2")
+        assertEquals(DpRect(padded.left + 14.dp, padded.top + 14.dp, padded.left + 34.dp, padded.top + 34.dp), c2)
+        assertEquals(48.dp, padded.width)
+        assertEquals(48.dp, padded.height)
+    }
+
+    /**
      * W4 (ClipRRect, and a Container's clipBehavior): the child is cut to
      * the rounded corners, one radius for all four or each its own; a
      * clipping Container cuts its child to its decoration's corners.
