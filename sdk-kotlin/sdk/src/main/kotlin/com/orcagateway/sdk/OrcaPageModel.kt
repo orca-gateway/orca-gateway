@@ -103,6 +103,10 @@ public class OrcaPageModel(
 
     public fun resolve(id: String): ResolvedNode? = renderer.resolve(id, store.state)
 
+    /** Resolve under an AnimatedBuilder: `tween` props take [animationProgress]. */
+    public fun resolve(id: String, animationProgress: Double?): ResolvedNode? =
+        renderer.resolve(id, store.state, animationProgress = animationProgress)
+
     public fun watches(of: String): List<String> = renderer.node(of)?.watches ?: emptyList()
 
     /**

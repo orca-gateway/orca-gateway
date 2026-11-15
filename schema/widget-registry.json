@@ -4118,6 +4118,84 @@
       "triggers": []
     },
     {
+      "type": "Video",
+      "kind": "primitive",
+      "childMode": "none",
+      "slots": [],
+      "props": [
+        {
+          "name": "src",
+          "optional": false,
+          "kind": "value",
+          "type": "string",
+          "valueable": true
+        },
+        {
+          "name": "poster",
+          "optional": true,
+          "kind": "value",
+          "type": "string",
+          "valueable": true
+        },
+        {
+          "name": "fit",
+          "optional": true,
+          "kind": "value",
+          "type": "ImageFit",
+          "valueable": true
+        },
+        {
+          "name": "width",
+          "optional": true,
+          "kind": "value",
+          "type": "number",
+          "valueable": true
+        },
+        {
+          "name": "height",
+          "optional": true,
+          "kind": "value",
+          "type": "number",
+          "valueable": true
+        },
+        {
+          "name": "autoplay",
+          "optional": true,
+          "kind": "value",
+          "type": "boolean",
+          "valueable": true
+        },
+        {
+          "name": "visibleFraction",
+          "optional": true,
+          "kind": "value",
+          "type": "number",
+          "valueable": true
+        },
+        {
+          "name": "muted",
+          "optional": true,
+          "kind": "value",
+          "type": "boolean",
+          "valueable": true
+        },
+        {
+          "name": "loop",
+          "optional": true,
+          "kind": "value",
+          "type": "boolean",
+          "valueable": true
+        }
+      ],
+      "introducedIn": "1.1.0",
+      "isSupportedOnWeb": false,
+      "targets": [
+        "android",
+        "ios"
+      ],
+      "triggers": []
+    },
+    {
       "type": "Wrap",
       "kind": "layout",
       "childMode": "multi",

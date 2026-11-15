@@ -13,6 +13,8 @@ import { WIDGET_REGISTRY } from "../src/core/widget-registry-gen";
 const MANIFEST = join(import.meta.dir, "../../schema/widget-registry.json");
 const ALL = ["flutter", "web", "android", "ios"];
 const IOS_ORPHANS = ["Checkbox", "Drawer", "FloatingActionButton", "InkWell", "Radio", "SnackBar", "Tooltip"];
+// Widgets only the native SDKs draw so far; Flutter and web degrade them.
+const NATIVE_ONLY = ["Video"];
 
 interface ManifestWidget { type: string; targets?: string[]; isSupportedOnWeb?: boolean }
 
@@ -28,11 +30,12 @@ describe("widget targets", () => {
   });
 
   test("default is all four platforms; only the iOS orphans omit ios", () => {
+    for (const type of NATIVE_ONLY) expect(manifest.widgets.find((w) => w.type === type)?.targets, type).toEqual(["android", "ios"]);
     const noIos = manifest.widgets.filter((w) => !w.targets!.includes("ios")).map((w) => w.type).sort();
     expect(noIos).toEqual(IOS_ORPHANS);
     for (const w of manifest.widgets) {
       if (IOS_ORPHANS.includes(w.type)) expect(w.targets).toEqual(["flutter", "web", "android"]);
-      else expect(w.targets).toEqual(ALL);
+      else if (!NATIVE_ONLY.includes(w.type)) expect(w.targets).toEqual(ALL);
     }
   });
 

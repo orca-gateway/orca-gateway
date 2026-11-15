@@ -9,7 +9,7 @@ final class CapabilitiesTests: XCTestCase {
     private func manifestIOSWidgets() throws -> Set<String> {
         let manifest = try Fixtures.json("schema/widget-registry.json")
         let widgets = manifest["widgets"].arrayValue ?? []
-        XCTAssertEqual(widgets.count, 92)
+        XCTAssertEqual(widgets.count, 93)
         return Set(widgets.compactMap { w -> String? in
             let targets = (w["targets"].arrayValue ?? []).compactMap(\.stringValue)
             return targets.contains("ios") ? w["type"].stringValue : nil

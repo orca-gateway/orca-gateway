@@ -96,6 +96,8 @@ export {
 export {
   Text,
   Image,
+  Video,
+  type VideoProps,
   Icon,
   Divider,
   Spacer,

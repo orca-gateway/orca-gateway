@@ -20,6 +20,7 @@ public object GeneratedCapabilities {
     public const val sdkSemver: String = "0.1.0-alpha.1"
 
     public val widgets: List<String> = listOf(
+        "AnimatedBuilder",
         "AppBar",
         "Card",
         "Center",
@@ -45,6 +46,8 @@ public object GeneratedCapabilities {
         "Text",
         "TextButton",
         "TextField",
+        "Transform",
+        "Video",
     )
 
     public val valueKinds: List<String> = listOf(
@@ -128,5 +131,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "277cc2e0ee594953a06718433976b76542859fe36020c197187715b24fa51254"
+    public const val capsHash: String = "582ab6ab9ae64e92679b3d5b83585db42c268e59598a52ada04eb43f3481753f"
 }

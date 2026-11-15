@@ -54,6 +54,11 @@ public final class OrcaPageModel: ObservableObject {
         renderer.resolve(id, state: store.state)
     }
 
+    /// Resolve under an AnimatedBuilder: `tween` props take `animationProgress`.
+    public func resolve(_ id: String, animationProgress: Double?) -> ResolvedNode? {
+        renderer.resolve(id, state: store.state, animationProgress: animationProgress)
+    }
+
     public func watches(of id: String) -> [String] {
         renderer.node(id)?.watches ?? []
     }

@@ -1,5 +1,6 @@
 export { Text } from "./text";
 export { Image } from "./image";
+export { Video, type VideoProps } from "./video";
 export { Icon } from "./icon";
 export { Divider } from "./divider";
 export { Spacer } from "./spacer";

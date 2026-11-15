@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.orcagateway.core.render.ResolvedNode
+import com.orcagateway.sdk.widgets.AnimatedBuilderWidget
 import com.orcagateway.sdk.widgets.AppBarWidget
 import com.orcagateway.sdk.widgets.ButtonWidget
 import com.orcagateway.sdk.widgets.CardWidget
@@ -26,6 +27,8 @@ import com.orcagateway.sdk.widgets.SpacerWidget
 import com.orcagateway.sdk.widgets.StackWidget
 import com.orcagateway.sdk.widgets.TextFieldWidget
 import com.orcagateway.sdk.widgets.TextWidget
+import com.orcagateway.sdk.widgets.TransformWidget
+import com.orcagateway.sdk.widgets.VideoWidget
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -75,10 +78,10 @@ internal class WidgetBuilders private constructor(initial: Map<String, WidgetBui
         val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 25 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 28 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
-         * Positioned, Image, Icon). Keep the two lists in step: the caps vector
+         * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video. Keep the two lists in step: the caps vector
          * advertises what this draws (WidgetBuildersTest checks it).
          */
         fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
@@ -107,6 +110,9 @@ internal class WidgetBuilders private constructor(initial: Map<String, WidgetBui
             register("Positioned") { node, model, modifier -> PositionedWidget(node, model, modifier) }
             register("Image") { node, model, modifier -> ImageWidget(node, model, modifier) }
             register("Icon") { node, model, modifier -> IconWidget(node, model, modifier) }
+            register("AnimatedBuilder") { node, model, modifier -> AnimatedBuilderWidget(node, model, modifier) }
+            register("Transform") { node, model, modifier -> TransformWidget(node, model, modifier) }
+            register("Video") { node, _, modifier -> VideoWidget(node, modifier) }
         }
     }
 }
