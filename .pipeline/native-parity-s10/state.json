@@ -4,7 +4,7 @@
   "idea": "Native parity step 10 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase B): tabs and drawer on sdk-swift and sdk-kotlin. Bottom-tab shell with one stack per tab that keeps each tab's pages alive; BottomNavigationBar, BottomNavItem, Drawer widgets; server-driven tab bar and drawer trees; _tabIndex app state sync; actions switchTab and openDrawer; Scaffold drawer and endDrawer slots; the drawer drawn on iOS as a swipeable side panel (the user's decision). Test cases B10.1-B10.8 in /Users/amrebada/.claude/plans/native-parity/phase-b-tests.md. Stages 01-07 skipped as covered by the approved plan file.",
   "kind": "feature",
   "created_at": "2026-11-15T19:37:43Z",
-  "updated_at": "2026-11-15T20:19:43Z",
+  "updated_at": "2026-11-15T20:47:31Z",
   "active_session": "fe23fb0a-f62c-4a83-a51f-655a2e0bf8ff",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "draft",
-      "rounds": 3,
-      "card": "cards/09-r2.md"
+      "rounds": 4,
+      "card": "cards/09-r3.md"
     },
     "10": {
       "status": "pending"

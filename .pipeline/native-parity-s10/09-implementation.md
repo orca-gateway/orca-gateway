@@ -3,21 +3,22 @@
 ## Front page
 
 ### In one breath
-group 2 of 5 · tasks: 8 green, 0 blocked · cases: 13 of 36 green · all four suites green
-T5 / T6 executors: `switchTab` and `openDrawer` emit their effects; 17 action kinds on both.
-T7 / T8 `TabShell`: a pure tab state machine in each core; 15 sessions, 87 steps pass on both.
-One more session was recorded on Flutter to settle what `go` keeps inside a tab.
-engine 742 · Flutter +321 · Swift core 252, UI 74 · Kotlin core 249, sdk 152.
+group 3 of 5 · tasks: 12 green, 0 blocked · cases: 19 of 36 green · all four suites green
+T9 / T10 routers own the tab shell: per-tab stacks, `_tabIndex` both ways, drawer state.
+T11 / T12 widgets: BottomNavigationBar, BottomNavItem, Drawer; 31 widgets advertised on both.
+A side-by-side review of the two routers found five differences; all aligned and pinned.
+engine 742 · Flutter +321 · Swift core 252, UI 97 · Kotlin core 249, sdk 162.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 auto-decided: `go` inside a tab keeps pages by path, as Flutter was recorded doing (a query
-change keeps the page). My first call, a new page on a new query, was wrong and is reverted.
+3 auto-decided: the bar stops at the first missing item slot, as Flutter (my brief said skip) ·
+Android keeps the Material 3 selection pill · a host write to `stack` that adds routes is
+pushed through the shell on both SDKs (step 9 allowed it).
 
 ### Questions for you
-1. Next: group 3 (routers own the tab shell; the three widgets)? (default: go)
+1. Next: group 4 (the tab shells in OrcaApp, server tab bar, demo apps)? (default: go)
 
 ## Appendix
 
@@ -110,7 +111,50 @@ Review quality: two dead branches left by the reworks, fixed
 File: schema/fixtures/navigation/12_tab_sessions.json: "go inside a tab keeps the pages it still needs", 7 steps,
 recorded: `go` to the tab root keeps the root page; a query-only change keeps the page and requests nothing.
 
+### Group 3
+
+#### T9 · Swift router: tabs, _tabIndex, drawer state
+Files: sdk-swift/Sources/OrcaGateway/Navigation/OrcaRouter.swift · Tests/OrcaGatewayTests/RouterTests.swift
+Cases: B10.2-S, B10.3-S → green (RouterTests 34: 13 new; no step 9 test edited, diff checked)
+Changed: with a config the router owns a `TabShell`; one route per entry, stable id and loader; loaders dropped only
+when the entry leaves every stack; `_tabIndex` at boot before the first request and on every tab change; a page or
+host write of `_tabIndex` switches; `perform` handles `switchTab`, `openDrawer`.
+Public: `tabs`, `hasShell`, `currentTab`, `tabStacks`, `overRoutes`, `selectTab`, `switchTab`, `setTabPath`,
+`hasDrawer`, `isDrawerOpen`, `openDrawer`, `closeDrawer`, `pageDrawerRequest`.
+Decisions: tab switches, reselect and `go` report replace · `openDrawer` in path mode asks the page
+Review fit: a `stack` write adding routes was restored, not pushed (plus 3 alignments with Kotlin), fixed
+Review quality: two maps where one does, fixed
+
+#### T10 · Kotlin router: tabs, _tabIndex, drawer state
+Files: sdk-kotlin/sdk/.../navigation/OrcaRouter.kt · sdk/src/test/.../navigation/RouterTest.kt
+Cases: B10.2-K, B10.3-K → green (RouterTest 34: 10 new; 24 step 9 tests unedited)
+Changed: the twin of T9; also `canGoBack` (false at a tab root) for the back handler; `OrcaRoute.location`,
+`scaffoldTitle`, `isNotFound`, `transition` are Compose state with internal set (a binary change of `OrcaRoute`).
+Review fit: pass; aligned with Swift: a kept route takes every field of its entry, fixed
+Review quality: pass
+
+#### T11 · Swift widgets: BottomNavigationBar, BottomNavItem, Drawer; 31
+Files: sdk-swift/Sources/OrcaGateway/Widgets/Structure.swift · NodeView.swift · capabilities.json · Generated.swift ·
+Tests/OrcaGatewayTests/StructureWidgetTests.swift (new)
+Cases: B10.6-S, B10.C-S → green (10 tests)
+Changed: `BottomNavBar` (items, currentIndex, select) and its views; a tap writes the bound key, then fires `onChange`
+with the index (order asserted through store commits); `DrawerView` panel (304 wide by default); the switch draws
+all 31 advertised widgets. `ScaffoldView` still ignores drawer slots (group 5).
+Review fit: pass
+Review quality: items skipped a missing slot where Flutter stops, fixed
+
+#### T12 · Kotlin widgets: BottomNavigationBar, BottomNavItem, Drawer; 31
+Files: sdk-kotlin/sdk/.../widgets/Structure.kt · WidgetBuilders.kt · capabilities.json · Generated.kt ·
+core/src/test/.../capabilities/CapabilitiesTest.kt
+Cases: B10.C-K → green (pin 28 → 31, renamed test, three names asserted)
+Changed: M3 `NavigationBar` with tags `orca-bottom-nav-item-<i>`, helpers `bottomNavEntries`, `bottomNavIndex`,
+`bottomNavTap`; `DrawerWidget` on `ModalDrawerSheet`; three registrations.
+Review fit: pass; the same slot rule as Swift, fixed
+Review quality: pass
+
 ### Test run
+group 3: `swift test` core 252, UI 97, 0 failures, 0 warnings · `./gradlew build` successful, core 249, sdk 162,
+0 failed · engine and Flutter unchanged since group 2 (742, +321). Generators leave no diff.
 group 2: `bun test` 742 pass 0 fail · `flutter test` +321 all passed · `swift test` core 252, UI 74, 0 failures,
 0 warnings · `./gradlew build` successful, core 249, sdk 152, 0 failed. Generators leave no diff.
 group 1: `bun test` 742 · `flutter test` +320 · native red by design, green again in group 2.
@@ -127,4 +171,7 @@ none
 - README "Running it" does not say that the native runners run the sessions on `TabShell`; the file-12 row and
   description do not mention the fifth session. Fix before the PR.
 - The Swift and Kotlin corner tests pin the same corners with different scripts and ids (not literal mirrors).
+- Known differences to list: the Android bar has the M3 selection pill; a host route pushed by a `stack` write keeps
+  its own path if its location redirects; Kotlin closes loaders of dropped routes, Swift forgets them (as before).
+- No Kotlin test yet for the bar's stop-at-gap rule or its tap (T17 writes `StructureTest.kt`).
 - `hasShell` always equals `currentTab != nil` in both twins (could be computed).
