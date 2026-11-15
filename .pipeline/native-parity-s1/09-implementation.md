@@ -3,23 +3,22 @@
 ## Front page
 
 ### In one breath
-group 2 of 7 · tasks: 3 green, 0 blocked · cases: 10 of 26 green · every suite green
-S-text: Swift Text draws line height, word spacing, overline/dotted/dashed/double/wavy, decoration
-colour, the four overflow modes and justify; left/right stay absolute in RTL; absolute insets.
-K-text: Compose Text draws the same; decorations from the text layout, built once per layout.
-D1: demo app `parity-a`, page `polish`: every step 1 prop, a pushed page, one with no back arrow.
-iOS runs now use a new iPhone 16 Pro (iOS 18.5) simulator: the plain iPhone 16 failed 9 old tests.
+group 3 of 7 · tasks: 5 green, 0 blocked · cases: 14 of 26 green · every suite green
+S-flex: Swift Row/Column read textDirection and verticalDirection for their own layout only;
+Center sizes by its factors; scroll views honour reverse and shrinkWrap; absolute padding.
+K-flex: the same on Compose, positions computed from the props, not the page direction.
+K-router (group 4) started early: the Kotlin tree was free and it depends on nothing in group 3.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided: overline at the font ascent (Flutter); Swift overline/double/wavy need iOS 18;
-D1 draws no Wrap (native SDKs lack it until step 3).
+3 auto-decided: Swift reverse on iOS 16 scrolls to the end but short content stays at the start;
+`primary` is a documented no-op on both; Row baseline in Swift FlexLayout left as before (top).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 3 (S-flex, K-flex: flex directions, Center factors, scroll)? (default: go)
+2. Next: group 4 (S-box Container border inset, K-router kept across rotation)? (default: go)
 
 ## Appendix
 
@@ -117,6 +116,49 @@ DA7254F5) UI 63 + core 234, 0 failures, goldens included · Kotlin `./gradlew bu
 lint clean). Flutter: no file of its changed (fixtures unchanged since G1).
 Simulator note: on the plain iPhone 16 (iOS 18.5) a clean tree fails 4 goldens and 4 layout tests (its safe area
 differs); CI and the goldens use an iPhone 16 Pro, so this session made its own 16 Pro.
+
+
+### Group 3
+Commits: K-flex c184b56, S-flex ccf5327 (staged by path). Nothing pushed. Group 2's card approved under the
+standing rule. K-router (group 4) was started while S-flex was in review: Kotlin-only, no dependency.
+
+#### Task K-flex · Kotlin flex directions, Center, scroll
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Flex.kt` · `…/sdk/widgets/Layout.kt` · `sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/widgets/FlexLayoutTest.kt` · `…/sdk/widgets/LayoutTest.kt` (new)
+Cases: A1.10 kt, A1.12 kt → green (11 new tests: rtl Row on an ltr page and ltr Row on an rtl page, Column up,
+up/rtl cross flips, a Text in an rtl Row keeps the page direction, Center factors and no factor, reverse starts at
+the far end, short reversed content at the far end, shrinkWrap hugs; `./gradlew build` clean).
+Changed: FlexMeasurePolicy takes the flex's own textDirection and `up` and computes positions from them (not
+LocalLayoutDirection); Center is a small Layout sizing by widthFactor/heightFactor; ScrollWidget reverseScrolling
+and scrolledContent keep the content's own length on the scroll axis.
+Decisions: 1. shrinkWrap and primary need nothing on Android (documented): the scroll view already wraps its
+content where the parent allows.
+Review fit: pass
+Review quality: pass
+Not done: nothing
+
+#### Task S-flex · Swift flex directions, Center, scroll
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Layout.swift` · `…/Widgets/Flex.swift` · `sdk-swift/Tests/OrcaGatewayTests/FlexLayoutTests.swift` · `…/LayoutTests.swift` (new)
+Cases: A1.10 sw, A1.12 sw, D4 → green (macOS `swift test` green; iOS 16 Pro 18.5 UI 75/0, core 234/0, goldens
+unchanged, 0 warnings). Red first except two regression guards (a Text child keeps the ambient direction;
+shrinkWrap stops at the bounds).
+Changed: FlexView sets the layout direction on the stack/FlexLayout only when textDirection is sent and gives
+each child the ambient direction back; Column up reverses with start/end swapped; Row up swaps cross start/end
+(stack and FlexLayout paths); CenterFactorLayout when a factor is sent; Padding and scroll use `orcaPadding`;
+ScrollNodeView reverse (iOS 17 defaultScrollAnchor, iOS 16 ScrollViewReader to the end) and shrinkWrap
+(HugLayout: hugs, never grows past the offer); `primary` documented as a known difference.
+Decisions: 1. rtl relies on SwiftUI mirroring the flex under its own direction (tests: same output on both
+paths) · 2. HugLayout over plain fixedSize (bounded like Flutter's IntrinsicHeight) · 3. an unknown
+textDirection value counts as absent.
+Review fit: Row baseline added to FlexLayout outside the task (moved a no-text child from Flutter's top),
+fixed (removed, baseline stays at the top as before)
+Review quality: every plain Row/Column got 1 + N environment layers, fixed (only when textDirection is sent)
+Not done: iOS 16 reverse fallback leaves short content at the start (doc comment; CI and goldens run 18.5).
+For later: Row baseline alignment in Swift FlexLayout (no case row covers it).
+
+#### Group 3 test run
+engine 739 pass 0 fail (no engine file changed) · Swift macOS `swift test` green · iOS (DA7254F5) UI 75 + core
+234, 0 failures, goldens unchanged · Kotlin `./gradlew build` successful at c184b56 (K-flex's run; lint clean); the
+full Kotlin counts are re-run with group 4 (K-router is using the tree now). Flutter: no file changed.
 
 ### Test run
 engine 739 pass 0 fail · Flutter +248 all passed · Swift macOS 234 tests 0 failures · Kotlin core 228, sdk 132,
