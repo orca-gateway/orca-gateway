@@ -1,0 +1,152 @@
+{
+  "name": "flex-direction-center-factors",
+  "description": "Column with verticalDirection up and textDirection rtl holding a Row with textDirection rtl (two Text children) and a Center with widthFactor 0.5 and heightFactor 2 (one Text child). The direction props and the Center factors reach the wire unchanged and every client resolver passes them through unchanged.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "props": {
+      "verticalDirection": "up",
+      "textDirection": "rtl"
+    },
+    "children": [
+      {
+        "type": "Row",
+        "key": "row",
+        "props": {
+          "textDirection": "rtl"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "first",
+            "props": {
+              "data": "First"
+            }
+          },
+          {
+            "type": "Text",
+            "key": "second",
+            "props": {
+              "data": "Second"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Center",
+        "key": "center",
+        "props": {
+          "widthFactor": 0.5,
+          "heightFactor": 2
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "centred",
+            "props": {
+              "data": "Centred"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "pageState": {},
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "verticalDirection": "up",
+        "textDirection": "rtl"
+      },
+      "children": [
+        "row",
+        "center"
+      ],
+      "watches": []
+    },
+    {
+      "id": "center",
+      "type": "Center",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "widthFactor": 0.5,
+        "heightFactor": 2
+      },
+      "children": [
+        "centred"
+      ],
+      "watches": []
+    },
+    {
+      "id": "centred",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Centred"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "row",
+      "type": "Row",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "textDirection": "rtl"
+      },
+      "children": [
+        "first",
+        "second"
+      ],
+      "watches": []
+    },
+    {
+      "id": "second",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Second"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "first",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "First"
+      },
+      "children": [],
+      "watches": []
+    }
+  ],
+  "resolved": {
+    "col": {
+      "verticalDirection": "up",
+      "textDirection": "rtl"
+    },
+    "row": {
+      "textDirection": "rtl"
+    },
+    "center": {
+      "widthFactor": 0.5,
+      "heightFactor": 2
+    }
+  }
+}
