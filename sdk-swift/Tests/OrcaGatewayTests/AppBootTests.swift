@@ -264,6 +264,31 @@ final class AppBootTests: XCTestCase {
                       "the hosted app loaded the pushed page")
     }
 
+    func test_B10_1_bootingIntoATabShowsTheShell() async throws {
+        let stub = BootStub(config: config(tabs: true, initialRoute: "/cart"))
+        let boot = boot(stub, path: nil)
+        await boot.startIfNeeded()
+        let router = try ready(boot)
+        XCTAssertTrue(router.hasShell)
+        XCTAssertEqual(router.currentTab, 1, "the initial route's tab is the selected one")
+        let shell = TabShellModel(router: router)
+        XCTAssertEqual(shell.items.map(\.label), ["Home", "Cart"])
+        XCTAssertEqual(shell.items.map(\.symbol), ["house.fill", "cart.fill"])
+        XCTAssertEqual(shell.selection, 1)
+        XCTAssertFalse(shell.usesServerBar)
+        XCTAssertNil(shell.root(of: 0), "the other tab is not visited yet")
+
+        _ = try await host(OrcaApp(router: router))
+        XCTAssertEqual(stub.pageRequests.map { $0.url.path.components(separatedBy: "/page/").last },
+                       ["cart"], "only the selected tab's page is fetched")
+        XCTAssertEqual(stub.configRequests.count, 1)
+
+        // A config without tabs has no shell: the single stack of step 9.
+        let plain = self.boot(BootStub(config: config()), path: nil)
+        await plain.startIfNeeded()
+        XCTAssertFalse(try ready(plain).hasShell)
+    }
+
     func test_aNotFoundRouteRequestsNoPage() async throws {
         let stub = BootStub(config: config(initialRoute: "/nowhere"))
         let boot = boot(stub, path: nil)

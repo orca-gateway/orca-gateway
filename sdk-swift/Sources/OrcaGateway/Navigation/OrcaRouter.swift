@@ -1,4 +1,5 @@
 #if canImport(SwiftUI)
+import Combine
 import Foundation
 import SwiftUI
 
@@ -110,7 +111,13 @@ public final class OrcaRouter: ObservableObject {
     public let client: OrcaClient
     public var system: SystemActions
     /// The shared app scope, as the latest page or the host left it.
-    public private(set) var appState: [String: JSONValue] = [:]
+    public private(set) var appState: [String: JSONValue] = [:] {
+        didSet { if appState != oldValue { appStateChanges.send(appState) } }
+    }
+    /// The app scope after each change, whoever wrote it (a page, the host,
+    /// a tab change): what the shell's server trees (tab bar, drawer) are
+    /// drawn against.
+    let appStateChanges = PassthroughSubject<[String: JSONValue], Never>()
     /// Called with every effect a page reports, for DevTools and logging.
     public var onEffect: ((ActionEffect) -> Void)?
     /// Called once per change of the location on top, after any redirect

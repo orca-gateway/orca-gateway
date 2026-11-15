@@ -183,7 +183,9 @@ public final class OrcaAppBoot: ObservableObject {
 
 /// The root view of an Orca-driven app: a NavigationStack of server pages,
 /// each with loading and error states. `navigate` pushes a page, `goBack`
-/// pops one, and app state is shared by every page on the stack.
+/// pops one, and app state is shared by every page on the stack. A config
+/// with tabs is drawn as a tab bar with one NavigationStack per tab
+/// (`TabShellView`).
 ///
 /// With a `path` no config is fetched and every path is a page. The default
 /// is `home`: `OrcaApp(client:)` opens the page `home`, as it always has.
@@ -215,11 +217,27 @@ public struct OrcaApp: View {
         case .loading:
             ProgressView().task { await boot.startIfNeeded() }
         case .ready(let router):
-            RouteStack(router: router)
+            RouterRoot(router: router)
         case .failed(let message):
             LoadError(title: "Could not start the app", message: message) {
                 Task { await boot.retry() }
             }
+        }
+    }
+}
+
+/// A router on screen: the tab shell while it has one (a config with tabs,
+/// showing a tab), else one stack (no tabs, a host path, or after a `go` to
+/// a route outside the tabs).
+@MainActor
+private struct RouterRoot: View {
+    @ObservedObject var router: OrcaRouter
+
+    var body: some View {
+        if router.hasShell {
+            TabShellView(router: router)
+        } else {
+            RouteStack(router: router)
         }
     }
 }
