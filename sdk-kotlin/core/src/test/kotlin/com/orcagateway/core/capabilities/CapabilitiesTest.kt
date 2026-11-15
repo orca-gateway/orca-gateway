@@ -75,8 +75,9 @@ class CapabilitiesTest {
         val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["actionKinds"])
         assertEquals(listed, GeneratedCapabilities.actionKinds.toSet())
         assertTrue(Action.kinds.toSet().containsAll(listed), "not wire kinds: ${listed - Action.kinds.toSet()}")
-        assertEquals(15, listed.size)
-        // Swift's twin: the iOS SDK advertises the same 15 kinds.
+        assertEquals(17, listed.size)
+        assertTrue(listed.containsAll(setOf("switchTab", "openDrawer")))
+        // Swift's twin: the iOS SDK advertises the same 17 kinds.
         assertEquals(strings(json("sdk-swift/capabilities.json").jsonObject["actionKinds"]), listed)
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).

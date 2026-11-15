@@ -71,12 +71,14 @@ public object GeneratedCapabilities {
         "goBack",
         "lifecycle",
         "navigate",
+        "openDrawer",
         "openUrl",
         "serverAction",
         "setState",
         "share",
         "showSnackbar",
         "showToast",
+        "switchTab",
         "updateComponent",
     )
 
@@ -131,5 +133,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "582ab6ab9ae64e92679b3d5b83585db42c268e59598a52ada04eb43f3481753f"
+    public const val capsHash: String = "10aad557d11f329a2857d3f6c6e294d757ea7166d69d543aa7661c808a18f472"
 }
