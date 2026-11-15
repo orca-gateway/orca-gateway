@@ -257,11 +257,16 @@ final class AppBootTests: XCTestCase {
         await second.startIfNeeded()
         let fresh = try ready(second)
         fresh.navigate(to: "/settings")
+        let before = stub.pageRequests.count
         if let shown = try await host(OrcaApp(router: fresh)) {
             XCTAssertEqual(shown, "Your settings")
         }
-        XCTAssertTrue(stub.pageRequests.last?.url.path.hasSuffix("/page/settings") ?? false,
-                      "the hosted app loaded the pushed page")
+        // The shell also loads the tab's page under the pushed one (the tab
+        // is the visited one), each from its own view's task: either order.
+        let hosted = stub.pageRequests.dropFirst(before).map { $0.url.path.components(separatedBy: "/page/").last }
+        XCTAssertEqual(hosted.filter { $0 == "settings" }.count, 1, "the hosted app loaded the pushed page")
+        XCTAssertEqual(hosted.sorted { ($0 ?? "") < ($1 ?? "") }, ["home", "settings"],
+                       "and the tab's page under it, each once")
     }
 
     func test_B10_1_bootingIntoATabShowsTheShell() async throws {
