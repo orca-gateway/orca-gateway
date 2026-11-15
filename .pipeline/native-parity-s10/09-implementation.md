@@ -3,7 +3,7 @@
 ## Front page
 
 ### In one breath
-group 1 of 5 · tasks: 4 green, 0 blocked · cases: 5 of 36 green · bun test: 742 pass · flutter: +320
+group 1 of 5 · tasks: 4 green, 0 blocked · cases: 5 of 36 green · bun 742 pass · flutter +320
 T1 Navigation sessions: 14 sessions in 3 files, recorded on the real Flutter app.
 T2 Action fixtures 30/31: Flutter now emits `switchTab` and `openDrawer` debug effects.
 T3 Render fixtures 60/61 and the README's Sessions section.
