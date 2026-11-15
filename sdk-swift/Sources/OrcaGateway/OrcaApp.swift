@@ -91,7 +91,8 @@ public final class OrcaPageLoader: ObservableObject {
         do {
             let (page, timing) = try await client.fetchPageTimed(path, appState: app)
             let renderStart = timing.elapsed()
-            let model = OrcaPageModel(page: page, store: ElmStore(app: app), client: client)
+            let model = router?.plugins?.page(page, store: ElmStore(app: app), client: client)
+                ?? OrcaPageModel(page: page, store: ElmStore(app: app), client: client)
             router?.attach(model)
             let renderComplete = timing.elapsed()
             let path = self.path
@@ -125,20 +126,31 @@ public final class OrcaAppBoot: ObservableObject {
     public let client: OrcaClient
     private let system: SystemActions?
     private let onRouteChanged: ((RouteChangeEvent) -> Void)?
+    /// OrcaApp's plugins: every router made here is attached to them.
+    private let plugins: OrcaPluginHost?
     private var started = false
 
     /// `path` defaults to `home`. An explicit `path: nil` boots from the
     /// config: call `startIfNeeded()`.
-    public init(client: OrcaClient, path: String? = "home", system: SystemActions? = nil,
-                onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) {
+    public convenience init(client: OrcaClient, path: String? = "home", system: SystemActions? = nil,
+                            onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) {
+        self.init(client: client, path: path, system: system, onRouteChanged: onRouteChanged, plugins: nil)
+    }
+
+    /// With OrcaApp's plugins: their names are advertised on `client` before
+    /// the config is asked for, and the router is attached to them.
+    init(client: OrcaClient, path: String?, system: SystemActions?,
+         onRouteChanged: ((RouteChangeEvent) -> Void)?, plugins: OrcaPluginHost?) {
         self.client = client
         self.system = system
         self.onRouteChanged = onRouteChanged
+        self.plugins = plugins
+        plugins?.advertise(on: client)
         if let path {
             let router = OrcaRouter(client: client, path: path, system: system)
             router.onRouteChanged = onRouteChanged
             started = true
-            phase = .ready(router)
+            phase = .ready(plugins?.attach(router) ?? router)
         }
     }
 
@@ -147,6 +159,7 @@ public final class OrcaAppBoot: ObservableObject {
         client = router.client
         system = nil
         onRouteChanged = nil
+        plugins = nil
         started = true
         phase = .ready(router)
     }
@@ -171,8 +184,9 @@ public final class OrcaAppBoot: ObservableObject {
         if client.device == DeviceInfo() { client.device = .current() }
         do {
             let config = try await client.fetchConfig()
-            phase = .ready(OrcaRouter(client: self.client, config: config, system: system,
-                                      onRouteChanged: onRouteChanged))
+            let router = OrcaRouter(client: self.client, config: config, system: system,
+                                    onRouteChanged: onRouteChanged)
+            phase = .ready(plugins?.attach(router) ?? router)
         } catch OrcaClientError.http(let status, let body) {
             phase = .failed("HTTP \(status): \(body.prefix(200))")
         } catch {
@@ -213,24 +227,43 @@ public struct OrcaApp: View {
     ///   - enableSessionTracking: send a session start when the app comes to
     ///     the foreground and an end when it goes to the background.
     ///   - onRouteChanged: told of every route change, the first route included.
+    ///   - plugins: widgets, actions and triggers bundled per plugin, merged
+    ///     once with `customActions` and `widgets` before the first request
+    ///     (Dart `OrcaApp.plugins`, sdk/lib/src/widgets/orca_app.dart). Their
+    ///     widget and action names are added to the client's capabilities. A
+    ///     conflict shows the error view with Flutter's message and loads no page.
+    ///   - customActions: handlers by action type, run by every page and not
+    ///     advertised (Dart `OrcaApp.customActions`). A plugin action of the
+    ///     same name is a conflict.
+    ///   - widgets: builders for host widget types the SDK does not draw, not
+    ///     advertised (Dart `OrcaApp.registry`). A plugin widget of the same
+    ///     type is a conflict.
     public init(client: OrcaClient, path: String? = "home", system: SystemActions? = nil,
                 enableOffline: Bool = false, enableSessionTracking: Bool = false,
-                onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) {
+                onRouteChanged: ((RouteChangeEvent) -> Void)? = nil,
+                plugins: [OrcaPlugin] = [], customActions: [String: OrcaActionHandler] = [:],
+                widgets: WidgetBuilders = WidgetBuilders()) {
+        let host = OrcaPluginHost(plugins: plugins, customActions: customActions, widgets: widgets)
         _boot = StateObject(wrappedValue: OrcaAppBoot(
             client: client.identified(by: UserDefaultsKeyValueStore()), path: path, system: system,
-            onRouteChanged: onRouteChanged))
+            onRouteChanged: onRouteChanged, plugins: host))
         _gate = StateObject(wrappedValue: OrcaBootModel(
-            enableOffline: enableOffline, enableSessionTracking: enableSessionTracking))
+            enableOffline: enableOffline, enableSessionTracking: enableSessionTracking, failure: host.failure))
     }
 
     /// The router's client is used as the host built it: to send a device
     /// id, set `client.deviceId = DeviceIdentity.resolve(UserDefaultsKeyValueStore())`.
-    /// The options are those of `init(client:)`.
+    /// The options are those of `init(client:)`, `plugins`, `customActions`
+    /// and `widgets` included (Dart `OrcaApp`, sdk/lib/src/widgets/orca_app.dart):
+    /// a conflict shows the error view.
     public init(router: @autoclosure @escaping () -> OrcaRouter,
-                enableOffline: Bool = false, enableSessionTracking: Bool = false) {
-        _boot = StateObject(wrappedValue: OrcaAppBoot(router: router()))
+                enableOffline: Bool = false, enableSessionTracking: Bool = false,
+                plugins: [OrcaPlugin] = [], customActions: [String: OrcaActionHandler] = [:],
+                widgets: WidgetBuilders = WidgetBuilders()) {
+        let host = OrcaPluginHost(plugins: plugins, customActions: customActions, widgets: widgets)
+        _boot = StateObject(wrappedValue: OrcaAppBoot(router: host.attach(router())))
         _gate = StateObject(wrappedValue: OrcaBootModel(
-            enableOffline: enableOffline, enableSessionTracking: enableSessionTracking))
+            enableOffline: enableOffline, enableSessionTracking: enableSessionTracking, failure: host.failure))
     }
 
     public var body: some View {
