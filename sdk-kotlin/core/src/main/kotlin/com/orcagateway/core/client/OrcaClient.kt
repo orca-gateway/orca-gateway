@@ -48,27 +48,56 @@ public sealed class OrcaClientException(message: String) : Exception(message) {
  * and the server caches it, so later requests take the fast path. A second
  * 412 is returned to the caller as an error, never retried again.
  *
- * Immutable, so one client can serve any number of coroutines; [copy] makes
- * a changed one (what assigning a `var` of the Swift struct does). The
+ * Immutable but for the capability extensions, so one client can serve any
+ * number of coroutines; [copy] makes a changed one (what assigning a `var`
+ * of the Swift struct does). The extensions are thread-safe and shared by a
+ * client and every copy made of it, before or after a registration. The
  * network goes through [transport].
  */
-public class OrcaClient(
+public class OrcaClient private constructor(
     public val baseUrl: URI,
     public val appId: String,
     /** Sent as `Authorization: Bearer <apiKey>`. */
-    public val apiKey: String? = null,
+    public val apiKey: String?,
     /** Sent as `X-Orca-Env`. */
-    public val environment: String? = null,
+    public val environment: String?,
     /** Sent as `x-orca-device-id`, unless empty. */
-    public val deviceId: String? = null,
-    public val device: DeviceInfo = DeviceInfo(),
-    public val capabilities: CapabilityVector = CapabilityVector.current,
+    public val deviceId: String?,
+    public val device: DeviceInfo,
+    /** The vector the client was made with, before any extension. */
+    private val baseCapabilities: CapabilityVector,
     public val transport: HttpTransport,
+    private val extensions: Extensions,
 ) : ActionClient {
-    /** `x-orca-caps-hash`: SHA-256 of the canonical vector, computed once. */
-    public val capsHash: String = capabilities.hash
+    public constructor(
+        baseUrl: URI,
+        appId: String,
+        apiKey: String? = null,
+        environment: String? = null,
+        deviceId: String? = null,
+        device: DeviceInfo = DeviceInfo(),
+        capabilities: CapabilityVector = CapabilityVector.current,
+        transport: HttpTransport,
+    ) : this(baseUrl, appId, apiKey, environment, deviceId, device, capabilities, transport, Extensions())
 
-    /** This client with some settings changed (Swift: a copy of the struct with a `var` assigned). */
+    /**
+     * The advertised vector: the one the client was made with plus the
+     * registered extensions ([CapabilityVector.adding]); the base itself
+     * while nothing is registered.
+     */
+    public val capabilities: CapabilityVector get() = advertised().vector
+
+    /**
+     * `x-orca-caps-hash`: SHA-256 of the canonical [capabilities],
+     * recomputed only when the extensions grew.
+     */
+    public val capsHash: String get() = advertised().hash
+
+    /**
+     * This client with some settings changed (Swift: a copy of the struct
+     * with a `var` assigned). [capabilities] is the new base; the copy shares
+     * this client's extensions.
+     */
     public fun copy(
         baseUrl: URI = this.baseUrl,
         appId: String = this.appId,
@@ -76,9 +105,57 @@ public class OrcaClient(
         environment: String? = this.environment,
         deviceId: String? = this.deviceId,
         device: DeviceInfo = this.device,
-        capabilities: CapabilityVector = this.capabilities,
+        capabilities: CapabilityVector = this.baseCapabilities,
         transport: HttpTransport = this.transport,
-    ): OrcaClient = OrcaClient(baseUrl, appId, apiKey, environment, deviceId, device, capabilities, transport)
+    ): OrcaClient =
+        OrcaClient(baseUrl, appId, apiKey, environment, deviceId, device, capabilities, transport, extensions)
+
+    /**
+     * Dart `registerCapabilityExtensions`
+     * (sdk/lib/src/client/orca_client.dart): advertise plugin [widgets]
+     * verbatim and each plugin action bare and as `custom:<name>`, from the
+     * next request on, on this client and every copy of it. Idempotent: what
+     * is already registered changes nothing, not even the hash.
+     */
+    public fun registerCapabilityExtensions(
+        widgets: Iterable<String> = emptyList(),
+        actions: Iterable<String> = emptyList(),
+    ) {
+        extensions.add(widgets, actions)
+    }
+
+    /** The registered names; they only grow, so their count tells whether a cached vector is current. */
+    private class Extensions {
+        private val widgets = LinkedHashSet<String>()
+        private val actions = LinkedHashSet<String>()
+
+        val count: Int get() = synchronized(this) { widgets.size + actions.size }
+
+        fun add(widgets: Iterable<String>, actions: Iterable<String>) {
+            synchronized(this) {
+                this.widgets.addAll(widgets)
+                this.actions.addAll(actions)
+            }
+        }
+
+        /** The vector [base] advertises with these extensions, and the count it reflects. */
+        fun applied(base: CapabilityVector): Pair<Int, CapabilityVector> = synchronized(this) {
+            val count = widgets.size + actions.size
+            count to if (count == 0) base else base.adding(widgets.toList(), actions.toList())
+        }
+    }
+
+    /** The advertised vector and its hash, for [count] registered extension names. */
+    private class Advertised(val count: Int, val vector: CapabilityVector, val hash: String)
+
+    private val cacheLock = Any()
+    private var cached: Advertised? = null
+
+    private fun advertised(): Advertised = synchronized(cacheLock) {
+        cached?.takeIf { it.count == extensions.count }
+            ?: extensions.applied(baseCapabilities).let { (count, vector) -> Advertised(count, vector, vector.hash) }
+                .also { cached = it }
+    }
 
     /** Every header the client sends, as the Dart `_deviceHeaders` builds them. */
     public val headers: Map<String, String>

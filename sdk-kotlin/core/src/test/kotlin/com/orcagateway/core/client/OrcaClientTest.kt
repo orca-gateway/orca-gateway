@@ -31,7 +31,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.SerializationException
 
-/** T2.1 (the capability handshake), T2.2 (headers) and C1 (a live 4.0) on the Kotlin client. */
+/**
+ * T2.1 (the capability handshake), T2.2 (headers), C16.3 (capability
+ * extensions) and C1 (a live 4.0) on the Kotlin client.
+ */
 class OrcaClientTest {
     private val base = URI("http://localhost:8080")
 
@@ -183,6 +186,97 @@ class OrcaClientTest {
         val c = client(StubEngine(ByteArray(0))).copy(deviceId = "")
         assertNull(c.headers["x-orca-device-id"])
         assertNull(c.headers["Authorization"])
+    }
+
+    // MARK: C16.3 capability extensions (Dart registerCapabilityExtensions)
+
+    private val vector = CapabilityVector(
+        protocolVersion = "2.0.0", sdkSemver = "1.0.0", widgets = listOf("Text", "Column"),
+        valueKinds = listOf("static"), actionKinds = listOf("setState"), transformKinds = listOf("toString"),
+        boolExprOps = listOf("eq"),
+    )
+
+    @Test
+    fun c16_3_addingUnionsSortsAndDoublesBareActions() {
+        val added = vector.adding(widgets = listOf("Map", "Text"), actions = listOf("moveCamera", "custom:rateApp", "setState"))
+        assertEquals(listOf("Column", "Map", "Text"), added.widgets)
+        assertEquals(
+            listOf("custom:moveCamera", "custom:rateApp", "custom:setState", "moveCamera", "setState"),
+            added.actionKinds,
+        )
+        assertEquals(vector.copy(widgets = added.widgets, actionKinds = added.actionKinds), added)
+    }
+
+    @Test
+    fun c16_3_extensionsAddWidgetsVerbatimAndActionsBareAndPrefixed() {
+        val c = client(StubEngine(ByteArray(0)))
+        c.registerCapabilityExtensions(widgets = listOf("Map"), actions = listOf("moveCamera", "custom:rateApp"))
+        val base = CapabilityVector.current
+        assertEquals((base.widgets + "Map").sorted(), c.capabilities.widgets)
+        assertEquals((base.actionKinds + listOf("moveCamera", "custom:moveCamera", "custom:rateApp")).sorted(), c.capabilities.actionKinds)
+        assertFalse("custom:custom:rateApp" in c.capabilities.actionKinds)
+        assertFalse("rateApp" in c.capabilities.actionKinds)
+        assertEquals(base.valueKinds, c.capabilities.valueKinds)
+    }
+
+    @Test
+    fun c16_3_extensionsChangeTheHashOnceAndAreIdempotent() {
+        val c = client(StubEngine(ByteArray(0)))
+        assertEquals(GeneratedCapabilities.capsHash, c.capsHash)
+        assertEquals(CapabilityVector.current, c.capabilities)
+        c.registerCapabilityExtensions()
+        assertEquals(GeneratedCapabilities.capsHash, c.capsHash)
+
+        c.registerCapabilityExtensions(widgets = listOf("Map"), actions = listOf("moveCamera"))
+        val grown = c.capsHash
+        assertTrue(grown != GeneratedCapabilities.capsHash)
+        assertEquals(c.capabilities.hash, grown)
+        assertEquals(grown, c.headers["x-orca-caps-hash"])
+
+        c.registerCapabilityExtensions(widgets = listOf("Map"), actions = listOf("moveCamera", "custom:moveCamera"))
+        assertEquals(grown, c.capsHash)
+    }
+
+    @Test
+    fun c16_3_copiesShareTheExtensionsBothWays() {
+        val c = client(StubEngine(ByteArray(0)))
+        val early = c.copy(appId = "router")
+        c.registerCapabilityExtensions(widgets = listOf("Map"))
+        assertEquals(c.capsHash, early.capsHash)
+        assertTrue("Map" in early.capabilities.widgets)
+
+        early.registerCapabilityExtensions(actions = listOf("moveCamera"))
+        assertTrue("custom:moveCamera" in c.capabilities.actionKinds)
+        assertEquals(c.capsHash, early.capsHash)
+    }
+
+    /** `copy(capabilities = ...)` replaces the base; the shared extensions stay on top of it. */
+    @Test
+    fun c16_3_aCopyWithAnotherBaseKeepsTheExtensions() {
+        val c = client(StubEngine(ByteArray(0)))
+        c.registerCapabilityExtensions(widgets = listOf("Map"), actions = listOf("moveCamera"))
+        val other = c.copy(capabilities = vector)
+        assertEquals(vector.adding(listOf("Map"), listOf("moveCamera")), other.capabilities)
+        assertEquals(other.capabilities.hash, other.capsHash)
+        assertTrue("Map" in c.capabilities.widgets)
+        assertTrue("AppBar" in c.capabilities.widgets)
+    }
+
+    @Test
+    fun c16_3_aPageRequestAndItsRetryCarryTheExtendedVector(): Unit = runSuspend {
+        val stub = StubEngine(counterPage())
+        val c = client(stub)
+        c.registerCapabilityExtensions(widgets = listOf("ColoredBadge"), actions = listOf("hapticFeedback"))
+        c.fetchPage("home")
+
+        val requests = stub.requests
+        assertEquals(listOf("GET", "POST"), requests.map { it.method })
+        assertTrue(c.capsHash != GeneratedCapabilities.capsHash)
+        assertEquals(c.capsHash, requests[0].headers["x-orca-caps-hash"])
+        assertEquals(c.capsHash, requests[1].headers["x-orca-caps-hash"])
+        assertJsonEqual(json(requests[1].body)["_orcaCapsVector"], JsonValue.encoding(c.capabilities))
+        assertEquals(c.capabilities, stub.cached(c.capsHash))
+        assertTrue("custom:hapticFeedback" in c.capabilities.actionKinds)
     }
 
     // MARK: C1 a live 4.0 stays a double, as Dart's jsonDecode keeps it
