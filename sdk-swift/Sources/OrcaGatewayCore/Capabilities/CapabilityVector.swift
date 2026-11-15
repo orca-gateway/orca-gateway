@@ -55,6 +55,23 @@ public struct CapabilityVector: Codable, Equatable, Sendable {
             + "}"
     }
 
+    /// This vector plus plugin-contributed names, as Dart's
+    /// `_capabilityVector` (sdk/lib/src/client/orca_client.dart) builds it:
+    /// widgets added verbatim; each action added bare and as `custom:<name>`
+    /// (unless it already starts with `custom:`), because the wire carries
+    /// custom actions with the prefix. `widgets` and `actionKinds` become the
+    /// sorted union (UTF-16 order, no duplicates); the other arrays are kept.
+    public func adding(widgets: [String] = [], actions: [String] = []) -> CapabilityVector {
+        func union(_ base: [String], _ extra: [String]) -> [String] {
+            Set(base + extra).sorted { $0.utf16.lexicographicallyPrecedes($1.utf16) }
+        }
+        let doubled = actions.flatMap { $0.hasPrefix("custom:") ? [$0] : [$0, "custom:\($0)"] }
+        var next = self
+        next.widgets = union(self.widgets, widgets)
+        next.actionKinds = union(actionKinds, doubled)
+        return next
+    }
+
     /// Lowercase hex SHA-256 of `canonicalJSON()`, the `X-Orca-Caps-Hash` value.
     public var hash: String {
         SHA256.hex(Array(canonicalJSON().utf8))
