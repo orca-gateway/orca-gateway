@@ -1,3 +1,4 @@
 {"ts":"2026-11-15T18:35:18Z","stage":"09","round":1,"template":null,"text":"A (standing rule 2026-11-11: minor and patch auto-approved; group 1: nothing blocked, group 2 next, no validator dependency; all defaults)"}
 {"ts":"2026-11-15T18:42:40Z","stage":"09","round":2,"template":null,"text":"A (standing rule 2026-11-11: minor and patch auto-approved; group 2: nothing blocked, group 3 next, no typed encoder; all defaults)"}
 {"ts":"2026-11-15T18:52:30Z","stage":"09","round":3,"template":null,"text":"A (standing rule 2026-11-11: minor and patch auto-approved; group 3: nothing blocked, group 4 next, NFC/NFD left as a known difference; all defaults)"}
+{"ts":"2026-11-15T19:02:45Z","stage":"09","round":4,"template":null,"text":"A (standing rule 2026-11-11: minor and patch auto-approved; group 4: nothing blocked, group 5 next, null write during a fetch left; all defaults)"}

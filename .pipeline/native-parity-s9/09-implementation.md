@@ -3,23 +3,23 @@
 ## Front page
 
 ### In one breath
-group 3 of 5 · tasks: 6 green, 0 blocked · cases: 21 of 31 legs green · Swift 248 · Kotlin 375
-T5 Swift core: `RouteTable` resolves a location; all 11 fixtures (56 cases) pass.
-T6 Kotlin core: the same `RouteTable`; the same 56 cases pass.
-A cross-check aligned the two on corners no fixture pins, with one mirrored test on each side.
+group 4 of 5 · tasks: 8 green, 0 blocked · cases: 25 of 31 legs green · Swift 352 · Kotlin 389
+T7 Swift router: boots from a config, resolves and redirects, shares app state, reports changes.
+T8 Kotlin router: the same, with the same names.
+A host write made while a page loads is kept on both; Kotlin lost it until the review caught it.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided: a path or query part with a bad escape is kept as raw text on both SDKs ·
-`routePath` is built from the matched segments, not the raw config string.
+2 auto-decided: a push of a nested location adds only its top page; `replace` shows the whole
+chain · when a page lands, the router's scope wins and the page's seeds fill only unset keys.
 
 ### Questions for you
 1. No task is blocked. (default: nothing to retry)
-2. Next: group 4, both routers (config, app state, onRouteChanged)? (default: go)
-3. Swift compares path text by Unicode canonical equivalence, Kotlin and Dart by code unit; a
-   route in NFC asked in NFD matches on Swift only. Leave it as a known difference. (default: leave)
+2. Next: group 5, `OrcaApp` boots from the config and draws the title bar? (default: go)
+3. A host write of null during a page's fetch is refilled by that page's seed, on both SDKs.
+   Leave it. (default: leave)
 
 ## Appendix
 
@@ -80,8 +80,27 @@ Review fit: pass
 Review quality: the percent-decoder corrupted a non-BMP character beside an escape, fixed (text copied whole, escape runs decoded strictly; `queryParameters`, `config` and the defaults aligned with Swift)
 Not done: nothing
 
+### Group 4
+#### Task T7 · Swift router: config, app state, onRouteChanged
+Files: `sdk-swift/Sources/OrcaGateway/Navigation/OrcaRouter.swift` · `sdk-swift/Tests/OrcaGatewayTests/RouterTests.swift` · `sdk-swift/README.md` (`OrcaPageModel.swift`, `PageModelTests.swift` not needed)
+Cases: B9.6-US, B9.7-US → green (`swift test`: UI 104, core 248, 0 failures; 14 new; red first as compile errors, then one behavioural red) · baseline unchanged (the 7 router tests untouched)
+Changed: `OrcaRoute` gains `location`, `scaffoldTitle`, `isNotFound`, `transition` · `OrcaRouter.init(client:config:system:onRouteChanged:)` seeds `initialAppState`, shows `initialRoute`'s chain as root + stack · `navigate` resolves through `RouteTable` · `setAppState` commits into every loaded page · `onRouteChanged` once per changed top location · README section
+Decisions: 1. a push of a nested location adds its top page only; `replace` shows the chain · 2. `attach` merges: the router's scope wins, the page's seeds fill unset keys, so a host write during a load is kept · 3. the same location pushed over itself adds a page and fires no event
+Review fit: the Kotlin twin lost a host write made during a page load, fixed in T8 (no Swift change)
+Review quality: pass
+Not done: the path init has no boot event; the `OrcaApp` side is group 5
+
+#### Task T8 · Kotlin router: config, app state, onRouteChanged
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/navigation/OrcaRouter.kt` · `sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/navigation/RouterTest.kt` · `sdk-kotlin/README.md` (`OrcaPageModel.kt`, `PageModelTest.kt` not needed)
+Cases: B9.6-UK, B9.7-UK → green (`./gradlew build`: BUILD SUCCESSFUL, core 243, sdk 146; 14 new; red first) · baseline unchanged (the 10 router tests untouched)
+Changed: `OrcaRoute(path, location, scaffoldTitle, isNotFound, transition)` · `OrcaRouter(client, config, system, onRouteChanged)` beside the unchanged path constructor · `navigate` through `RouteTable` · `setAppState` · `onRouteChanged` · `public val table` · README section
+Decisions: 1. one page per push, the chain on `replace` · 2. `stack` set from outside is `Pop` when shorter, else `Push` · 3. a not-found route still gets a loader if asked; `OrcaApp` checks `isNotFound` first (group 5)
+Review fit: pass
+Review quality: a host write made while a page was fetching was reverted when the page landed, fixed (`attach` merges as Swift does; the not-found path drops only the query, as Swift)
+Not done: the `OrcaApp` side is group 5
+
 ### Test run
-`cd sdk-swift && swift test` · Executed 248 tests, with 0 failures · `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL, core 243, sdk 132 · group 1: `bun test` 738 pass, `flutter test` +303 · failures: none
+`cd sdk-swift && swift test` · UI 104 and core 248 tests, 0 failures · `cd sdk-kotlin && ./gradlew build` · BUILD SUCCESSFUL, core 243, sdk 146 · group 1: `bun test` 738 pass, `flutter test` +303 · failures: none
 
 ### Blocked
 none
