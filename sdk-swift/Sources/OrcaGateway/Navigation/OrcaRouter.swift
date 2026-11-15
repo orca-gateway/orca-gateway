@@ -32,6 +32,18 @@ public struct OrcaRoute: Hashable, Identifiable, Sendable {
         self.transition = transition
     }
 
+    /// The route of a stack entry that lives on: the same id (so the same
+    /// page), the entry's fields as they are now.
+    init(id: UUID, _ path: String, location: String, scaffoldTitle: String?, isNotFound: Bool,
+         transition: RouteTransitionDef?) {
+        self.id = id
+        self.path = path
+        self.location = location
+        self.scaffoldTitle = scaffoldTitle
+        self.isNotFound = isNotFound
+        self.transition = transition
+    }
+
     public static func == (a: OrcaRoute, b: OrcaRoute) -> Bool { a.id == b.id }
 
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -48,14 +60,52 @@ public struct OrcaRoute: Hashable, Identifiable, Sendable {
 /// redirect rules apply, a nested route is shown over its parents, and an
 /// unknown location is a "not found" route. Made with a path, every path is
 /// a page.
+///
+/// A config with tabs gives a tab shell (`TabShell`, the Swift side of
+/// Flutter's `OrcaShell`): each tab keeps its own stack and its pages while
+/// another tab is shown, `root` and `stack` are the stack on screen (the
+/// current tab's, then the routes over the shell), and app state `_tabIndex`
+/// follows the current tab and switches it when written.
 @MainActor
 public final class OrcaRouter: ObservableObject {
-    /// The page under every pushed route.
+    /// The page under every pushed route: with tabs, the current tab's root.
     @Published public private(set) var root: OrcaRoute
-    /// Pushed routes, bottom to top: the `NavigationStack` path.
+    /// Pushed routes, bottom to top: the `NavigationStack` path. With tabs,
+    /// the current tab's pages above its root, then `overRoutes`. Written
+    /// by a back swipe or by the host; with a config the write goes through
+    /// the table like `goBack` and `navigate`: routes taken off the top are
+    /// popped, and each route added is pushed by its location and stays the
+    /// route given.
     @Published public var stack: [OrcaRoute] = [] {
-        didSet { routesChanged(from: oldValue.count) }
+        didSet {
+            guard !isSyncing else { return }
+            if shell != nil { pathWritten(from: oldValue) } else { routesChanged(from: oldValue.count) }
+        }
     }
+
+    /// The tabs of the config; empty without a config or without tabs.
+    public let tabs: [TabDef]
+    /// A tab shell is on screen: the config has tabs and the last `go`
+    /// (boot, `navigate` with `replace`, a tab switch) landed in one.
+    public var hasShell: Bool { currentTab != nil }
+    /// The tab on screen, also under a route pushed over the shell; nil
+    /// without a shell.
+    @Published public private(set) var currentTab: Int?
+    /// One stack per tab, bottom to top; empty: not visited yet. Empty
+    /// array without tabs.
+    @Published public private(set) var tabStacks: [[OrcaRoute]] = []
+    /// Routes above the shell, bottom to top. With a config and no shell on
+    /// screen: the whole stack, `root` first. Empty without a config.
+    @Published public private(set) var overRoutes: [OrcaRoute] = []
+    /// The config has a shell drawer: tabs, and `drawerItems` or
+    /// `drawerComponents`.
+    public let hasDrawer: Bool
+    /// The shell drawer is open.
+    @Published public private(set) var isDrawerOpen = false
+    /// `openDrawer()` was asked where no shell drawer can open: the route
+    /// whose page should open its own `Scaffold` drawer. The page that does
+    /// sets it back to nil; with no drawer on that page nothing happens.
+    @Published public var pageDrawerRequest: OrcaRoute.ID?
 
     public let client: OrcaClient
     public var system: SystemActions
@@ -73,6 +123,14 @@ public final class OrcaRouter: ObservableObject {
     public let table: RouteTable?
 
     private var loaders: [UUID: OrcaPageLoader] = [:]
+    /// The stacks of a router made with a config; nil in path mode.
+    private var shell: TabShell?
+    /// The route of every entry of `shell`, by entry id, with the entry as
+    /// it was when the route was made or given (a `stack` write): the route
+    /// stays while its entry is the same.
+    private var bound: [Int: (route: OrcaRoute, entry: TabShellEntry)] = [:]
+    /// `root` and `stack` are being set from `shell`: not a back swipe.
+    private var isSyncing = false
     /// The location last reported, and how the change under way began.
     private var lastLocation: String
     private var pendingType: RouteChangeType?
@@ -83,6 +141,8 @@ public final class OrcaRouter: ObservableObject {
         self.client = client
         self.system = system ?? .live
         self.table = nil
+        self.tabs = []
+        self.hasDrawer = false
         let root = OrcaRoute(path)
         self.root = root
         self.lastLocation = root.location
@@ -97,13 +157,22 @@ public final class OrcaRouter: ObservableObject {
         self.system = system ?? .live
         let table = RouteTable(config)
         self.table = table
+        self.tabs = config.tabs
+        self.hasDrawer = !config.tabs.isEmpty
+            && !(config.drawerItems.isEmpty && config.drawerComponents.isEmpty)
         self.appState = config.initialAppState
         self.onRouteChanged = onRouteChanged
-        let routes = Self.routes(
-            table.resolve(Self.slashed(config.initialRoute), appState: config.initialAppState))
-        self.root = routes[0]
-        self.stack = Array(routes.dropFirst())
-        self.lastLocation = routes[routes.count - 1].location
+        var shell = TabShell(table: table)
+        let change = shell.go(config.initialRoute, appState: config.initialAppState)
+        // `go` always leaves a page on screen, if only "not found".
+        let first = Self.route(shell.visible[0], id: nil)
+        self.root = first
+        self.lastLocation = shell.location
+        self.bound = [shell.visible[0].id: (first, shell.visible[0])]
+        self.shell = shell
+        // `_tabIndex` is in app state before the first page is requested.
+        if let index = change.tabIndexWrite { appState["_tabIndex"] = .int(index) }
+        publishStacks()
         onRouteChanged?(RouteChangeEvent(location: lastLocation, previousLocation: nil, type: .push))
     }
 
@@ -120,12 +189,16 @@ public final class OrcaRouter: ObservableObject {
 
     public func navigate(to path: String, replace: Bool = false) {
         guard !path.isEmpty else { return }
-        var routes = [OrcaRoute(path)]
-        if let table {
-            routes = Self.routes(table.resolve(Self.slashed(path), appState: appState))
+        if shell != nil {
             // A push adds one page, the one asked for; `go` shows its chain.
-            if !replace { routes = [routes[routes.count - 1]] }
+            if replace {
+                shellChanged(shell?.go(path, appState: appState), .replace)
+            } else {
+                shellChanged(shell?.push(path, appState: appState), .push)
+            }
+            return
         }
+        let routes = [OrcaRoute(path)]
         if replace {
             pendingType = .replace
             root = routes[0]
@@ -137,9 +210,59 @@ public final class OrcaRouter: ObservableObject {
     }
 
     public func goBack() {
+        if shell != nil {
+            shellChanged(shell?.pop(), .pop)
+            return
+        }
         guard !stack.isEmpty else { return }
         pendingType = .pop
         stack.removeLast()
+    }
+
+    /// A tap on the tab bar: another tab shows its stack as it was left (its
+    /// first page on its first visit), the tab on screen pops to its root.
+    /// What lies over the shell is dropped. Nothing without a shell or for
+    /// an index out of range.
+    public func selectTab(_ index: Int) {
+        guard shell != nil else { return }
+        shellChanged(shell?.selectTab(index, appState: appState), .replace)
+    }
+
+    /// The `switchTab` action: go to the tab's first page. Nothing for an
+    /// unknown id.
+    public func switchTab(_ tabId: String) {
+        guard shell != nil else { return }
+        shellChanged(shell?.switchTab(tabId, appState: appState), .replace)
+    }
+
+    /// The path of tab `index`'s own `NavigationStack`, as SwiftUI writes it
+    /// after a back swipe. The path is the tab's pages above its root
+    /// (`tabStacks[index].dropFirst()`), then `overRoutes` for the tab on
+    /// screen. A shorter path pops; anything else, and any write for a tab
+    /// that is not on screen, changes nothing.
+    public func setTabPath(_ index: Int, _ routes: [OrcaRoute]) {
+        guard shell != nil, index == currentTab else { return }
+        let current = stack
+        if routes.count < current.count, Array(current.prefix(routes.count)) == routes {
+            for _ in routes.count..<current.count { _ = shell?.pop() }
+        }
+        shellChanged(nil, .pop)
+    }
+
+    /// Open the nearest drawer: the shell drawer when a tab's page is on
+    /// screen and the config has one; else ask the page on top to open its
+    /// own (`pageDrawerRequest`).
+    public func openDrawer() {
+        if hasDrawer, hasShell, overRoutes.isEmpty {
+            isDrawerOpen = true
+        } else {
+            pageDrawerRequest = top.id
+        }
+    }
+
+    /// Close the shell drawer.
+    public func closeDrawer() {
+        if isDrawerOpen { isDrawerOpen = false }
     }
 
     /// Write one app state key from the host. See `setAppState(_:)`.
@@ -151,7 +274,14 @@ public final class OrcaRouter: ObservableObject {
     /// so does the store of every page loaded so far, so widgets watching a
     /// key redraw. A page loaded later starts from the new scope.
     public func setAppState(_ values: [String: JSONValue]) {
+        let tabIndex = appState["_tabIndex"]
         appState.merge(values) { _, new in new }
+        shareAppState()
+        tabIndexWritten(was: tabIndex)
+    }
+
+    /// Give every loaded page the shared scope.
+    private func shareAppState() {
         let scope = appState
         for loader in loaders.values {
             guard case .loaded(let model) = loader.phase, model.store.state.app != scope else { continue }
@@ -161,23 +291,103 @@ public final class OrcaRouter: ObservableObject {
         }
     }
 
-    /// The routes of a resolution, bottom to top: its page chain, of which
-    /// only the top carries the location's query, title and transition; or
-    /// one "not found" route.
-    private static func routes(_ resolution: RouteResolution) -> [OrcaRoute] {
-        guard resolution.kind == .page, let top = resolution.stack.last else {
-            let path = resolution.location.split(
-                separator: "?", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
-            return [OrcaRoute(String(path), location: resolution.location, isNotFound: true)]
+    // MARK: - The shell's stacks as routes
+
+    /// The route of a shell entry: only the top of a page chain carries the
+    /// location's query, title and transition; an entry of no route is "not
+    /// found", its path the location without the query. `id` is the route
+    /// the entry already has, nil for a new one.
+    private static func route(_ entry: TabShellEntry, id: UUID?) -> OrcaRoute {
+        let isNotFound = entry.resolution.kind != .page
+        var path = Substring(entry.pagePath)
+        if isNotFound {
+            path = entry.resolution.location.prefix { $0 != "?" }
+            while path.hasPrefix("/") { path = path.dropFirst() }
         }
-        return resolution.stack.dropLast().map { OrcaRoute($0) } + [
-            OrcaRoute(top, location: resolution.location, scaffoldTitle: resolution.scaffoldTitle,
-                      transition: resolution.transition)
-        ]
+        return OrcaRoute(id: id ?? UUID(), String(path), location: entry.location,
+                         scaffoldTitle: entry.isTop ? entry.resolution.scaffoldTitle : nil,
+                         isNotFound: isNotFound,
+                         transition: entry.isTop ? entry.resolution.transition : nil)
     }
 
-    private static func slashed(_ location: String) -> String {
-        location.hasPrefix("/") ? location : "/" + location
+    /// The same routes showing the same locations.
+    private static func same(_ a: [OrcaRoute], _ b: [OrcaRoute]) -> Bool {
+        a == b && a.map(\.location) == b.map(\.location)
+    }
+
+    /// Set the published stacks from `shell`: one route per entry, the same
+    /// route (its id, so its loader) for as long as the entry lives. Loaders
+    /// of entries that left every stack go, and a page drawer request with
+    /// its route.
+    private func publishStacks() {
+        guard let shell else { return }
+        var next: [Int: (route: OrcaRoute, entry: TabShellEntry)] = [:]
+        let known = bound
+        func route(_ entry: TabShellEntry) -> OrcaRoute {
+            let was = known[entry.id]
+            // A route stays as it is while its entry is the same.
+            let route = was?.entry == entry ? was!.route : Self.route(entry, id: was?.route.id)
+            next[entry.id] = (route, entry)
+            return route
+        }
+        let tabs = shell.tabStacks.map { $0.map(route) }
+        let over = shell.over.map(route)
+        bound = next
+        let live = Set(next.values.map(\.route.id))
+        loaders = loaders.filter { live.contains($0.key) }
+        if let asked = pageDrawerRequest, !live.contains(asked) { pageDrawerRequest = nil }
+
+        let visible = (shell.currentTab.map { tabs[$0] } ?? []) + over
+        isSyncing = true
+        defer { isSyncing = false }
+        if currentTab != shell.currentTab { currentTab = shell.currentTab }
+        if tabStacks.count != tabs.count || !zip(tabStacks, tabs).allSatisfy(Self.same) { tabStacks = tabs }
+        if !Self.same(overRoutes, over) { overRoutes = over }
+        guard let bottom = visible.first else { return }
+        if !Self.same([root], [bottom]) { root = bottom }
+        let above = Array(visible.dropFirst())
+        if !Self.same(stack, above) { stack = above }
+    }
+
+    /// `shell` did an operation: publish its stacks, write the `_tabIndex`
+    /// it asks for (every loaded page sees it; coming back through
+    /// `tabIndexWritten` it is the current index, so it stops there), hand
+    /// the page now on top the latest app scope, and report the location on
+    /// top when it changed (which also closes the shell drawer).
+    private func shellChanged(_ change: TabShellChange?, _ type: RouteChangeType) {
+        publishStacks()
+        if let index = change?.tabIndexWrite { setAppState("_tabIndex", .int(index)) }
+        handTopTheAppState()
+        report(type)
+    }
+
+    /// App state `_tabIndex` may have been written, by a page or the host:
+    /// another tab's index shows that tab. Our own write comes back with the
+    /// current index, which changes nothing.
+    private func tabIndexWritten(was previous: JSONValue?) {
+        let value = appState["_tabIndex"]
+        guard shell != nil, value != previous else { return }
+        guard case .int(let index)? = value, index != currentTab else { return }
+        shellChanged(shell?.tabIndexChanged(value, appState: appState), .replace)
+    }
+
+    /// The visible path was written from outside (a `NavigationStack`
+    /// binding after a back swipe, or the host): pop down to the routes the
+    /// old and the new path share, then push each route added by its
+    /// location; its entry's route is the route given. A `pop` event when
+    /// the path got shorter, else a `push`.
+    private func pathWritten(from old: [OrcaRoute]) {
+        let written = stack
+        var kept = 0
+        while kept < written.count, kept < old.count, written[kept] == old[kept] { kept += 1 }
+        for _ in kept..<old.count { _ = shell?.pop() }
+        for route in written.dropFirst(kept) {
+            let before = shell?.visible.count
+            _ = shell?.push(route.location, appState: appState)
+            guard let entry = shell?.visible.last, shell?.visible.count != before else { continue }
+            bound[entry.id] = (route, entry)
+        }
+        shellChanged(nil, written.count < old.count ? .pop : .push)
     }
 
     /// Wire a page that just loaded: its commits keep the shared app scope,
@@ -197,7 +407,12 @@ public final class OrcaRouter: ObservableObject {
             state.app = scope
             model.store.commit(state)
         }
-        model.store.onCommit = { [weak self] state in self?.appState = state.app }
+        model.store.onCommit = { [weak self] state in
+            guard let self else { return }
+            let tabIndex = self.appState["_tabIndex"]
+            self.appState = state.app
+            self.tabIndexWritten(was: tabIndex)
+        }
         model.onEffect = { [weak self] effect in self?.onEffect?(effect) }
         model.effectHandler = { [weak self] effect in
             guard let self, !self.perform(effect) else { return }
@@ -206,24 +421,37 @@ public final class OrcaRouter: ObservableObject {
     }
 
     /// Drop loaders of routes that left the stack (a back swipe changes the
-    /// path directly), hand the page now on top the latest app scope, and
-    /// report the location on top when it changed.
+    /// path directly) and a page drawer request with its route, hand the
+    /// page now on top the latest app scope, and report the location on top
+    /// when it changed.
     private func routesChanged(from oldCount: Int) {
         let live = Set(stack.map(\.id) + [root.id])
         loaders = loaders.filter { live.contains($0.key) }
+        if let asked = pageDrawerRequest, !live.contains(asked) { pageDrawerRequest = nil }
+        handTopTheAppState()
+        // A change that `navigate` and `goBack` did not start came through
+        // the `NavigationStack` path: a back swipe when the stack shrank.
+        let type = pendingType ?? (stack.count < oldCount ? .pop : .push)
+        pendingType = nil
+        report(type)
+    }
+
+    private func handTopTheAppState() {
         if case .loaded(let model)? = loaders[top.id]?.phase, model.store.state.app != appState {
             var state = model.store.state
             state.app = appState
             model.store.commit(state)
         }
-        // A change that `navigate` and `goBack` did not start came through
-        // the `NavigationStack` path: a back swipe when the stack shrank.
-        let type = pendingType ?? (stack.count < oldCount ? .pop : .push)
-        pendingType = nil
+    }
+
+    /// Report the location on top when it is another; the shell drawer
+    /// closes with it.
+    private func report(_ type: RouteChangeType) {
         let location = top.location
         guard location != lastLocation else { return }
         let previous = lastLocation
         lastLocation = location
+        closeDrawer()
         onRouteChanged?(RouteChangeEvent(location: location, previousLocation: previous, type: type))
     }
 
@@ -236,6 +464,10 @@ public final class OrcaRouter: ObservableObject {
                      replace: effect.payload["replace"]?.boolValue ?? false)
         case "goBack":
             goBack()
+        case "switchTab":
+            switchTab(effect.payload["tabId"]?.stringValue ?? "")
+        case "openDrawer":
+            openDrawer()
         default:
             return false
         }
