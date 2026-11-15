@@ -1,0 +1,591 @@
+{
+  "name": "tab-index-state",
+  "description": "The shell writes the current tab's index into app state as `_tabIndex`: on boot, over whatever `initialAppState` seeds, and after every change of tab, however it came about. Without a shell (after a `go` to a route outside the tabs) the last value stays. Writing an int that is another tab's index switches to that tab and restores its stack, with a page request only on the tab's first visit, and drops a route pushed over the tabs. Writing the current index, or a value that is not an int, changes nothing on screen; the value written stays in app state until the next change of tab. `push` never changes the tab: a pushed location that belongs to another tab is put on top of the current tab's stack.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "tabs": [
+      {
+        "id": "home",
+        "label": "Home",
+        "icon": "circle",
+        "initialRoute": "/home"
+      },
+      {
+        "id": "search",
+        "label": "Search",
+        "icon": "circle",
+        "initialRoute": "/search"
+      },
+      {
+        "id": "more",
+        "label": "More",
+        "icon": "circle",
+        "initialRoute": "/more"
+      }
+    ],
+    "initialAppState": {
+      "_tabIndex": 2,
+      "user": "ann"
+    },
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "home/product/:id",
+                "requiredAppState": []
+              }
+            ]
+          },
+          {
+            "path": "search",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "search/results",
+                "requiredAppState": []
+              }
+            ]
+          },
+          {
+            "path": "more",
+            "requiredAppState": []
+          },
+          {
+            "path": "settings",
+            "requiredAppState": []
+          }
+        ]
+      }
+    ]
+  },
+  "sessions": [
+    {
+      "name": "the shell writes the index",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0,
+            "user": "ann"
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "tapTab",
+          "index": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/more",
+          "expected": {
+            "location": "/more",
+            "tabIndex": 2,
+            "appState": {
+              "_tabIndex": 2,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "more"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "push",
+          "location": "/settings",
+          "expected": {
+            "location": "/settings",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "settings"
+            ]
+          }
+        },
+        {
+          "op": "back",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "go",
+          "location": "/settings",
+          "expected": {
+            "location": "/settings",
+            "tabIndex": null,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "settings"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/search",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "setting the index switches the tab",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0,
+            "user": "ann"
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": 0,
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": 0,
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": 2,
+          "expected": {
+            "location": "/more",
+            "tabIndex": 2,
+            "appState": {
+              "_tabIndex": 2,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "more"
+            ]
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "values that are not another tab's index",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0,
+            "user": "ann"
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "tapTab",
+          "index": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": "0",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": "0",
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": 1.5,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1.5,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": null,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": null,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": true,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": true,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "user",
+          "value": "bob",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": true,
+              "user": "bob"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "bob"
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "setting the index under a pushed route",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0,
+            "user": "ann"
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "push",
+          "location": "/settings",
+          "expected": {
+            "location": "/settings",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "settings"
+            ]
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": 1,
+          "expected": {
+            "location": "/settings",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "setAppState",
+          "key": "_tabIndex",
+          "value": 0,
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "push of another tab's route stays in the current tab",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0,
+            "user": "ann"
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "push",
+          "location": "/search",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1,
+              "user": "ann"
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "back",
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0,
+              "user": "ann"
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    }
+  ]
+}

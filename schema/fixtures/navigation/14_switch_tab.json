@@ -1,0 +1,427 @@
+{
+  "name": "switch-tab",
+  "description": "The `switchTab {tabId}` action is a `go` to the tab's initialRoute: it lands on the tab's root, whatever the tab's stack was, and drops a route pushed over the tabs, also when the tab is the current one. The root is requested only when the tab was never visited or the shell was gone. `_tabIndex` follows. An unknown or empty tabId changes nothing.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "tabs": [
+      {
+        "id": "home",
+        "label": "Home",
+        "icon": "circle",
+        "initialRoute": "/home"
+      },
+      {
+        "id": "search",
+        "label": "Search",
+        "icon": "circle",
+        "initialRoute": "/search"
+      },
+      {
+        "id": "more",
+        "label": "More",
+        "icon": "circle",
+        "initialRoute": "/more"
+      }
+    ],
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "home/product/:id",
+                "requiredAppState": []
+              }
+            ]
+          },
+          {
+            "path": "search",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "search/results",
+                "requiredAppState": []
+              }
+            ]
+          },
+          {
+            "path": "more",
+            "requiredAppState": []
+          },
+          {
+            "path": "settings",
+            "requiredAppState": []
+          }
+        ]
+      }
+    ]
+  },
+  "sessions": [
+    {
+      "name": "to another tab",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "switchTab",
+          "tabId": "search",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "switchTab",
+          "tabId": "more",
+          "expected": {
+            "location": "/more",
+            "tabIndex": 2,
+            "appState": {
+              "_tabIndex": 2
+            },
+            "pageRequests": [
+              "more"
+            ]
+          }
+        },
+        {
+          "op": "switchTab",
+          "tabId": "home",
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "to a tab with a deeper stack",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "switchTab",
+          "tabId": "home",
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "switchTab",
+          "tabId": "search",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "push",
+          "location": "/search/results",
+          "expected": {
+            "location": "/search/results",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search/results"
+            ]
+          }
+        },
+        {
+          "op": "switchTab",
+          "tabId": "search",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "with a route pushed over the tabs",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "push",
+          "location": "/settings",
+          "expected": {
+            "location": "/settings",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "settings"
+            ]
+          }
+        },
+        {
+          "op": "switchTab",
+          "tabId": "search",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "push",
+          "location": "/settings",
+          "expected": {
+            "location": "/settings",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "settings"
+            ]
+          }
+        },
+        {
+          "op": "switchTab",
+          "tabId": "home",
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "an unknown tab id",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "switchTab",
+          "tabId": "nope",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "switchTab",
+          "tabId": "",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "from a route outside the tabs",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "go",
+          "location": "/settings",
+          "expected": {
+            "location": "/settings",
+            "tabIndex": null,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "settings"
+            ]
+          }
+        },
+        {
+          "op": "switchTab",
+          "tabId": "more",
+          "expected": {
+            "location": "/more",
+            "tabIndex": 2,
+            "appState": {
+              "_tabIndex": 2
+            },
+            "pageRequests": [
+              "more"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

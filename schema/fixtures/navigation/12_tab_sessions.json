@@ -1,0 +1,514 @@
+{
+  "name": "tab-sessions",
+  "description": "Each tab keeps its own page stack while the tab shell lives. A tab's page is requested on its first visit and never again: switching away and back shows the last location of the tab and requests nothing. A tap on the selected tab pops it to its root, also without a request. Back pops inside the current tab. A route outside the tabs pushed over them keeps the shell and its stacks (tabIndex stays, the bar is covered and cannot be tapped); a `go` to such a route drops the shell, so every tab starts again and is requested again.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "tabs": [
+      {
+        "id": "home",
+        "label": "Home",
+        "icon": "circle",
+        "initialRoute": "/home"
+      },
+      {
+        "id": "search",
+        "label": "Search",
+        "icon": "circle",
+        "initialRoute": "/search"
+      },
+      {
+        "id": "more",
+        "label": "More",
+        "icon": "circle",
+        "initialRoute": "/more"
+      }
+    ],
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "home/product/:id",
+                "requiredAppState": []
+              }
+            ]
+          },
+          {
+            "path": "search",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "search/results",
+                "requiredAppState": []
+              }
+            ]
+          },
+          {
+            "path": "more",
+            "requiredAppState": []
+          },
+          {
+            "path": "settings",
+            "requiredAppState": []
+          }
+        ]
+      }
+    ]
+  },
+  "sessions": [
+    {
+      "name": "a tab is fetched on its first visit and its stack is kept",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 2,
+          "expected": {
+            "location": "/more",
+            "tabIndex": 2,
+            "appState": {
+              "_tabIndex": 2
+            },
+            "pageRequests": [
+              "more"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "back pops inside the tab",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "push",
+          "location": "/home/product/8",
+          "expected": {
+            "location": "/home/product/8",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home/product/8"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "push",
+          "location": "/search/results",
+          "expected": {
+            "location": "/search/results",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search/results"
+            ]
+          }
+        },
+        {
+          "op": "back",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home/product/8",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "back",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "back",
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "a route outside the tabs pushed over them",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "push",
+          "location": "/settings",
+          "expected": {
+            "location": "/settings",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "settings"
+            ]
+          }
+        },
+        {
+          "op": "back",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "push",
+          "location": "/settings",
+          "expected": {
+            "location": "/settings",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "settings"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/search",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "go to a route outside the tabs drops every tab stack",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 1,
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/settings",
+          "expected": {
+            "location": "/settings",
+            "tabIndex": null,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "settings"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/search",
+          "expected": {
+            "location": "/search",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "tapTab",
+          "index": 0,
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/settings",
+          "expected": {
+            "location": "/settings",
+            "tabIndex": null,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "settings"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/home",
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
