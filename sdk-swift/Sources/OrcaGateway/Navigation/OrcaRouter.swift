@@ -126,6 +126,12 @@ public final class OrcaRouter: ObservableObject {
     /// The same location again gives no event. The boot event (no previous
     /// location, `push`) goes to the callback given to `init`.
     public var onRouteChanged: ((RouteChangeEvent) -> Void)?
+    /// Called once per deep link (`handleDeeplink`, or the link the router
+    /// booted at), after the navigation and after `onRouteChanged` fired for
+    /// it (Flutter `OrcaApp.onDeeplink`); also for a link to the location
+    /// already on screen, which navigates nothing. Links navigate with or
+    /// without it.
+    public var onDeeplink: ((DeeplinkEvent) -> Void)?
     /// The routes of the config the router was made with; nil without one.
     public let table: RouteTable?
     /// OrcaApp's plugins: every page this router loads is built by it.
@@ -143,10 +149,20 @@ public final class OrcaRouter: ObservableObject {
     /// The location last reported, and how the change under way began.
     private var lastLocation: String
     private var pendingType: RouteChangeType?
+    /// The `link` the router was made with, until another link comes or the
+    /// location on top changes: the system may deliver that same URL once
+    /// more (`OrcaApp(router:)`'s `.onOpenURL`), and that repeat is dropped.
+    var bootLink: URL?
 
     /// Every path is a page, starting at `path`.
     /// `system` defaults to the device's own handlers (`SystemActions.live`).
-    public init(client: OrcaClient, path: String = "home", system: SystemActions? = nil) {
+    ///
+    /// With a `link` (the deep link that opened the app) the router starts at
+    /// the link's location instead of `path`, which is never requested, and
+    /// `onDeeplink` is told with `isColdStart` set. No route event: without
+    /// a config there is none for the boot.
+    public init(client: OrcaClient, path: String = "home", system: SystemActions? = nil,
+                onDeeplink: ((DeeplinkEvent) -> Void)? = nil, link: URL? = nil) {
         self.client = client
         self.system = system ?? .live
         self.table = nil
@@ -155,13 +171,24 @@ public final class OrcaRouter: ObservableObject {
         let root = OrcaRoute(path)
         self.root = root
         self.lastLocation = root.location
+        self.onDeeplink = onDeeplink
+        if let link {
+            bootLink = link
+            start(at: link)
+        }
     }
 
     /// Boot from the server's config (`OrcaClient.fetchConfig`), as Flutter's
     /// `OrcaApp._initRouter`: seed `initialAppState`, then show
     /// `initialRoute` resolved against it, the page chain as root + stack.
+    ///
+    /// With a `link` (the deep link that opened the app) the router boots at
+    /// the link's location instead of `initialRoute`: the same seeding, the
+    /// link's redirect rule applied, and `onDeeplink` told with
+    /// `isColdStart` set, after the boot's route event.
     public init(client: OrcaClient, config: NavConfig, system: SystemActions? = nil,
-                onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) {
+                onRouteChanged: ((RouteChangeEvent) -> Void)? = nil,
+                onDeeplink: ((DeeplinkEvent) -> Void)? = nil, link: URL? = nil) {
         self.client = client
         self.system = system ?? .live
         let table = RouteTable(config)
@@ -171,18 +198,25 @@ public final class OrcaRouter: ObservableObject {
             && !(config.drawerItems.isEmpty && config.drawerComponents.isEmpty)
         self.appState = config.initialAppState
         self.onRouteChanged = onRouteChanged
+        self.onDeeplink = onDeeplink
         var shell = TabShell(table: table)
-        let change = shell.go(config.initialRoute, appState: config.initialAppState)
+        // On a fresh shell a link is the boot: a `go` to its location.
+        let opened = link.map { shell.open(link: DeepLink.location(of: $0), appState: config.initialAppState) }
+        let change = opened?.change ?? shell.go(config.initialRoute, appState: config.initialAppState)
         // `go` always leaves a page on screen, if only "not found".
         let first = Self.route(shell.visible[0], id: nil)
         self.root = first
         self.lastLocation = shell.location
         self.bound = [shell.visible[0].id: (first, shell.visible[0])]
         self.shell = shell
+        self.bootLink = link
         // `_tabIndex` is in app state before the first page is requested.
         if let index = change.tabIndexWrite { appState["_tabIndex"] = .int(index) }
         publishStacks()
         onRouteChanged?(RouteChangeEvent(location: lastLocation, previousLocation: nil, type: .push))
+        if let link, let opened {
+            onDeeplink?(DeepLink.event(link: link, resolution: opened.resolution, coldStart: true))
+        }
     }
 
     /// The loader of a route, made the first time it is asked for.
@@ -216,6 +250,60 @@ public final class OrcaRouter: ObservableObject {
             pendingType = .push
             stack.append(routes[0])
         }
+    }
+
+    /// Open a deep link (a URL scheme or universal link the platform handed
+    /// to the app): go to its location, `DeepLink.location(of:)`, the URL's
+    /// path and query. A `go` (`navigate` with `replace`), so the stack and
+    /// the tab come from the config and the route's redirect rule applies;
+    /// a link that ends on the location already on screen navigates and
+    /// requests nothing. Then `onDeeplink` is told, once, after
+    /// `onRouteChanged`. `OrcaApp` calls this for the links it receives;
+    /// call it for links the host receives elsewhere. `isColdStart`: the
+    /// link is what opened the app. A router made with a `link` drops one
+    /// repeat of that exact URL while it is still where it booted: the
+    /// system delivering the launch URL again is not a second link.
+    public func handleDeeplink(_ url: URL, isColdStart: Bool = false) {
+        let booted = bootLink
+        bootLink = nil
+        if url == booted { return }
+        let location = DeepLink.location(of: url)
+        let resolution: RouteResolution
+        if let opened = shell?.open(link: location, appState: appState) {
+            resolution = opened.resolution
+            shellChanged(opened.change, .replace)
+        } else {
+            // No config: every path is a page, and the event's fields are
+            // those of a location no rule can redirect.
+            resolution = Self.pathResolution(location, appState)
+            if location != top.location {
+                pendingType = .replace
+                root = OrcaRoute(String(location.prefix { $0 != "?" }), location: location)
+                stack = []
+            }
+        }
+        onDeeplink?(DeepLink.event(link: url, resolution: resolution, coldStart: isColdStart))
+    }
+
+    /// A link's resolution without a config: its own location, no rule.
+    private static func pathResolution(_ location: String, _ appState: [String: JSONValue]) -> RouteResolution {
+        RouteTable(NavConfig(initialRoute: "/")).resolve(location, appState: appState)
+    }
+
+    /// Without a config, before any page showed: stand on the link that
+    /// opened the app as if made there. The location is not a change, so no
+    /// route event, and the path the router was made with is never
+    /// requested; then `onDeeplink` is told, `isColdStart` set.
+    func start(at link: URL) {
+        guard shell == nil else { return handleDeeplink(link, isColdStart: true) }
+        let location = DeepLink.location(of: link)
+        if location != top.location {
+            lastLocation = location
+            root = OrcaRoute(String(location.prefix { $0 != "?" }), location: location)
+            if !stack.isEmpty { stack = [] }
+        }
+        onDeeplink?(DeepLink.event(link: link, resolution: Self.pathResolution(location, appState),
+                                   coldStart: true))
     }
 
     public func goBack() {
@@ -460,6 +548,7 @@ public final class OrcaRouter: ObservableObject {
         guard location != lastLocation else { return }
         let previous = lastLocation
         lastLocation = location
+        bootLink = nil
         closeDrawer()
         onRouteChanged?(RouteChangeEvent(location: location, previousLocation: previous, type: type))
     }

@@ -126,39 +126,57 @@ public final class OrcaAppBoot: ObservableObject {
     public let client: OrcaClient
     private let system: SystemActions?
     private let onRouteChanged: ((RouteChangeEvent) -> Void)?
+    private let onDeeplink: ((DeeplinkEvent) -> Void)?
     /// OrcaApp's plugins: every router made here is attached to them.
     private let plugins: OrcaPluginHost?
     private var started = false
+    /// A deep link that came while there was no router yet (the version
+    /// check, the config fetch, a failed boot): the router boots at it.
+    private var pendingLink: URL?
+    /// No route has appeared and no link was applied yet: the next link the
+    /// view receives is the one that opened the app.
+    private var awaitsFirstRoute = true
+    /// The router is the one made here from the host's `path`.
+    private var madeAtPath = false
 
     /// `path` defaults to nil, the boot from the config: call
     /// `startIfNeeded()`. A path opens that page and fetches no config.
+    /// `onDeeplink` is told of every deep link (`handleDeeplink(_:)`).
     public convenience init(client: OrcaClient, path: String? = nil, system: SystemActions? = nil,
-                            onRouteChanged: ((RouteChangeEvent) -> Void)? = nil) {
-        self.init(client: client, path: path, system: system, onRouteChanged: onRouteChanged, plugins: nil)
+                            onRouteChanged: ((RouteChangeEvent) -> Void)? = nil,
+                            onDeeplink: ((DeeplinkEvent) -> Void)? = nil) {
+        self.init(client: client, path: path, system: system, onRouteChanged: onRouteChanged,
+                  onDeeplink: onDeeplink, plugins: nil)
     }
 
     /// With OrcaApp's plugins: their names are advertised on `client` before
     /// the config is asked for, and the router is attached to them.
     init(client: OrcaClient, path: String?, system: SystemActions?,
-         onRouteChanged: ((RouteChangeEvent) -> Void)?, plugins: OrcaPluginHost?) {
+         onRouteChanged: ((RouteChangeEvent) -> Void)?, onDeeplink: ((DeeplinkEvent) -> Void)? = nil,
+         plugins: OrcaPluginHost?) {
         self.client = client
         self.system = system
         self.onRouteChanged = onRouteChanged
+        self.onDeeplink = onDeeplink
         self.plugins = plugins
         plugins?.advertise(on: client)
         if let path {
             let router = OrcaRouter(client: client, path: path, system: system)
             router.onRouteChanged = onRouteChanged
+            router.onDeeplink = onDeeplink
+            madeAtPath = true
             started = true
             phase = .ready(plugins?.attach(router) ?? router)
         }
     }
 
-    /// A router the host made: ready at once.
+    /// A router the host made: ready at once. Its `onDeeplink` is the
+    /// host's to set.
     public init(router: OrcaRouter) {
         client = router.client
         system = nil
         onRouteChanged = nil
+        onDeeplink = nil
         plugins = nil
         started = true
         phase = .ready(router)
@@ -179,13 +197,50 @@ public final class OrcaAppBoot: ObservableObject {
         await fetch()
     }
 
+    /// A deep link reached the app. With a router it goes there, as a link
+    /// to a running app (`OrcaRouter.handleDeeplink`, `isColdStart` false);
+    /// without one yet it is held, the last one winning, and the router
+    /// boots at it instead of the config's `initialRoute`, `isColdStart`
+    /// set.
+    public func handleDeeplink(_ url: URL) {
+        guard case .ready(let router) = phase else {
+            pendingLink = url
+            return
+        }
+        awaitsFirstRoute = false
+        router.handleDeeplink(url)
+    }
+
+    /// A link from `OrcaApp`'s own `.onOpenURL` or
+    /// `.onContinueUserActivity`. As `handleDeeplink(_:)`, but iOS may hand
+    /// over the launch URL when the router already exists and nothing
+    /// showed yet: that one link is the cold start. The router made from the
+    /// host's `path` then starts at it (no route event, the path never
+    /// requested); a config's or the host's router goes to it.
+    func receive(_ url: URL) {
+        guard case .ready(let router) = phase, awaitsFirstRoute else { return handleDeeplink(url) }
+        awaitsFirstRoute = false
+        if madeAtPath { router.start(at: url) } else { router.handleDeeplink(url, isColdStart: true) }
+    }
+
+    /// The router's first route is on screen: a link from now on is warm.
+    func firstRouteAppeared() {
+        awaitsFirstRoute = false
+    }
+
     private func fetch() async {
         var client = self.client
         if client.device == DeviceInfo() { client.device = .current() }
         do {
             let config = try await client.fetchConfig()
+            // A link held until now is what the app opens at.
+            let link = pendingLink
+            pendingLink = nil
+            if link != nil { awaitsFirstRoute = false }
             let router = OrcaRouter(client: self.client, config: config, system: system,
-                                    onRouteChanged: onRouteChanged)
+                                    onRouteChanged: onRouteChanged, onDeeplink: onDeeplink, link: link)
+            // The held link was the system's delivery: no repeat will come.
+            router.bootLink = nil
             phase = .ready(plugins?.attach(router) ?? router)
         } catch OrcaClientError.http(let status, let body) {
             phase = .failed("HTTP \(status): \(body.prefix(200))")
@@ -229,6 +284,16 @@ public struct OrcaApp: View {
     ///   - enableSessionTracking: send a session start when the app comes to
     ///     the foreground and an end when it goes to the background.
     ///   - onRouteChanged: told of every route change, the first route included.
+    ///   - onDeeplink: told once per deep link, after the navigation and
+    ///     after `onRouteChanged` (Dart `OrcaApp.onDeeplink`). The view
+    ///     receives URL scheme and universal links itself (`.onOpenURL`,
+    ///     `.onContinueUserActivity`) and goes to the link's path and query,
+    ///     with or without this callback. A link that opens the app is where
+    ///     the app starts, in place of the config's initial route. With a
+    ///     `path` and no version check the first page shows at once: a launch
+    ///     URL iOS delivers after that is a link to a running app
+    ///     (`isColdStart` false, the `path` page already requested). To have
+    ///     it exact, make the router with `link:` and use `init(router:)`.
     ///   - plugins: widgets, actions and triggers bundled per plugin, merged
     ///     once with `customActions` and `widgets` before the first request
     ///     (Dart `OrcaApp.plugins`, sdk/lib/src/widgets/orca_app.dart). Their
@@ -243,12 +308,13 @@ public struct OrcaApp: View {
     public init(client: OrcaClient, path: String? = nil, system: SystemActions? = nil,
                 enableOffline: Bool = false, enableSessionTracking: Bool = false,
                 onRouteChanged: ((RouteChangeEvent) -> Void)? = nil,
+                onDeeplink: ((DeeplinkEvent) -> Void)? = nil,
                 plugins: [OrcaPlugin] = [], customActions: [String: OrcaActionHandler] = [:],
                 widgets: WidgetBuilders = WidgetBuilders()) {
         let host = OrcaPluginHost(plugins: plugins, customActions: customActions, widgets: widgets)
         _boot = StateObject(wrappedValue: OrcaAppBoot(
             client: client.identified(by: UserDefaultsKeyValueStore()), path: path, system: system,
-            onRouteChanged: onRouteChanged, plugins: host))
+            onRouteChanged: onRouteChanged, onDeeplink: onDeeplink, plugins: host))
         _gate = StateObject(wrappedValue: OrcaBootModel(
             enableOffline: enableOffline, enableSessionTracking: enableSessionTracking, failure: host.failure))
     }
@@ -257,7 +323,12 @@ public struct OrcaApp: View {
     /// id, set `client.deviceId = DeviceIdentity.resolve(UserDefaultsKeyValueStore())`.
     /// The options are those of `init(client:)`, `plugins`, `customActions`
     /// and `widgets` included (Dart `OrcaApp`, sdk/lib/src/widgets/orca_app.dart):
-    /// a conflict shows the error view.
+    /// a conflict shows the error view. Deep links go to the router as for
+    /// `init(client:)`; set `router.onDeeplink` to be told of them. The
+    /// router shows its first page at once, so a launch URL iOS delivers
+    /// after that is a link to a running app (`isColdStart` false, the first
+    /// page already requested); a router made with `link:` starts at the
+    /// link, and drops the system's repeat of it.
     public init(router: @autoclosure @escaping () -> OrcaRouter,
                 enableOffline: Bool = false, enableSessionTracking: Bool = false,
                 plugins: [OrcaPlugin] = [], customActions: [String: OrcaActionHandler] = [:],
@@ -276,12 +347,19 @@ public struct OrcaApp: View {
             case .loading:
                 ProgressView().task { await boot.startIfNeeded() }
             case .ready(let router):
-                RouterRoot(router: router)
+                RouterRoot(router: router).onAppear { boot.firstRouteAppeared() }
             case .failed(let message):
                 LoadError(title: "Could not start the app", message: message) {
                     Task { await boot.retry() }
                 }
             }
+        }
+        // Deep links: a URL scheme link, and a universal link. Held by the
+        // boot while there is no router (also under the version check),
+        // else a navigation of the router.
+        .onOpenURL { boot.receive($0) }
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            if let url = activity.webpageURL { boot.receive(url) }
         }
     }
 }
@@ -341,7 +419,8 @@ extension OrcaRoute {
 }
 
 /// One route: its page, or "Page not found" for a location no route matches
-/// (no loader is made for it, so nothing is fetched). `isStackRoot`: the first
+/// (no loader is made for it, so nothing is fetched), with Flutter's "Go to
+/// home page" button, a `go` to `/`. `isStackRoot`: the first
 /// page of its NavigationStack, where no back swipe takes the leading edge.
 @MainActor
 struct RoutePage: View {
@@ -349,12 +428,22 @@ struct RoutePage: View {
     let route: OrcaRoute
     var isStackRoot = false
 
+    static let homeButtonTitle = "Go to home page"
+
+    /// The not-found page's button (go_router's default error screen does
+    /// `go('/')`).
+    func goHome() {
+        router.navigate(to: "/", replace: true)
+    }
+
     var body: some View {
         if route.isNotFound {
             VStack(spacing: 12) {
                 Text("Page not found").font(.headline)
                 Text(route.location).font(.footnote).foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
+                Button(Self.homeButtonTitle, action: goHome)
+                    .accessibilityIdentifier("orca.notFound.home")
             }
             .padding(24)
             .accessibilityIdentifier("orca.notFound")
