@@ -162,7 +162,7 @@ final class ModelRoundTripTests: XCTestCase {
 
     func testB9_1_CS_EveryNavigationFixtureConfigDecodes() throws {
         let files = try Fixtures.navigation()
-        XCTAssertEqual(files.count, 14, "navigation fixtures 01-14")
+        XCTAssertEqual(files.count, 15, "navigation fixtures 01-15")
         var routes = 0
         for (name, fixture) in files {
             let json = fixture["config"]
