@@ -8,13 +8,25 @@ import XCTest
 /// the Dart executor. Each run seeds the state, runs the actions, and compares
 /// the state and the effects as JSON. A fixture with `serverResponses` talks
 /// to a stub of the `/action` route, as the Dart runner's stub client does.
+///
+/// Optional `handlers: [String]` (native parity step 16): before the actions
+/// run, a recording handler is registered under each name; it appends
+/// `{"kind": "handler", "name": <the name it was registered under>, "action":
+/// <the raw action it received>}` to the effects, in order with the others.
 final class ActionFixtureTests: XCTestCase {
-    @MainActor func testAllFifteenActionFixturesPass() async throws {
+    /// The effects of one run as JSON, SDK effects and handler records alike.
+    @MainActor final class Effects {
+        var list: [JSONValue] = []
+        func append(_ effect: JSONValue) { list.append(effect) }
+    }
+
+    @MainActor func testAllActionFixturesPass() async throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 15)
+        XCTAssertEqual(files.count, 18)
         for (name, fx) in files {
             let actions = try (fx["actions"].arrayValue ?? []).map { try $0.decode(Action.self) }
-            XCTAssertTrue(actions.allSatisfy(ActionExecutor.implements), "\(name): every kind implemented")
+            let handlers = (fx["handlers"].arrayValue ?? []).compactMap(\.stringValue)
+            XCTAssertTrue(actions.allSatisfy { runs($0, Set(handlers)) }, "\(name): every kind implemented")
 
             let store = ElmStore(try fx["state"].decode(StoreState.self))
             var client: OrcaClient?
@@ -22,14 +34,33 @@ final class ActionFixtureTests: XCTestCase {
                 client = ActionStub.client(ActionStub(responses))
             }
             let executor = ActionExecutor(store: store, client: client)
-            var effects: [ActionEffect] = []
-            executor.onEffect = { effects.append($0) }
+            let effects = Effects()
+            executor.onEffect = { effects.append($0.json) }
+            for handler in handlers {
+                executor.registerHandler(handler) { action, _ in
+                    await effects.append(["kind": "handler", "name": .string(handler), "action": action])
+                }
+            }
 
             for action in actions {
                 try await executor.execute(action, eventData: fx["event"].objectValue)
             }
             assertJSONEqual(try jsonOf(store.state), fx["expected"]["state"], "\(name): state")
-            assertJSONEqual(.array(effects.map(\.json)), fx["expected"]["effects"], "\(name): effects")
+            assertJSONEqual(.array(effects.list), fx["expected"]["effects"], "\(name): effects")
+        }
+    }
+
+    /// `ActionExecutor.implements`, counting a kind the fixture registers a
+    /// handler for, and a `custom:` kind (a silent no-op without one, fixture
+    /// 46), as run.
+    private func runs(_ action: Action, _ handlers: Set<String>) -> Bool {
+        if action.kind.hasPrefix("custom:") || handlers.contains(action.kind) { return true }
+        switch action {
+        case .actionGroup(let group): return group.actions.allSatisfy { runs($0, handlers) }
+        case .lifecycle(let l): return runs(l.action, handlers)
+        case .conditionalAction(let c):
+            return c.branches.allSatisfy { runs($0.then, handlers) } && (c.else.map { runs($0, handlers) } ?? true)
+        default: return ActionExecutor.implements(action)
         }
     }
 
