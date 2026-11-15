@@ -123,6 +123,10 @@ internal class OrcaBoot(private val client: OrcaClient, enableOffline: Boolean, 
  * [enableSessionTracking], sessions are tracked here, around all four, with
  * [client]'s device id (the saved one when it has none) and an offline
  * queue in SharedPreferences. Swift twin `OrcaBootView`.
+ *
+ * The host's views replace the SDK's, as Flutter's `_buildSplash`,
+ * `_buildError` and `_buildForceUpdate` do: [splash] while checking,
+ * [error] with what [prepare] threw, [forceUpdate] for a force update.
  */
 @Composable
 internal fun OrcaBootView(
@@ -131,6 +135,9 @@ internal fun OrcaBootView(
     enableSessionTracking: Boolean,
     modifier: Modifier,
     prepare: () -> Unit = {},
+    splash: (@Composable () -> Unit)? = null,
+    error: (@Composable (Throwable) -> Unit)? = null,
+    forceUpdate: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -142,15 +149,27 @@ internal fun OrcaBootView(
         SessionTracking(client, deviceId, remember(store) { OfflineSessionStore(store) })
     }
     when (boot.phase) {
-        OrcaBoot.Phase.Checking -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+        OrcaBoot.Phase.Checking -> if (splash != null) {
+            HostView(modifier, splash)
+        } else {
+            Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         }
-        OrcaBoot.Phase.ForceUpdate -> ForceUpdateScreen(modifier)
+        OrcaBoot.Phase.ForceUpdate -> if (forceUpdate != null) HostView(modifier, forceUpdate) else ForceUpdateScreen(modifier)
         OrcaBoot.Phase.Failed -> boot.error?.let {
-            OrcaErrorView(OrcaErrorInfo.from(it).copy(message = boot.failure.orEmpty()), modifier)
+            if (error != null) {
+                HostView(modifier) { error(it) }
+            } else {
+                OrcaErrorView(OrcaErrorInfo.from(it).copy(message = boot.failure.orEmpty()), modifier)
+            }
         }
         OrcaBoot.Phase.Ready -> content()
     }
+}
+
+/** A host's boot view in OrcaApp's place: its [modifier], the whole screen, as the SDK's views fill it. */
+@Composable
+internal fun HostView(modifier: Modifier, view: @Composable () -> Unit) {
+    Box(modifier.fillMaxSize()) { view() }
 }
 
 /** Flutter's default force-update screen (`_buildForceUpdate` in sdk/lib/src/widgets/orca_app.dart): one centred line. */
