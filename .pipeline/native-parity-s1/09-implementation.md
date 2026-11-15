@@ -3,22 +3,22 @@
 ## Front page
 
 ### In one breath
-group 6 of 7 · tasks: 11 green, 0 blocked · cells: 20 of 26 green (recounted per SDK cell)
-S-button: Swift buttons keep the native iOS look; padding inside, elevation shadow, splash and
-highlight overlay and autofocus apply only when sent. Every Stack fit takes forced axes (Flutter).
-K-button: Kotlin ripple colours and autofocus; every Image at one dp per image pixel, repeat tiles.
-Group 7: K-field committed (de91c6d); S-media running. Android hand checks A1.9, A1.13 pass.
+group 7 of 7 · tasks: 14 green + the rebase, 0 blocked · cells: 26 of 26 green
+S-media: Swift Image fits as Flutter's BoxFit, repeat tiles; read-only TextField, its styles, dense.
+K-field: Kotlin TextField styles, dense, N-line height. The iPhone hand check found a doubled AppBar
+title: fixed, re-checked. Rebased on main (PR #30, #31): rotation retention covers the /config boot.
+All suites green on the rebased tree; rows A1.1-A1.13 ticked on both SDKs.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-4 auto-decided: Swift buttons stay native (your gate-03 call) not a Material face; Kotlin autofocus
-only outside touch mode; a loose Swift Stack fills a tight parent (Flutter); host theme still wins.
+3 auto-decided: the /config boot is kept through a rotation too (A1.13 needs both entry points);
+a kept router takes the shown activity's hooks (no leak); OrcaAppBoot hooks internal, API unchanged.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: finish group 7 (S-media), then the step's full run and iOS hand checks? (default: go)
+2. Next: stage 10, push and open the step 1 PR; you merge it. (default: go)
 
 ## Appendix
 
@@ -296,9 +296,70 @@ engine 739 pass 0 fail (no engine file changed) · Swift macOS `swift test` 84 U
 UI 98 + core 234, 0 failures, goldens unchanged · Kotlin `./gradlew build` successful (sdk 181, core 228; then sdk
 187 with K-field). Flutter: no file changed.
 
+### Group 7
+Commits: K-field de91c6d, S-media 2123abc, S-bar fix 0f56d7f (staged by path). Then the branch was rebased
+on origin/main (PR #30, #31) in a separate worktree (tip af409a0), then S-media and the S-bar fix moved
+on top (53952bc, 2efe73b) and the rebase rework landed as 3eb1511. Nothing pushed yet.
+
+#### Task K-field · Kotlin TextField styles, Box/Stack pins
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Input.kt` · `.../widgets/TextFieldTest.kt` ·
+`.../widgets/BoxTest.kt` · `.../widgets/StackTest.kt`
+Cases: A1.4 kt, A1.6 kt, A1.8 kt → green (6 tests: a1_4 border inset, a1_6 passthrough, a1_8 read-only focus and
+select with no typing, hint/helper/error styles, dense shorter, maxLines without minLines N lines tall; the two
+pins passed at once, as Kotlin already drew both; `./gradlew build` sdk 187, core 228, lint clean)
+Changed: hintStyle, helperStyle and errorStyle merged over the Material defaults; isDense takes 4dp off the top
+and bottom of the content padding (Flutter InputDecorator); maxLines N with no minLines is N lines tall.
+Review fit: pass · Review quality: pass
+Not done: word spacing and the hand-drawn decorations do not reach the TextField (noted, out of scope).
+
+#### Task S-media · Swift Image fits, TextField styles
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Media.swift` · `.../Widgets/Input.swift` ·
+`sdk-swift/Tests/OrcaGatewayTests/ImageTests.swift` (new) · `.../TextFieldTests.swift` (new)
+Cases: A1.7 sw, A1.8 sw → green (ImageTests 7, TextFieldTests; macOS `swift test` 92 UI + 234 core; iOS
+(DA7254F5) 110 + 234, TEST SUCCEEDED, 0 warnings)
+Changed: Image fits as Flutter's BoxFit (fitWidth, fitHeight, none, scaleDown never enlarges), no width/height →
+the pixel size, repeat/repeatX/repeatY tile from the aligned position; TextField readOnly focusable and
+selectable but not editable, hint/helper/error styles, isDense, padding through `orcaPadding` (D4).
+Review fit: pass · Review quality: one finding (a second copy of the alignment table, `ImageFit.unit`), fixed in
+one rework (`Props.unitPoint`, placement `(box - size) * alignment`, a pin for none + topLeft/bottomRight in both
+directions); re-review pass (same placement maths, RTL mirror and tiling path unchanged)
+Not done: the keyboard still opens on a read-only field (SwiftUI has no read-only TextField; a UIKit field is for
+later). Props.unitPoint's doc still says "(gradient ends)".
+
+#### Task S-bar fix · the title drawn twice (found by hand)
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Structure.swift` · `sdk-swift/Tests/OrcaGatewayTests/AppBarCardTests.swift`
+Cases: A1.9 sw → green (`testA1_9ScaffoldTextTitleIsDrawnOnce` red first: the system's centred title found in
+the bar; AppBarCardTests 14/14; iOS (DA7254F5) 112 + 234, no golden moved, 0 warnings; macOS 92 + 234)
+Changed: a zero-size principal item takes the centre when centerTitle is false (an empty item is dropped by
+SwiftUI); `.navigationTitle` kept; a guard test reads the next page's back title (passed before the fix).
+Review fit: pass · Review quality: pass
+
+#### Task Rebase · step 1 on origin/main (PR #30, PR #31)
+Files: `examples/server/index.ts` · `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/OrcaApp.kt` ·
+`sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/OrcaAppTest.kt` (conflicts); OrcaRouter.kt, FixturePathsTest.kt,
+ModelRoundTripTests.swift merged clean (41 render fixtures, 11 navigation)
+Cases: A1.13 kt kept through the merge, and extended: `a1_13_kt_aConfigBootKeepsThePushedPageThroughARecreationAndFetchesTheConfigOnce`
+red before the retained boot, green after (OrcaAppTest 16/16)
+Changed: OrcaApp(client, path) keeps its router and OrcaApp(client, path = null) its /config boot in one
+`Retained<T : AutoCloseable>` ViewModel per call site; the shown activity's `system` and `onRouteChanged` are
+attached while shown (AttachHost); OrcaNavHost is main's body plus LocalOrcaNavigation and the keep-restored-
+entries rule; OrcaAppBoot's two hooks are `internal var` (public API unchanged). Generators: no change.
+Decisions: kotlin-boot-retained, kotlin-route-changed-latest, kotlin-boot-hooks-internal (decisions.jsonl)
+Review fit: pass (main's boot, not-found, TopAppBar, BackHandler and 6ff7679's retention all hold; no test dropped) · Review quality: one finding (RetainedRouter and RetainedBoot were the same class), fixed
+in one rework (`Retained<T : AutoCloseable>(value) : ViewModel(value)`); re-review pass (closed only when cleared, keys per call site kept)
+Not done: with enableOffline the version check runs again after a rotation (not /config): PR #31's OrcaBootView.
+
+#### Group 7 test run (the final tree, rebased)
+engine 740 pass 0 fail · Flutter 305 passed, analyze clean · Kotlin `./gradlew build` sdk 219 + core 301, lint
+clean · Swift macOS `swift test` 120 UI + 298 core, 0 failures · iOS (DA7254F5, iOS 18.5) 140 UI + 298 core,
+TEST SUCCEEDED, 0 compiler warnings, goldens unchanged · generators: no diff. Hand: iPhone A1.9 sw and A1.13 sw
+pass, the doubled title found there is fixed and re-checked on the rebuilt app; Android A1.9 kt and A1.13 kt
+pass (scratchpad hand/notes.md).
+
 ### Test run
-engine 739 pass 0 fail · Flutter +248 all passed · Swift macOS 234 tests 0 failures · Kotlin core 228, sdk 132,
-0 failures. Lint: not run (no lint-relevant source changed; G2 onward runs `./gradlew build` and `flutter analyze`).
+The final tree (rebased on origin/main 81b4bc1, code tip 3eb1511): engine 740 pass 0 fail · Flutter 305 passed,
+analyze clean · Kotlin `./gradlew build` sdk 219 + core 301, lint clean · Swift macOS 120 UI + 298 core, 0 failures · iOS (DA7254F5,
+iOS 18.5) 140 UI + 298 core, TEST SUCCEEDED, 0 compiler warnings, goldens unchanged · generators: no diff.
 
 ### Blocked
 none
@@ -307,4 +368,5 @@ none
 none
 
 ### For ship (stage 10) to know
-nothing
+CI's Xcode 16.4 runs the Swift goldens for 18.5; locally only Xcode 27.2 ran (its own golden names); no golden
+moved. 5c6b57e is already on main. The step's PR is stacked on nothing; steps 2-8 stack on it.
