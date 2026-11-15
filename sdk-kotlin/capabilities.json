@@ -1,6 +1,7 @@
 {
   "$comment": "What this Kotlin build implements. gen-native-capabilities.ts advertises these widgets (each must carry the android target in schema/widget-registry.json) and these action kinds; value kinds, transforms and BoolExpr ops are scraped from the engine like the Dart SDK's. Add a name here only in the PR that lands its implementation. S7 drew the 15 core widgets with Compose; S9 added the rest of the iOS set.",
   "widgets": [
+    "AnimatedBuilder",
     "AppBar",
     "Card",
     "Center",
@@ -25,7 +26,9 @@
     "Stack",
     "Text",
     "TextButton",
-    "TextField"
+    "TextField",
+    "Transform",
+    "Video"
   ],
   "actionKinds": [
     "actionGroup",

@@ -110,6 +110,7 @@ const Set<String> kSupportedWidgets = {
   'Tooltip',
   'Transform',
   'UnsupportedWidgetPlaceholder',
+  'Video',
   'Wrap',
 };
 

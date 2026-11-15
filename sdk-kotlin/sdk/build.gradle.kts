@@ -94,6 +94,9 @@ dependencies {
     implementation(libs.compose.material.icons.extended)
     implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
+    // ProcessLifecycleOwner for session tracking (SessionLifecycle.kt); already on the
+    // runtime classpath at this version through emoji2, so apps get nothing new.
+    implementation(libs.lifecycle.process)
 
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.junit4)

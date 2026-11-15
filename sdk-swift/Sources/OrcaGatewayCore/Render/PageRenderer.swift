@@ -32,6 +32,8 @@ public final class WidgetRegistry: @unchecked Sendable {
         let first = reported.insert(type).inserted
         lock.unlock()
         if first { onUnknownType?(type) }
+        // The process-wide sink hears each type once, whatever registry saw it.
+        OrcaTelemetry.reportUnknownWidgetOnce(type)
         return first
     }
 
@@ -144,10 +146,14 @@ public struct PageRenderer: Sendable {
         return registry.supports(node.type) ? node : registry.degraded(node)
     }
 
+    /// `animationProgress` is the enclosing AnimatedBuilder's value (0...1),
+    /// which `tween` and `tweenSequence` props interpolate by.
     public func resolve(_ id: String, state: StoreState,
-                        eventData: [String: JSONValue]? = nil) -> ResolvedNode? {
+                        eventData: [String: JSONValue]? = nil,
+                        animationProgress: Double? = nil) -> ResolvedNode? {
         guard let source = nodes[id], let node = node(id) else { return nil }
-        let resolver = state.resolver(eventData: eventData)
+        var resolver = state.resolver(eventData: eventData)
+        resolver.animationProgress = animationProgress
         var props: [String: JSONValue] = [:]
         for (key, value) in node.props { props[key] = resolver.resolveDeep(value) }
 

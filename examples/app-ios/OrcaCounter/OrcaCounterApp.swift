@@ -7,7 +7,9 @@ import SwiftUI
 /// Any example app on that server runs here too: set ORCA_APP_ID and
 /// ORCA_PATH (for example `basic-actions` and `home`, or `server-actions`
 /// and `shop`) in the scheme, or as SIMCTL_CHILD_ORCA_APP_ID and
-/// SIMCTL_CHILD_ORCA_PATH for `simctl launch`.
+/// SIMCTL_CHILD_ORCA_PATH for `simctl launch`. ORCA_OFFLINE=1 runs the
+/// version check at boot (the force-update screen when the server answers
+/// forceUpdate), and ORCA_SESSIONS=1 reports session starts and ends.
 @main
 struct OrcaCounterApp: App {
     init() {
@@ -27,7 +29,9 @@ struct OrcaCounterApp: App {
             OrcaApp(
                 client: OrcaClient(baseURL: Self.serverURL, appId: Self.setting("ORCA_APP_ID", "counter"),
                                    apiKey: "demo-key"),
-                path: Self.setting("ORCA_PATH", "home"))
+                path: Self.setting("ORCA_PATH", "home"),
+                enableOffline: Self.isOn("ORCA_OFFLINE"),
+                enableSessionTracking: Self.isOn("ORCA_SESSIONS"))
         }
     }
 
@@ -41,5 +45,10 @@ struct OrcaCounterApp: App {
     static func setting(_ key: String, _ fallback: String) -> String {
         let value = ProcessInfo.processInfo.environment[key] ?? ""
         return value.isEmpty ? fallback : value
+    }
+
+    /// A switch: on when the setting is "1" or "true".
+    static func isOn(_ key: String) -> Bool {
+        ["1", "true"].contains(setting(key, ""))
     }
 }

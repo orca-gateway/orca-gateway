@@ -2,9 +2,16 @@ package com.orcagateway.sdk
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.orcagateway.core.render.ResolvedNode
+
+/**
+ * Progress (0..1, after its curve) of the nearest enclosing AnimatedBuilder;
+ * null outside one. Nodes below one resolve `tween` props by it.
+ */
+internal val LocalOrcaAnimationProgress = compositionLocalOf<Double?> { null }
 
 /**
  * Draws one node of a page by id, and everything below it. Each node
@@ -21,7 +28,10 @@ public fun NodeView(id: String, model: OrcaPageModel, modifier: Modifier = Modif
     // Reading the revision ties this node to its watches: the node is
     // resolved again only when one of them, or the tree, changed.
     val revision = observer.revision
-    val node = remember(observer, revision) { model.resolve(id) } ?: return
+    // Under an AnimatedBuilder the progress changes every frame, and the
+    // node is resolved again with it so its `tween` props move.
+    val progress = LocalOrcaAnimationProgress.current
+    val node = remember(observer, revision, progress) { model.resolve(id, progress) } ?: return
     WidgetView(node, model, modifier)
 }
 

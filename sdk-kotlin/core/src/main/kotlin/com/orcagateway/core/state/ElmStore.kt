@@ -45,8 +45,10 @@ public data class StoreState(
     public fun merging(update: Map<String, JsonValue>, scope: StateScope): StoreState = with(scope, get(scope) + update)
 
     /** A resolver over the merged view. */
-    public fun resolver(eventData: Map<String, JsonValue>? = null): ValueResolver =
-        ValueResolver(state = merged, eventData = eventData)
+    public fun resolver(
+        eventData: Map<String, JsonValue>? = null,
+        animationProgress: Double? = null,
+    ): ValueResolver = ValueResolver(state = merged, eventData = eventData, animationProgress = animationProgress)
 }
 
 /**

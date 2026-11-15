@@ -30,7 +30,7 @@ class CapabilitiesTest {
 
     private fun manifestAndroidWidgets(): Set<String> {
         val widgets = json("schema/widget-registry.json").jsonObject["widgets"]!!.jsonArray
-        assertEquals(92, widgets.size)
+        assertEquals(93, widgets.size)
         return widgets.mapNotNull { w ->
             val o = w.jsonObject
             if ("android" in strings(o["targets"])) o["type"]!!.jsonPrimitive.content else null
@@ -45,24 +45,25 @@ class CapabilitiesTest {
         val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["widgets"])
         assertEquals(listed, advertised)
         // Android draws Material, so no widget lacks the android target.
-        assertEquals(92, android.size)
+        assertEquals(93, android.size)
     }
 
     /**
      * S9.13: Android draws the iOS set, the 15 core widgets plus the ten S9
-     * added, and the generated vector is the regenerated list (sorted as the
+     * added and then AnimatedBuilder, Transform and Video, and the generated vector is the regenerated list (sorted as the
      * generator sorts, hashed as the engine hashes), not a hand edit.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame25WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame28WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(25, kotlin.size)
+        assertEquals(28, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
             "Icon", "Image", "Container", "Expanded", "Spacer", "TextField",
             "Stack", "Positioned", "ClipRRect", "GestureDetector",
+            "AnimatedBuilder", "Transform", "Video",
         )
         assertTrue(kotlin.containsAll(added), "missing: ${added - kotlin.toSet()}")
         assertEquals(kotlin, GeneratedCapabilities.widgets)

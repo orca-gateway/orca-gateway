@@ -33,6 +33,8 @@ public class WidgetRegistry(
     public fun reportUnknown(type: String): Boolean {
         val first = synchronized(lock) { reported.add(type) }
         if (first) onUnknownType?.invoke(type)
+        // The process-wide sink hears each type once, whatever registry saw it.
+        com.orcagateway.core.telemetry.OrcaTelemetry.reportUnknownWidgetOnce(type)
         return first
     }
 
@@ -161,10 +163,19 @@ public class PageRenderer(
         return if (registry.supports(node.type)) node else registry.degraded(node)
     }
 
-    public fun resolve(id: String, state: StoreState, eventData: Map<String, JsonValue>? = null): ResolvedNode? {
+    /**
+     * [animationProgress] is the enclosing AnimatedBuilder's value (0..1),
+     * which `tween` and `tweenSequence` props interpolate by.
+     */
+    public fun resolve(
+        id: String,
+        state: StoreState,
+        eventData: Map<String, JsonValue>? = null,
+        animationProgress: Double? = null,
+    ): ResolvedNode? {
         val source = nodes[id] ?: return null
         val node = node(id) ?: return null
-        val resolver = state.resolver(eventData)
+        val resolver = state.resolver(eventData, animationProgress)
         val props = node.props.mapValues { resolver.resolveDeep(it.value) }
 
         var childIds: List<String> = emptyList()

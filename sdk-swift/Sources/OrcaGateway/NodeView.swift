@@ -24,6 +24,8 @@ private struct WatchedNode: View {
     let id: String
     let model: OrcaPageModel
     @StateObject private var observer: NodeObserver
+    /// Set by an enclosing AnimatedBuilder; redraws this node every frame.
+    @Environment(\.orcaAnimationProgress) private var animationProgress
 
     init(id: String, model: OrcaPageModel) {
         self.id = id
@@ -34,7 +36,7 @@ private struct WatchedNode: View {
     var body: some View {
         // Reading the revision ties this body to the node's watches.
         let _ = observer.revision
-        if let node = model.resolve(id) {
+        if let node = model.resolve(id, animationProgress: animationProgress) {
             WidgetView(node: node, model: model)
         }
     }
@@ -73,6 +75,9 @@ struct WidgetView: View {
         case "Positioned": PositionedView(node: node, model: model)
         case "ClipRRect": ClipRRectView(node: node, model: model)
         case "GestureDetector": GestureNodeView(node: node, model: model)
+        case "AnimatedBuilder": AnimatedBuilderView(node: node, model: model)
+        case "Transform": TransformView(node: node, model: model)
+        case "Video": VideoNodeView(node: node)
         default: EmptyView()
         }
     }
