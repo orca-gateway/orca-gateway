@@ -153,11 +153,16 @@ struct ScaffoldDrawers {
     }
 
     /// Show that drawer: the slot's node, normally a `Drawer`, which gives
-    /// the panel its width and colour.
+    /// the panel its width and colour. Light, as the Scaffold it belongs to
+    /// (`ScaffoldView`): the host draws it at the app root, out of the
+    /// Scaffold's light pin, but Flutter's `_buildScaffold` wraps the whole
+    /// Scaffold, drawer slots too, in `Theme(data: ThemeData())`.
     func open(_ edge: DrawerEdge) {
         guard let host, let id = slot(edge) else { return }
         let model = self.model
-        host.present(id: panelId(edge), edge: edge) { AnyView(NodeView(id: id, model: model)) }
+        host.present(id: panelId(edge), edge: edge) {
+            AnyView(NodeView(id: id, model: model).environment(\.colorScheme, .light))
+        }
     }
 
     func close(_ edge: DrawerEdge) {

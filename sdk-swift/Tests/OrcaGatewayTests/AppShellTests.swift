@@ -8,8 +8,10 @@ import XCTest
 /// The engine for the app-shell tests: `/version` answers a fresh check, or
 /// a forceUpdate one; `/config` opens `initialRoute`, or answers 500; both
 /// take a moment, so a screen shown meanwhile is drawn. A page is `plain`
-/// (one EnvProbe), `scaffold` (a Scaffold whose body is an EnvProbe), and a
-/// 404 for any other name. Every request is kept.
+/// (one EnvProbe), `scaffold` (a Scaffold whose body is an EnvProbe),
+/// `drawer` (a Scaffold whose body is an EnvProbe and whose drawer slot is a
+/// Drawer holding another), and a 404 for any other name. Every request is
+/// kept.
 final class ShellStub: HTTPTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var _requests: [HTTPRequest] = []
@@ -69,6 +71,16 @@ final class ShellStub: HTTPTransport, @unchecked Sendable {
                 ["id": "s", "type": "Scaffold", "kind": "structure", "childMode": "none",
                  "props": ["body": "inScaffold"], "children": ["inScaffold"], "watches": []],
                 Self.probe("inScaffold"),
+            ]
+        case "drawer":
+            components = [
+                ["id": "s", "type": "Scaffold", "kind": "structure", "childMode": "none",
+                 "props": ["body": "drawerBody", "drawer": "panel"], "children": ["drawerBody", "panel"],
+                 "watches": []],
+                Self.probe("drawerBody"),
+                ["id": "panel", "type": "Drawer", "kind": "layout", "childMode": "single",
+                 "props": [:], "children": ["inDrawer"], "watches": []],
+                Self.probe("inDrawer"),
             ]
         default:
             return HTTPResponse(status: 404, body: Data("no page here".utf8))
@@ -361,6 +373,26 @@ final class AppShellTests: XCTestCase {
                                colorScheme: .light)
         try await host(lightApp.environment(\.colorScheme, .dark)) { light.names.contains("plain") }
         XCTAssertEqual(light.first("plain")?.scheme, .light)
+    }
+
+    /// A page Scaffold's drawer is drawn by the app root's drawer layer, out
+    /// of the Scaffold, yet stays light: Flutter's `_buildScaffold` wraps the
+    /// whole Scaffold, its drawer slot too, in `Theme(data: ThemeData())`, and
+    /// Android pins its light scheme over the Scaffold and its drawers.
+    func testC18_3_APageScaffoldDrawerStaysLightUnderADarkScheme() async throws {
+        let seen = Seen()
+        let router = OrcaRouter(client: ShellStub().client(), path: "drawer", system: SystemRecorder().actions())
+        let app = OrcaApp(router: router, widgets: probes(seen), colorScheme: .dark)
+        var asked = false
+        try await host(app) {
+            if !asked, seen.names.contains("drawerBody") {
+                asked = true
+                router.openDrawer()
+            }
+            return seen.names.contains("inDrawer")
+        }
+        XCTAssertEqual(seen.first("drawerBody")?.scheme, .light, "the Scaffold's body")
+        XCTAssertEqual(seen.first("inDrawer")?.scheme, .light, "its drawer, as in Flutter and on Android")
     }
 
     func testC18_3_WithALocaleAPageSeesItAndTheHeaderStaysTheDevices() async throws {
