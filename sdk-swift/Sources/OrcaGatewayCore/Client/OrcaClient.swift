@@ -35,10 +35,17 @@ public struct OrcaClient: @unchecked Sendable {
     /// Sent as `x-orca-device-id`.
     public var deviceId: String?
     public var device: DeviceInfo
-    public let capabilities: CapabilityVector
-    /// `x-orca-caps-hash`: SHA-256 of the canonical vector, computed once.
-    public let capsHash: String
     public let transport: HTTPTransport
+    /// The advertised vector and its hash, shared by every copy of this client
+    /// so a copy made earlier (a router's) sees later registrations.
+    private let advertised: AdvertisedCapabilities
+
+    /// The vector this client advertises: the one given at init plus every
+    /// `registerCapabilityExtensions` so far.
+    public var capabilities: CapabilityVector { advertised.current.vector }
+    /// `x-orca-caps-hash`: SHA-256 of the canonical `capabilities`, computed
+    /// at init and again only when an extension grew the vector.
+    public var capsHash: String { advertised.current.hash }
 
     public init(
         baseURL: URL, appId: String, apiKey: String? = nil, environment: String? = nil,
@@ -52,9 +59,18 @@ public struct OrcaClient: @unchecked Sendable {
         self.environment = environment
         self.deviceId = deviceId
         self.device = device
-        self.capabilities = capabilities
-        self.capsHash = capabilities.hash
+        self.advertised = AdvertisedCapabilities(capabilities)
         self.transport = transport
+    }
+
+    /// Advertise plugin-contributed widget types and action kinds from the
+    /// next request on (Dart `registerCapabilityExtensions`,
+    /// sdk/lib/src/client/orca_client.dart). Widgets are added verbatim; each
+    /// action bare and as `custom:<name>`, see `CapabilityVector.adding`. The
+    /// hash, the headers and the 412 retry body follow. Idempotent, and seen by
+    /// every copy of this client.
+    public func registerCapabilityExtensions(widgets: [String] = [], actions: [String] = []) {
+        advertised.add(widgets: widgets, actions: actions)
     }
 
     /// Every header the client sends, as the Dart `_deviceHeaders` builds them.
@@ -212,7 +228,10 @@ public struct OrcaClient: @unchecked Sendable {
     /// Dart `_sendPageRequestWithCapsRetry`: at most one retry, only for
     /// `caps_vector_unknown`; any other 412 goes back to the caller as is.
     func sendWithCapsRetry(url: URL, appState: [String: JSONValue]?) async throws -> HTTPResponse {
-        let base = headers
+        // One snapshot, so the hash sent and the vector retried always agree.
+        let (capabilities, capsHash) = advertised.current
+        var base = headers
+        base["x-orca-caps-hash"] = capsHash
         let state = (appState?.isEmpty ?? true) ? nil : appState
         var json = base
         json["Content-Type"] = "application/json"
@@ -235,6 +254,37 @@ public struct OrcaClient: @unchecked Sendable {
         if let state { body["appState"] = .object(state) }
         return try await send(HTTPRequest(
             method: "POST", url: url, headers: json, body: try JSONValue.object(body).encoded()))
+    }
+}
+
+/// The advertised capability vector and its cached hash behind a lock, so
+/// copies of an `OrcaClient` share registrations (Dart keeps `_extraWidgets`,
+/// `_extraActions` and `_cachedCapsHash` on the one client instance).
+final class AdvertisedCapabilities: @unchecked Sendable {
+    private let lock = NSLock()
+    private var vector: CapabilityVector
+    private var hash: String
+
+    init(_ base: CapabilityVector) {
+        vector = base
+        hash = base.hash
+    }
+
+    /// The vector and its hash, read together.
+    var current: (vector: CapabilityVector, hash: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (vector, hash)
+    }
+
+    /// Adds the names; the hash is recomputed only when the vector grew.
+    func add(widgets: [String], actions: [String]) {
+        lock.lock()
+        defer { lock.unlock() }
+        let next = vector.adding(widgets: widgets, actions: actions)
+        guard next != vector else { return }
+        vector = next
+        hash = next.hash
     }
 }
 

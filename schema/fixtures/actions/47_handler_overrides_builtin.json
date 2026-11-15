@@ -1,0 +1,40 @@
+{
+  "name": "handler-overrides-builtin",
+  "description": "A handler registered under a built-in action's name replaces the built-in: only the handler runs, with the raw action. Native parity step 16 (C16.5).",
+  "pageId": "home",
+  "state": {
+    "page": {},
+    "app": {}
+  },
+  "handlers": [
+    "copyToClipboard"
+  ],
+  "actions": [
+    {
+      "type": "copyToClipboard",
+      "text": {
+        "type": "static",
+        "value": "x"
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {},
+      "app": {}
+    },
+    "effects": [
+      {
+        "kind": "handler",
+        "name": "copyToClipboard",
+        "action": {
+          "type": "copyToClipboard",
+          "text": {
+            "type": "static",
+            "value": "x"
+          }
+        }
+      }
+    ]
+  }
+}

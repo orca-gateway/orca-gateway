@@ -16,6 +16,7 @@ import com.orcagateway.core.navigation.RouteTable
 import com.orcagateway.core.state.ActionEffect
 import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.OrcaPluginHost
 import com.orcagateway.sdk.system.SystemActions
 import java.util.UUID
 
@@ -123,6 +124,9 @@ public class OrcaRouter private constructor(
 
     /** Called with every effect a page reports, for DevTools and logging. */
     public var onEffect: ((ActionEffect) -> Unit)? = null
+
+    /** What OrcaApp's plugins give each page loaded from here; OrcaApp sets it before the first request. */
+    internal var plugins: OrcaPluginHost? = null
 
     private val loaders = HashMap<UUID, OrcaPageLoader>()
 

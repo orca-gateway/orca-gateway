@@ -1,0 +1,64 @@
+{
+  "name": "custom-action-dispatch",
+  "description": "A registered handler runs for its custom:-prefixed type and for the bare type, and an exact match wins over the bare one; the handler receives the raw action (type as sent, params as sibling keys, unresolved). Native parity step 16 (C16.2).",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 0
+    },
+    "app": {}
+  },
+  "handlers": [
+    "hapticFeedback",
+    "custom:ping",
+    "ping"
+  ],
+  "actions": [
+    {
+      "type": "custom:hapticFeedback",
+      "intensity": "heavy"
+    },
+    {
+      "type": "hapticFeedback",
+      "intensity": "light"
+    },
+    {
+      "type": "custom:ping",
+      "id": 1
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 0
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "kind": "handler",
+        "name": "hapticFeedback",
+        "action": {
+          "type": "custom:hapticFeedback",
+          "intensity": "heavy"
+        }
+      },
+      {
+        "kind": "handler",
+        "name": "hapticFeedback",
+        "action": {
+          "type": "hapticFeedback",
+          "intensity": "light"
+        }
+      },
+      {
+        "kind": "handler",
+        "name": "custom:ping",
+        "action": {
+          "type": "custom:ping",
+          "id": 1
+        }
+      }
+    ]
+  }
+}

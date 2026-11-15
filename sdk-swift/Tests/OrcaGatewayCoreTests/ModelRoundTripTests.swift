@@ -36,26 +36,33 @@ final class ModelRoundTripTests: XCTestCase {
 
     func testAllActionFixturesRoundTrip() throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 15, "action fixtures 01-15")
+        XCTAssertEqual(files.count, 18, "action fixtures 01-15, 45-47")
         var kinds = Set<String>()
         for (name, fixture) in files {
             var lists: [JSONValue] = [fixture["actions"]]
             if case .object(let responses) = fixture["serverResponses"] {
                 lists += responses.values.map { $0["actions"] }.filter { !$0.isNull }
             }
+            // A bare plugin type (fixture 45's `hapticFeedback`) is unknown to
+            // the model by design; it may appear only where a handler runs it.
+            let handled = Set((fixture["handlers"].arrayValue ?? []).compactMap(\.stringValue))
             for list in lists {
                 let actions = try decodeModel([Action].self, from: list)
                 assertJSONEqual(try jsonOf(actions), list, name)
                 for action in actions {
-                    XCTAssertFalse(isUnknown(action), "\(name): \(action.kind) decoded as unknown")
+                    XCTAssertFalse(isUnknown(action) && !handled.contains(action.kind),
+                                   "\(name): \(action.kind) decoded as unknown")
                     collectKinds(action, into: &kinds)
                 }
             }
-            // State snapshots and effects are data too.
+            // State snapshots and effects are data too. `{"kind": "handler"}`
+            // entries are the runner's handler records, not SDK effects.
             let state = try decodeModel(StoreState.self, from: fixture["expected"]["state"])
             assertJSONEqual(try jsonOf(state), fixture["expected"]["state"], name)
-            let effects = try decodeModel([ActionEffect].self, from: fixture["expected"]["effects"])
-            assertJSONEqual(.array(effects.map(\.json)), fixture["expected"]["effects"], name)
+            let sdkEffects = JSONValue.array(try XCTUnwrap(fixture["expected"]["effects"].arrayValue, name)
+                .filter { $0["kind"].stringValue != "handler" })
+            let effects = try decodeModel([ActionEffect].self, from: sdkEffects)
+            assertJSONEqual(.array(effects.map(\.json)), sdkEffects, name)
         }
         // Every advertised kind appears in the fixtures, except the three
         // component kinds: a fixture compares state and effects, not the node
