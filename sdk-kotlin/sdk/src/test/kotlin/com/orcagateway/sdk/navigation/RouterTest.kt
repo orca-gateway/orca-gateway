@@ -20,6 +20,7 @@ import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.models.DrawerItemDef
 import com.orcagateway.core.models.NavConfig
 import com.orcagateway.core.models.NavFlow
 import com.orcagateway.core.models.NavRoute
@@ -648,6 +649,413 @@ class RouterTest {
         assertNull(route.scaffoldTitle)
         assertNull(route.transition)
         assertFalse(route.isNotFound)
+    }
+
+    /** Three tabs (`/home` with the child `home/product/:id`, `/search`, `/more`) and `settings` outside them. */
+    private fun tabConfig(
+        initialRoute: String = "/home",
+        initialAppState: Map<String, JsonValue> = emptyMap(),
+        drawerItems: List<DrawerItemDef> = emptyList(),
+    ) = NavConfig(
+        initialRoute = initialRoute,
+        tabs = listOf(
+            TabDef("home", "Home", "home", "/home"),
+            TabDef("search", "Search", "search", "/search"),
+            TabDef("more", "More", "menu", "/more"),
+        ),
+        drawerItems = drawerItems,
+        initialAppState = initialAppState,
+        flows = listOf(
+            NavFlow(
+                name = "main",
+                routes = listOf(
+                    NavRoute("home", children = listOf(NavRoute("home/product/:id"))),
+                    NavRoute("search"),
+                    NavRoute("more"),
+                    NavRoute("settings"),
+                ),
+            ),
+        ),
+    )
+
+    private fun pages(stub: PageStub): List<String> = stub.requests.map { it.url.path.substringAfterLast("/page/") }
+
+    private fun tabIndex(router: OrcaRouter): JsonValue? = router.appState["_tabIndex"]
+
+    /**
+     * B10.2-K: a page pushed in tab 0 is still there after a visit to tab 1,
+     * as the same route with the same page model, and nothing is fetched
+     * again; a tab's page is fetched on its first visit only.
+     */
+    @Test
+    fun b10_2_aTabKeepsItsStackAndItsPagesAcrossASwitch() = runBlocking {
+        val stub = PageStub()
+        val router = OrcaRouter(stub.client, tabConfig())
+        assertTrue(router.hasShell)
+        assertEquals(listOf("home", "search", "more"), router.tabs.map { it.id })
+        assertEquals(0, router.currentTab)
+
+        val homeRoute = router.root
+        val home = loaded(router, homeRoute)
+        router.navigate("/home/product/3")
+        val productRoute = router.stack.single()
+        val product = loaded(router, productRoute)
+        assertEquals(listOf(listOf("home", "home/product/3"), emptyList(), emptyList()), router.tabStacks.map { s -> s.map { it.path } })
+
+        router.selectTab(1)
+        assertEquals(1, router.currentTab)
+        assertEquals("search", router.root.path)
+        assertEquals(emptyList(), router.stack)
+        assertEquals(listOf("home", "home/product/3"), router.tabStacks[0].map { it.path })
+        loaded(router, router.root)
+        assertEquals(listOf("home", "home/product/3", "search"), pages(stub)) // the first visit fetches, once
+
+        router.selectTab(0)
+        assertEquals(0, router.currentTab)
+        assertSame(homeRoute, router.root)
+        assertEquals(listOf(productRoute), router.stack)
+        assertEquals("/home/product/3", router.top.location)
+        assertSame(home, loaded(router, router.root))
+        assertSame(product, loaded(router, router.stack[0]))
+
+        router.selectTab(1)
+        loaded(router, router.root)
+        router.selectTab(0)
+        assertEquals(listOf("home", "home/product/3", "search"), pages(stub)) // no repeat
+        assertEquals(emptyList(), router.overRoutes)
+    }
+
+    /** B10.2-K: a tap on the current tab pops it to its root; the popped page is closed, the root is kept. */
+    @Test
+    fun b10_2_reselectPopsTheTabToItsRoot() = runBlocking {
+        val stub = PageStub()
+        val router = OrcaRouter(stub.client, tabConfig())
+        val home = loaded(router, router.root)
+        router.navigate("/home/product/3")
+        router.navigate("/home/product/4")
+        val product = router.stack[0]
+        val productLoader = router.loader(product)
+
+        router.selectTab(0)
+        assertEquals(emptyList(), router.stack)
+        assertEquals(0, router.currentTab)
+        assertSame(home, loaded(router, router.root))
+        assertNotSame(productLoader, router.loader(product)) // dropped: its loader was closed and forgotten
+        assertEquals(listOf("home"), pages(stub))
+
+        router.selectTab(7) // no such tab
+        assertEquals(0, router.currentTab)
+    }
+
+    /** B10.2-K: `navigate(replace)` into the tab on screen keeps the pages its chain starts with; the kept top follows the new location. */
+    @Test
+    fun b10_2_goIntoATabKeepsItsPagesAndTheirRoutes() = runBlocking {
+        val stub = PageStub()
+        val router = OrcaRouter(stub.client, tabConfig())
+        val homeRoute = router.root
+        val home = loaded(router, homeRoute)
+
+        router.navigate("/home?sort=new", replace = true)
+        assertSame(homeRoute, router.root)
+        assertEquals("/home?sort=new", router.root.location)
+        assertSame(home, loaded(router, router.root))
+
+        router.navigate("/home/product/3", replace = true)
+        assertSame(homeRoute, router.root)
+        assertEquals("/home", router.root.location)
+        assertEquals(listOf("home/product/3"), router.stack.map { it.path })
+        assertEquals(listOf("home"), pages(stub))
+    }
+
+    /**
+     * B10.2-K: a route `navigate(replace)` kept follows its entry with every
+     * field, not only the location: the tab root gains its transition when it
+     * becomes the top and loses it under its child, as a route built anew for
+     * that entry would have it, and stays the same route with the same loader.
+     * A route outside the tabs (the one with a title bar) is never kept: it
+     * is built anew each time.
+     */
+    @Test
+    fun b10_2_aKeptRouteTakesTheEntrysNewFields() {
+        val fade = RouteTransitionDef("fade")
+        val slide = RouteTransitionDef("slide")
+        fun config(initialRoute: String) = NavConfig(
+            initialRoute = initialRoute,
+            tabs = listOf(TabDef("home", "Home", "home", "/home"), TabDef("search", "Search", "search", "/search")),
+            flows = listOf(
+                NavFlow(
+                    name = "main",
+                    routes = listOf(
+                        NavRoute("home", transition = fade, children = listOf(NavRoute("home/product/:id", transition = slide))),
+                        NavRoute("search"),
+                        NavRoute("settings", transition = fade),
+                    ),
+                ),
+            ),
+        )
+
+        fun fields(router: OrcaRouter) = (listOf(router.root) + router.stack).map {
+            listOf(it.path, it.location, it.scaffoldTitle, it.isNotFound, it.transition)
+        }
+
+        /** What a router booted at [location] shows: every route built anew for its entry. */
+        fun fresh(location: String) = fields(OrcaRouter(PageStub().client, config(location)))
+
+        val router = OrcaRouter(PageStub().client, config("/home"))
+        val home = router.root
+        val loader = router.loader(home)
+        assertEquals(fade, home.transition) // the top at boot
+
+        val steps = listOf("/home/product/3", "/home", "/home/product/3?tab=specs", "/home?sort=new", "/home/product/4")
+        for (location in steps) {
+            router.navigate(location, replace = true)
+            assertSame(home, router.root, location)
+            assertSame(loader, router.loader(home), location)
+            assertEquals(fresh(location), fields(router), location)
+        }
+
+        // Spelled out for the first three: a parent has no transition, the top has its own.
+        router.navigate("/home/product/3", replace = true)
+        assertNull(router.root.transition)
+        assertEquals(slide, router.top.transition)
+        router.navigate("/home", replace = true)
+        assertEquals(fade, router.root.transition)
+        assertEquals("/home", router.root.location)
+        router.navigate("/home/product/3", replace = true)
+        assertNull(router.root.transition)
+        assertNull(router.root.scaffoldTitle)
+        assertFalse(router.root.isNotFound)
+        assertSame(home, router.root)
+        assertSame(loader, router.loader(home))
+
+        // Outside the tabs nothing is kept: the titled route is a new one each time, with the fields of its entry.
+        router.navigate("/settings", replace = true)
+        val settings = router.root
+        assertEquals(fresh("/settings"), fields(router))
+        assertEquals("Settings", settings.scaffoldTitle)
+        router.navigate("/settings?x=1", replace = true)
+        assertNotSame(settings, router.root)
+        assertEquals(fresh("/settings?x=1"), fields(router))
+    }
+
+    /** B10.2-K: a route outside the tabs pushed over the shell keeps the tab under it, and a tab tap drops it. */
+    @Test
+    fun b10_2_aNonTabRouteOverTheShellKeepsTheTabAndIsDroppedBySelectTab() {
+        val router = OrcaRouter(PageStub().client, tabConfig())
+        val homeRoute = router.root
+        router.navigate("/settings")
+        val settings = router.top
+        assertEquals("Settings", settings.scaffoldTitle)
+        assertEquals(0, router.currentTab)
+        assertEquals(listOf(settings), router.overRoutes)
+        assertEquals(listOf(settings), router.stack)
+        assertEquals(listOf("home"), router.tabStacks[0].map { it.path })
+        val loader = router.loader(settings)
+
+        router.selectTab(1)
+        assertEquals(1, router.currentTab)
+        assertEquals(emptyList(), router.overRoutes)
+        assertEquals("search", router.top.path)
+        assertNotSame(loader, router.loader(settings))
+
+        router.selectTab(0)
+        assertSame(homeRoute, router.root)
+        assertEquals(emptyList(), router.stack)
+
+        // Replaced by a route outside the tabs, the shell is gone.
+        router.navigate("/settings", replace = true)
+        assertFalse(router.hasShell)
+        assertNull(router.currentTab)
+        assertEquals(listOf(emptyList(), emptyList(), emptyList()), router.tabStacks)
+        assertEquals(listOf("settings"), router.overRoutes.map { it.path })
+        assertEquals("settings", router.root.path)
+    }
+
+    /** B10.2-K: `canGoBack` is what `goBack` would do: false at a tab root, true one level in or under a pushed route. */
+    @Test
+    fun b10_2_canGoBackIsFalseAtATabRootAndTrueOneLevelIn() {
+        val router = OrcaRouter(PageStub().client, tabConfig())
+        assertFalse(router.canGoBack)
+        router.navigate("/home/product/3")
+        assertTrue(router.canGoBack)
+        router.goBack()
+        assertFalse(router.canGoBack)
+        router.goBack() // at the tab root: nothing
+        assertEquals("home", router.top.path)
+
+        router.selectTab(1)
+        assertFalse(router.canGoBack) // no hop back to the first tab
+        router.navigate("/settings")
+        assertTrue(router.canGoBack)
+        router.goBack()
+        assertEquals(1, router.currentTab)
+        assertFalse(router.canGoBack)
+
+        val plain = router()
+        assertFalse(plain.canGoBack)
+        plain.navigate("about")
+        assertTrue(plain.canGoBack)
+    }
+
+    /**
+     * B10.3-K: `_tabIndex` is written at boot, over a seeded value and before
+     * the first page request, and follows a tab tap, `switchTab` and
+     * `navigate(replace)`; every loaded page holds it. Each is a `Replace`.
+     */
+    @Test
+    fun b10_3_tabIndexIsInTheFirstPageRequestAndFollowsEveryTabChange() = runBlocking {
+        val stub = PageStub()
+        val events = mutableListOf<RouteChangeEvent>()
+        val config = tabConfig(initialRoute = "/search", initialAppState = mapOf("_tabIndex" to JsonValue.Int(7)))
+        val router = OrcaRouter(stub.client, config, onRouteChanged = { events += it })
+        assertEquals(1, router.currentTab)
+        assertEquals(JsonValue.Int(1), tabIndex(router))
+        val search = loaded(router, router.root)
+        assertEquals(JsonValue.obj("_tabIndex" to 1), stub.appState(0))
+
+        router.selectTab(2)
+        assertEquals(JsonValue.Int(2), tabIndex(router))
+        assertEquals(JsonValue.Int(2), search.store.state.app["_tabIndex"]) // a page of another tab
+        val more = loaded(router, router.root)
+        assertEquals(JsonValue.obj("_tabIndex" to 2), stub.appState(1))
+
+        router.switchTab("home")
+        assertEquals(0, router.currentTab)
+        assertEquals(JsonValue.Int(0), tabIndex(router))
+        assertEquals(JsonValue.Int(0), more.store.state.app["_tabIndex"])
+
+        router.navigate("/search", replace = true)
+        assertEquals(1, router.currentTab)
+        assertEquals(JsonValue.Int(1), tabIndex(router))
+        assertSame(search, loaded(router, router.root))
+
+        router.navigate("/settings", replace = true) // the shell is gone; the key keeps its last value
+        assertEquals(JsonValue.Int(1), tabIndex(router))
+
+        assertEquals(
+            listOf(
+                RouteChangeEvent("/search", null, RouteChangeType.Push),
+                RouteChangeEvent("/more", "/search", RouteChangeType.Replace),
+                RouteChangeEvent("/home", "/more", RouteChangeType.Replace),
+                RouteChangeEvent("/search", "/home", RouteChangeType.Replace),
+                RouteChangeEvent("/settings", "/search", RouteChangeType.Replace),
+            ),
+            events,
+        )
+    }
+
+    /**
+     * B10.3-K: a page (or the host) writing app state `_tabIndex` switches
+     * the tab and restores its stack; a value that is no tab's index changes
+     * nothing and stays in app state as written.
+     */
+    @Test
+    fun b10_3_aPageSettingTabIndexSwitchesTheTab() = runBlocking {
+        val stub = PageStub()
+        val router = OrcaRouter(stub.client, tabConfig())
+        val home = loaded(router, router.root)
+        router.navigate("/home/product/3")
+        val product = router.top
+
+        home.run(Action.SetState(key = "_tabIndex", scope = StateScope.App, value = JsonValue.Int(2)))
+        assertEquals(2, router.currentTab)
+        assertEquals("more", router.top.path)
+        assertEquals(JsonValue.Int(2), tabIndex(router))
+        val more = loaded(router, router.root)
+
+        more.run(Action.SetState(key = "_tabIndex", scope = StateScope.App, value = JsonValue.String("first")))
+        assertEquals(2, router.currentTab)
+        assertEquals(JsonValue.String("first"), tabIndex(router))
+        more.run(Action.SetState(key = "_tabIndex", scope = StateScope.App, value = JsonValue.Int(9)))
+        assertEquals(2, router.currentTab)
+        assertEquals(JsonValue.Int(9), tabIndex(router))
+        assertEquals("more", router.top.path)
+
+        more.run(Action.SetState(key = "_tabIndex", scope = StateScope.App, value = JsonValue.Int(0)))
+        assertEquals(0, router.currentTab)
+        assertSame(product, router.top) // restored, not reset
+        assertEquals(JsonValue.Int(0), home.store.state.app["_tabIndex"])
+
+        router.setAppState("_tabIndex", JsonValue.Int(1)) // the host's write switches too
+        assertEquals(1, router.currentTab)
+        assertEquals("search", router.top.path)
+        assertEquals(listOf("home", "more"), pages(stub))
+    }
+
+    /** B10.3-K: the `switchTab` action a page runs changes the tab and lands on its root; an unknown id does nothing. */
+    @Test
+    fun b10_3_theSwitchTabActionSwitchesAndLandsOnTheRoot() = runBlocking {
+        val stub = PageStub()
+        val router = OrcaRouter(stub.client, tabConfig())
+        val homeRoute = router.root
+        loaded(router, homeRoute)
+        router.navigate("/home/product/3")
+        router.selectTab(1)
+        val search = loaded(router, router.root)
+
+        search.run(Action.SwitchTab("home"))
+        assertEquals(0, router.currentTab)
+        assertSame(homeRoute, router.root)
+        assertEquals(emptyList(), router.stack) // the root, not the page it was left on
+        assertEquals(JsonValue.Int(0), tabIndex(router))
+
+        search.run(Action.SwitchTab("nowhere"))
+        assertEquals(0, router.currentTab)
+        search.run(Action.SwitchTab("more"))
+        assertEquals(2, router.currentTab)
+        assertEquals("more", router.top.path)
+        assertEquals(listOf("home", "search"), pages(stub))
+
+        // Without a config there are no tabs: nothing happens.
+        val plain = router()
+        loaded(plain, plain.root).run(Action.SwitchTab("home"))
+        assertEquals("home", plain.top.path)
+        assertFalse(plain.hasShell)
+        assertEquals(emptyList(), plain.tabs)
+        assertNull(plain.currentTab)
+    }
+
+    /**
+     * B10.3-K (brief D1): `openDrawer` opens the shell drawer from a tab page
+     * of a config with a drawer; anywhere else it asks the page on top for
+     * its own. A navigation that changes the visible location closes the
+     * shell drawer.
+     */
+    @Test
+    fun b10_3_openDrawerOpensTheShellDrawerOnATabPageElseAsksThePage() = runBlocking {
+        val drawer = listOf(DrawerItemDef("settings", "Settings", route = "/settings"))
+        val router = OrcaRouter(PageStub().client, tabConfig(drawerItems = drawer))
+        assertTrue(router.hasDrawer)
+        assertFalse(router.isDrawerOpen)
+        val home = loaded(router, router.root)
+
+        home.run(Action.OpenDrawer)
+        assertTrue(router.isDrawerOpen)
+        assertNull(router.pageDrawerRequest)
+        router.closeDrawer()
+        assertFalse(router.isDrawerOpen)
+
+        router.openDrawer()
+        router.selectTab(1) // the visible location changes
+        assertFalse(router.isDrawerOpen)
+
+        router.navigate("/settings") // over the shell: no shell drawer there
+        router.openDrawer()
+        assertFalse(router.isDrawerOpen)
+        assertEquals(router.top.id, router.pageDrawerRequest)
+        router.pageDrawerRequest = null // a consumer clears it
+        assertNull(router.pageDrawerRequest)
+
+        // No drawer in the config: a tab page is asked for its own.
+        val bare = OrcaRouter(PageStub().client, tabConfig())
+        assertFalse(bare.hasDrawer)
+        loaded(bare, bare.root).run(Action.OpenDrawer)
+        assertFalse(bare.isDrawerOpen)
+        assertEquals(bare.root.id, bare.pageDrawerRequest)
+
+        // Drawer items without tabs are no shell drawer.
+        assertFalse(OrcaRouter(PageStub().client, navConfig().copy(drawerItems = drawer)).hasDrawer)
+        assertFalse(router().hasDrawer)
     }
 
     /** A home page whose one button copies `ORCA-42`. */
