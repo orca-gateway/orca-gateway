@@ -115,7 +115,7 @@ final class ActionHandlerTests: XCTestCase {
         }
     }
 
-    @MainActor func testC16_2_KindsStayTheBuiltInList() {
+    @MainActor func testC16_2_KindsStayTheBuiltInList() async {
         let executor = ActionExecutor(store: ElmStore(StoreState()))
         executor.registerHandler("hapticFeedback") { _, _ in }
         executor.registerHandler("custom:ping") { _, _ in }
