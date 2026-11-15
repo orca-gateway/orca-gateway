@@ -139,6 +139,57 @@ does: the config's `initialRoute` and `initialAppState`, its routes, the "Page n
 the title bar and the tabs. `OrcaRouter(client, path = "home")` and `OrcaApp(client, path = "home")`
 open that one page: no config, every path is a page.
 
+## Deep links
+
+`OrcaApp` opens links by itself, inside a `ComponentActivity`:
+
+- The link of the Intent that launched the activity (the data of an `ACTION_VIEW`) opens the app
+  at the link: the router starts there instead of the config's `initialRoute` (or of `path`), with
+  `initialAppState` seeded and the route's redirect applied, and only that page is requested. It
+  is read once, not again after a rotation or a restore from saved state.
+- The link of every new Intent goes there while the app runs, also one that arrives while the
+  config is still being fetched (it is held, and then opens the app).
+
+A link's location is the URL's path and query; scheme, host and fragment are ignored
+(`https://shop.example/product/42?tab=specs` and `myapp://open/product/42?tab=specs` both go to
+`/product/42?tab=specs`). It is shown as `navigate(location, replace = true)` shows it: the tab
+and the parent pages come from the config. A link no route matches shows "Page not found", whose
+"Go to home page" button goes to `/`. A link to the location already on screen navigates nowhere.
+
+```kotlin
+OrcaApp(client, onDeeplink = { event ->
+    // event.incoming            the link as delivered
+    // event.resolvedLocation    where it ended, after the redirect: path and query
+    // event.pathParameters      of the matched route ("id" to "42")
+    // event.queryParameters     of the final location
+    // event.wasRedirected       a redirect rule sent it elsewhere (a protected route, logged out)
+    // event.isColdStart         the link is what opened the app
+    analytics.link(event.resolvedLocation)
+})
+```
+
+`onDeeplink` is called once per link, after the navigation and after `onRouteChanged`; links
+navigate without it too. With `OrcaApp(router)`, set `router.onDeeplink`.
+
+The manifest needs an intent filter for your links, and `singleTop` so a link reaches the running
+activity as a new Intent instead of starting a second one:
+
+```xml
+<activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
+    <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="myapp" android:host="open" />
+    </intent-filter>
+</activity>
+```
+
+A host that receives links elsewhere (a push notification, its own `onNewIntent`) hands them to
+the router: `router.handleDeeplink(url)` (pass `isColdStart = true` when the link opened the app),
+or `router.handleIntent(intent)`, which returns false when the Intent carries no link. Before the
+router exists, `OrcaAppBoot.handleDeeplink(url)` holds the link for it.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An Android host does it with
