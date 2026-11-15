@@ -142,11 +142,14 @@ public class OrcaPageLoader(
  * A boot cancelled mid-fetch leaves [phase] at `Loading` and runs again on
  * the next [loadIfNeeded]. After [close] it builds no router: a config that
  * lands then is dropped.
+ *
+ * [system] and [onRouteChanged] go to the router a load makes. OrcaApp keeps
+ * a boot through a rotation and sets them to the shown activity's own.
  */
 public class OrcaAppBoot(
     public val client: OrcaClient,
-    private val system: SystemActions? = null,
-    private val onRouteChanged: ((RouteChangeEvent) -> Unit)? = null,
+    internal var system: SystemActions? = null,
+    internal var onRouteChanged: ((RouteChangeEvent) -> Unit)? = null,
 ) : AutoCloseable {
     /** Where the boot stands. */
     public sealed interface Phase {
@@ -225,13 +228,13 @@ public class OrcaAppBoot(
  * Snackbars and toasts are handled by the page; `openUrl`, the clipboard and
  * share go to [system], by default the device's own ([SystemActions.android]).
  *
- * With a [path], the router is made once, like Swift's `StateObject`, and
- * kept in the activity's `ViewModelStore` (one per call site): an activity
- * recreated by a rotation shows the same pages, with their state, and the
- * router is closed when the activity finishes. It never holds the activity:
+ * The router (with `path = null`, the boot and the router it makes) is made
+ * once, like Swift's `StateObject`, and kept in the activity's
+ * `ViewModelStore` (one per call site): an activity recreated by a rotation
+ * shows the same pages, with their state, without asking `/config` again,
+ * and it is closed when the activity finishes. It never holds the activity:
  * [system] and [onRouteChanged] are the router's only while this composition
- * shows it. The boot of `path = null` is closed with this composition: a new
- * activity boots again. A [client] without a device id gets the one saved in
+ * shows it. A [client] without a device id gets the one saved in
  * SharedPreferences (`DeviceIdentity`, [SharedPreferencesKeyValueStore]),
  * made on first run, as Flutter does whether or not sessions are tracked;
  * `/config` is asked with it too.
@@ -255,7 +258,7 @@ public fun OrcaApp(
 ) {
     val context = LocalContext.current
     val identified = remember { client.identified(SharedPreferencesKeyValueStore(context)) }
-    // Keyed by the call site: two OrcaApps in one activity keep a router each.
+    // Keyed by the call site: two OrcaApps in one activity keep a router (or a boot) each.
     val site = currentCompositeKeyHashCode.toString(36)
     if (path != null) {
         val retained = viewModel(key = "com.orcagateway.sdk.OrcaApp:$site") { RetainedRouter(OrcaRouter(identified, path)) }
@@ -267,12 +270,24 @@ public fun OrcaApp(
     // The version check comes first: the config is asked only once the app may run.
     OrcaBootView(identified, enableOffline, enableSessionTracking, modifier) {
         val scope = rememberCoroutineScope()
-        val boot = remember { OrcaAppBoot(identified, system, onRouteChanged) }
-        DisposableEffect(boot) { onDispose { boot.close() } }
+        val retained = viewModel(key = "com.orcagateway.sdk.OrcaAppBoot:$site") { RetainedBoot(OrcaAppBoot(identified)) }
+        val boot = retained.boot
+        // Before the load starts, so the router it makes gets them.
+        DisposableEffect(boot, system, onRouteChanged) {
+            boot.system = system
+            boot.onRouteChanged = onRouteChanged
+            onDispose {
+                if (boot.system === system) boot.system = null
+                if (boot.onRouteChanged === onRouteChanged) boot.onRouteChanged = null
+            }
+        }
         LaunchedEffect(boot) { boot.loadIfNeeded(context) }
         when (val phase = boot.phase) {
             OrcaAppBoot.Phase.Loading -> LoadingView(modifier)
-            is OrcaAppBoot.Phase.Ready -> OrcaNavHost(phase.router, modifier)
+            is OrcaAppBoot.Phase.Ready -> {
+                AttachHost(phase.router, system, onRouteChanged)
+                OrcaNavHost(phase.router, modifier)
+            }
             is OrcaAppBoot.Phase.Failed -> ErrorView("Could not load this app", phase.message, modifier) {
                 scope.launch { boot.reload(context) }
             }
@@ -300,6 +315,13 @@ private fun AttachHost(router: OrcaRouter, system: SystemActions?, onRouteChange
 internal class RetainedRouter(val router: OrcaRouter) : ViewModel() {
     override fun onCleared() {
         router.close()
+    }
+}
+
+/** OrcaApp(client, path = null)'s boot (and its router) through configuration changes; closed when the activity finishes. */
+internal class RetainedBoot(val boot: OrcaAppBoot) : ViewModel() {
+    override fun onCleared() {
+        boot.close()
     }
 }
 

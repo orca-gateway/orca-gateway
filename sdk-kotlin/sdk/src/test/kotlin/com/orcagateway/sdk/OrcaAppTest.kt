@@ -405,6 +405,37 @@ class OrcaAppTest {
     }
 
     /**
+     * A1.13 (kt): OrcaApp(client, path = null) keeps its boot through a
+     * recreation: the pushed page stays, `/config` is fetched once and no
+     * page again, and route changes go to the shown activity's listener.
+     */
+    @Test
+    fun a1_13_kt_aConfigBootKeepsThePushedPageThroughARecreationAndFetchesTheConfigOnce() {
+        val engine = ConfigEngine(config(initialRoute = "/home"))
+        val events = mutableListOf<String>()
+        var made = 0
+        val activity = host {
+            val activityNo = remember { ++made }
+            OrcaApp(engine.client, path = null, onRouteChanged = { events += "$activityNo ${it.location}" })
+        }
+        compose.waitUntil(5_000) { count("Go") > 0 }
+        compose.onNodeWithText("Go").performClick()
+        compose.waitUntil(5_000) { count("settings page") > 0 }
+
+        activity.recreate()
+        compose.waitForIdle()
+        compose.onNodeWithText("settings page").assertIsDisplayed()
+        assertEquals(1, engine.configRequests.size)
+        assertEquals(listOf("home", "settings"), engine.pageRequests)
+
+        compose.runOnIdle { activity.get().onBackPressedDispatcher.onBackPressed() }
+        compose.waitUntil(5_000) { count("settings page") == 0 }
+        compose.onNodeWithText("home page").assertIsDisplayed()
+        assertEquals(listOf("home", "settings"), engine.pageRequests)
+        assertEquals(listOf("1 /home", "1 /settings", "2 /home"), events)
+    }
+
+    /**
      * A1.13 (kt): a router the host keeps across the recreation behaves the
      * same: the NavHost keeps the entries it restored (no pop to the root and
      * push), the page under the top one too.
