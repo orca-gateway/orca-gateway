@@ -102,6 +102,41 @@ Android SDK with platform 36 (`ANDROID_HOME` or `local.properties`).
 | S9 | Degrade policies and the drawn 426 page, ten more widgets (Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector), `OrcaTheme` button styles | done |
 | S10 | `0.1.0-alpha.1` on Maven Central as `com.orcagateway:sdk-core` and `com.orcagateway:sdk`; `sdk-kotlin` in `scripts/release.sh`; the tag-triggered "SDK Kotlin Publish" workflow | this package |
 
+## Navigation from the server config
+
+`OrcaRouter` can start from the app's `/config` instead of a fixed path. The config names the
+first route, the app state to start with, and every route of the app:
+
+```kotlin
+val config = client.fetchConfig() // suspend: GET /api/v1/app/{appId}/config
+val router = OrcaRouter(client, config, onRouteChanged = { event ->
+    // event.location, event.previousLocation (null for the first one), event.type: Push, Replace, Pop
+    analytics.screen(event.location)
+})
+setContent { OrcaApp(router) }
+```
+
+- The router starts at `config.initialRoute`, with `config.initialAppState` already in app state,
+  so the first page request carries it.
+- `router.navigate("/product/42")` resolves the location through the config's routes (`RouteTable`
+  in the core). A route's redirect rule (`when` an app state key `equals` a value, go `to`) is
+  applied once, against the app state of that moment. `navigate(location, replace = true)` shows a
+  nested route with its parent pages under it; without `replace` one page is pushed.
+- A location no route matches becomes a route with `isNotFound`, and no page is requested for it.
+  Each `OrcaRoute` also carries its `location`, and from the config its `scaffoldTitle` and
+  `transition`.
+- `router.appState` reads the shared app state. `router.setAppState("loggedIn", JsonValue.Bool(true))`
+  (or a map of several keys) writes it into every loaded page, so widgets that watch the key
+  redraw. Writing state does not navigate: call `navigate` again after a login.
+- `onRouteChanged` fires once each time the location on top changes, after the redirect: `Push`
+  for `navigate`, `Replace` with `replace = true`, `Pop` for `goBack()` and the system back
+  gesture. Showing the location that is already on top reports nothing. It can also be set later
+  (`router.onRouteChanged = ...`), and works on a router built from a path.
+
+`OrcaRouter(client, path = "home")` and `OrcaApp(client, path = "home")` work as before: no
+config, every path is a page. `OrcaApp(client)` fetching the config itself, the "page not found"
+screen and the title bar follow in the next change; tabs and the drawer come after that.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An Android host does it with
