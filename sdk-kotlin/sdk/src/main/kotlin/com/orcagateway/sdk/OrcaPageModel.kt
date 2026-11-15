@@ -1,5 +1,6 @@
 package com.orcagateway.sdk
 
+import android.util.Log
 import androidx.compose.runtime.RememberObserver
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -17,6 +18,7 @@ import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.core.state.ActionEffect
 import com.orcagateway.core.state.ActionExecutor
+import com.orcagateway.core.state.ActionSource
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.OrcaUrlPolicy
 import kotlinx.coroutines.CoroutineScope
@@ -113,20 +115,23 @@ public class OrcaPageModel(
      * Run the node's action for a trigger (`onTap`, `onLongPress`, ...), the
      * Flutter `fireAction`: nothing happens (null) when the node has none.
      * The run is asynchronous (a server action waits on the network); the
-     * returned job finishes when the action does, which tests join.
+     * returned job finishes when the action does, which tests join. Its
+     * source is the node and the trigger, so a `once` in it runs one time
+     * per widget and trigger.
      */
     public fun fire(trigger: String, on: ResolvedNode, eventData: Map<String, JsonValue>? = null): Job? {
         val action = on.actions[trigger] ?: return null
-        return scope.launch { run(action, eventData) }
+        return scope.launch { run(action, eventData, ActionSource(on.id, trigger)) }
     }
 
     /**
      * Run one action to the end; a failure goes to DevTools as an `error`
      * event and to [onError], never up. A cancelled run is not a failure.
+     * [source] is the widget and trigger that fired it, for `once`.
      */
-    public suspend fun run(action: Action, eventData: Map<String, JsonValue>? = null) {
+    public suspend fun run(action: Action, eventData: Map<String, JsonValue>? = null, source: ActionSource? = null) {
         try {
-            executor.execute(action, eventData)
+            executor.execute(action, eventData, source)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -152,6 +157,19 @@ public class OrcaPageModel(
         first?.invoke()
     }
 
+    /** The `id::trigger` of each onInit and onVisible that ran (see [firstMount]). */
+    private val mounted = HashSet<String>()
+
+    /**
+     * True the first time node [id]'s mount [trigger] (onInit, onVisible)
+     * asks, false ever after: the guard of widgets/Lifecycle.kt. It lives on
+     * the model, not in the composition, because a page under a pushed one
+     * leaves the composition (NavHost) and coming back is no new mount, while
+     * a reload or a restored process builds a new model, whose state the
+     * trigger must set again.
+     */
+    internal fun firstMount(id: String, trigger: String): Boolean = mounted.add("$id::$trigger")
+
     /**
      * A link the page itself draws, such as a FallbackPrompt's call to action
      * (Flutter: `OrcaUrlPolicy.isAllowed`, then `launchUrl`). A URL the policy
@@ -176,7 +194,30 @@ public class OrcaPageModel(
                 durationMillis = effect.payload["duration"]?.intValue ?: DEFAULT_DURATION_MILLIS,
                 style = if (effect.type == "showSnackbar") OrcaToast.Style.Snackbar else OrcaToast.Style.Toast,
             )
+            "debugLog" -> {
+                log(effect)
+                effectHandler?.invoke(effect)
+            }
             else -> effectHandler?.invoke(effect)
+        }
+    }
+
+    /**
+     * Prints a debugLog effect to logcat, as Flutter's `developer.log`: under
+     * its tag, at its level (debug, info, warn, error; anything else debug),
+     * the message then the data as JSON.
+     */
+    private fun log(effect: ActionEffect) {
+        val tag = effect.payload["tag"]?.stringValue ?: "orca"
+        val line = listOfNotNull(
+            effect.payload["message"]?.stringValue,
+            effect.payload["data"]?.toJsonElement()?.toString(),
+        ).joinToString(" ")
+        when (effect.payload["level"]?.stringValue) {
+            "info" -> Log.i(tag, line)
+            "warn" -> Log.w(tag, line)
+            "error" -> Log.e(tag, line)
+            else -> Log.d(tag, line)
         }
     }
 
