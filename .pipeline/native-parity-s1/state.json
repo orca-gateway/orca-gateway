@@ -4,9 +4,9 @@
   "idea": "Native parity step 1 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): polish the widgets Swift and Kotlin already draw so they honour Flutter's props: Text line height, word spacing, overline, decoration style and colour, overflow, justify, absolute left/right under RTL; Container border inset; ElevatedButton elevation and padding; Stack passthrough; Image fitWidth/fitHeight/scaleDown and repeat; read-only TextField focusable, hint/helper/error styles, dense; AppBar elevation, shadow, leadingWidth, centerTitle, implied back button; Row/Column textDirection and verticalDirection; Center factors; button autofocus and tooltip; Card tint and clip; scroll reverse/primary/shrinkWrap; Kotlin router survives rotation. Test cases A1.1-A1.13 in phase-a-tests.md. In sdk-swift and sdk-kotlin",
   "kind": "feature",
   "created_at": "2026-11-15T18:18:35Z",
-  "updated_at": "2026-11-15T21:53:34Z",
+  "updated_at": "2026-11-15T22:11:41Z",
   "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
-  "current": "10",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -51,27 +51,38 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 7's two questions are minor (no blocked task; next is stage 10, open the PR, the user merges), defaults"
     },
     "10": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/10-r1.md"
+      "card": "cards/10-r1.md",
+      "approved_at": "2026-11-15T22:10:51Z",
+      "approved_with": "standing rule (2026-11-11): Q2 minor, default; Q1 answered by the user's own action: PR #33 merged by amrebada 2026-11-15T22:04:40Z (merge 82e9027)"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-15T22:11:40Z",
+      "approved_with": "standing rule (2026-11-11): gate 12's one question is minor (13-16 skipped, no deploy target), default; all checks green on PR #33 and main 82e9027"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 10 default"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 10 default"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 10 default"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 10 default"
     }
   },
   "gates": {
