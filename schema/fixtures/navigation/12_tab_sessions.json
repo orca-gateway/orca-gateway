@@ -509,6 +509,115 @@
           }
         }
       ]
+    },
+    {
+      "name": "go inside a tab keeps the pages it still needs",
+      "boot": {
+        "expected": {
+          "location": "/home",
+          "tabIndex": 0,
+          "appState": {
+            "_tabIndex": 0
+          },
+          "pageRequests": [
+            "home"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/home",
+          "expected": {
+            "location": "/home",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "go",
+          "location": "/home/product/7",
+          "expected": {
+            "location": "/home/product/7",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home/product/7"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/home/product/8",
+          "expected": {
+            "location": "/home/product/8",
+            "tabIndex": 0,
+            "appState": {
+              "_tabIndex": 0
+            },
+            "pageRequests": [
+              "home/product/8"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/search?q=a",
+          "expected": {
+            "location": "/search?q=a",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": [
+              "search"
+            ]
+          }
+        },
+        {
+          "op": "go",
+          "location": "/search?q=a",
+          "expected": {
+            "location": "/search?q=a",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": []
+          }
+        },
+        {
+          "op": "go",
+          "location": "/search?q=b",
+          "expected": {
+            "location": "/search?q=b",
+            "tabIndex": 1,
+            "appState": {
+              "_tabIndex": 1
+            },
+            "pageRequests": []
+          }
+        }
+      ]
     }
   ]
 }
