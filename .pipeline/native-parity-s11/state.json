@@ -4,9 +4,9 @@
   "idea": "Native parity step 11 (Phase B): deep links on sdk-swift and sdk-kotlin. Cold-start and warm links resolved through step 9's routes and redirects; onDeeplink callback with cold-start and redirected flags; Swift onOpenURL and onContinueUserActivity inside OrcaApp; Kotlin reads the launch Intent and exposes handleIntent() for onNewIntent; example manifest intent filter and a custom URL scheme on both example apps; associated domains and app links walkthrough in docs/User_Actions.md. Test rows B11.1-B11.4.",
   "kind": "feature",
   "created_at": "2026-11-15T23:01:32Z",
-  "updated_at": "2026-11-15T23:01:32Z",
+  "updated_at": "2026-11-15T23:09:31Z",
   "active_session": "fe23fb0a-f62c-4a83-a51f-655a2e0bf8ff",
-  "current": "08",
+  "current": "09",
   "stages": {
     "01": {
       "status": "skipped",
@@ -37,11 +37,15 @@
       "reason": "covered by the approved plan /Users/amrebada/.claude/plans/native-parity/plan.md"
     },
     "08": {
-      "status": "draft",
-      "rounds": 1
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-15T23:09:31Z",
+      "approved_with": "A (standing rule: the plan fixes the scope; the four quirk decisions are minor and reported)"
     },
     "09": {
-      "status": "pending"
+      "status": "draft",
+      "rounds": 1
     },
     "10": {
       "status": "pending"
@@ -66,6 +70,6 @@
     }
   },
   "gates": {
-    "code_unlocked": false
+    "code_unlocked": true
   }
 }

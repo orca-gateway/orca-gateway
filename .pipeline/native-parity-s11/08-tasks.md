@@ -17,7 +17,7 @@ parameters in the event; `isColdStart` true on iOS too; a link during boot is he
 a link to the page already shown still calls back. The location of a link is path plus query.
 
 ### Questions for you
-1. Commands as found (bun test, flutter test, swift test, gradlew build, xcodebuild test)? (default: yes)
+1. Commands as found, plus the Swift package tests on an iOS simulator? (default: yes)
 2. Commits by the plugin: per task. (default: per task)
 3. One gate per group, minor ones self-approved under the standing rule. (default: yes)
 
