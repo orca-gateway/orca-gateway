@@ -340,7 +340,7 @@ class OrcaAppTest {
     fun a1_13_kt_aPushedPageSurvivesARecreationAndBackReturnsHome() {
         probe()
         val pages = PathPages()
-        val activity = host { OrcaApp(pages.client) }
+        val activity = host { OrcaApp(pages.client, path = "home") }
         compose.waitUntil(5_000) { count("Go") > 0 }
         compose.onNodeWithText("Go").performClick()
         compose.waitUntil(5_000) { count("about") > 0 }
@@ -370,7 +370,7 @@ class OrcaAppTest {
     @Test
     fun a1_13_kt_theRouterOutlivesARecreationAndClosesWhenTheActivityFinishes() {
         probe()
-        val activity = host { OrcaApp(PathPages().client) }
+        val activity = host { OrcaApp(PathPages().client, path = "home") }
         compose.waitUntil(5_000) { count("Go") > 0 }
         compose.waitForIdle()
         val router = checkNotNull(seen.getValue("Go").navigation.router)
@@ -402,7 +402,7 @@ class OrcaAppTest {
         val made = mutableListOf<SystemActions>()
         val activity = host {
             val own = remember { SystemActions(open = {}, copy = {}, share = { _, _ -> }).also { made += it } }
-            OrcaApp(PathPages().client, system = own)
+            OrcaApp(PathPages().client, path = "home", system = own)
         }
         compose.waitUntil(5_000) { count("Go") > 0 }
         val router = checkNotNull(seen.getValue("Go").navigation.router)
