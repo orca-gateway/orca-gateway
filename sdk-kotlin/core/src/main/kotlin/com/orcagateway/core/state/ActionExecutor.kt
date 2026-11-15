@@ -8,6 +8,7 @@ import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ActionList
 import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.plugins.OrcaActionHandler
 import com.orcagateway.core.render.ComponentMutation
 import com.orcagateway.core.resolver.ValueResolver
 import java.util.concurrent.atomic.AtomicInteger
@@ -16,6 +17,9 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.startCoroutine
 import kotlin.coroutines.suspendCoroutine
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Runs a page's actions: state changes through the store, structural changes
@@ -53,6 +57,26 @@ public class ActionExecutor(
 
     private val reducer = ActionReducer()
     private var eventData: Map<String, JsonValue>? = null
+    private val handlers = HashMap<String, OrcaActionHandler>()
+
+    /**
+     * Run [handler] for every action of [type] (Dart `registerHandler`,
+     * sdk/lib/src/state/action_executor.dart). It overrides a built-in of
+     * that name; registering a type again replaces its handler. An action
+     * looks up its type as sent first, then the type without a leading
+     * `custom:`, so a plugin registers its bare name.
+     */
+    public fun registerHandler(type: String, handler: OrcaActionHandler) {
+        handlers[type] = handler
+    }
+
+    /**
+     * Resolve a value expression against the store's page and app state and
+     * the event data of the action being run (Dart `resolveValue`), for a
+     * handler reading its own params (`V.event`, `V.pageState`, ...).
+     */
+    public fun resolve(value: JsonElement): JsonElement =
+        resolver.resolve(JsonValue.fromJsonElement(value)).toJsonElement()
 
     /**
      * Run one action. [eventData] feeds `V.event(...)` for this action and
@@ -83,12 +107,14 @@ public class ActionExecutor(
      * cancelled run is not a failure and did not finish: no event.
      */
     private suspend fun run(action: Action) {
-        if (action.kind !in kinds) return
-        if (!OrcaDebug.isEnabled) return handle(action)
+        val kind = action.kind
+        val handler = handlers[kind] ?: handlers[kind.removePrefix("custom:")]
+        if (handler == null && kind !in kinds) return
+        if (!OrcaDebug.isEnabled) return dispatch(action, handler)
         val start = OrcaDebug.now()
         var cancelled = false
         try {
-            handle(action)
+            dispatch(action, handler)
         } catch (e: CancellationException) {
             cancelled = true
             throw e
@@ -97,6 +123,13 @@ public class ActionExecutor(
                 OrcaDebug.report { DevToolsEvent.action(action, pageId = store.pageId ?: "", durationMs = OrcaDebug.now() - start) }
             }
         }
+    }
+
+    /** A registered handler gets the action as sent; otherwise the built-in runs. */
+    private suspend fun dispatch(action: Action, handler: OrcaActionHandler?) {
+        if (handler == null) return handle(action)
+        val raw = action.json.toJsonElement() as? JsonObject ?: JsonObject(mapOf("type" to JsonPrimitive(action.kind)))
+        handler.handle(raw, this)
     }
 
     private suspend fun handle(action: Action) {
@@ -274,8 +307,9 @@ public class ActionExecutor(
 
     public companion object {
         /**
-         * The kinds this executor runs. Anything else does nothing, as an
-         * unregistered handler does in Dart. `replaceComponent` is a server
+         * The built-in kinds this executor runs. Anything else does nothing
+         * unless a handler is registered for it (see [registerHandler]), as
+         * in Dart. `replaceComponent` is a server
          * response kind outside action.ts, so it is handled but never
          * advertised.
          */
