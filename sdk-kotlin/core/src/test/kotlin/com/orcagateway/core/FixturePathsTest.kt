@@ -14,10 +14,10 @@ class FixturePathsTest {
         assertEquals(20, Fixtures.actionFiles().size)
     }
 
-    /** B9.1-CK: the navigation fixture family is reachable, all 14 files of it (11 of cases, 3 of sessions). */
+    /** B9.1-CK: the navigation fixture family is reachable, all 15 files of it (11 of cases, 3 of sessions, 1 of links). */
     @Test
     fun b9_1_ck_theNavigationFixturesAreReachable() {
-        assertEquals(14, Fixtures.navigationFiles().size)
+        assertEquals(15, Fixtures.navigationFiles().size)
     }
 
     /** B9.1-CK: the `config` of every navigation fixture is a real /config body and decodes. */
