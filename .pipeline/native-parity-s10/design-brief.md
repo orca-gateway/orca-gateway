@@ -158,3 +158,21 @@ Both: `BottomNavigationBar` / `BottomNavItem` / `Drawer` widgets per §1.10 (tap
 | B10.8-H | hand | the same on the simulator and the emulator with the `tabs` demo |
 | B10.C-S / -K | unit | capabilities: 31 widgets, 17 action kinds, Drawer on iOS; generated files in step |
 | B10.D | unit (engine) | the `tabs` and `tabs-server` demos serve `/config` and their pages |
+
+## 6. Recorded on Flutter by group 1 (the session fixtures are the contract)
+
+Files `schema/fixtures/navigation/12_tab_sessions.json`, `13_tab_index_state.json`, `14_switch_tab.json`; format in
+`schema/navigation-fixture.schema.json` and the README's "Sessions" section. Session files carry no `cases`.
+- a. Reselect pops the tab to its root and fetches nothing. `switchTab` to a visited tab lands on its root, no fetch.
+- b. `go` to a route outside the tabs destroys the shell: `tabIndex` null, `_tabIndex` keeps its last value; after
+  it every tab starts at its root again and its page is fetched again.
+- c. A route outside the tabs PUSHED over the shell keeps `tabIndex` and the tab stacks. `go`, `switchTab` (also to
+  the current tab) and a `_tabIndex` write of another index drop it; a write of the current index leaves it.
+- d. `initialAppState._tabIndex` is overwritten at boot with the index of the initial route's tab.
+- e. A non-int `_tabIndex` write moves nothing and stays in app state until the next tab change overwrites it.
+- f. `push` of another tab's location stays in the current tab (index unchanged, one more entry on its stack); a
+  later visit of that tab fetches that path for itself.
+- `tabIndex` is the shell's index even while a pushed route covers the bar; null only when no shell exists.
+- Not pinned (Flutter throws or asserts): out-of-range `_tabIndex`; `back` at a tab root or the app root; a tab tap
+  under a pushed route. Native: out-of-range ignored (D3); `back` at a root changes nothing in the core (the UI
+  layer lets the system leave the app on Android).
