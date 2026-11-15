@@ -1,0 +1,40 @@
+{
+  "name": "custom-action-unhandled",
+  "description": "A custom action with no handler is a silent no-op, also inside a group: the group goes on to the next action. Native parity step 16.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 0
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "actionGroup",
+      "mode": "sequential",
+      "actions": [
+        {
+          "type": "custom:rateApp",
+          "stars": 5
+        },
+        {
+          "type": "setState",
+          "key": "count",
+          "value": {
+            "type": "static",
+            "value": 1
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 1
+      },
+      "app": {}
+    },
+    "effects": []
+  }
+}

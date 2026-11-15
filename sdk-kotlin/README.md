@@ -250,6 +250,72 @@ OrcaTelemetry.onEvent = { event, data -> Log.w("Orca", "$event $data") }
 It reports one event so far, `unknown_widget_type` with `{"type": "<type>"}`, the first time the
 process meets a widget type the SDK does not draw.
 
+## Plugins
+
+A plugin bundles widgets and actions that belong together, as Flutter's `OrcaPlugin` does. Give
+your plugins to `OrcaApp` (both overloads take them):
+
+```kotlin
+import com.orcagateway.core.plugins.OrcaActionHandler
+import com.orcagateway.core.plugins.TriggerDefinition
+import com.orcagateway.sdk.OrcaPlugin
+import com.orcagateway.sdk.WidgetBuilder
+
+private val coloredBadge: WidgetBuilder = { node, model, modifier ->
+    Text(node["label"]?.stringValue ?: "", modifier.clickable { model.fire("onTap", on = node) })
+}
+
+class BadgePlugin : OrcaPlugin {
+    override val name = "BadgePlugin"
+    override val widgets = mapOf("ColoredBadge" to coloredBadge)
+    override val actions = mapOf(
+        "hapticFeedback" to OrcaActionHandler { action, executor -> /* action["intensity"] */ },
+    )
+    override val triggers = mapOf("ColoredBadge" to listOf(TriggerDefinition("onTap")))
+}
+
+OrcaApp(client, plugins = listOf(BadgePlugin()))
+```
+
+- `name` names the plugin in conflict messages.
+- `widgets` maps a wire type to a `WidgetBuilder` (the node, the page model, the parent's
+  modifier). A builder draws children with `NodeView(id, model)` and fires a trigger with
+  `model.fire(trigger, on = node, eventData = ...)`: the node's action of that name runs and reads
+  the event data through `V.event`.
+- `actions` maps an action type to an `OrcaActionHandler`. It gets the action as sent (a
+  `JsonObject`: `type` and its params, unresolved) and the `ActionExecutor`;
+  `executor.resolve(value)` resolves a value against the page state, app state and event data.
+- `triggers` declares the events each widget fires, for tooling. Nothing reads it at run time.
+
+`OrcaApp` also takes `customActions`, handlers by type that belong to no plugin, and `widgets`, a
+`WidgetBuilders` (`WidgetBuilders.standard()` plus what you `register` on it) for your own
+widgets. It merges all of them once, before the first request, with Flutter's rules: two plugins
+with one widget type or one action name, a plugin widget the SDK or `widgets` already draws, or a
+plugin action named in `customActions` is a conflict. The first one stops the app: it shows its
+error view with Flutter's message, for example
+`Widget type "ColoredBadge" from plugin "B" conflicts with plugin "A".`, and fetches nothing.
+
+An action `{"type":"custom:hapticFeedback"}` (the engine's `Custom("custom:hapticFeedback", ...)`) or
+`{"type":"hapticFeedback"}` runs the handler named `hapticFeedback`; one registered under the exact
+type `custom:hapticFeedback` comes first. A plugin action named like a built-in one
+(`copyToClipboard`, `navigate`, ...) is no conflict: it replaces the built-in. An action that no
+handler and no built-in knows does nothing.
+
+Before the first request `OrcaApp` adds the plugins' widget types, and their action names both bare
+and as `custom:<name>`, to the client's capabilities, so the server sends those widgets instead of
+treating them as unsupported. Only plugins are advertised, not `customActions` or `widgets`.
+
+The CLI writes a plugin stub from a plugin's `orca_plugin.yaml`: a props type per widget, a params
+type per action, the triggers, and a placeholder builder and a no-op handler for each, to fill in
+([CLI README](https://github.com/orca-gateway/orca-gateway/tree/main/cli#native-plugin-stubs)):
+
+```bash
+orca plugin generate --lang kotlin --manifest orca_plugin.yaml --package com.example.plugins
+```
+
+The [Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android#plugins)
+registers two plugins (`DemoPlugins.kt`) for the example server's `custom` app.
+
 ## Tests
 
 ```bash

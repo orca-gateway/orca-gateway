@@ -69,6 +69,7 @@ The same app draws any app on the example server. Pass `APP` and `PAGE` to the r
 | Capability demo | `capability-demo` | `degrade` | the three fallback policies, on a Checkbox this SDK does not draw: left out (`graceful`), a warning banner above the page (`warn`), or a blocking prompt instead of the page (`require`) |
 | Native widgets | `native-widgets` | `home` | the ten widgets of S9: Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector (the images come from picsum.photos) |
 | Todo | `todo` | `home` | add, tick, delete |
+| Custom extensions | `custom` | `home` | a widget and actions from the app's plugins; see [Plugins](#plugins) |
 
 ```bash
 task example:android:run APP=basic-actions PAGE=home
@@ -118,6 +119,35 @@ The `tabs` app in `examples/server/tabs.ts` shows the tab bar: extras `ORCA_APP_
 | Extra | Type | Default | What |
 |---|---|---|---|
 | `ORCA_BOOT` | string | `path` | `config` boots from the server's navigation config; anything else starts at `ORCA_PATH` |
+
+## Plugins
+
+The app registers two plugins ([`DemoPlugins.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/DemoPlugins.kt)),
+as the Flutter example does: `BadgePlugin` draws the `ColoredBadge` widget of the example server's
+`custom` app, and `DeviceActionsPlugin` runs its actions `hapticFeedback`, `showConfetti`, `rateApp`
+and `processPayment`. Start the server (step 1 above), then the app on `custom`:
+
+```bash
+task example:android:run APP=custom PAGE=home
+```
+
+Once installed, `adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --es ORCA_APP_ID custom`
+does the same.
+
+The page "Custom Actions & Components" ends with three badges: a green "CUSTOM BADGE", a blue
+"TAPS: 0" and an orange "RATE: ★★★★★". The server sends a ColoredBadge only to an app that
+advertises it (in the default `graceful` mode it leaves the widget out), so seeing them means the
+plugin's widget reached the capabilities. Tap the green badge: a "Badge tapped!" snackbar. "Trigger
+Haptic" counts up "Haptics triggered" and the blue badge. A device plays the haptics; the emulator
+has none, so each action is also logged:
+
+```bash
+adb logcat -s OrcaDemoPlugins
+```
+
+The green badge prints `hapticFeedback light`, "Trigger Haptic" `hapticFeedback heavy`. The example
+has no confetti or store SDK, so the handlers behind "Show Confetti", "Rate This App", "Pay $29.99"
+and the orange badge only log the action they get.
 
 ## Force update and sessions
 

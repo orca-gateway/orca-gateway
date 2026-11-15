@@ -47,6 +47,8 @@ import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.client.OrcaClientException
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.navigation.RouteChangeEvent
+import com.orcagateway.core.plugins.OrcaActionHandler
+import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.StoreState
 import com.orcagateway.sdk.client.current
@@ -66,7 +68,8 @@ import kotlinx.coroutines.launch
  * `OrcaPageLoader`). The first load fills the client's device headers from
  * this device when the client was built with the default [DeviceInfo].
  * Under a [router] the fetch carries the shared app state, and the page
- * joins the router. Use it from the main thread; [phase] is Compose state.
+ * joins the router, with the plugins, custom actions and host widgets its
+ * OrcaApp was given. Use it from the main thread; [phase] is Compose state.
  * With DevTools on, a loaded page sends its `timing` once, on its first frame.
  *
  * A load cancelled mid-fetch (its page left the screen) leaves [phase] at
@@ -109,7 +112,10 @@ public class OrcaPageLoader(
             val (page, timing) = client.fetchPageTimed(path, app)
             if (closed) return
             val renderStart = timing.elapsed()
-            val model = OrcaPageModel(page, store = ElmStore(StoreState(app = app)), client = client)
+            val plugins = router?.plugins
+            val registry = plugins?.registry ?: WidgetRegistry.shared
+            val model = OrcaPageModel(page, store = ElmStore(StoreState(app = app)), registry = registry, client = client)
+            plugins?.install(model)
             router?.attach(model)
             val renderComplete = timing.elapsed()
             // The DevTools `timing` event waits for the first frame.
@@ -166,6 +172,9 @@ public class OrcaAppBoot(
     public var phase: Phase by mutableStateOf(Phase.Loading)
         private set
 
+    /** What OrcaApp's plugins give each router made here; OrcaApp sets it before the config is fetched. */
+    internal var plugins: OrcaPluginHost? = null
+
     private var started = false
     private var closed = false
 
@@ -184,7 +193,7 @@ public class OrcaAppBoot(
         phase = try {
             val config = client.fetchConfig()
             if (closed) return
-            Phase.Ready(OrcaRouter(client, config, system, onRouteChanged))
+            Phase.Ready(OrcaRouter(client, config, system, onRouteChanged).also { it.plugins = plugins })
         } catch (e: CancellationException) {
             started = false
             throw e
@@ -247,6 +256,22 @@ public class OrcaAppBoot(
  * `preload()` arrive with plan step 14.
  * @param enableSessionTracking posts a session start when the app comes to
  * the foreground and an end when it leaves, queued offline when unsent.
+ * @param plugins widgets, actions and triggers that belong together (Dart
+ * `OrcaApp.plugins`, sdk/lib/src/widgets/orca_app.dart), merged once
+ * (the kept router or boot keeps them through a rotation), before the
+ * first request: their widget and action names are advertised in the
+ * client's capabilities, their builders draw on every page and their
+ * handlers run there. A conflict (two plugins, or a plugin and the
+ * SDK, [widgets] or [customActions], with one name) shows the error view
+ * with Flutter's message, and nothing is fetched.
+ * @param customActions action handlers by type (Dart
+ * `OrcaApp.customActions`): an action `{"type":"custom:<name>"}` or
+ * `{"type":"<name>"}` runs one; a name like a built-in action's replaces
+ * it. Not advertised in the capabilities.
+ * @param widgets the builders the pages draw with (Dart `OrcaApp.registry`):
+ * by default the SDK's own, else a [WidgetBuilders.standard] with what the
+ * host registered on it. Not advertised; the plugins' builders are added
+ * to a copy, so this one is not changed.
  */
 @Composable
 public fun OrcaApp(
@@ -257,6 +282,9 @@ public fun OrcaApp(
     onRouteChanged: ((RouteChangeEvent) -> Unit)? = null,
     enableOffline: Boolean = false,
     enableSessionTracking: Boolean = false,
+    plugins: List<OrcaPlugin> = emptyList(),
+    customActions: Map<String, OrcaActionHandler> = emptyMap(),
+    widgets: WidgetBuilders = WidgetBuilders.shared,
 ) {
     val context = LocalContext.current
     val identified = remember { client.identified(SharedPreferencesKeyValueStore(context)) }
@@ -266,14 +294,18 @@ public fun OrcaApp(
         val retained = viewModel(key = "com.orcagateway.sdk.OrcaApp:$site") { Retained(OrcaRouter(identified, path)) }
         val router = retained.value
         AttachHost(router, system, onRouteChanged)
-        OrcaApp(router, modifier, enableOffline, enableSessionTracking)
+        OrcaApp(router, modifier, enableOffline, enableSessionTracking, plugins, customActions, widgets)
         return
     }
+    val retained = viewModel(key = "com.orcagateway.sdk.OrcaAppBoot:$site") { Retained(OrcaAppBoot(identified)) }
+    val boot = retained.value
+    // The plugins are merged first, so the config is asked with their names; once per kept boot.
+    val prepare = {
+        if (boot.plugins == null) boot.plugins = OrcaPluginHost.merge(boot.client, plugins, customActions, widgets)
+    }
     // The version check comes first: the config is asked only once the app may run.
-    OrcaBootView(identified, enableOffline, enableSessionTracking, modifier) {
+    OrcaBootView(identified, enableOffline, enableSessionTracking, modifier, prepare) {
         val scope = rememberCoroutineScope()
-        val retained = viewModel(key = "com.orcagateway.sdk.OrcaAppBoot:$site") { Retained(OrcaAppBoot(identified)) }
-        val boot = retained.value
         // Before the load starts, so the router it makes gets them.
         DisposableEffect(boot, system, onRouteChanged) {
             boot.system = system
@@ -337,7 +369,12 @@ internal class Retained<T : AutoCloseable>(val value: T) : ViewModel(value)
  * The router's client is used as the host built it: to send the device id
  * OrcaApp(client) gives, build the client with
  * `deviceId = DeviceIdentity.resolve(SharedPreferencesKeyValueStore(context))`.
- * [enableOffline] and [enableSessionTracking] are those of OrcaApp(client).
+ * [enableOffline], [enableSessionTracking], [plugins], [customActions] and
+ * [widgets] are those of OrcaApp(client) (Dart `OrcaApp.plugins`,
+ * `customActions` and `registry`, sdk/lib/src/widgets/orca_app.dart): the
+ * router's pages get them, and a plugin conflict shows the error view with
+ * Flutter's message and fetches nothing. They are merged once per router,
+ * by the first OrcaApp that shows it.
  */
 @Composable
 public fun OrcaApp(
@@ -345,8 +382,15 @@ public fun OrcaApp(
     modifier: Modifier = Modifier,
     enableOffline: Boolean = false,
     enableSessionTracking: Boolean = false,
+    plugins: List<OrcaPlugin> = emptyList(),
+    customActions: Map<String, OrcaActionHandler> = emptyMap(),
+    widgets: WidgetBuilders = WidgetBuilders.shared,
 ) {
-    OrcaBootView(router.client, enableOffline, enableSessionTracking, modifier) { OrcaNavHost(router, modifier) }
+    // Once per router: one kept through a rotation keeps what it was given.
+    val prepare = {
+        if (router.plugins == null) router.plugins = OrcaPluginHost.merge(router.client, plugins, customActions, widgets)
+    }
+    OrcaBootView(router.client, enableOffline, enableSessionTracking, modifier, prepare) { OrcaNavHost(router, modifier) }
 }
 
 /** The router's pages on a [NavHost], once the boot let the app run. */
@@ -485,9 +529,9 @@ private fun LoadingView(modifier: Modifier = Modifier) {
     }
 }
 
-/** What went wrong, and a "Try again". */
+/** The SDK's error view: what went wrong, and a "Try again" when there is an [onRetry]. */
 @Composable
-private fun ErrorView(title: String, message: String, modifier: Modifier = Modifier, onRetry: () -> Unit) {
+internal fun ErrorView(title: String, message: String, modifier: Modifier = Modifier, onRetry: (() -> Unit)? = null) {
     Column(
         modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
@@ -500,7 +544,7 @@ private fun ErrorView(title: String, message: String, modifier: Modifier = Modif
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        TextButton(onClick = onRetry) { Text("Try again") }
+        if (onRetry != null) TextButton(onClick = onRetry) { Text("Try again") }
     }
 }
 

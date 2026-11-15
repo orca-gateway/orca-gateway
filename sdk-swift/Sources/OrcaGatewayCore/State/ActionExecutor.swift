@@ -38,10 +38,31 @@ public final class ActionExecutor {
 
     private let reducer = ActionReducer()
     private var eventData: [String: JSONValue]?
+    /// Custom handlers by the type they were registered under, apart from
+    /// `kinds` (which stays what the caps vector advertises).
+    private var handlers: [String: OrcaActionHandler] = [:]
 
     public init(store: ElmStore, client: OrcaClient? = nil) {
         self.store = store
         self.client = client
+    }
+
+    /// Register a handler for an action type, or override a built-in one; a
+    /// second registration of the same type replaces the first. Dart
+    /// `registerHandler` (sdk/lib/src/state/action_executor.dart).
+    ///
+    /// An action runs the handler registered under its type as sent, else the
+    /// one under that type without a leading `custom:`, so a plugin registers
+    /// `moveCamera` and receives `custom:moveCamera`.
+    public func registerHandler(_ type: String, _ handler: @escaping OrcaActionHandler) {
+        handlers[type] = handler
+    }
+
+    /// Resolve a Value against the page and app state and the event data of
+    /// the action being run, for handlers that read their raw params. Dart
+    /// `resolveValue` (sdk/lib/src/state/action_executor.dart).
+    public func resolve(_ value: JSONValue) -> JSONValue {
+        resolver.resolve(value)
     }
 
     /// Run one action. `eventData` feeds `V.event(...)` for this action and
@@ -73,14 +94,31 @@ public final class ActionExecutor {
 
     private var resolver: ValueResolver { store.state.resolver(eventData: eventData) }
 
+    /// The handler for an action, as Dart `execute` picks it: exact type first,
+    /// then the type without `custom:`.
+    private func handler(for kind: String) -> OrcaActionHandler? {
+        let bare = kind.hasPrefix("custom:") ? String(kind.dropFirst("custom:".count)) : kind
+        return handlers[kind] ?? handlers[bare]
+    }
+
     private func run(_ action: Action) async throws {
-        guard Self.kinds.contains(action.kind) else { return }
+        let handler = self.handler(for: action.kind)
+        guard handler != nil || Self.kinds.contains(action.kind) else { return }
         // Every action run, nested ones too, is a DevTools `action` event.
         let start = OrcaDebug.isEnabled ? OrcaDebug.now() : nil
         defer {
             if let start {
                 OrcaDebug.report(.action(action, pageId: store.pageId ?? "", durationMs: OrcaDebug.now() - start))
             }
+        }
+
+        if let handler {
+            // The raw object as sent; a built-in kind is encoded back to it.
+            switch action {
+            case .custom(let raw), .unknown(let raw): try await handler(raw, self)
+            default: try await handler(action.json, self)
+            }
+            return
         }
 
         switch action {

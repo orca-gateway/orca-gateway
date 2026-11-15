@@ -401,4 +401,76 @@ final class OrcaClientTests: XCTestCase {
         XCTAssertEqual(r.resolve(Self.toString("d")).stringValue, "4.0")
         XCTAssertEqual(r.resolve(Self.toString("i")).stringValue, "4")
     }
+
+    // MARK: C16.3 capability extensions (Dart registerCapabilityExtensions)
+
+    private func sortedUTF16(_ items: [String]) -> [String] {
+        items.sorted { $0.utf16.lexicographicallyPrecedes($1.utf16) }
+    }
+
+    func testC16_3_AddingUnionsWidgetsAndDoublesBareActions() {
+        let base = CapabilityVector.current
+        let v = base.adding(widgets: ["MapView", "Text"], actions: ["moveCamera", "custom:share"])
+        XCTAssertEqual(v.widgets, sortedUTF16(Array(Set(base.widgets + ["MapView"]))))
+        XCTAssertEqual(
+            v.actionKinds, sortedUTF16(base.actionKinds + ["moveCamera", "custom:moveCamera", "custom:share"]))
+        XCTAssertFalse(v.actionKinds.contains("custom:custom:share"))
+        XCTAssertEqual(v.valueKinds, base.valueKinds)
+        XCTAssertEqual(v.transformKinds, base.transformKinds)
+        XCTAssertEqual(v.boolExprOps, base.boolExprOps)
+        XCTAssertEqual(v.adding(widgets: ["MapView"], actions: ["moveCamera"]), v)
+    }
+
+    func testC16_3_RegisteredExtensionsAreAdvertised() {
+        let c = client(StubEngine(page: Data()))
+        XCTAssertEqual(c.capsHash, GeneratedCapabilities.capsHash)
+        c.registerCapabilityExtensions(widgets: ["MapView"], actions: ["moveCamera", "custom:share"])
+        XCTAssertTrue(c.capabilities.widgets.contains("MapView"))
+        XCTAssertTrue(c.capabilities.actionKinds.contains("moveCamera"))
+        XCTAssertTrue(c.capabilities.actionKinds.contains("custom:moveCamera"))
+        XCTAssertTrue(c.capabilities.actionKinds.contains("custom:share"))
+        XCTAssertFalse(c.capabilities.actionKinds.contains("custom:custom:share"))
+        XCTAssertEqual(
+            c.capabilities,
+            CapabilityVector.current.adding(widgets: ["MapView"], actions: ["moveCamera", "custom:share"]))
+        XCTAssertNotEqual(c.capsHash, GeneratedCapabilities.capsHash)
+        XCTAssertEqual(c.capsHash, c.capabilities.hash)
+        XCTAssertEqual(c.headers["x-orca-caps-hash"], c.capsHash)
+    }
+
+    func testC16_3_RegisteringTheSameExtensionsTwiceKeepsTheHash() {
+        let c = client(StubEngine(page: Data()))
+        c.registerCapabilityExtensions(widgets: ["MapView"], actions: ["moveCamera"])
+        let first = c.capsHash
+        let vector = c.capabilities
+        c.registerCapabilityExtensions(widgets: ["MapView"], actions: ["moveCamera", "custom:moveCamera"])
+        XCTAssertEqual(c.capsHash, first)
+        XCTAssertEqual(c.capabilities, vector)
+        c.registerCapabilityExtensions(actions: ["zoom"])
+        XCTAssertNotEqual(c.capsHash, first)
+        XCTAssertEqual(c.capsHash, c.capabilities.hash)
+    }
+
+    func testC16_3_ACopyMadeBeforeRegistrationSeesTheExtensions() {
+        let c = client(StubEngine(page: Data()))
+        let copy = c
+        c.registerCapabilityExtensions(widgets: ["MapView"])
+        XCTAssertEqual(copy.capsHash, c.capsHash)
+        XCTAssertEqual(copy.capabilities, c.capabilities)
+        XCTAssertTrue(copy.capabilities.widgets.contains("MapView"))
+    }
+
+    func testC16_3_RequestsAndThe412RetryCarryTheExtendedVector() async throws {
+        let stub = StubEngine(page: try counterPage())
+        let c = client(stub)
+        c.registerCapabilityExtensions(widgets: ["MapView"], actions: ["moveCamera"])
+        _ = try await c.fetchPage("home")
+        let requests = stub.requests
+        XCTAssertEqual(requests.map(\.method), ["GET", "POST"])
+        XCTAssertEqual(requests[0].headers["x-orca-caps-hash"], c.capsHash)
+        XCTAssertEqual(requests[1].headers["x-orca-caps-hash"], c.capsHash)
+        let body = try JSONValue.decode(requests[1].body ?? Data())
+        assertJSONEqual(body["_orcaCapsVector"], try JSONValue(encoding: c.capabilities))
+        XCTAssertEqual(stub.cached(c.capsHash), c.capabilities)
+    }
 }

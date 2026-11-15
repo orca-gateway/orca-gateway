@@ -1,5 +1,6 @@
 import OrcaGateway
 import SwiftUI
+import UIKit
 
 /// The counter example on iOS: the same Bun server as the Flutter example,
 /// drawn by the Swift SDK. Start the server with `t example:dev:server`.
@@ -15,6 +16,8 @@ import SwiftUI
 /// path (the host passes `path: nil`): its `initialRoute` is the first page and its `initialAppState` is
 /// seeded. Use it with ORCA_APP_ID=navigation (`examples/server/navigation.ts`);
 /// ORCA_PATH is not read then. The two switches above work in both modes.
+///
+/// ORCA_APP_ID=custom shows the two plugins below at work.
 @main
 struct OrcaCounterApp: App {
     init() {
@@ -38,7 +41,8 @@ struct OrcaCounterApp: App {
             OrcaApp(
                 client: client, path: path,
                 enableOffline: Self.isOn("ORCA_OFFLINE"),
-                enableSessionTracking: Self.isOn("ORCA_SESSIONS"))
+                enableSessionTracking: Self.isOn("ORCA_SESSIONS"),
+                plugins: [BadgePlugin(), DeviceActionsPlugin()])
         }
     }
 
@@ -57,5 +61,88 @@ struct OrcaCounterApp: App {
     /// A switch: on when the setting is "1" or "true".
     static func isOn(_ key: String) -> Bool {
         ["1", "true"].contains(setting(key, ""))
+    }
+}
+
+// MARK: - Plugins
+
+/// Draws the `ColoredBadge` widget of the `custom` example app
+/// (examples/server/custom.ts): its label in white bold on its color, and a
+/// tap fires the node's onTap. The Swift twin of `_BadgePlugin` in the Flutter
+/// example (examples/app/lib/main.dart). Registering it adds `ColoredBadge` to
+/// the capabilities the app sends, so the server keeps the badges on the page.
+struct BadgePlugin: OrcaPlugin {
+    let name = "BadgePlugin"
+
+    var widgets: [String: OrcaWidgetBuilder] {
+        ["ColoredBadge": { node, model in
+            AnyView(ColoredBadge(label: node["label"]?.stringValue ?? "",
+                                 color: Self.color(hex: node["color"]?.stringValue ?? "#888888")) {
+                _ = model.fire("onTap", on: node)
+            })
+        }]
+    }
+
+    /// `#RRGGBB`, as the Flutter builder reads it; grey when it is anything else.
+    static func color(hex: String) -> Color {
+        guard hex.count == 7, hex.hasPrefix("#"), let rgb = UInt32(hex.dropFirst(), radix: 16) else {
+            return .gray
+        }
+        return Color(red: Double(rgb >> 16 & 0xFF) / 255, green: Double(rgb >> 8 & 0xFF) / 255,
+                     blue: Double(rgb & 0xFF) / 255)
+    }
+}
+
+/// The badge: padding 16 by 8 and a corner radius of 20, as the Flutter one.
+/// A Button, not `onTapGesture`: a tap gesture fails when the finger stays
+/// down about a second, where Flutter's GestureDetector still taps on release.
+struct ColoredBadge: View {
+    let label: String
+    let color: Color
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Text(label)
+                .font(.system(size: 14, weight: .bold))
+                .tracking(1.2)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(color, in: RoundedRectangle(cornerRadius: 20))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The custom actions of the `custom` example app. `hapticFeedback` plays an
+/// impact (`intensity` light, medium or heavy); `showConfetti`, `rateApp` and
+/// `processPayment` print a line, as this example has no confetti or store
+/// SDK. The Swift twin of `_DeviceActionsPlugin` in the Flutter example.
+struct DeviceActionsPlugin: OrcaPlugin {
+    let name = "DeviceActionsPlugin"
+
+    var actions: [String: OrcaActionHandler] {
+        [
+            "hapticFeedback": { action, _ in
+                let style: UIImpactFeedbackGenerator.FeedbackStyle
+                switch action["intensity"].stringValue {
+                case "light": style = .light
+                case "heavy": style = .heavy
+                default: style = .medium
+                }
+                await MainActor.run { UIImpactFeedbackGenerator(style: style).impactOccurred() }
+            },
+            "showConfetti": { action, _ in Self.log(action) },
+            "rateApp": { action, _ in Self.log(action) },
+            "processPayment": { action, _ in Self.log(action) },
+        ]
+    }
+
+    /// The action as the server sent it, in the Xcode console (or the
+    /// terminal, with `simctl launch --console`).
+    static func log(_ action: JSONValue) {
+        let json = (try? action.encoded()).map { String(decoding: $0, as: UTF8.self) } ?? "\(action)"
+        print("[DeviceActionsPlugin] \(json)")
     }
 }

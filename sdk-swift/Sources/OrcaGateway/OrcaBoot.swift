@@ -56,6 +56,9 @@ final class OrcaBootModel: ObservableObject {
         case ready
         /// The server demands an update; no page is ever fetched.
         case forceUpdate
+        /// The app cannot start (a plugin conflict, Flutter's boot error):
+        /// the message shows and nothing is fetched.
+        case failed(String)
     }
 
     @Published private(set) var phase: Phase
@@ -66,18 +69,19 @@ final class OrcaBootModel: ObservableObject {
     private var started = false
     private var tracker: SessionTracker?
 
+    /// With a `failure` (OrcaPluginHost's conflict) the app starts failed.
     init(enableOffline: Bool, enableSessionTracking: Bool = false,
-         store: KeyValueStore = UserDefaultsKeyValueStore()) {
+         store: KeyValueStore = UserDefaultsKeyValueStore(), failure: String? = nil) {
         self.enableOffline = enableOffline
         self.enableSessionTracking = enableSessionTracking
         self.store = store
-        phase = enableOffline ? .checking : .ready
+        phase = failure.map(Phase.failed) ?? (enableOffline ? .checking : .ready)
     }
 
     /// Run the version check once, with no local versions yet (the static
     /// flow cache arrives with plan step 14).
     func start(client: OrcaClient) async {
-        guard enableOffline, !started else { return }
+        guard enableOffline, !started, phase == .checking else { return }
         started = true
         let outcome = await VersionChecker(client: client).check(localVersions: [:])
         phase = outcome.result == .forceUpdate ? .forceUpdate : .ready
@@ -85,9 +89,11 @@ final class OrcaBootModel: ObservableObject {
 
     /// The one SessionTracker of this app, made on first use from `client`
     /// with its device id (the stored one when it has none) and an offline
-    /// queue in the store; nil without `enableSessionTracking`.
+    /// queue in the store; nil without `enableSessionTracking` or when the
+    /// app failed to start.
     func sessionTracker(client: OrcaClient) -> SessionTracker? {
         guard enableSessionTracking else { return nil }
+        if case .failed = phase { return nil }
         if let tracker { return tracker }
         let made = SessionTracker(
             client: client, deviceId: client.identified(by: store).deviceId,
@@ -98,8 +104,9 @@ final class OrcaBootModel: ObservableObject {
 }
 
 /// OrcaApp's root: the spinner while the version check runs, the
-/// force-update screen when the server demands one, else `content`, which is
-/// built only then. Sessions are tracked here, around all three.
+/// force-update screen when the server demands one, the error when the app
+/// cannot start, else `content`, which is built only then. Sessions are
+/// tracked here, around all of them but the error.
 @MainActor
 struct OrcaBootView<Content: View>: View {
     @ObservedObject var boot: OrcaBootModel
@@ -113,6 +120,10 @@ struct OrcaBootView<Content: View>: View {
                 ProgressView()
             case .forceUpdate:
                 ForceUpdateView()
+            case .failed(let message):
+                // No retry: a plugin conflict stays one.
+                LoadError(title: "Could not load this page", message: message, retry: nil)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .ready:
                 content()
             }

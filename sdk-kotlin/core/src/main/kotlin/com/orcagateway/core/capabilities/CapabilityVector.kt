@@ -46,7 +46,25 @@ public data class CapabilityVector(
             .digest(canonicalJson().toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
 
+    /**
+     * This vector with plugin [widgets] and [actions] added, as the Dart
+     * client advertises them (`registerCapabilityExtensions` and
+     * `_capabilityVector`, sdk/lib/src/client/orca_client.dart): widgets
+     * verbatim, each action bare and as `custom:<name>` unless it already
+     * has the prefix. Both lists become the sorted union, without
+     * duplicates; the other fields stay.
+     */
+    public fun adding(widgets: Iterable<String> = emptyList(), actions: Iterable<String> = emptyList()): CapabilityVector {
+        val kinds = actions.flatMap { if (it.startsWith(CUSTOM_PREFIX)) listOf(it) else listOf(it, CUSTOM_PREFIX + it) }
+        return copy(
+            widgets = (this.widgets + widgets).distinct().sorted(),
+            actionKinds = (actionKinds + kinds).distinct().sorted(),
+        )
+    }
+
     public companion object {
+        private const val CUSTOM_PREFIX = "custom:"
+
         /** The vector this build advertises. */
         public val current: CapabilityVector = CapabilityVector(
             protocolVersion = GeneratedCapabilities.protocolVersion,

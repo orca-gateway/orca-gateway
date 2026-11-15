@@ -3,12 +3,15 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 
+import '../generators/kotlin_generator.dart';
+import '../generators/swift_generator.dart';
 import '../generators/typescript_generator.dart';
 import '../manifest/plugin_manifest.dart';
 import '../utils/package_resolver.dart';
 
 /// Generates TypeScript types for all installed Orca Gateway plugins that
-/// have a `schema` section in their `orca_plugin.yaml`.
+/// have a `schema` section in their `orca_plugin.yaml`, or, with `--lang`,
+/// a Swift or Kotlin plugin stub for each.
 ///
 /// Run from the root of a Flutter project:
 /// ```
@@ -16,19 +19,28 @@ import '../utils/package_resolver.dart';
 /// orca plugin generate --output src/generated
 /// orca plugin generate --plugin orca_google_map
 /// ```
+///
+/// Or, for a native host with no pubspec.yaml, from one manifest:
+/// ```
+/// orca plugin generate --lang swift --manifest path/to/orca_plugin.yaml
+/// orca plugin generate --lang kotlin --manifest path/to/orca_plugin.yaml --package com.example.plugins
+/// ```
 class PluginGenerateCommand extends Command<void> {
   @override
   final name = 'generate';
 
   @override
   final description =
-      'Generate TypeScript types from installed plugin schemas.';
+      'Generate TypeScript types (or Swift/Kotlin plugin stubs) from plugin schemas.';
 
-  PluginGenerateCommand() {
+  /// The project root; the current directory when null.
+  final String? _root;
+
+  PluginGenerateCommand({String? root}) : _root = root {
     argParser.addOption(
       'output',
       abbr: 'o',
-      help: 'Output directory for generated .ts files.',
+      help: 'Output directory for the generated files.',
       defaultsTo: 'generated',
     );
     argParser.addOption(
@@ -36,13 +48,46 @@ class PluginGenerateCommand extends Command<void> {
       abbr: 'p',
       help: 'Generate for a specific plugin only.',
     );
+    argParser.addOption(
+      'lang',
+      help: 'Output language.',
+      allowed: ['ts', 'swift', 'kotlin'],
+      defaultsTo: 'ts',
+    );
+    argParser.addOption(
+      'manifest',
+      help: 'Generate from this orca_plugin.yaml only; no pubspec.yaml needed.',
+    );
+    argParser.addOption(
+      'package',
+      help: 'Package of the generated Kotlin file.',
+      defaultsTo: 'orca.plugins',
+    );
   }
 
   @override
   Future<void> run() async {
-    final projectRoot = Directory.current.path;
+    final projectRoot = _root ?? Directory.current.path;
     final outputDir = argResults!['output'] as String;
     final singlePlugin = argResults!['plugin'] as String?;
+    final lang = argResults!['lang'] as String;
+    final manifestArg = argResults!['manifest'] as String?;
+    final kotlinPackage = argResults!['package'] as String;
+
+    if (manifestArg != null) {
+      final manifestPath = p.join(projectRoot, manifestArg);
+      if (!File(manifestPath).existsSync()) {
+        stderr.writeln('Error: No manifest found at $manifestArg.');
+        exit(1);
+      }
+      final manifest = PluginManifest.fromYamlFile(manifestPath);
+      final written = _write(projectRoot, outputDir, manifest.name, manifest,
+          lang, kotlinPackage);
+      if (!written) {
+        stdout.writeln('No schema section in $manifestArg. Nothing to generate.');
+      }
+      return;
+    }
 
     // Validate Flutter project
     final pubspecFile = File(p.join(projectRoot, 'pubspec.yaml'));
@@ -82,22 +127,10 @@ class PluginGenerateCommand extends Command<void> {
       if (!File(manifestPath).existsSync()) continue;
 
       final manifest = PluginManifest.fromYamlFile(manifestPath);
-      if (manifest.schema == null || manifest.schema!.isEmpty) continue;
-
-      // Generate TypeScript
-      final ts =
-          TypeScriptGenerator.generate(packageName, manifest.schema!);
-
-      // Write output file
-      final outDir = Directory(p.join(projectRoot, outputDir));
-      if (!outDir.existsSync()) {
-        outDir.createSync(recursive: true);
+      if (_write(projectRoot, outputDir, packageName, manifest, lang,
+          kotlinPackage)) {
+        generated++;
       }
-
-      final outFile = File(p.join(outDir.path, '$packageName.ts'));
-      outFile.writeAsStringSync(ts);
-      stdout.writeln('  Generated ${p.relative(outFile.path)}');
-      generated++;
     }
 
     if (generated == 0) {
@@ -109,6 +142,46 @@ class PluginGenerateCommand extends Command<void> {
     }
   }
 }
+
+/// Writes the [lang] output for [manifest] under [outputDir]: `<name>.ts`, or
+/// `<Pascal(name)>Plugin.swift` / `.kt`. TypeScript needs a schema section
+/// (false without one, nothing written); Swift and Kotlin always write.
+bool _write(String projectRoot, String outputDir, String name,
+    PluginManifest manifest, String lang, String kotlinPackage) {
+  final schema = manifest.schema;
+  final String fileName;
+  final String source;
+  switch (lang) {
+    case 'swift':
+      source = SwiftGenerator.generate(name, schema);
+      fileName = '${_pascal(name)}Plugin.swift';
+    case 'kotlin':
+      source = KotlinGenerator.generate(name, schema,
+          packageName: kotlinPackage);
+      fileName = '${_pascal(name)}Plugin.kt';
+    default:
+      if (schema == null || schema.isEmpty) return false;
+      source = TypeScriptGenerator.generate(name, schema);
+      fileName = '$name.ts';
+  }
+
+  final outDir = Directory(p.join(projectRoot, outputDir));
+  if (!outDir.existsSync()) {
+    outDir.createSync(recursive: true);
+  }
+
+  final outFile = File(p.join(outDir.path, fileName));
+  outFile.writeAsStringSync(source);
+  stdout.writeln('  Generated ${p.relative(outFile.path)}');
+  return true;
+}
+
+/// `orca_google_map` → `OrcaGoogleMap`.
+String _pascal(String name) => name
+    .split(RegExp('[_-]'))
+    .where((part) => part.isNotEmpty)
+    .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+    .join();
 
 /// Generate TypeScript for a single plugin manifest and write to [outputDir].
 /// Used by `plugin add` for auto-generation after installation.

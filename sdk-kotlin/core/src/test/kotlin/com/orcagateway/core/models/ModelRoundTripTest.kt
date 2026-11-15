@@ -4,6 +4,7 @@ import com.orcagateway.core.capabilities.GeneratedCapabilities
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.resolver.ValueResolver
 import com.orcagateway.core.state.ActionEffect
+import com.orcagateway.core.state.ActionExecutor
 import com.orcagateway.core.state.StoreState
 import com.orcagateway.core.support.Fixtures
 import com.orcagateway.core.support.arr
@@ -74,9 +75,11 @@ class ModelRoundTripTest {
     @Test
     fun allActionFixturesRoundTrip() {
         val files = Fixtures.files("actions")
-        assertEquals(17, files.size, "action fixtures 01-15, 30-31")
+        assertEquals(20, files.size, "action fixtures 01-15, 30-31 and 45-47")
         val kinds = HashSet<String>()
         for ((name, fixture) in files) {
+            // Plugin action names a fixture registers handlers for (45-47).
+            val handlers = fixture["handlers"].arrayValue.orEmpty().mapNotNull { it.stringValue }.toSet()
             val lists = mutableListOf(fixture["actions"])
             fixture["serverResponses"].objectValue?.let { responses ->
                 lists += responses.values.map { it["actions"] }.filter { !it.isNull }
@@ -85,15 +88,24 @@ class ModelRoundTripTest {
                 val actions = decodeModel<List<Action>>(list)
                 assertJsonEqual(jsonOf(actions), list, name)
                 for (action in actions) {
-                    assertFalse(action is Action.Unknown, "$name: ${action.kind} decoded as unknown")
+                    // A bare plugin name with a handler is unknown to the models by design.
+                    val plugin = action.kind !in ActionExecutor.kinds && action.kind in handlers
+                    assertFalse(action is Action.Unknown && !plugin, "$name: ${action.kind} decoded as unknown")
                     collectKinds(action, kinds)
                 }
             }
             // State snapshots and effects are data too.
             val state = decodeModel<StoreState>(fixture["expected"]["state"])
             assertJsonEqual(jsonOf(state), fixture["expected"]["state"], name)
-            val effects = decodeModel<List<ActionEffect>>(fixture["expected"]["effects"])
-            assertJsonEqual(JsonValue.Array(effects.map { it.json }), fixture["expected"]["effects"], name)
+            // The runner's handler records are not SDK effects: skipped.
+            val expectedEffects = fixture["expected"]["effects"]
+            val sdkEffects = if (handlers.isEmpty()) {
+                expectedEffects
+            } else {
+                JsonValue.Array(expectedEffects.arrayValue.orEmpty().filter { it["kind"].stringValue != "handler" })
+            }
+            val effects = decodeModel<List<ActionEffect>>(sdkEffects)
+            assertJsonEqual(JsonValue.Array(effects.map { it.json }), sdkEffects, name)
         }
         // Every advertised kind appears in the fixtures, except the three
         // component kinds: a fixture compares state and effects, not the node

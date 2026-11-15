@@ -4,6 +4,12 @@
 // ActionExecutor (no BuildContext, so nothing is drawn), then asserts the
 // resulting state and the effects the executor emitted as data. The Flutter
 // SDK runs these first; the Swift and Kotlin SDKs load the same files.
+//
+// Optional `handlers: [String]` (native parity step 16): before the actions
+// run, the runner registers a recording handler under each name, which
+// appends `{"kind": "handler", "name": <the name it was registered under>,
+// "action": <a copy of the raw action map it received>}` to the effects.
+// Fixtures without `handlers` run exactly as before.
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -91,6 +97,16 @@ void main() {
             : null,
         onEffect: (e) => effects.add(e.toJson()),
       );
+      for (final name in (fx['handlers'] as List? ?? const []).cast<String>()) {
+        executor.registerHandler(
+          name,
+          (action, _) async => effects.add({
+            'kind': 'handler',
+            'name': name,
+            'action': Map<String, dynamic>.from(action),
+          }),
+        );
+      }
 
       final event = fx['event'];
       for (final action in fx['actions'] as List) {

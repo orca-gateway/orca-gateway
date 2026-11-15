@@ -30,6 +30,9 @@ import java.net.URI
  * An app with a navigation config (app id `navigation`) boots from it with
  * the extra ORCA_BOOT set to `config`: the server's config says where the
  * app starts, and ORCA_PATH is not used.
+ *
+ * Two plugins (DemoPlugins.kt) draw the ColoredBadge and run the device
+ * actions of the `custom` app: start it with ORCA_APP_ID `custom`.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,10 +49,17 @@ class MainActivity : ComponentActivity() {
         val path = if (setting("ORCA_BOOT", "path") == "config") null else setting("ORCA_PATH", "home")
         val offline = intent.getBooleanExtra("ORCA_OFFLINE", false)
         val sessions = intent.getBooleanExtra("ORCA_SESSIONS", false)
+        val plugins = listOf(BadgePlugin(), DeviceActionsPlugin(window.decorView))
         setContent {
             MaterialTheme {
                 Surface {
-                    OrcaApp(client, path = path, enableOffline = offline, enableSessionTracking = sessions)
+                    OrcaApp(
+                        client,
+                        path = path,
+                        enableOffline = offline,
+                        enableSessionTracking = sessions,
+                        plugins = plugins,
+                    )
                 }
             }
         }

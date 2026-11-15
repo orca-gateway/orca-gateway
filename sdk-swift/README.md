@@ -185,6 +185,68 @@ draw (once per type per process).
 OrcaTelemetry.onEvent = { name, payload in print(name, payload) }
 ```
 
+## Plugins
+
+A plugin brings widget types and custom actions the SDK does not have, as a Flutter `OrcaPlugin`
+does. It is a type conforming to `OrcaPlugin`:
+
+- `name`: shown in conflict messages.
+- `widgets`: an `OrcaWidgetBuilder` per wire type. It gets the resolved node and the page model and
+  returns an `AnyView`: it reads a prop with `node["label"]`, draws a child with
+  `NodeView(id: node.childIds[0], model: model)` and fires a trigger with
+  `model.fire("onTap", on: node, eventData: [...])`, which runs the node's action for it. Fire a
+  tap from a `Button`: `onTapGesture` drops a touch held about a second, which Flutter still taps.
+- `actions`: an `OrcaActionHandler` per action type. It gets the action as the server sent it
+  (params as sibling keys, not resolved; `executor.resolve(value)` resolves one) and the executor.
+- `triggers`: the triggers each widget type can fire. Metadata: nothing reads them at run time.
+
+All but `name` default to empty. Pass plugins to `OrcaApp`, with `customActions` (handlers outside
+any plugin) and `widgets` (a `WidgetBuilders` of your own widget types) if you have some:
+
+```swift
+struct BadgePlugin: OrcaPlugin {
+    let name = "BadgePlugin"
+    var widgets: [String: OrcaWidgetBuilder] {
+        ["ColoredBadge": { node, model in
+            AnyView(Button { _ = model.fire("onTap", on: node) } label: {
+                Text(node["label"]?.stringValue ?? "")
+            })
+        }]
+    }
+    var actions: [String: OrcaActionHandler] {
+        ["hapticFeedback": { action, _ in print("haptic", action["intensity"]) }]
+    }
+}
+
+OrcaApp(client: client, path: "home", plugins: [BadgePlugin()],
+        customActions: ["rateApp": { _, _ in /* open the store page */ }])
+```
+
+`OrcaApp(router:)` takes the same three options. They are merged once, before the first request,
+with Flutter's rules: a widget type claimed twice (by two plugins, or by a plugin and the SDK or
+`widgets`) or an action type claimed twice (by two plugins, or by a plugin and `customActions`) is
+a conflict. A conflict shows the error view with Flutter's message, such as
+`Widget type "ColoredBadge" from plugin "b" conflicts with plugin "a".`, and loads no page.
+
+An action runs the handler registered under its type as sent, else the one under its type without
+`custom:`, so a `hapticFeedback` handler runs both `hapticFeedback` and `custom:hapticFeedback`. A
+handler named like a built-in action kind (`navigate`, `copyToClipboard`) replaces the built-in.
+
+The client adds the plugins' widget types, and their action types (each bare and as
+`custom:<name>`), to the capabilities it sends, so the server keeps the nodes that use them.
+`customActions` and `widgets` are not advertised, as in Flutter. The
+[iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios) registers
+two plugins for the example server's `custom` app.
+
+To start a plugin from a Flutter plugin's `orca_plugin.yaml`, the CLI writes a Swift stub (a props
+type per widget, a params type per action, a placeholder builder and handler for each):
+
+```bash
+orca plugin generate --lang swift --manifest orca_plugin.yaml
+```
+
+See [`cli/README.md`](https://github.com/orca-gateway/orca-gateway/blob/main/cli/README.md).
+
 ## Tests
 
 In a checkout of the monorepo:

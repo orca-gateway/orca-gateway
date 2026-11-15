@@ -54,6 +54,7 @@ scheme, or pass them to `simctl launch`:
 | Basic actions | `basic-actions` | `home` | navigation, back, URL, clipboard, share, toasts |
 | Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
 | Todo | `todo` | `home` | add, tick, delete |
+| Custom extensions | `custom` | `home` | a plugin widget and plugin actions (see "Plugins" below) |
 
 ```bash
 SIMCTL_CHILD_ORCA_APP_ID=server-actions SIMCTL_CHILD_ORCA_PATH=shop xcrun simctl launch booted com.orcagateway.examples.counter
@@ -84,6 +85,30 @@ in place of the system one. The drawer follows in the same release. The `tabs` d
 ```bash
 SIMCTL_CHILD_ORCA_APP_ID=tabs SIMCTL_CHILD_ORCA_BOOT=config xcrun simctl launch booted com.orcagateway.examples.counter
 ```
+
+## Plugins
+
+The app registers two plugins, the Swift twins of the Flutter example's: `BadgePlugin` draws the
+server's `ColoredBadge` widget in SwiftUI, and `DeviceActionsPlugin` runs the custom actions
+`hapticFeedback`, `showConfetti`, `rateApp` and `processPayment`. Both are in
+`OrcaCounter/OrcaCounterApp.swift`, passed as `OrcaApp(..., plugins: [...])`. To see them, start
+the server (step 1 above) and launch the `custom` app:
+
+```bash
+SIMCTL_CHILD_ORCA_APP_ID=custom xcrun simctl launch --console booted com.orcagateway.examples.counter
+```
+
+Under "Custom Component" the page shows three badges: a green "CUSTOM BADGE", a blue "TAPS: 0" and
+an orange "RATE: ★★★★★". The server leaves out widgets an app does not advertise, so a drawn badge
+shows that the plugin added `ColoredBadge` to the app's capabilities. Then:
+
+- Tap "CUSTOM BADGE": a light haptic and the snackbar "Badge tapped!".
+- Tap "Trigger Haptic": a heavy haptic; "Haptics triggered: 1" and the blue badge reads "TAPS: 1".
+- Tap "Show Confetti", "Rate This App" or "Pay $29.99": the console prints the action as
+  `[DeviceActionsPlugin] {...}` (the example has no confetti or store SDK); rating and paying then
+  show their snackbars.
+
+The simulator plays no haptics; a device does.
 
 ## Version check and sessions
 

@@ -128,6 +128,8 @@ public final class OrcaRouter: ObservableObject {
     public var onRouteChanged: ((RouteChangeEvent) -> Void)?
     /// The routes of the config the router was made with; nil without one.
     public let table: RouteTable?
+    /// OrcaApp's plugins: every page this router loads is built by it.
+    var plugins: OrcaPluginHost?
 
     private var loaders: [UUID: OrcaPageLoader] = [:]
     /// The stacks of a router made with a config; nil in path mode.

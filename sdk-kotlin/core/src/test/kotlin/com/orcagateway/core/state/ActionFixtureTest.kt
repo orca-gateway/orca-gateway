@@ -3,6 +3,7 @@ package com.orcagateway.core.state
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.StateScope
+import com.orcagateway.core.plugins.OrcaActionHandler
 import com.orcagateway.core.support.ActionStub
 import com.orcagateway.core.support.Fixtures
 import com.orcagateway.core.support.assertJsonEqual
@@ -22,26 +23,49 @@ import kotlin.test.assertTrue
  * the Dart executor. Each run seeds the state, runs the actions, and compares
  * the state and the effects as JSON. A fixture with `serverResponses` talks
  * to a stub of the `/action` route, as the Dart runner's stub client does.
+ * A fixture with `handlers` registers, for each name, a handler that records
+ * `{"kind": "handler", "name": <name>, "action": <the raw action>}` among
+ * the effects (fixtures 45-47, custom action handlers).
  */
 class ActionFixtureTest {
     @Test
-    fun allSeventeenActionFixturesPass() = runSuspend {
+    fun allTwentyActionFixturesPass() = runSuspend {
         val files = Fixtures.files("actions")
-        assertEquals(17, files.size)
+        assertEquals(20, files.size)
         for ((name, fx) in files) {
+            val handlers = fx["handlers"].arrayValue.orEmpty().map { it.stringValue ?: error("$name: a handler name is a string") }
             val actions = fx["actions"].arrayValue.orEmpty().map { it.decode(Action.serializer()) }
-            assertTrue(actions.all { ActionExecutor.implements(it) }, "$name: every kind implemented")
+            assertTrue(actions.all { runs(it, handlers) }, "$name: every kind implemented")
 
             val store = ElmStore(fx["state"].decode(StoreState.serializer()))
             val client = fx["serverResponses"].objectValue?.let { ActionStub.client(ActionStub(it)) }
             val executor = ActionExecutor(store, client)
-            val effects = ArrayList<ActionEffect>()
-            executor.onEffect = { effects.add(it) }
+            val effects = ArrayList<JsonValue>()
+            executor.onEffect = { effects.add(it.json) }
+            for (handler in handlers) {
+                executor.registerHandler(
+                    handler,
+                    OrcaActionHandler { action, _ ->
+                        effects.add(JsonValue.obj("kind" to "handler", "name" to handler, "action" to JsonValue.fromJsonElement(action)))
+                    },
+                )
+            }
 
             for (action in actions) executor.execute(action, fx["event"].objectValue)
             assertJsonEqual(jsonOf(store.state), fx["expected"]["state"], "$name: state")
-            assertJsonEqual(JsonValue.Array(effects.map { it.json }), fx["expected"]["effects"], "$name: effects")
+            assertJsonEqual(JsonValue.Array(effects), fx["expected"]["effects"], "$name: effects")
         }
+    }
+
+    /**
+     * A built-in the executor implements, an action a fixture handler takes,
+     * or a `custom:` action (run by its handler, else the silent no-op
+     * fixture 46 pins); groups are checked member by member.
+     */
+    private fun runs(action: Action, handlers: List<String>): Boolean = when {
+        action is Action.Custom || action.kind in handlers -> true
+        action is Action.ActionGroup -> action.actions.all { runs(it, handlers) }
+        else -> ActionExecutor.implements(action)
     }
 
     @Test
