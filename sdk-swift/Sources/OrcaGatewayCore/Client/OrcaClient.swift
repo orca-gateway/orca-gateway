@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// A failed page request: a status other than 200, or a URL that cannot be
 /// built.
@@ -36,6 +39,11 @@ public struct OrcaClient: @unchecked Sendable {
     public var deviceId: String?
     public var device: DeviceInfo
     public let transport: HTTPTransport
+    /// Seconds a whole request may take, send to answer, before it fails with
+    /// URLError(.timedOut), which OrcaErrorInfo shows as Connection Failed.
+    /// Flutter's `timeout` (30 s by default), here enforced on every request
+    /// the client sends, whatever the transport.
+    public var timeout: TimeInterval
     /// The advertised vector and its hash, shared by every copy of this client
     /// so a copy made earlier (a router's) sees later registrations.
     private let advertised: AdvertisedCapabilities
@@ -51,7 +59,7 @@ public struct OrcaClient: @unchecked Sendable {
         baseURL: URL, appId: String, apiKey: String? = nil, environment: String? = nil,
         deviceId: String? = nil, device: DeviceInfo = DeviceInfo(),
         capabilities: CapabilityVector = .current,
-        transport: HTTPTransport = URLSessionTransport()
+        transport: HTTPTransport = URLSessionTransport(), timeout: TimeInterval = 30
     ) {
         self.baseURL = baseURL
         self.appId = appId
@@ -61,6 +69,7 @@ public struct OrcaClient: @unchecked Sendable {
         self.device = device
         self.advertised = AdvertisedCapabilities(capabilities)
         self.transport = transport
+        self.timeout = timeout
     }
 
     /// Advertise plugin-contributed widget types and action kinds from the
@@ -178,7 +187,7 @@ public struct OrcaClient: @unchecked Sendable {
     /// `captureNetworkRequests` is off) and an `error` event for one that
     /// failed or was refused (Dart `_reportFailedRequest` and
     /// `_reportHttpErrorResponse`). The 412 of the capability handshake is
-    /// expected, so it is no error.
+    /// expected, so it is no error. Every request goes out with `timeout`.
     ///
     /// With `includeBodies` on, the event shows `requestBody`: the given one,
     /// else the request's own JSON body (a page fetch gives its app state, or
@@ -186,7 +195,9 @@ public struct OrcaClient: @unchecked Sendable {
     /// response as JSON, else its text (Dart `_tryDecodeJson`), none when the
     /// transport failed.
     func send(_ request: HTTPRequest, requestBody: JSONValue? = nil) async throws -> HTTPResponse {
-        guard OrcaDebug.isEnabled else { return try await transport.send(request) }
+        var request = request
+        request.timeout = timeout
+        guard OrcaDebug.isEnabled else { return try await sendWithinTimeout(request) }
         let options = OrcaDebug.options
         let start = OrcaDebug.now()
         let url = request.url.absoluteString
@@ -195,7 +206,7 @@ public struct OrcaClient: @unchecked Sendable {
         let shownBody = options.includeBodies
             ? requestBody ?? request.body.flatMap { try? JSONValue.decode($0) } : nil
         do {
-            let response = try await transport.send(request)
+            let response = try await sendWithinTimeout(request)
             let ms = OrcaDebug.now() - start
             if options.captureNetworkRequests {
                 OrcaDebug.report(.network(
@@ -225,6 +236,26 @@ public struct OrcaClient: @unchecked Sendable {
             }
             OrcaDebug.report(.error(message: "Network request failed: \(error)", context: context))
             throw error
+        }
+    }
+
+    /// The transport's answer, or URLError(.timedOut) when `timeout` passes
+    /// first: the two race in a task group, the first to finish wins, and the
+    /// loser is cancelled. The group waits for a transport that ignores
+    /// cancellation, so URLSessionTransport is also given the timeout.
+    func sendWithinTimeout(_ request: HTTPRequest) async throws -> HTTPResponse {
+        let transport = self.transport
+        // Clamped so the conversion cannot overflow; NaN and below 0 are 0.
+        let nanoseconds = UInt64((timeout > 0 ? min(timeout, 4e9) : 0) * 1_000_000_000)
+        return try await withThrowingTaskGroup(of: HTTPResponse.self) { group in
+            group.addTask { try await transport.send(request) }
+            group.addTask {
+                try await Task.sleep(nanoseconds: nanoseconds)
+                throw URLError(.timedOut)
+            }
+            defer { group.cancelAll() }
+            guard let response = try await group.next() else { throw URLError(.timedOut) }
+            return response
         }
     }
 

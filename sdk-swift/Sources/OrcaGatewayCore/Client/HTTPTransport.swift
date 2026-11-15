@@ -11,12 +11,21 @@ public struct HTTPRequest: Equatable, @unchecked Sendable {
     public var url: URL
     public var headers: [String: String]
     public var body: Data?
+    /// The client's timeout in seconds (OrcaClient sets it on every request
+    /// it sends). The client enforces it itself; URLSessionTransport also
+    /// gives it to URLRequest, so URLSession stops the request on its side.
+    /// Nil keeps URLSession's own.
+    public var timeout: TimeInterval?
 
-    public init(method: String, url: URL, headers: [String: String] = [:], body: Data? = nil) {
+    public init(
+        method: String, url: URL, headers: [String: String] = [:], body: Data? = nil,
+        timeout: TimeInterval? = nil
+    ) {
         self.method = method
         self.url = url
         self.headers = headers
         self.body = body
+        self.timeout = timeout
     }
 }
 
@@ -54,13 +63,20 @@ public struct URLSessionTransport: HTTPTransport, @unchecked Sendable {
         self.session = session
     }
 
-    public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+    /// The URLRequest for `request`: its method, body, headers and timeout.
+    func urlRequest(_ request: HTTPRequest) -> URLRequest {
         var urlRequest = URLRequest(url: request.url)
         urlRequest.httpMethod = request.method
         urlRequest.httpBody = request.body
         for (name, value) in request.headers {
             urlRequest.setValue(value, forHTTPHeaderField: name)
         }
+        if let timeout = request.timeout { urlRequest.timeoutInterval = timeout }
+        return urlRequest
+    }
+
+    public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        let urlRequest = self.urlRequest(request)
         // dataTask plus a continuation: the async URLSession API is missing
         // from older Linux Foundation releases.
         return try await withCheckedThrowingContinuation { continuation in
