@@ -34,6 +34,15 @@ describe("Trigger manifest — per-widget triggers in widget-registry", () => {
     expect(WIDGET_REGISTRY.CustomScrollView.triggers).toEqual(scrollTriggers);
   });
 
+  it("B13.3-F ReorderableListView fires onReorder and the scroll trigger set", () => {
+    expect(WIDGET_REGISTRY.ReorderableListView.triggers).toEqual([
+      "onReorder",
+      "onScrollBegin",
+      "onScrolling",
+      "onScrollEnd",
+    ]);
+  });
+
   it("pure display widgets have no widget-specific triggers", () => {
     // Text / Divider / Spacer don't fire any gesture or input events on
     // their own — authors wrap them in GestureDetector for taps.
@@ -58,6 +67,7 @@ describe("Trigger manifest — per-widget triggers in widget-registry", () => {
       "onScrollEnd",
       "onRefresh",
       "onAction",
+      "onReorder",
       "onVisible",
       "onInit",
       "onAppBackground",

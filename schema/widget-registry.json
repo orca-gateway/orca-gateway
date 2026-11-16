@@ -2799,7 +2799,12 @@
         "android",
         "ios"
       ],
-      "triggers": []
+      "triggers": [
+        "onReorder",
+        "onScrollBegin",
+        "onScrolling",
+        "onScrollEnd"
+      ]
     },
     {
       "type": "RichText",

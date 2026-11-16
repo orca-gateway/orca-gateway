@@ -48,6 +48,7 @@ The server runs on `http://localhost:8080` by default.
 | `custom.ts`           | Custom widget types and custom action handlers                |
 | `navigation.ts`       | Config-driven navigation: initial route, tabs, a nested route, a login redirect, shared app state |
 | `tabs.ts`             | Two apps, `tabs` and `tabs-server`, over the same pages. `tabs`: the SDK's own tab bar and drawer; each tab keeps its page (a counter, a scroll position, typed text), `SwitchTab`, `OpenDrawer`, the `_tabIndex` app state, routes over the tabs, a page with its own drawer, end drawer and bottom bar. `tabs-server`: the same with the tab bar and the drawer sent by the server |
+| `reorder.ts`          | App `reorder`: one `ReorderableListView` of five rows. The order is a list in page state; a drop sends `oldIndex` and `newIndex` to a server action, which answers with the moved list |
 | `orca_google_map.ts`  | Google Maps integration via the map plugin                    |
 | `index.ts`            | Entry point — registers all examples into a single engine     |
 

@@ -1,0 +1,93 @@
+{
+  "name": "reorder-event",
+  "description": "onReorder reads its payload through the event Value: {oldIndex, newIndex}, where newIndex is the insertion index before the dragged item is removed (the first of three rows dropped at the end gives 3, not 2). The indices go into page state and into a serverAction's params; the order itself changes only through the server's answer.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "from": -1,
+      "to": -1,
+      "order": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    "app": {}
+  },
+  "event": {
+    "oldIndex": 0,
+    "newIndex": 3
+  },
+  "serverResponses": {
+    "moveRow": {
+      "actions": [
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "order",
+          "value": [
+            "b",
+            "c",
+            "a"
+          ]
+        }
+      ]
+    }
+  },
+  "actions": [
+    {
+      "type": "setState",
+      "key": "from",
+      "value": {
+        "type": "event",
+        "key": "oldIndex"
+      }
+    },
+    {
+      "type": "setState",
+      "key": "to",
+      "value": {
+        "type": "event",
+        "key": "newIndex"
+      }
+    },
+    {
+      "type": "serverAction",
+      "id": "moveRow",
+      "params": {
+        "oldIndex": {
+          "type": "event",
+          "key": "oldIndex"
+        },
+        "newIndex": {
+          "type": "event",
+          "key": "newIndex"
+        }
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "from": 0,
+        "to": 3,
+        "order": [
+          "b",
+          "c",
+          "a"
+        ]
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "serverAction",
+        "id": "moveRow",
+        "params": {
+          "oldIndex": 0,
+          "newIndex": 3
+        }
+      }
+    ]
+  }
+}

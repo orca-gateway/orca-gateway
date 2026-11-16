@@ -13,6 +13,7 @@ import { todoApp } from "./todo";
 import { navigationApp } from "./navigation";
 import { tabsApp, tabsServerApp } from "./tabs";
 import { motionApp } from "./motion";
+import { reorderApp } from "./reorder";
 import { recoveryMiddleware } from "../../engine/src/middlewares/recovery";
 import { loggingMiddleware } from "../../engine/src/middlewares/logging";
 import { corsMiddleware } from "../../engine/src/middlewares/cors";
@@ -23,7 +24,7 @@ import enginePackage from "../../engine/package.json";
 
 // ── Register middleware on each app ──────────────────────────
 
-const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp, navigationApp, tabsApp, tabsServerApp, parityAApp, motionApp];
+const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp, navigationApp, tabsApp, tabsServerApp, parityAApp, motionApp, reorderApp];
 
 for (const app of apps) {
   app
@@ -101,5 +102,6 @@ console.log("  - navigation:     /api/v1/app/navigation/config");
 console.log("  - tabs:           /api/v1/app/tabs/config");
 console.log("  - tabs-server:    /api/v1/app/tabs-server/config");
 console.log("  - motion:         /api/v1/app/motion/config");
+console.log("  - reorder:        /api/v1/app/reorder/page/home");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/polish");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/lifecycle");
