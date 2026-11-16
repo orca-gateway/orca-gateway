@@ -414,24 +414,37 @@ files under `context.filesDir/orca_gateway`:
 The same boot can run under your own splash: await `preload` with a `StaticFlowManager` over
 `offlineStore(context)`, the files `enableOffline` uses, and give `OrcaApp` the config and the same
 manager. It then asks no `/version` and no `/config`, and its first frame is the app. The
-force-update answer is yours to show (`OrcaApp` never sees it), and offline with nothing saved
-`preload` throws `OfflineBootException`:
+force-update answer is yours to show (`OrcaApp` never sees it), and so is a failed boot. Offline
+with nothing saved, `preload` throws `OfflineBootException`. A failed `/config` (asked when a
+version moved, or when no config is saved) is thrown as the client threw it, with no fallback to
+the saved config, as in Flutter. So catch every `Exception`, and let `CancellationException`
+through:
 
 ```kotlin
 import com.orcagateway.core.client.PreloadResult
 import com.orcagateway.core.client.StaticFlowManager
 import com.orcagateway.core.client.preload
 import com.orcagateway.sdk.offlineStore
+import kotlinx.coroutines.CancellationException
 
 val manager = remember { StaticFlowManager(offlineStore(context)) }
-val result by produceState<PreloadResult?>(null) {
-    // File work off the main thread; catch OfflineBootException to show your own error.
-    value = withContext(Dispatchers.IO) { preload(client, manager) }
+val outcome by produceState<Result<PreloadResult>?>(null) {
+    value = try {
+        // File work off the main thread.
+        Result.success(withContext(Dispatchers.IO) { preload(client, manager) })
+    } catch (e: CancellationException) {
+        throw e // the splash left the composition: no failed boot
+    } catch (e: Exception) {
+        Result.failure(e) // OfflineBootException, or what the client threw for /config
+    }
 }
-when (val ready = result) {
+when (val result = outcome) {
     null -> Splash()
-    PreloadResult.ForceUpdate -> UpdateRequired()
-    is PreloadResult.Success -> OrcaApp(client, preloadedConfig = ready.config, staticFlowManager = manager)
+    else -> when (val ready = result.getOrNull()) {
+        null -> BootFailed(result.exceptionOrNull()?.message)
+        PreloadResult.ForceUpdate -> UpdateRequired()
+        is PreloadResult.Success -> OrcaApp(client, preloadedConfig = ready.config, staticFlowManager = manager)
+    }
 }
 ```
 

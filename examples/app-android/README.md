@@ -213,9 +213,9 @@ To check it offline:
 
 1. Boot once with the server up (the command above).
 2. Stop the server, then launch again with the same command. `/version` fails, so the app boots
-   from the saved config: "Home (Static)" opens, "Go to About" opens "About (Static)", and "Go to
-   Profile" shows "Could not load this page" with the connection error: a dynamic page is never
-   cached.
+   from the saved config: "Home (Static)" opens, "Go to About (also static)" opens
+   "About (Static)", and "Go to Profile (dynamic, always fresh)" shows "Could not load this page"
+   with the connection error: a dynamic page is never cached.
 3. With nothing saved the boot fails. Clear the app's data and launch again, the server still
    down: "Could not load this app" with "No network and no cached config available", and "Try
    again".
