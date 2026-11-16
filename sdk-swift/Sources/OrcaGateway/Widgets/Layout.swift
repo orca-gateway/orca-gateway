@@ -7,9 +7,9 @@ import SwiftUI
 /// `spaceAround` and `spaceEvenly` space like a child; `spaceAround` puts
 /// half a space at each end. A Column's cross-axis `baseline` is `start`.
 ///
-/// A Row or Column with an Expanded or Spacer child is drawn by FlexLayout,
-/// which shares the space by `flex`; every other one keeps the stack below,
-/// so pages that drew before draw exactly as before.
+/// A Row or Column with an Expanded, Flexible or Spacer child is drawn by
+/// FlexLayout, which shares the space by `flex`; every other one keeps the
+/// stack below, so pages that drew before draw exactly as before.
 ///
 /// `textDirection` and `verticalDirection` (Flutter LB:119-158) order the
 /// flex's own layout only: rtl starts a Row at the right and swaps a
@@ -53,9 +53,11 @@ struct FlexView: View {
         if flexes.contains(where: { $0 > 0 }) {
             FlexLayout(axis: axis, cross: Props.crossAxis(node["crossAxisAlignment"]),
                        fill: Props.fillsMainAxis(node["mainAxisSize"]),
-                       gap: Props.number(node["gap"]) ?? 0, up: up) {
+                       gap: Props.number(node["gap"]) ?? 0, up: up,
+                       main: Props.mainAxis(node["mainAxisAlignment"]), gapItems: Props.number(node["gap"]) != nil) {
                 ForEach(Array(zip(node.childIds, flexes)), id: \.0) { id, flex in
                     child(id).layoutValue(key: FlexFactor.self, value: flex)
+                        .layoutValue(key: LooseFlex.self, value: loose(id))
                 }
             }
             .environment(\.orcaFlexAxis, axis)
@@ -64,10 +66,17 @@ struct FlexView: View {
         }
     }
 
-    /// Flutter `propOr<int>('flex', 1)` for Expanded and Spacer; 0 otherwise.
+    /// Flutter `propOr<int>('flex', 1)` for Expanded, Flexible and Spacer;
+    /// 0 otherwise.
     private func flex(of id: String) -> Int {
-        guard let type = model.renderer.node(id)?.type, type == "Expanded" || type == "Spacer" else { return 0 }
+        guard let type = model.renderer.node(id)?.type, ["Expanded", "Flexible", "Spacer"].contains(type)
+        else { return 0 }
         return max(model.resolve(id)?["flex"]?.intValue ?? 1, 0)
+    }
+
+    /// A Flexible whose `fit` is not `tight` (LB:234-240).
+    private func loose(_ id: String) -> Bool {
+        model.renderer.node(id)?.type == "Flexible" && model.resolve(id)?["fit"]?.stringValue != "tight"
     }
 
     /// A Column going up is the stack of its children in reverse, its
