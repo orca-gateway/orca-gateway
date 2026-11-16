@@ -195,6 +195,18 @@ public final class OrcaPageModel: ObservableObject {
 
     public var page: PageResponse { renderer.page }
 
+    /// Save persistState and clearState to `savedState` from now on, and
+    /// lay the page's saved entry over its seed (Flutter
+    /// `StateManager.initPage`, which restores at every seed). The loader
+    /// runs it on each model it makes, from the network or the cache, on a
+    /// first load and a reload, before the page is shown. A SubPage's state
+    /// has no entry of its own. Nil, or a frozen copy, changes nothing.
+    func useSavedState(_ savedState: SavedState?) {
+        guard let savedState, !isInert else { return }
+        executor.savedState = savedState
+        savedState.restorePage(into: store, pageId: page.pageId)
+    }
+
     /// The renderer's node ids in Flutter's node map order, which the
     /// renderer's dictionary does not keep: a Dart map keeps insertion order,
     /// and setting a key it holds keeps its place. `apply` keeps it in step.

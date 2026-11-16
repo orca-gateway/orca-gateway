@@ -8,9 +8,10 @@ import SwiftUI
 /// router's app state. It follows every change of the app scope, so a node
 /// watching `_tabIndex` redraws when the tab changes; what it writes to app
 /// state goes to the router and every loaded page; its navigation and system
-/// effects are performed and reported as a page's are; the app's plugin
-/// widgets and custom action handlers are a page's too. A widget this SDK
-/// cannot draw degrades as on a page.
+/// effects are performed and reported as a page's are; its persistState and
+/// clearState go to the router's saved state; the app's plugin widgets and
+/// custom action handlers are a page's too. A widget this SDK cannot draw
+/// degrades as on a page.
 @MainActor
 final class ShellTree {
     static let pageId = "__shell__"
@@ -26,6 +27,10 @@ final class ShellTree {
         let page = router.plugins?.page(response, store: store, client: router.client)
             ?? OrcaPageModel(page: response, store: store, client: router.client)
         self.page = page
+        // persistState and clearState save through the app's saved state, as
+        // Flutter's shell executor does with the app's StateManager; Flutter
+        // restores no page entry for the shell, so neither does this.
+        page.executor.savedState = router.savedState
         page.store.onCommit = { [weak router] state in router?.setAppState(state.app) }
         page.onEffect = { [weak router] effect in router?.onEffect?(effect) }
         page.effectHandler = { [weak router] effect in

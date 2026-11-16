@@ -157,8 +157,9 @@ public final class OrcaPageLoader: ObservableObject {
         model.replacePage(page)
     }
 
-    /// The page's model, with the router's plugins, joined to the router; it
-    /// runs refetchPage through `refetch`.
+    /// The page's model, with the router's plugins and saved state (its
+    /// saved entry laid over the seed), joined to the router; it runs
+    /// refetchPage through `refetch`.
     private func build(_ page: PageResponse, app: [String: JSONValue], client: OrcaClient) -> OrcaPageModel {
         let model = router?.plugins?.page(page, store: ElmStore(app: app), client: client)
             ?? OrcaPageModel(page: page, store: ElmStore(app: app), client: client)
@@ -166,6 +167,7 @@ public final class OrcaPageLoader: ObservableObject {
             guard let self, let model else { return }
             try await self.refetch(model)
         }
+        model.useSavedState(router?.savedState)
         router?.attach(model)
         return model
     }
@@ -220,6 +222,9 @@ public final class OrcaAppBoot: ObservableObject {
     private let enableOffline: Bool
     /// The offline cache (Flutter `_flowManager`); nil with a `path`.
     private let staticFlowManager: StaticFlowManager?
+    /// The saved state every router made here takes (OrcaApp's); nil:
+    /// nothing is saved or restored.
+    private let savedState: SavedState?
     /// `preload` answered forceUpdate: OrcaApp shows the force-update
     /// screen, and no router is made.
     @Published private(set) var updateRequired = false
@@ -236,11 +241,12 @@ public final class OrcaAppBoot: ObservableObject {
 
     /// With OrcaApp's plugins: their names are advertised on `client` before
     /// the config is asked for, and the router is attached to them. The
-    /// offline inputs are OrcaApp's, used only with no `path`.
+    /// offline inputs are OrcaApp's, used only with no `path`; so is
+    /// `savedState`, which the router takes in either mode.
     init(client: OrcaClient, path: String?, system: SystemActions?,
          onRouteChanged: ((RouteChangeEvent) -> Void)?, onDeeplink: ((DeeplinkEvent) -> Void)? = nil,
          plugins: OrcaPluginHost?, enableOffline: Bool = false, preloadedConfig: NavConfig? = nil,
-         staticFlowManager: StaticFlowManager? = nil) {
+         staticFlowManager: StaticFlowManager? = nil, savedState: SavedState? = nil) {
         self.client = client
         self.system = system
         self.onRouteChanged = onRouteChanged
@@ -248,9 +254,10 @@ public final class OrcaAppBoot: ObservableObject {
         self.plugins = plugins
         self.enableOffline = enableOffline
         self.staticFlowManager = path == nil ? staticFlowManager : nil
+        self.savedState = savedState
         plugins?.advertise(on: client)
         if let path {
-            let router = OrcaRouter(client: client, path: path, system: system)
+            let router = OrcaRouter(client: client, path: path, system: system, savedState: savedState)
             router.onRouteChanged = onRouteChanged
             router.onDeeplink = onDeeplink
             madeAtPath = true
@@ -272,6 +279,7 @@ public final class OrcaAppBoot: ObservableObject {
         plugins = nil
         enableOffline = false
         staticFlowManager = nil
+        savedState = router.savedState
         started = true
         phase = .ready(router)
     }
@@ -359,7 +367,8 @@ public final class OrcaAppBoot: ObservableObject {
     private func makeRouter(_ config: NavConfig, link: URL?) -> OrcaRouter {
         staticFlowManager?.initDynamicPaths(config.flows)
         let router = OrcaRouter(client: client, config: config, system: system,
-                                onRouteChanged: onRouteChanged, onDeeplink: onDeeplink, link: link)
+                                onRouteChanged: onRouteChanged, onDeeplink: onDeeplink, link: link,
+                                savedState: savedState)
         router.staticFlowManager = staticFlowManager
         return plugins?.attach(router) ?? router
     }
@@ -416,8 +425,11 @@ public struct OrcaApp: View {
     ///     with the static flows' pre-rendered pages. A forceUpdate answer
     ///     shows the force-update screen; offline (any `/version` failure)
     ///     the app boots from the saved config, and with none saved the boot
-    ///     error says "No network and no cached config available", with a
-    ///     retry that runs `preload` again. With a `path` (Flutter has no
+    ///     fails: `OrcaErrorView` shows Flutter's screen for it, "Something
+    ///     Went Wrong" / "An unexpected error occurred. Please try again.",
+    ///     with a retry that runs `preload` again (the error's own message,
+    ///     what an `errorView` and a host's own `preload` see, is "No network
+    ///     and no cached config available"). With a `path` (Flutter has no
     ///     such mode) it is the version check alone: a forceUpdate answer
     ///     shows the force-update screen, and nothing is cached.
     ///   - preloadedConfig: a config the host already has, from `preload`
@@ -429,6 +441,15 @@ public struct OrcaApp: View {
     ///     `OrcaApp.staticFlowManager`); pass the same one `preload` used.
     ///     Every page asks it first and opens a static page it holds with no
     ///     request, also without `enableOffline`. Ignored with a `path`.
+    ///   - savedState: where persistState saves and clearState deletes, and
+    ///     what comes back at start: its saved app entry is laid over the
+    ///     app state before the first route (with a config, over
+    ///     `initialAppState`, so redirects see it), and each page's saved
+    ///     entry over the page's state before the page is shown, as Flutter
+    ///     does. Nil, the default, makes one over
+    ///     `FileKeyValueStore.applicationSupport()`, the store the offline
+    ///     cache uses (the saved entries, `orca_saved_*`, are apart from the
+    ///     cache's). One per OrcaApp, made once, as the boot is.
     ///   - enableSessionTracking: send a session start when the app comes to
     ///     the foreground and an end when it goes to the background.
     ///   - onRouteChanged: told of every route change, the first route included.
@@ -475,7 +496,8 @@ public struct OrcaApp: View {
     ///     `x-orca-locale` header stays the device's, as in Flutter.
     public init(client: OrcaClient, path: String? = nil, system: SystemActions? = nil,
                 enableOffline: Bool = false, preloadedConfig: NavConfig? = nil,
-                staticFlowManager: StaticFlowManager? = nil, enableSessionTracking: Bool = false,
+                staticFlowManager: StaticFlowManager? = nil, savedState: SavedState? = nil,
+                enableSessionTracking: Bool = false,
                 onRouteChanged: ((RouteChangeEvent) -> Void)? = nil,
                 onDeeplink: ((DeeplinkEvent) -> Void)? = nil,
                 plugins: [OrcaPlugin] = [], customActions: [String: OrcaActionHandler] = [:],
@@ -489,7 +511,8 @@ public struct OrcaApp: View {
             onRouteChanged: onRouteChanged, onDeeplink: onDeeplink, plugins: host,
             enableOffline: enableOffline, preloadedConfig: preloadedConfig,
             staticFlowManager: path != nil ? nil : staticFlowManager
-                ?? (enableOffline ? StaticFlowManager(store: FileKeyValueStore.applicationSupport()) : nil)))
+                ?? (enableOffline ? StaticFlowManager(store: FileKeyValueStore.applicationSupport()) : nil),
+            savedState: savedState ?? SavedState(local: FileKeyValueStore.applicationSupport())))
         // The config boot checks versions in `preload`, or not at all with
         // a preloaded config: the gate's check is for a `path` only.
         _gate = StateObject(wrappedValue: OrcaBootModel(
@@ -512,7 +535,9 @@ public struct OrcaApp: View {
     /// router made with `link:` starts at the link, and drops the system's
     /// repeat of it. `enableOffline` here is the version check alone (a
     /// forceUpdate answer shows the force-update screen): nothing is cached,
-    /// and the router's pages go to the network.
+    /// and the router's pages go to the network. Saved state is the
+    /// router's (`OrcaRouter(…, savedState:)`): a router made without one
+    /// saves and restores nothing.
     public init(router: @autoclosure @escaping () -> OrcaRouter,
                 enableOffline: Bool = false, enableSessionTracking: Bool = false,
                 plugins: [OrcaPlugin] = [], customActions: [String: OrcaActionHandler] = [:],
