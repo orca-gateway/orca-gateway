@@ -25,6 +25,10 @@ import '../utils/package_resolver.dart';
 /// orca plugin generate --lang swift --manifest path/to/orca_plugin.yaml
 /// orca plugin generate --lang kotlin --manifest path/to/orca_plugin.yaml --package com.example.plugins
 /// ```
+///
+/// `--types-only` (Swift, Kotlin) writes the props, params and trigger-name
+/// types alone, as `<Pascal>Types.swift` / `.kt`, for a plugin package to
+/// compile as is.
 class PluginGenerateCommand extends Command<void> {
   @override
   final name = 'generate';
@@ -63,6 +67,12 @@ class PluginGenerateCommand extends Command<void> {
       help: 'Package of the generated Kotlin file.',
       defaultsTo: 'orca.plugins',
     );
+    argParser.addFlag(
+      'types-only',
+      help: 'Swift/Kotlin: write only the props, params and trigger-name '
+          'types, as <Pascal>Types.swift / .kt (no plugin stub).',
+      negatable: false,
+    );
   }
 
   @override
@@ -73,6 +83,7 @@ class PluginGenerateCommand extends Command<void> {
     final lang = argResults!['lang'] as String;
     final manifestArg = argResults!['manifest'] as String?;
     final kotlinPackage = argResults!['package'] as String;
+    final typesOnly = argResults!['types-only'] as bool;
 
     if (manifestArg != null) {
       final manifestPath = p.join(projectRoot, manifestArg);
@@ -82,7 +93,7 @@ class PluginGenerateCommand extends Command<void> {
       }
       final manifest = PluginManifest.fromYamlFile(manifestPath);
       final written = _write(projectRoot, outputDir, manifest.name, manifest,
-          lang, kotlinPackage);
+          lang, kotlinPackage, typesOnly);
       if (!written) {
         stdout.writeln('No schema section in $manifestArg. Nothing to generate.');
       }
@@ -128,7 +139,7 @@ class PluginGenerateCommand extends Command<void> {
 
       final manifest = PluginManifest.fromYamlFile(manifestPath);
       if (_write(projectRoot, outputDir, packageName, manifest, lang,
-          kotlinPackage)) {
+          kotlinPackage, typesOnly)) {
         generated++;
       }
     }
@@ -144,24 +155,29 @@ class PluginGenerateCommand extends Command<void> {
 }
 
 /// Writes the [lang] output for [manifest] under [outputDir]: `<name>.ts`, or
-/// `<Pascal(name)>Plugin.swift` / `.kt`. TypeScript needs a schema section
-/// (false without one, nothing written); Swift and Kotlin always write.
+/// `<Pascal(name)>Plugin.swift` / `.kt`, or with [typesOnly]
+/// `<Pascal(name)>Types.swift` / `.kt` (TypeScript ignores it). TypeScript
+/// and [typesOnly] need a schema section (false without one, nothing
+/// written); the Swift and Kotlin stubs always write.
 bool _write(String projectRoot, String outputDir, String name,
-    PluginManifest manifest, String lang, String kotlinPackage) {
+    PluginManifest manifest, String lang, String kotlinPackage,
+    bool typesOnly) {
   final schema = manifest.schema;
+  final noSchema = schema == null || schema.isEmpty;
+  if (noSchema && (typesOnly || lang == 'ts')) return false;
+  final suffix = typesOnly ? 'Types' : 'Plugin';
   final String fileName;
   final String source;
   switch (lang) {
     case 'swift':
-      source = SwiftGenerator.generate(name, schema);
-      fileName = '${_pascal(name)}Plugin.swift';
+      source = SwiftGenerator.generate(name, schema, typesOnly: typesOnly);
+      fileName = '${_pascal(name)}$suffix.swift';
     case 'kotlin':
       source = KotlinGenerator.generate(name, schema,
-          packageName: kotlinPackage);
-      fileName = '${_pascal(name)}Plugin.kt';
+          packageName: kotlinPackage, typesOnly: typesOnly);
+      fileName = '${_pascal(name)}$suffix.kt';
     default:
-      if (schema == null || schema.isEmpty) return false;
-      source = TypeScriptGenerator.generate(name, schema);
+      source = TypeScriptGenerator.generate(name, schema!);
       fileName = '$name.ts';
   }
 
