@@ -25,6 +25,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -116,6 +117,7 @@ import com.orcagateway.sdk.widgets.LocalOrcaHeroStage
 import com.orcagateway.sdk.widgets.LocalOrcaPageDrawerHost
 import com.orcagateway.sdk.widgets.OrcaHeroStage
 import com.orcagateway.sdk.widgets.PageDrawerHost
+import com.orcagateway.sdk.widgets.SnackbarLayer
 import com.orcagateway.sdk.widgets.orcaReduceMotion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -1031,7 +1033,14 @@ internal fun RoutePage(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoa
     CompositionLocalProvider(LocalOrcaPageDrawerHost provides drawers) { RouteFrame(router, route, loader) }
 }
 
-/** A route's page, under the title bar of a route that has a fallback title. */
+/**
+ * A route's page, under the title bar of a route that has a fallback title.
+ * Flutter wraps such a route in a root Scaffold of its own
+ * (navigation_handler.dart:111-147, :372; orca_page.dart:218-247), on the
+ * single stack and over the tab shell alike: the app's snackbar shows at
+ * its bottom edge, over the page, even when the page has no Scaffold, and
+ * the page's Scaffolds are nested in it and draw none.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RouteFrame(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoader?) {
@@ -1041,20 +1050,28 @@ private fun RouteFrame(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoa
         return
     }
     val title = (loader?.phase as? OrcaPageLoader.Phase.Loaded)?.model?.page?.title ?: fallback
-    Column(Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(title, Modifier.testTag(ORCA_ROUTE_TITLE_TAG)) },
-            navigationIcon = {
-                if (router.stack.isNotEmpty()) {
-                    IconButton(onClick = { router.goBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            TopAppBar(
+                title = { Text(title, Modifier.testTag(ORCA_ROUTE_TITLE_TAG)) },
+                navigationIcon = {
+                    if (router.stack.isNotEmpty()) {
+                        IconButton(onClick = { router.goBack() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
-                }
-            },
-        )
-        Box(Modifier.weight(1f)) { RouteBody(router, route, loader) }
+                },
+            )
+            Box(Modifier.weight(1f)) {
+                CompositionLocalProvider(LocalOrcaShellSnackbars provides true) { RouteBody(router, route, loader) }
+            }
+        }
+        SnackbarLayer(router.snackbars, NO_BARS, onBars = false)
     }
 }
+
+/** No bars under a titled route's snackbar. */
+private val NO_BARS = PaddingValues()
 
 /** What a route shows under its bar, if it has one. */
 @Composable

@@ -3,6 +3,7 @@ package com.orcagateway.sdk
 import android.util.Log
 import androidx.compose.runtime.RememberObserver
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -532,11 +533,27 @@ internal class OrcaSnackbarQueue {
     var phase: SnackbarQueue.Phase? by mutableStateOf(null)
         private set
 
+    /** How far the head is in, 0 (out) .. 1 (fully in), linear in time: what its bar is revealed by. Compose state. */
+    var reveal: Double by mutableDoubleStateOf(0.0)
+        private set
+
     /** At the back of the queue; no [durationMillis] is 4000 ms for a snackbar, 2000 for a toast. */
     fun show(style: OrcaToast.Style, message: String, durationMillis: Long?) {
         val kind = if (style == OrcaToast.Style.Snackbar) SnackbarQueue.Kind.Snackbar else SnackbarQueue.Kind.Toast
         val item = queue.show(kind, message, durationMillis)
         toasts[item] = OrcaToast(message, item.durationMs, style)
+        changed()
+    }
+
+    /**
+     * A swipe on the bar: the head goes at once, with no leave of its own,
+     * and the next, if any, starts entering (the core's [SnackbarQueue.swipe]).
+     * Left empty, its clock stops, as when the last one leaves in [tick]: the
+     * next show starts it again, so the idle time is not taken as its entry.
+     */
+    fun swipe() {
+        queue.swipe()
+        if (queue.phase == null) lastFrameMs = null
         changed()
     }
 
@@ -565,6 +582,7 @@ internal class OrcaSnackbarQueue {
         toasts.keys.retainAll(items.toSet())
         head = queue.current?.let(toasts::get)
         phase = queue.phase
+        reveal = queue.reveal
         busy.value = items.isNotEmpty()
     }
 }

@@ -36,8 +36,6 @@ import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -80,6 +78,7 @@ import com.orcagateway.sdk.ChildView
 import com.orcagateway.sdk.LocalOrcaSnackbars
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.OrcaSnackbarQueue
 import com.orcagateway.sdk.WithColorScheme
 import com.orcagateway.sdk.indexedSlots
 import com.orcagateway.sdk.navigation.LocalOrcaNavigation
@@ -116,10 +115,11 @@ private val LocalDrawerChildDirection = compositionLocalOf<LayoutDirection?> { n
  * (an AppBar draws as a `TopAppBar`; any other widget is drawn there as
  * is), `body` fills the rest at the top-start with loose constraints,
  * `floatingActionButton` floats bottom-end, and `bottomNavigationBar` sits
- * under the `persistentFooterButton_N` row. The page's snackbars show in its
- * `SnackbarHost` when it is the page root. The `bottomSheet` slot is
+ * under the `persistentFooterButton_N` row. The `bottomSheet` slot is
  * Flutter's persistent sheet over the body's bottom ([ScaffoldBottomSheet]),
- * the floating button rising above it.
+ * the floating button rising above it. With no Scaffold above it, it draws
+ * the app's snackbar, Material 3's fixed bar, above its bars and over that
+ * sheet, the floating button rising above it too ([SnackbarLayer]).
  *
  * A `drawer` slot is a modal drawer on the leading edge and an `endDrawer`
  * slot one on the trailing edge ([PageDrawer]), each closed until it is
@@ -241,13 +241,15 @@ private fun ScaffoldFrame(
     node: ResolvedNode,
     model: OrcaPageModel,
     modifier: Modifier,
-    snackbars: SnackbarHostState?,
+    snackbars: OrcaSnackbarQueue?,
     drawers: ScaffoldDrawers,
 ) {
     val footer = indexedSlots(node, "persistentFooterButton")
     val bottomBar = node.slots["bottomNavigationBar"]
+    val onBars = footer.isNotEmpty() || bottomBar != null
     val sheet = node.slots["bottomSheet"]
     val sheetRise = remember { mutableIntStateOf(0) }
+    val barLift = remember { mutableIntStateOf(0) }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -256,7 +258,7 @@ private fun ScaffoldFrame(
             }
         },
         bottomBar = {
-            if (footer.isNotEmpty() || bottomBar != null) {
+            if (onBars) {
                 Column {
                     if (footer.isNotEmpty()) {
                         Row(
@@ -270,16 +272,17 @@ private fun ScaffoldFrame(
                 }
             }
         },
-        snackbarHost = { if (snackbars != null) SnackbarHost(snackbars) },
+        // Not Material 3's snackbarHost: it puts the bar above the floating button, Flutter the button above the bar.
         floatingActionButton = {
-            node.slots["floatingActionButton"]?.let { NodeView(it, model, if (sheet != null) Modifier.risenBy(sheetRise) else Modifier) }
+            node.slots["floatingActionButton"]?.let { NodeView(it, model, Modifier.risenBy(sheetRise, barLift)) }
         },
         containerColor = Props.color(node["backgroundColor"]) ?: MaterialTheme.colorScheme.background,
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             node.slots["body"]?.let { NodeView(it, model) }
         }
-        if (sheet != null) ScaffoldBottomSheet(sheet, model, padding, onBars = footer.isNotEmpty() || bottomBar != null, sheetRise)
+        if (sheet != null) ScaffoldBottomSheet(sheet, model, padding, onBars, sheetRise)
+        if (snackbars != null) SnackbarLayer(snackbars, padding, onBars, barLift)
     }
 }
 
@@ -324,15 +327,17 @@ private fun ScaffoldBottomSheet(id: String, model: OrcaPageModel, padding: Paddi
 }
 
 /**
- * The floating button over a bottom sheet, Flutter's endFloat with one
- * (floating_action_button_location.dart:583-585, `FabFloatOffsetY`): raised
- * until its centre is on the sheet's top edge, never lowered, so it stays
- * 16 over the bars when the sheet is lower ([rise], [ScaffoldBottomSheet]).
+ * The floating button, Flutter's endFloat (floating_action_button_location
+ * .dart:561-587, `FabFloatOffsetY`): over a bottom sheet raised until its
+ * centre is on the sheet's top edge ([sheet], [ScaffoldBottomSheet]), over a
+ * snackbar until its bottom is 16 over the bar's top (:576-581; [bar], the
+ * rise itself, [SnackbarLayer]), the higher of the two; never lowered,
+ * so it stays 16 over the bars when they are lower.
  */
-private fun Modifier.risenBy(rise: IntState): Modifier = layout { measurable, constraints ->
+private fun Modifier.risenBy(sheet: IntState, bar: IntState): Modifier = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
     layout(placeable.width, placeable.height) {
-        placeable.place(0, -maxOf(0, rise.intValue - placeable.height / 2))
+        placeable.place(0, -maxOf(0, sheet.intValue - placeable.height / 2, bar.intValue))
     }
 }
 
