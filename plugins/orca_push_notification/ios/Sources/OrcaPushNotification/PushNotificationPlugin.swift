@@ -120,7 +120,13 @@ final class PushNotifications {
         notifications.registerForRemoteNotifications()
         // DarwinInitializationSettings' request*Permission defaults.
         let notifications = notifications
-        Task { _ = try? await notifications.requestAuthorization() }
+        Task {
+            do {
+                _ = try await notifications.requestAuthorization()
+            } catch {
+                Self.log.error("requestAuthorization failed: \(String(describing: error), privacy: .public)")
+            }
+        }
     }
 
     /// The plugin's own notifications are presented; a remote one with a
