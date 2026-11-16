@@ -41,9 +41,56 @@ class ComponentStore extends ChangeNotifier {
     return true;
   }
 
-  /// Initialize from a flat node list (as received from the server).
+  /// Prefixes of the pages mounted in each SubPage, keyed by subPageId.
+  final Map<String, List<String>> _subPagePrefixes = {};
+
+  /// Prefix of every page mounted in a SubPage of this page, nested ones
+  /// included: what `subPagePrefixOf` is asked with.
+  Iterable<String> get subPagePrefixes =>
+      _subPagePrefixes.values.expand((prefixes) => prefixes);
+
+  /// Record the prefixes of the pages mounted in a SubPage (oldest first).
+  /// An empty list forgets the SubPage.
+  void setSubPagePrefixes(String subPageId, List<String> prefixes) {
+    if (prefixes.isEmpty) {
+      _subPagePrefixes.remove(subPageId);
+    } else {
+      _subPagePrefixes[subPageId] = List.of(prefixes);
+    }
+  }
+
+  /// Put the merged nodes of a mounted sub-page into the store. They hang
+  /// under no parent: the SubPage widget draws them from their root. Does not
+  /// notify; the SubPage redraws itself.
+  void putSubPageNodes(Iterable<ComponentNode> nodes) {
+    for (final node in nodes) {
+      _nodeMap[node.id] = node;
+    }
+  }
+
+  /// Take the nodes with these ids out of the store. Does not notify.
+  void removeSubPageNodes(Iterable<String> ids) {
+    for (final id in ids.toList()) {
+      _nodeMap.remove(id);
+    }
+  }
+
+  /// The node [id] and everything under it, the root first; empty when the
+  /// node is not in the store.
+  List<ComponentNode> subtree(String id) {
+    final result = <ComponentNode>[];
+    _collectSubtree(id, result);
+    return result;
+  }
+
+  /// Initialize from a flat node list (as received from the server). The
+  /// nodes of the sub-pages still mounted stay: their SubPage takes them out
+  /// when it goes away.
   void init(List<ComponentNode> nodes) {
-    _nodeMap.clear();
+    final prefixes = subPagePrefixes.toList();
+    _nodeMap.removeWhere(
+      (id, _) => !prefixes.any((prefix) => id.startsWith(prefix)),
+    );
     for (final node in nodes) {
       _nodeMap[node.id] = node;
     }
