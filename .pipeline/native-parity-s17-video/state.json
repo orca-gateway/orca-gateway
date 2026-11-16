@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "slug": "native-parity-s17-video",
+  "idea": "Native parity step 17, plugin 2 of 4: the video player plugin as separate native packages (plugins/orca_video_player/ios SwiftPM, plugins/orca_video_player/android Gradle) on the voice recorder's template, matching the Flutter plugin",
+  "kind": "feature",
+  "created_at": "2026-11-16T13:02:43Z",
+  "updated_at": "2026-11-16T13:11:45Z",
+  "active_session": "7317184b-fcd8-4ef3-bc8c-3dc085f8486c",
+  "current": "09",
+  "stages": {
+    "01": {
+      "status": "skipped",
+      "reason": "covered by the approved native parity plan (step 17), the user's packaging answer B (2026-11-16) and the voice recorder's package template (PR #47)"
+    },
+    "02": {
+      "status": "skipped",
+      "reason": "covered by the approved native parity plan (step 17), the user's packaging answer B (2026-11-16) and the voice recorder's package template (PR #47)"
+    },
+    "03": {
+      "status": "skipped",
+      "reason": "covered by the approved native parity plan (step 17), the user's packaging answer B (2026-11-16) and the voice recorder's package template (PR #47)"
+    },
+    "04": {
+      "status": "skipped",
+      "reason": "covered by the approved native parity plan (step 17), the user's packaging answer B (2026-11-16) and the voice recorder's package template (PR #47)"
+    },
+    "05": {
+      "status": "skipped",
+      "reason": "covered by the approved native parity plan (step 17), the user's packaging answer B (2026-11-16) and the voice recorder's package template (PR #47)"
+    },
+    "06": {
+      "status": "skipped",
+      "reason": "covered by the approved native parity plan (step 17), the user's packaging answer B (2026-11-16) and the voice recorder's package template (PR #47)"
+    },
+    "07": {
+      "status": "skipped",
+      "reason": "covered by the approved native parity plan (step 17), the user's packaging answer B (2026-11-16) and the voice recorder's package template (PR #47)"
+    },
+    "08": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-16T13:11:45Z",
+      "approved_with": "standing rule (minor and patch auto-approved): all four questions minor, defaults: commands as found; commits per task stacked on PR #47; gate per group; the mirror repo, key and secret are the user's after the merge"
+    },
+    "09": {
+      "status": "draft",
+      "rounds": 1
+    },
+    "10": {
+      "status": "pending"
+    },
+    "11": {
+      "status": "pending"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": true
+  }
+}
