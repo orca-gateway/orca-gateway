@@ -1,0 +1,34 @@
+{
+  "name": "openDialog-closeDialog",
+  "description": "openDialog and closeDialog emit no effect and leave page and app state unchanged: the executor hands openDialog's dialogId and heightFactor (0.4 here; 0.5 when absent) to the host's sheet (Flutter's onOpenDialog, awaited until the sheet closes), and closeDialog asks the host to close the top sheet, never a page. With no host wired, as here, both do nothing. Native parity step 8.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 2
+    },
+    "app": {
+      "visits": 3
+    }
+  },
+  "actions": [
+    {
+      "type": "openDialog",
+      "dialogId": "d",
+      "heightFactor": 0.4
+    },
+    {
+      "type": "closeDialog"
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 2
+      },
+      "app": {
+        "visits": 3
+      }
+    },
+    "effects": []
+  }
+}

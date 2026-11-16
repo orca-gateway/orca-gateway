@@ -1,0 +1,380 @@
+{
+  "name": "overlay-widgets",
+  "description": "Scaffold whose body Column holds the overlay widgets and whose bottomSheet slot holds a BottomSheet (backgroundColor #E8DEF8, borderRadius 20) around a Text. The body holds a keyed Dialog `dialog` with dismissible false, backgroundColor #FFFBFE and borderRadius 28 around a Column whose Text is bound to pageState `note` (no title: flatten embeds a title widget raw in the props); a Tooltip with message 'Copy link' over a Text; a SnackBar with content 'Message archived', duration 3000 and actionLabel 'Undo' whose onAction sets `note` to 'Restored'; an ElevatedButton whose onTap is openDialog of `dialog` at heightFactor 0.4 and a TextButton whose onTap is closeDialog. Every static prop reaches the wire unchanged, the Scaffold names both slots in its props and lists them in children in slot order, every action rides on its node with its heightFactor, the bound Text keeps its state Value with `note` in its watches, and every client resolver resolves each listed prop to the listed value. Flutter draws the Dialog as nothing in place (openDialog shows its children as a modal bottom sheet) and reads neither its three props nor the SnackBar's duration. Native parity step 8.",
+  "input": {
+    "type": "Scaffold",
+    "key": "page",
+    "slots": [
+      {
+        "name": "body",
+        "widget": {
+          "type": "Column",
+          "key": "body",
+          "children": [
+            {
+              "type": "Dialog",
+              "key": "dialog",
+              "props": {
+                "dismissible": false,
+                "backgroundColor": "#FFFBFE",
+                "borderRadius": 28
+              },
+              "children": [
+                {
+                  "type": "Column",
+                  "key": "dialog_column",
+                  "children": [
+                    {
+                      "type": "Text",
+                      "key": "dialog_text",
+                      "props": {
+                        "data": {
+                          "type": "state",
+                          "key": "note",
+                          "scope": "page"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Tooltip",
+              "key": "tip",
+              "props": {
+                "message": "Copy link"
+              },
+              "children": [
+                {
+                  "type": "Text",
+                  "key": "tip_text",
+                  "props": {
+                    "data": "Share"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "SnackBar",
+              "key": "snack",
+              "props": {
+                "content": "Message archived",
+                "duration": 3000,
+                "actionLabel": "Undo"
+              },
+              "actions": {
+                "onAction": {
+                  "type": "setState",
+                  "scope": "page",
+                  "key": "note",
+                  "value": {
+                    "type": "static",
+                    "value": "Restored"
+                  }
+                }
+              }
+            },
+            {
+              "type": "ElevatedButton",
+              "key": "open",
+              "children": [
+                {
+                  "type": "Text",
+                  "key": "open_label",
+                  "props": {
+                    "data": "Open"
+                  }
+                }
+              ],
+              "actions": {
+                "onTap": {
+                  "type": "openDialog",
+                  "dialogId": "dialog",
+                  "heightFactor": 0.4
+                }
+              }
+            },
+            {
+              "type": "TextButton",
+              "key": "close",
+              "children": [
+                {
+                  "type": "Text",
+                  "key": "close_label",
+                  "props": {
+                    "data": "Close"
+                  }
+                }
+              ],
+              "actions": {
+                "onTap": {
+                  "type": "closeDialog"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "bottomSheet",
+        "widget": {
+          "type": "BottomSheet",
+          "key": "sheet",
+          "props": {
+            "backgroundColor": "#E8DEF8",
+            "borderRadius": 20
+          },
+          "children": [
+            {
+              "type": "Text",
+              "key": "sheet_text",
+              "props": {
+                "data": "Pinned"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "note": "Draft saved"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "page",
+      "type": "Scaffold",
+      "kind": "structure",
+      "childMode": "none",
+      "props": {
+        "body": "body",
+        "bottomSheet": "sheet"
+      },
+      "children": [
+        "body",
+        "sheet"
+      ],
+      "watches": []
+    },
+    {
+      "id": "sheet",
+      "type": "BottomSheet",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "backgroundColor": "#E8DEF8",
+        "borderRadius": 20
+      },
+      "children": [
+        "sheet_text"
+      ],
+      "watches": []
+    },
+    {
+      "id": "sheet_text",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Pinned"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "body",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "dialog",
+        "tip",
+        "snack",
+        "open",
+        "close"
+      ],
+      "watches": []
+    },
+    {
+      "id": "close",
+      "type": "TextButton",
+      "kind": "button",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "close_label"
+      ],
+      "watches": [],
+      "actions": {
+        "onTap": {
+          "type": "closeDialog"
+        }
+      }
+    },
+    {
+      "id": "close_label",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Close"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "open",
+      "type": "ElevatedButton",
+      "kind": "button",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "open_label"
+      ],
+      "watches": [],
+      "actions": {
+        "onTap": {
+          "type": "openDialog",
+          "dialogId": "dialog",
+          "heightFactor": 0.4
+        }
+      }
+    },
+    {
+      "id": "open_label",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Open"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "snack",
+      "type": "SnackBar",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "content": "Message archived",
+        "duration": 3000,
+        "actionLabel": "Undo"
+      },
+      "children": [],
+      "watches": [],
+      "actions": {
+        "onAction": {
+          "type": "setState",
+          "scope": "page",
+          "key": "note",
+          "value": {
+            "type": "static",
+            "value": "Restored"
+          }
+        }
+      }
+    },
+    {
+      "id": "tip",
+      "type": "Tooltip",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "message": "Copy link"
+      },
+      "children": [
+        "tip_text"
+      ],
+      "watches": []
+    },
+    {
+      "id": "tip_text",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Share"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "dialog",
+      "type": "Dialog",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "dismissible": false,
+        "backgroundColor": "#FFFBFE",
+        "borderRadius": 28
+      },
+      "children": [
+        "dialog_column"
+      ],
+      "watches": []
+    },
+    {
+      "id": "dialog_column",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "dialog_text"
+      ],
+      "watches": []
+    },
+    {
+      "id": "dialog_text",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "state",
+          "key": "note",
+          "scope": "page"
+        }
+      },
+      "children": [],
+      "watches": [
+        "note"
+      ]
+    }
+  ],
+  "resolved": {
+    "page": {
+      "body": "body",
+      "bottomSheet": "sheet"
+    },
+    "dialog": {
+      "dismissible": false,
+      "backgroundColor": "#FFFBFE",
+      "borderRadius": 28
+    },
+    "dialog_text": {
+      "data": "Draft saved"
+    },
+    "tip": {
+      "message": "Copy link"
+    },
+    "snack": {
+      "content": "Message archived",
+      "duration": 3000,
+      "actionLabel": "Undo"
+    },
+    "sheet": {
+      "backgroundColor": "#E8DEF8",
+      "borderRadius": 20
+    }
+  }
+}
