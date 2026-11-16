@@ -190,6 +190,8 @@ app's icon (`android:icon`) as its small icon, goes away when tapped, and a tap 
 launch activity with the payload. An app without an `android:icon` shows none:
 `showLocalNotification` fails with Android's `IllegalArgumentException`, "Invalid notification (no
 valid small icon): …" (Flutter's `initialize` fails instead, without its `@mipmap/ic_launcher`).
+The status bar draws only the icon's shape, so a plain silhouette drawable reads best, and an
+adaptive icon as the small icon crashes System UI on Android 8.0 (API 26).
 An app without a launch activity gets notifications that a tap does not open.
 
 ## Differences from Flutter
