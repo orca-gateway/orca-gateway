@@ -15,3 +15,65 @@ platform:
         value:
           NSAllowsArbitraryLoads: true
         type: dict
+
+# What the Flutter plugin implements (lib/src/video_player_plugin.dart), for
+# `orca plugin generate` (TypeScript, Swift, Kotlin).
+# cli/test/video_player_schema_test.dart pins it against that source.
+# The CLI reads the names, `type`, `required` and `enum`; `default`,
+# `description` and `event_data` are notes for the native ports.
+schema:
+  widgets:
+    VideoPlayer:
+      kind: primitive
+      description: "Loading, a 32 pt grey circle; on error, the text Video failed to load; ready, the video at aspectRatio, and with showControls a tap toggles play and pause, a 56 pt dark circle with a white play mark over it while not playing."
+      props:
+        url: { type: string, default: "", description: "The video's network URL; a new url loads a new player." }
+        autoPlay: { type: boolean, default: false, description: "Plays as soon as the video is loaded." }
+        looping: { type: boolean, default: false, description: "Starts again at the end, without onComplete." }
+        showControls: { type: boolean, default: true, description: "A tap on the video plays or pauses it (firing onPlay or onPause), with the play mark over it while not playing." }
+        aspectRatio: { type: number, description: "Width over height. Defaults to the video's own." }
+        playerId: { type: string, description: "The id actions address the player by, once it is loaded. Defaults to the node's id." }
+      triggers: [onPlay, onPause, onComplete, onProgress, onError]
+      # The eventData each trigger fires with.
+      event_data:
+        onPlay:
+          description: "Only from the overlay tap (showControls) that starts playback; never from playVideo or autoPlay."
+        onPause:
+          description: "Only from the overlay tap (showControls) that pauses playback; never from pauseVideo."
+        onComplete:
+          description: "Once when the position reaches the duration; again only after the position is back before it. A looping video loops without it."
+        onProgress:
+          description: "On each player update while playing with a known duration (the position is polled every 100 ms)."
+          props:
+            position: { type: number, description: "The position in ms." }
+            duration: { type: number, description: "The video's length in ms." }
+            fraction: { type: number, description: "position / duration, 0 to 1." }
+        onError:
+          description: "When the video fails to load."
+          props:
+            message: { type: string, description: "The error's text." }
+
+  actions:
+    playVideo:
+      description: "Plays the player (from 0 when at the end). Fires no onPlay."
+      params:
+        playerId: { type: string, required: true, description: "Resolved as a value; an empty or unknown id does nothing." }
+    pauseVideo:
+      description: "Pauses the player. Fires no onPause."
+      params:
+        playerId: { type: string, required: true, description: "Resolved as a value; an empty or unknown id does nothing." }
+    seekVideo:
+      description: "Seeks the player to position."
+      params:
+        playerId: { type: string, required: true, description: "Resolved as a value; an empty or unknown id does nothing." }
+        position: { type: number, required: true, description: "In ms, resolved as a value, clamped to [0, duration]; missing does nothing." }
+    setVolume:
+      description: "Sets the player's volume."
+      params:
+        playerId: { type: string, required: true, description: "Resolved as a value; an empty or unknown id does nothing." }
+        volume: { type: number, required: true, description: "Resolved as a value, clamped to 0...1; missing does nothing." }
+    setPlaybackSpeed:
+      description: "Sets the player's speed."
+      params:
+        playerId: { type: string, required: true, description: "Resolved as a value; an empty or unknown id does nothing." }
+        speed: { type: number, required: true, description: "Resolved as a value; 1 is normal speed, <= 0 is an error (the action fails); missing does nothing." }
