@@ -15,8 +15,8 @@ import UIKit
 /// through the real NodeView, their boxes solid Containers, each colour's
 /// frame found in the pixels; taps, a child kept mounted and the device's
 /// safe-area insets need a UIKit window (iOS only). The three types (and
-/// IntrinsicHeight) are not advertised yet (group 5), so the page model here
-/// uses a registry widened with them.
+/// IntrinsicHeight) are advertised (A3.1), so the page model here uses the
+/// standard registry.
 @MainActor
 final class FlowTests: XCTestCase {
     static let accuracy: CGFloat = 0.5
@@ -273,11 +273,6 @@ final class FlowTests: XCTestCase {
 
     // MARK: helpers
 
-    /// The three types and IntrinsicHeight on top of what the SDK advertises today.
-    static let registry = WidgetRegistry(types: Set(GeneratedCapabilities.widgets).union([
-        "IntrinsicHeight", "Offstage", "SafeArea", "Wrap",
-    ]))
-
     static func isGreen(_ p: (r: UInt8, g: UInt8, b: UInt8, a: UInt8)) -> Bool {
         p.a > 200 && p.g > 200 && p.r < 60 && p.b < 60
     }
@@ -336,7 +331,7 @@ final class FlowTests: XCTestCase {
     func model(_ nodes: [JSONValue], state: [JSONValue] = []) throws -> OrcaPageModel {
         OrcaPageModel(page: try JSONValue.object([
             "pageId": "p", "title": "T", "state": .array(state), "components": .array(nodes),
-        ]).decode(PageResponse.self), registry: Self.registry)
+        ]).decode(PageResponse.self))
     }
 
     func rootId(_ nodes: [JSONValue]) throws -> String {

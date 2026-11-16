@@ -13,8 +13,7 @@ import UIKit
 /// render objects lay them out (layout_builders.dart :265-286, :487-521).
 /// Each test draws a page through the real NodeView, its children solid
 /// Containers, and finds each colour's frame in the pixels. The six types
-/// are not advertised yet (group 5), so the page model here uses a registry
-/// widened with them instead of degrading them to a FallbackPrompt.
+/// are advertised (A3.1), so the page model here uses the standard registry.
 @MainActor
 final class SizingTests: XCTestCase {
     static let accuracy: CGFloat = 0.5
@@ -240,11 +239,6 @@ final class SizingTests: XCTestCase {
 
     // MARK: helpers
 
-    /// The six sizing types on top of what the SDK advertises today.
-    static let registry = WidgetRegistry(types: Set(GeneratedCapabilities.widgets).union([
-        "Align", "AspectRatio", "ConstrainedBox", "FittedBox", "FractionallySizedBox", "LimitedBox",
-    ]))
-
     static func isGreen(_ p: (r: UInt8, g: UInt8, b: UInt8, a: UInt8)) -> Bool {
         p.a > 200 && p.g > 200 && p.r < 60 && p.b < 60
     }
@@ -286,7 +280,7 @@ final class SizingTests: XCTestCase {
     func model(_ nodes: [JSONValue]) throws -> OrcaPageModel {
         OrcaPageModel(page: try JSONValue.object([
             "pageId": "p", "title": "T", "state": [], "components": .array(nodes),
-        ]).decode(PageResponse.self), registry: Self.registry)
+        ]).decode(PageResponse.self))
     }
 
     func rootId(_ nodes: [JSONValue]) throws -> String {

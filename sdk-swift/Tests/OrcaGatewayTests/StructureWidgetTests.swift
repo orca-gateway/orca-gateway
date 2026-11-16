@@ -253,10 +253,12 @@ final class StructureWidgetTests: XCTestCase {
 
     // MARK: B10.C-S
 
-    func test_B10_C_S_thirtyOneWidgetsAreAdvertisedWithTheThreeNewOnes() {
+    /// The pin moved from 31 to 44 when native parity step 3 advertised its 13
+    /// layout wrappers (A3.1).
+    func test_B10_C_S_fortyFourWidgetsAreAdvertisedWithTheThreeNewOnes() {
         let widgets = GeneratedCapabilities.widgets
-        XCTAssertEqual(widgets.count, 31)
-        XCTAssertEqual(Set(widgets).count, 31)
+        XCTAssertEqual(widgets.count, 44)
+        XCTAssertEqual(Set(widgets).count, 44)
         XCTAssertTrue(Set(widgets).isSuperset(of: ["BottomNavigationBar", "BottomNavItem", "Drawer"]))
         XCTAssertEqual(WidgetRegistry.shared.types, Set(widgets))
     }
@@ -273,6 +275,39 @@ final class StructureWidgetTests: XCTestCase {
         // What the check relies on: a type outside the switch is EmptyView.
         node.type = "NoSuchWidget"
         XCTAssertTrue(Self.branch(WidgetView(node: node, model: model).body) is EmptyView)
+    }
+
+    // MARK: A3.1
+
+    /// A3.1: the standard registry holds native parity step 3's 13 layout
+    /// wrappers, so a page holding one of each, built with it (no widened
+    /// registry), keeps every node as sent: none is degraded to a
+    /// FallbackPrompt, each keeps its child, and the widget switch draws each
+    /// with its own view.
+    func testA3_1TheStandardRegistryDrawsTheThirteenLayoutWrappersNotAFallback() throws {
+        let wrappers = ["Align", "AspectRatio", "Baseline", "ConstrainedBox", "FittedBox", "Flexible",
+                        "FractionallySizedBox", "IntrinsicHeight", "IntrinsicWidth", "LimitedBox", "Offstage",
+                        "SafeArea", "Wrap"]
+        XCTAssertEqual(Set(wrappers).subtracting(WidgetRegistry.shared.types), [], "not in the standard registry")
+
+        let model = try wrappersModel()
+        XCTAssertTrue(model.renderer.registry === WidgetRegistry.shared)
+        let tree = try XCTUnwrap(model.renderer.tree(state: model.store.state))
+        XCTAssertEqual(tree.children.map(\.type), wrappers)
+        for wrapper in tree.children {
+            XCTAssertNil(wrapper.node.degradedFrom, "\(wrapper.type) was degraded")
+            XCTAssertEqual(wrapper.children.map(\.type), wrapper.type == "Wrap" ? ["Container", "Container"] : ["Container"],
+                           "\(wrapper.type) lost its child")
+        }
+        XCTAssertFalse(tree.all.contains { $0.type == "FallbackPrompt" }, "a FallbackPrompt is drawn")
+        XCTAssertTrue(WidgetRegistry.shared.reportedTypes.isDisjoint(with: wrappers),
+                      "reported unknown: \(WidgetRegistry.shared.reportedTypes.intersection(wrappers))")
+
+        for wire in wrappers {
+            let node = try XCTUnwrap(model.resolve("w_\(wire)"))
+            let drawn = Self.branch(WidgetView(node: node, model: model).body)
+            XCTAssertEqual(String(describing: type(of: drawn)), "\(wire)View")
+        }
     }
 
     // MARK: helpers
@@ -396,6 +431,44 @@ final class StructureWidgetTests: XCTestCase {
                 ["id": "filters_title", "type": "Text", "kind": "primitive", "childMode": "none",
                  "props": ["data": "Filters"], "children": [], "watches": []],
             ],
+        ]).decode(PageResponse.self))
+    }
+
+    /// A3.1: a Column holding one of each of the 13 layout wrappers (id
+    /// `w_<Type>`, props as the engine sends them), each around a small red
+    /// Container, the Wrap around two. The model uses the standard registry.
+    private func wrappersModel() throws -> OrcaPageModel {
+        let props: [(type: String, props: [String: JSONValue])] = [
+            ("Align", ["alignment": "bottomRight"]),
+            ("AspectRatio", ["aspectRatio": 2]),
+            ("Baseline", ["baseline": 20, "baselineType": "alphabetic"]),
+            ("ConstrainedBox", ["constraints": ["minWidth": 10, "maxHeight": 40]]),
+            ("FittedBox", ["fit": "contain"]),
+            ("Flexible", ["flex": 1, "fit": "loose"]),
+            ("FractionallySizedBox", ["widthFactor": 0.5]),
+            ("IntrinsicHeight", [:]),
+            ("IntrinsicWidth", ["stepWidth": 8]),
+            ("LimitedBox", ["maxHeight": 40]),
+            ("Offstage", ["offstage": false]),
+            ("SafeArea", ["top": true]),
+            ("Wrap", ["spacing": 4, "runSpacing": 4]),
+        ]
+        var nodes: [JSONValue] = [
+            ["id": "col", "type": "Column", "kind": "layout", "childMode": "multi", "props": [:],
+             "children": .array(props.map { .string("w_\($0.type)") }), "watches": []],
+        ]
+        for (type, wrapperProps) in props {
+            let children = type == "Wrap" ? ["c_Wrap", "c_Wrap_2"] : ["c_\(type)"]
+            nodes.append(["id": .string("w_\(type)"), "type": .string(type), "kind": "layout",
+                          "childMode": .string(type == "Wrap" ? "multi" : "single"), "props": .object(wrapperProps),
+                          "children": .array(children.map { .string($0) }), "watches": []])
+            for child in children {
+                nodes.append(["id": .string(child), "type": "Container", "kind": "layout", "childMode": "single",
+                              "props": ["color": "#FF0000", "width": 20, "height": 10], "children": [], "watches": []])
+            }
+        }
+        return OrcaPageModel(page: try JSONValue.object([
+            "pageId": "p", "title": "T", "state": [], "components": .array(nodes),
         ]).decode(PageResponse.self))
     }
 
