@@ -524,14 +524,17 @@ public class ActionExecutor(
          * response kind outside action.ts, so it is handled but never
          * advertised. `refetchPage` does nothing here and emits no effect,
          * as Dart's with a null `onRefetchPage`; the page loader registers
-         * the handler that reloads the page in place.
+         * the handler that reloads the page in place. `openDialog` and
+         * `closeDialog` do the same (Dart's null `onOpenDialog`, and no sheet
+         * to pop): the page registers the handlers that show and close its
+         * sheet, and openDialog's returns when the sheet closes.
          */
         public val kinds: Set<String> = setOf(
             "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
             "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
             "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
             "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage", "refetchPage",
-            "persistState", "clearState",
+            "persistState", "clearState", "openDialog", "closeDialog",
         )
 
         /** True when the action and everything nested in it is implemented. */

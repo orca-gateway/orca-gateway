@@ -130,6 +130,7 @@ public object GeneratedCapabilities {
         "animateForward",
         "animateReverse",
         "clearState",
+        "closeDialog",
         "conditionalAction",
         "copyToClipboard",
         "debugLog",
@@ -138,6 +139,7 @@ public object GeneratedCapabilities {
         "lifecycle",
         "navigate",
         "once",
+        "openDialog",
         "openDrawer",
         "openUrl",
         "persistState",
@@ -203,5 +205,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "8d06076b3a65aa6f098af24196f41d44ea385f45978d2e8fc155828e87fe10fc"
+    public const val capsHash: String = "1aaf60d669d5cc675a722c908eb54cc9c9b6282a972f3cc593ed5cb99c97238d"
 }

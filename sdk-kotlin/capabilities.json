@@ -1,5 +1,5 @@
 {
-  "$comment": "What this Kotlin build implements. gen-native-capabilities.ts advertises these widgets (each must carry the android target in schema/widget-registry.json) and these action kinds; value kinds, transforms and BoolExpr ops are scraped from the engine like the Dart SDK's. Add a name here only in the PR that lands its implementation. S7 drew the 15 core widgets with Compose; S9 added the rest of the iOS set; S13 added ReorderableListView, SubPage and the updateSubPage action. Native parity step 13 added CustomScrollView and the four slivers.",
+  "$comment": "What this Kotlin build implements. gen-native-capabilities.ts advertises these widgets (each must carry the android target in schema/widget-registry.json) and these action kinds; value kinds, transforms and BoolExpr ops are scraped from the engine like the Dart SDK's. Add a name here only in the PR that lands its implementation. S7 drew the 15 core widgets with Compose; S9 added the rest of the iOS set; S13 added ReorderableListView, SubPage and the updateSubPage action. Native parity step 13 added CustomScrollView and the four slivers. Native parity step 8 added the openDialog and closeDialog actions.",
   "widgets": [
     "AbsorbPointer",
     "Align",
@@ -98,6 +98,7 @@
     "animateForward",
     "animateReverse",
     "clearState",
+    "closeDialog",
     "conditionalAction",
     "copyToClipboard",
     "debugLog",
@@ -106,6 +107,7 @@
     "lifecycle",
     "navigate",
     "once",
+    "openDialog",
     "openDrawer",
     "openUrl",
     "persistState",

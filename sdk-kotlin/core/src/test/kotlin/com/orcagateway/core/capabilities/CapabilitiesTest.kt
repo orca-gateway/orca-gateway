@@ -229,7 +229,8 @@ class CapabilitiesTest {
     /**
      * C14.6: native parity step 14 implements persistState and clearState
      * (SavedState), so the pin moves from 24 to 26; Swift advertises the
-     * same two in the same step.
+     * same two in the same step. Step 8 adds openDialog and closeDialog
+     * (A8.1): 28.
      */
     @Test
     fun c14_6_actionKindsMatchTheImplementedList() {
@@ -238,7 +239,9 @@ class CapabilitiesTest {
         assertTrue(Action.kinds.toSet().containsAll(listed), "not wire kinds: ${listed - Action.kinds.toSet()}")
         // S12 added animateForward and animateReverse: 20 to 22. B13.5-K: S13 added updateSubPage, 23.
         // Step 5 added refetchPage (A5.6): 24. Step 14 added persistState and clearState: 26.
-        assertEquals(26, listed.size)
+        // Native parity step 8 added openDialog and closeDialog (A8.1): 28, Flutter's whole set.
+        assertEquals(28, listed.size)
+        assertTrue(listed.containsAll(setOf("openDialog", "closeDialog")), "missing: ${setOf("openDialog", "closeDialog") - listed}")
         assertTrue(listed.containsAll(setOf("animateForward", "animateReverse")))
         assertTrue("updateSubPage" in listed, "missing: updateSubPage")
         assertTrue("refetchPage" in listed, "missing: refetchPage")
@@ -248,7 +251,7 @@ class CapabilitiesTest {
         // Step 14 added the saved-state actions.
         assertTrue(listed.containsAll(setOf("persistState", "clearState")), "missing: ${setOf("persistState", "clearState") - listed}")
         assertEquals(GeneratedCapabilities.actionKinds.sorted(), GeneratedCapabilities.actionKinds, "the generator sorts the kinds")
-        // Swift's twin: the iOS SDK advertises the same 26 kinds.
+        // Swift's twin: the iOS SDK advertises the same 28 kinds.
         assertEquals(strings(json("sdk-swift/capabilities.json").jsonObject["actionKinds"]), listed)
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).

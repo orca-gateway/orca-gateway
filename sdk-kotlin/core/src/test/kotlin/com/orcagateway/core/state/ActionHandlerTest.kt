@@ -1,5 +1,7 @@
 package com.orcagateway.core.state
 
+import com.orcagateway.core.debug.DevToolsReporter
+import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.plugins.OrcaActionHandler
@@ -9,9 +11,17 @@ import com.orcagateway.core.support.j
 import com.orcagateway.core.support.obj
 import com.orcagateway.core.support.props
 import com.orcagateway.core.support.runSuspend
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.startCoroutine
+import kotlin.coroutines.suspendCoroutine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * C16.2: custom action handlers on [ActionExecutor], as Dart's
@@ -169,16 +179,126 @@ class ActionHandlerTest {
         executor.registerHandler("navigate", Calls().handler("navigate"))
         assertEquals(before, ActionExecutor.kinds)
         // A5.6: refetchPage is a built-in that does nothing on its own; the
-        // page loader's handler reloads (Flutter's onRefetchPage).
+        // page loader's handler reloads (Flutter's onRefetchPage). A8.1: so
+        // are openDialog and closeDialog; the page's handlers show and close
+        // the sheet (Flutter's OrcaPage).
         assertEquals(
             setOf(
                 "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
                 "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
                 "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
                 "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage", "refetchPage",
-                "persistState", "clearState",
+                "persistState", "clearState", "openDialog", "closeDialog",
             ),
             ActionExecutor.kinds,
         )
+    }
+
+    // A8.1 openDialog and closeDialog
+
+    /**
+     * A8.1: both are known kinds, as Flutter's executor has a built-in
+     * handler for each (sdk/lib/src/state/action_executor.dart:862-871,
+     * :894-919), so a chain holding them counts as implemented.
+     */
+    @Test
+    fun a8_1_openDialogAndCloseDialogAreKnownKinds() {
+        assertTrue(ActionExecutor.kinds.containsAll(setOf("openDialog", "closeDialog")), "not executor kinds")
+        assertTrue(ActionExecutor.implements(Action.OpenDialog("d", heightFactor = 0.4)), "openDialog not implemented")
+        assertTrue(ActionExecutor.implements(Action.CloseDialog), "closeDialog not implemented")
+        assertTrue(
+            ActionExecutor.implements(
+                Action.ActionGroup(actions = listOf(Action.OpenDialog("d"), Action.Always(Action.Once(Action.CloseDialog)))),
+            ),
+            "a chain holding both not implemented",
+        )
+    }
+
+    /**
+     * A8.1: with no page handler each runs nothing: no state change and no
+     * effect (Flutter's openDialog awaits a null onOpenDialog, its
+     * closeDialog has no context), the chain goes on, and DevTools hears
+     * each as a run action, as Flutter reports every action a handler took.
+     */
+    @Test
+    fun a8_1_withNoHandlerBothChangeNoStateAndEmitNoEffect(): Unit = runSuspend {
+        val reported = ArrayList<JsonValue?>()
+        OrcaDebug.reporter = DevToolsReporter { if (it.type == "action") reported.add(it.payload["actionType"]) }
+        try {
+            val state = StoreState(page = props("count" to 0, "flag" to true), app = props("user" to "amr"))
+            val (executor, store, effects) = executor(state)
+            executor.execute(
+                decode(
+                    obj(
+                        "type" to "actionGroup",
+                        "mode" to "sequential",
+                        "actions" to arr(
+                            obj("type" to "openDialog", "dialogId" to "d", "heightFactor" to 0.4),
+                            obj("type" to "closeDialog"),
+                            obj("type" to "setState", "key" to "count", "value" to obj("type" to "static", "value" to 1)),
+                        ),
+                    ),
+                ),
+            )
+            assertEquals(state.copy(page = props("count" to 1, "flag" to true)), store.state, "only the setState after them changed state")
+            assertEquals(emptyList(), effects)
+            assertEquals<List<JsonValue?>>(listOf(j("openDialog"), j("closeDialog"), j("setState"), j("actionGroup")), reported)
+        } finally {
+            OrcaDebug.reporter = null
+        }
+    }
+
+    /**
+     * A8.1: a page registers openDialog and closeDialog as it registers
+     * refetchPage: each handler gets the action as sent (dialogId and
+     * heightFactor), and nothing goes out as an effect.
+     */
+    @Test
+    fun a8_1_aRegisteredHandlerRunsWithTheAction(): Unit = runSuspend {
+        val (executor, _, effects) = executor()
+        val calls = Calls()
+        executor.registerHandler("openDialog", calls.handler("openDialog"))
+        executor.registerHandler("closeDialog", calls.handler("closeDialog"))
+        executor.execute(Action.OpenDialog("confirm", heightFactor = 0.4))
+        executor.execute(Action.OpenDialog("plain"))
+        executor.execute(Action.CloseDialog)
+        assertEquals(listOf("openDialog", "openDialog", "closeDialog"), calls.list.map { it.first })
+        assertEquals(
+            listOf(
+                obj("type" to "openDialog", "dialogId" to "confirm", "heightFactor" to 0.4),
+                obj("type" to "openDialog", "dialogId" to "plain"),
+                obj("type" to "closeDialog"),
+            ),
+            calls.list.map { it.second },
+        )
+        assertEquals(emptyList(), effects)
+    }
+
+    /**
+     * A8.1: the action after openDialog in a sequential group runs only once
+     * the page's handler returns, that is once its sheet has closed
+     * (Flutter awaits showModalBottomSheet, orca_page.dart:346).
+     */
+    @Test
+    fun a8_1_theNextActionWaitsForTheOpenDialogHandler() {
+        val (executor, store, _) = executor(StoreState(page = props("after" to 0)))
+        var sheet: Continuation<Unit>? = null
+        executor.registerHandler("openDialog", OrcaActionHandler { _, _ -> suspendCoroutine<Unit> { sheet = it } })
+        var result: Result<Unit>? = null
+        val chain: suspend () -> Unit = {
+            executor.execute(
+                Action.ActionGroup(
+                    "sequential",
+                    listOf(Action.OpenDialog("d", heightFactor = 0.4), Action.SetState("after", value = j(1))),
+                ),
+            )
+        }
+        chain.startCoroutine(Continuation(EmptyCoroutineContext) { result = it })
+        assertNotNull(sheet, "the handler never started")
+        assertEquals(j(0), store.state.page["after"], "ran before the sheet closed")
+        assertNull(result, "the chain ended before the sheet closed")
+        sheet.resume(Unit)
+        assertEquals(Result.success(Unit), result)
+        assertEquals(j(1), store.state.page["after"])
     }
 }
