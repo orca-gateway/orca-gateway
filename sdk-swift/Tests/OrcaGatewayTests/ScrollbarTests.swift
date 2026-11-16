@@ -123,34 +123,38 @@ final class ScrollbarTests: XCTestCase {
     }
 
     /// A5.7: with `thumbVisibility` the thumb flashes again as a scroll
-    /// ends (iOS 18's scroll phase), where iOS would fade it, and the
-    /// scroll view's own onScrollEnd still runs.
+    /// ends (iOS 18's scroll phase), where iOS would fade it; without it
+    /// the same scroll leaves none shown, so the flash is the Scrollbar's.
+    /// The scroll view's own onScrollEnd still runs.
     func testA5_7ThumbVisibilityFlashesTheIndicatorAgainAsAScrollEnds() throws {
         guard #available(iOS 18, *) else { throw XCTSkip("no scroll phase before iOS 18") }
-        var nodes = [node("bar", "Scrollbar", ["thumbVisibility": true], ["s"])]
-            + scrolling("SingleChildScrollView", "s", horizontal: false)
-        nodes[1] = node("s", "SingleChildScrollView", [:], ["s-line"], actions: ["onScrollEnd": [
-            "type": "setState", "scope": "page", "key": "ends", "value": ["type": "event", "key": "offset"],
-        ]])
-        let hosted = try HostedBar(nodes, keys: ["ends"])
-        defer { hosted.close() }
-        let scroll = try XCTUnwrap(hosted.scrollViews.first, "no UIScrollView")
-        hosted.pump(2)
-        XCTAssertFalse(HostedBar.indicatorShown(scroll), "the first flash has not faded")
+        for keep in [true, false] {
+            var nodes = [node("bar", "Scrollbar", ["thumbVisibility": .bool(keep)], ["s"])]
+                + scrolling("SingleChildScrollView", "s", horizontal: false)
+            nodes[1] = node("s", "SingleChildScrollView", [:], ["s-line"], actions: ["onScrollEnd": [
+                "type": "setState", "scope": "page", "key": "ends", "value": ["type": "event", "key": "offset"],
+            ]])
+            let hosted = try HostedBar(nodes, keys: ["ends"])
+            defer { hosted.close() }
+            let scroll = try XCTUnwrap(hosted.scrollViews.first, "no UIScrollView")
+            hosted.pump(2)
+            XCTAssertFalse(HostedBar.indicatorShown(scroll), "thumbVisibility \(keep): the first flash has not faded")
 
-        scroll.delegate?.scrollViewWillBeginDragging?(scroll)
-        hosted.pump(0.1)
-        for offset in [40, 80, 120] as [CGFloat] {
-            scroll.contentOffset = CGPoint(x: 0, y: offset)
-            hosted.pump(0.03)
+            scroll.delegate?.scrollViewWillBeginDragging?(scroll)
+            hosted.pump(0.1)
+            for offset in [40, 80, 120] as [CGFloat] {
+                scroll.contentOffset = CGPoint(x: 0, y: offset)
+                hosted.pump(0.03)
+            }
+            var target = scroll.contentOffset
+            scroll.delegate?.scrollViewWillEndDragging?(scroll, withVelocity: .zero, targetContentOffset: &target)
+            scroll.delegate?.scrollViewDidEndDragging?(scroll, willDecelerate: false)
+            hosted.pump(0.3)
+
+            XCTAssertEqual(HostedBar.indicatorShown(scroll), keep,
+                           "thumbVisibility \(keep): shown as the scroll ended")
+            XCTAssertEqual(hosted.value("ends"), 120, "thumbVisibility \(keep): the scroll view's onScrollEnd")
         }
-        var target = scroll.contentOffset
-        scroll.delegate?.scrollViewWillEndDragging?(scroll, withVelocity: .zero, targetContentOffset: &target)
-        scroll.delegate?.scrollViewDidEndDragging?(scroll, willDecelerate: false)
-        hosted.pump(0.3)
-
-        XCTAssertTrue(HostedBar.indicatorShown(scroll), "no flash as the scroll ended")
-        XCTAssertEqual(hosted.value("ends"), 120, "the scroll view's onScrollEnd")
     }
 
     #elseif canImport(AppKit)
