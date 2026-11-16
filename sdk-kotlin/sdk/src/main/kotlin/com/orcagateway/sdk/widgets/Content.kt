@@ -45,8 +45,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.render.ResolvedNode
+import com.orcagateway.core.render.TextStyles
 import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.style.ENGINE_TEXT_STYLE
 import com.orcagateway.sdk.style.IconNames
 import com.orcagateway.sdk.style.Props
 import com.orcagateway.sdk.style.TextStyleProps
@@ -58,18 +61,30 @@ import com.orcagateway.sdk.style.TextStyleProps
  * `semanticsLabel`. Where the parent forces the width (a stretched Column),
  * the text spans it and `textAlign` places the lines, as Flutter lays a
  * Text out in a tight box. Word spacing, the decorations Compose cannot draw
- * and the `fade` overflow are drawn here (TextDecorations.kt).
+ * and the `fade` overflow are drawn here (TextDecorations.kt). Under a
+ * DefaultTextStyle ([LocalOrcaDefaultTextStyle]; Flutter `Text.build`,
+ * widgets/text.dart:723-772) the style is the DTS's with the Text's own
+ * fields over it, on the engine's defaults ([ENGINE_TEXT_STYLE], scaled by
+ * the font scale as Flutter's textScaler scales a Text), and textAlign,
+ * maxLines and overflow are the Text's own ?? the DTS's ([TextStyles.layer]).
  */
 @Composable
 internal fun TextWidget(node: ResolvedNode, modifier: Modifier) {
     val data = Props.text(node["data"])
-    val props = TextStyleProps(node["style"])
-    var style = LocalTextStyle.current.merge(props.textStyle())
-    Props.textAlign(node["textAlign"])?.let { style = style.merge(TextStyle(textAlign = it)) }
+    val layer = LocalOrcaDefaultTextStyle.current?.let { TextStyles.layer(it, node.props) }
+    val props = TextStyleProps(if (layer != null) layer.style else node["style"])
+    var style = (if (layer != null) ENGINE_TEXT_STYLE else LocalTextStyle.current).merge(props.textStyle())
+    val align = if (layer != null) JsonValue.String(layer.textAlign) else node["textAlign"]
+    Props.textAlign(align)?.let { style = style.merge(TextStyle(textAlign = it)) }
     if (props.drawsDecoration) style = style.merge(TextStyle(textDecoration = TextDecoration.None))
-    val maxLines = node["maxLines"]?.intValue?.takeIf { it > 0 }?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
+    val maxLines = (if (layer != null) layer.maxLines else node["maxLines"]?.intValue)
+        ?.takeIf { it > 0 }?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
     val label = node["semanticsLabel"]?.stringValue
-    val overflowValue = node["overflow"]?.takeUnless { it.isNull } ?: props.overflow
+    val overflowValue = if (layer != null) {
+        JsonValue.String(layer.overflow)
+    } else {
+        node["overflow"]?.takeUnless { it.isNull } ?: props.overflow
+    }
     val overflow = Props.overflow(overflowValue)
     val fade = overflowValue?.stringValue == "fade"
     val decorationColor = props.decorationColor ?: style.color.takeOrElse { LocalContentColor.current }
