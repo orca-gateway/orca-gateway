@@ -307,7 +307,7 @@ With a key, the walk below was seen on the API 34 Google Play image (Google Play
 every step as written.
 
 1. **The pins.** A red pin on San Francisco at the centre. Oakland's is off the map's right edge,
-   across the bay: drag the map most of its width to the left to see it.
+   across the bay: drag the map most of its width to the left and a little down to see it.
 2. **Tap a pin.** Its info window opens over it ("San Francisco" and "This is SF!"), Google centres the
    map on it, and the lines read "Marker tapped: marker1" and "Marker taps: 1". Tap the same pin again:
    "Marker taps:" counts 2. Google fires `onMarkerTap` on every tap, as the Flutter plugin does.
