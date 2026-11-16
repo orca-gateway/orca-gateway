@@ -112,10 +112,10 @@ struct CustomScrollNodeView: View {
     private func scroll(_ items: [SliverItem], _ slivers: [ResolvedNode], _ horizontal: Bool,
                         _ collapsing: ResolvedNode?, top: CGFloat) -> some View {
         if let collapsing {
-            let extent = SliverAppBarView.geometry(collapsing, topPadding: top).maxExtent
+            let extent = CGFloat(SliverAppBarView.geometry(collapsing, topPadding: top).maxExtent)
             LazyScroll(node: node, model: model, horizontal: false, reverse: false, watch: bar.watch) {
                 ZStack(alignment: .top) {
-                    stack(items, slivers, horizontal: false, lazy: true, spacer: (collapsing.id, extent))
+                    stack(items, slivers, horizontal: false, lazy: true, spacer: (id: collapsing.id, extent: extent))
                     NodeView(id: collapsing.id, model: model)
                         .environment(\.orcaSliverBar, SliverBarPlace(id: collapsing.id, bar: bar, topPadding: top))
                         .zIndex(1)
@@ -158,17 +158,17 @@ struct CustomScrollNodeView: View {
     private func line(_ ids: [String], _ cells: GridCells, isLast: Bool) -> some View {
         let next: Edge.Set = cells.horizontal ? (reverse ? .leading : .trailing) : (reverse ? .top : .bottom)
         return EagerGrid(ids: ids, cells: cells, model: model)
-            .padding(next, isLast ? 0 : max(cells.mainAxisSpacing, 0))
+            .padding(next, isLast ? CGFloat(0) : CGFloat(max(cells.mainAxisSpacing, 0)))
     }
 
     /// The lifecycle triggers of the slivers this view flattens (a list, a
     /// grid, an adapter): they are not drawn as nodes, so nothing else
     /// would fire them. A bar and a stray widget are drawn by a NodeView.
     private func lifecycles(_ slivers: [ResolvedNode]) -> some View {
-        ForEach(slivers.filter { Self.flattened.contains($0.type) }, id: \.id) { sliver in
-            if let triggers = LifecycleTriggers(sliver.actions) {
+        ForEach(slivers.filter { Self.flattened.contains($0.type) }, id: \.id) { flat in
+            if let triggers = LifecycleTriggers(flat.actions) {
                 Color.clear.frame(width: 0, height: 0)
-                    .modifier(Lifecycle(node: sliver, model: model, triggers: triggers))
+                    .modifier(Lifecycle(node: flat, model: model, triggers: triggers))
             }
         }
     }
@@ -264,8 +264,8 @@ private struct SliverBarBox: View {
                 .padding(.top, topPadding)
                 .opacity(frame.toolbarOpacity)
         }
-        .frame(height: frame.box)
-        .frame(height: frame.paint, alignment: .bottom)
+        .frame(height: CGFloat(frame.box))
+        .frame(height: CGFloat(frame.paint), alignment: .bottom)
         .clipped()
         // Clipping does not stop touches: none above the view's top, none on a bar scrolled away.
         // The painted box takes its taps (none reaches a row under a pinned bar); a drag is the scroll view's.

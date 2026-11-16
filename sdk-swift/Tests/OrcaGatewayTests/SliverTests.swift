@@ -646,9 +646,9 @@ final class SliverTests: XCTestCase {
             "pageId": "p", "title": "T", "state": .array(state), "components": .array(components),
         ]).decode(PageResponse.self))
         for id in ["scroll", "bar", "adapter", "grid", "list", "strip"] {
-            let node = try XCTUnwrap(model.resolve(id), id)
-            XCTAssertNil(node.degradedFrom, "\(id) (\(node.type)) was degraded")
-            XCTAssertTrue(GeneratedCapabilities.widgets.contains(node.type), "\(node.type) is not advertised")
+            let resolved = try XCTUnwrap(model.resolve(id), id)
+            XCTAssertNil(resolved.degradedFrom, "\(id) (\(resolved.type)) was degraded")
+            XCTAssertTrue(GeneratedCapabilities.widgets.contains(resolved.type), "\(resolved.type) is not advertised")
         }
 
         let hosted = try HostedSlivers(model: model, root: "page", width: 300, height: 500)
