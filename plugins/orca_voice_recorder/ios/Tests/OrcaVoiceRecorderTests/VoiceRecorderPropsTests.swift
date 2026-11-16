@@ -145,8 +145,11 @@ final class VoiceRecorderPropsTests: XCTestCase {
         XCTAssertEqual(mirror.arrayValue?.count, 1)
         let remote = only(only(mirror)["sourceControl"])
         XCTAssertEqual(remote["identity"], "orca-gateway-swift")
-        XCTAssertEqual(only(remote["location"]["remote"])["urlString"],
-                       "https://github.com/orca-gateway/orca-gateway-swift")
+        // The URL as a whole JSON string anywhere in the location: SwiftPM
+        // writes it bare before its SourceControlURL type, `{"urlString": …}`
+        // since.
+        let location = String(decoding: try remote["location"].encoded(), as: UTF8.self)
+        XCTAssertTrue(location.contains("\"https://github.com/orca-gateway/orca-gateway-swift\""), location)
         XCTAssertEqual(only(remote["requirement"]["range"]), ["lowerBound": "0.1.0-alpha.2", "upperBound": "1.0.0"],
                        "the first sdk-swift release with the plugin API, up to the next major")
     }
