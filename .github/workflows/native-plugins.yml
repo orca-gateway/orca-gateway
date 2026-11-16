@@ -39,6 +39,8 @@ jobs:
         include:
           - plugin: orca_voice_recorder
             module: OrcaVoiceRecorder
+          - plugin: orca_video_player
+            module: OrcaVideoPlayer
     # The SDK's UI CI's Xcode (sdk-swift-ui.yml), so the plugin builds with
     # the toolchain the SDK is tested with.
     env:
@@ -104,7 +106,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        plugin: [orca_voice_recorder]
+        plugin: [orca_voice_recorder, orca_video_player]
     steps:
       - uses: actions/checkout@v4
 
