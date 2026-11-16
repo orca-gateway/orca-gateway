@@ -3,21 +3,19 @@
 ## Front page
 
 ### In one breath
-group 3 of 7 · tasks: 2 green, 0 blocked · cases: C14.1, C14.2, C14.5 green in both · all green
-T4 SwiftUI: OrcaApp boots offline via preload, takes a preloaded config, loads pages cache-first.
-T5 Compose: the same; OrcaAppBoot keeps its public surface, the new inputs stay internal.
-Both: a public helper hands the host OrcaApp's own store, so preload and OrcaApp share one cache.
+group 4 of 7 · tasks: 2 green, 0 blocked · cases: C14.1-C14.5 green, by hand too · all green
+T6/T7 demos: ORCA_PRELOAD runs the host's preload; the READMEs say what offline does.
+Hand check, both devices: offline boot, unvisited static pages open, dynamic fail, 4->5 refetch.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-4 auto-decided: Phase unchanged; a public store helper; Swift cache under the bundle id; IO thread
+2 auto-decided: a host preload error is a plain line; a deep link in its splash is not held
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 4 (demo apps gain ORCA_PRELOAD; READMEs say what offline does). (default: go)
-3. needs: decision 3 for G5-G7: persistState/clearState in all three SDKs, or drop. (default: wait)
+2. Next: groups 5-7 need decision 3: persistState/clearState in all 3 SDKs, or drop. (default: wait)
 
 ## Appendix
 
@@ -86,6 +84,30 @@ Decisions: Phase unchanged, force-update via an internal flag (auto-decided, min
 Dispatchers.IO
 Review fit: pass · Review quality: the public OrcaAppBoot constructor gained inputs a host could not use, fixed (internal)
 
+### Group 4
+#### T6 · iOS demo ORCA_PRELOAD, offline docs (82f3387)
+Files: examples/app-ios/OrcaCounter/OrcaCounterApp.swift · examples/app-ios/README.md · sdk-swift/README.md ·
+sdk-swift/Sources/OrcaGatewayCore/Client/FileKeyValueStore.swift (doc comment only, a group 3 leftover)
+Cases: C14.1/hand-S, C14.2/hand-S → the demo builds (BUILD SUCCEEDED, 0 Swift warnings); SDK suite unchanged
+(core 400, SwiftUI 275); the hand check below
+Changed: ORCA_PRELOAD (config mode only): the host's splash awaits preload over FileKeyValueStore.applicationSupport(),
+then OrcaApp(preloadedConfig:staticFlowManager:); forceUpdate → "Update required"; an error → its text. Both
+READMEs gain an "Offline" section (Flutter's rules, the quirk, a sample, a hand check); the gap notes are gone.
+Decisions: a preload error is a plain line, a relaunch retries · a link during the host splash is not held
+Review fit: pass · Review quality: pass
+
+#### T7 · Android demo ORCA_PRELOAD, offline docs (ace2eec, 3ab5b2c, 89a7bcb, 7bf081b)
+Files: examples/app-android/.../MainActivity.kt · examples/app-android/README.md · sdk-kotlin/README.md ·
+sdk-kotlin/sdk/.../OrcaBoot.kt (KDoc only, a group 3 leftover)
+Cases: C14.1/hand-K, C14.2/hand-K → the demo builds (assembleDebug, warnings as errors); SDK suite unchanged
+(core 399, sdk 388); the hand check below
+Changed: the extra ORCA_PRELOAD (config mode only): PreloadedApp's splash awaits preload over offlineStore(context)
+on Dispatchers.IO, then OrcaApp with preloadedConfig and the same manager; forceUpdate → "Update required"; an
+error → its message. The READMEs' offline sections boot from the config; the gap notes are gone.
+Decisions: preload from composition (produceState) · the host catches any Exception, rethrows cancellation
+Review fit: the README told hosts to catch only the offline error; a failed /config throws too, fixed ·
+Review quality: the READMEs said saved versions are sent to /version (they are compared on the device), fixed
+
 ### Test run
 Group 1 (..6835ab0): sdk `flutter test` 364, `flutter analyze` clean · engine `bun test` 751 · Swift and Kotlin
 unchanged (no file of theirs touched). Files changed: the task's only.
@@ -93,6 +115,15 @@ Group 2 (..576584c): `swift build --build-tests && swift test`: core 400, SwiftU
 `./gradlew build`: core 399, sdk 374, 0 failures, 0 skipped · Flutter and engine untouched · no stray file.
 Group 3 (..6be2e62): `swift test`: SwiftUI 275, core 400, 0 failures, 0 warnings · `xcodebuild test` on the
 iOS 18.5 simulator: TEST SUCCEEDED · `./gradlew build`: core 399, sdk 388, 0 failures · no stray file.
+Group 4 (..7bf081b): iOS demo xcodebuild BUILD SUCCEEDED, 0 Swift warnings · Android demo assembleDebug BUILD
+SUCCESSFUL (warnings as errors) · `swift test` core 400 · `./gradlew build` core 399, sdk 388 · no stray file.
+
+### Hand check (both devices, 2026-11-16; server :8094, static-flows at version 4)
+1 nothing saved, server down: the boot error with "No network and no cached config available" (iOS "Could not
+start the app", Android "Could not load this app") · 2 first online boot: Home; /version + /config, no page
+request · 3 relaunch: /version only · 4 server down: Home from the saved config, About (never shown) opens, Profile
+(dynamic) "Could not load this page" · 5 ORCA_PRELOAD offline: Home · 6 ORCA_PRELOAD nothing saved: the host's
+plain line · 7 version 4 → 5: /version + /config, then /version only. Screenshots: scratchpad s14/hand/.
 
 ### Blocked
 none
@@ -104,4 +135,4 @@ none
 - G5-G7 wait on the user's decision 3 (persistState/clearState).
 - New public API: Swift OrcaApp(preloadedConfig:staticFlowManager:), FileKeyValueStore.applicationSupport(), core
   preload/PreloadResult/OfflineBootError/StaticFlowManager/FileKeyValueStore; Kotlin the same, offlineStore(context).
-- The core's Swift FileKeyValueStore doc comment still names the old folder: T6 fixes it (a doc line only).
+- Rows C14.1-C14.5 tick with this branch; C14.6 waits on decision 3 (G5-G7), so the step's PR waits too.
