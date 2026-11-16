@@ -99,6 +99,8 @@ public class OrcaPageModel(
         executor.onEffect = { effect -> onEffect?.invoke(effect) }
         executor.perform = { effect -> perform(effect) }
         executor.onMutation = { mutation -> apply(mutation) }
+        // DevTools' affectedWidgets: the renderer's current nodes, in the page's order.
+        executor.pageNodes = { renderer.nodes.values }
     }
 
     public val page: PageResponse get() = renderer.page
