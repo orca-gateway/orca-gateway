@@ -255,8 +255,8 @@ final class StructureWidgetTests: XCTestCase {
 
     func test_B10_C_S_thirtyOneWidgetsAreAdvertisedWithTheThreeNewOnes() {
         let widgets = GeneratedCapabilities.widgets
-        XCTAssertEqual(widgets.count, 36)
-        XCTAssertEqual(Set(widgets).count, 36)
+        XCTAssertEqual(widgets.count, 37)
+        XCTAssertEqual(Set(widgets).count, 37)
         XCTAssertTrue(Set(widgets).isSuperset(of: ["BottomNavigationBar", "BottomNavItem", "Drawer"]))
         XCTAssertEqual(WidgetRegistry.shared.types, Set(widgets))
     }

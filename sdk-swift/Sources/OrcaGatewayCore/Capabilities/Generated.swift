@@ -43,6 +43,7 @@ public enum GeneratedCapabilities {
         "OutlinedButton",
         "Padding",
         "Positioned",
+        "ReorderableListView",
         "Row",
         "Scaffold",
         "SingleChildScrollView",
@@ -144,5 +145,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "944d9c6392b1db075d4b902584fbbc16db3039bfd72c7a9cf598fd1bff2932a5"
+    public static let capsHash = "99dd16ff7a82508aba8a981efb5b2f5bcacf4b6a27d0f565e7c15163ed9f6963"
 }

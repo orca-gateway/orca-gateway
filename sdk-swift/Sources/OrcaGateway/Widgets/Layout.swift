@@ -302,7 +302,7 @@ struct ScrollNodeView: View {
     }
 
     /// The scroll phase is there (iOS 18, macOS 15) and in use.
-    private static var phased: Bool {
+    static var phased: Bool {
         guard usesScrollPhase else { return false }
         if #available(iOS 18, macOS 15, *) { return true }
         return false

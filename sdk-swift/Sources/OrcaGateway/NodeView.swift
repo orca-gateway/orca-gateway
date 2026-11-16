@@ -93,6 +93,7 @@ struct WidgetView: View {
         case "Padding": PaddingView(node: node, model: model)
         case "SizedBox": SizedBoxView(node: node, model: model)
         case "SingleChildScrollView": ScrollNodeView(node: node, model: model)
+        case "ReorderableListView": ReorderableListNodeView(node: node, model: model)
         case "Card": CardView(node: node, model: model)
         case "Text": TextNodeView(node: node)
         case "Divider": DividerView(node: node)

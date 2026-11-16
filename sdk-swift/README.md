@@ -223,6 +223,31 @@ config (`ORCA_APP_ID=motion ORCA_BOOT=config`): a menu with one page for the con
 for the three implicit widgets, one for the switcher, a Hero pair, and one page per transition kind at
 600 ms.
 
+## Reorderable list
+
+A ReorderableListView draws its children as the rows of a list; a long press on a row picks it up, no
+edit mode and no handles.
+
+- **What fires.** Dropping a row somewhere else runs the list's `onReorder` action with
+  `{oldIndex, newIndex}`, read through `V.event`. Dropping it back where it was runs nothing.
+- **The raw `newIndex`.** `newIndex` is Flutter's value: the position to insert at, counted before the
+  dragged row is taken out. The first of three rows dropped at the end gives 3 (not 2), dropped below
+  the second gives 2; the last row dropped at the top gives 0. Moving a row down, the action subtracts
+  one before inserting. `ReorderDrop` in the core holds the rule.
+- **The order comes from the page.** The list never moves a row itself. After the drop it draws the
+  children the page has, so the row goes back unless the action changes the order (page state, or a
+  server action that sends the new children).
+- **Horizontal.** With `scrollDirection: "horizontal"` the children are drawn in a scrolling row that
+  cannot be reordered: SwiftUI drags rows in a vertical list only.
+- **Scroll triggers.** `onScrollBegin`, `onScrolling` and `onScrollEnd` fire as on a
+  SingleChildScrollView. The vertical list fires them on iOS 18 and later only; the horizontal row on
+  every supported version.
+
+To see it, run the `reorder` app of the example server in the
+[iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios), booted from its
+config (`ORCA_APP_ID=reorder ORCA_BOOT=config`): a list whose order lives in page state, moved by
+`onReorder`.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An iOS host does it with

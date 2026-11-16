@@ -26,6 +26,7 @@
     "OutlinedButton",
     "Padding",
     "Positioned",
+    "ReorderableListView",
     "Row",
     "Scaffold",
     "SingleChildScrollView",

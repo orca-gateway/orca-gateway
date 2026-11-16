@@ -22,7 +22,7 @@ final class ActionFixtureTests: XCTestCase {
 
     @MainActor func testAllTwentySixActionFixturesPass() async throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 26)
+        XCTAssertEqual(files.count, 27)
         for (name, fx) in files { try await run(name, fx) }
     }
 
