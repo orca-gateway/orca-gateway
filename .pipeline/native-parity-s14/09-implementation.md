@@ -239,6 +239,9 @@ simulator), 0 warnings · Kotlin core 477, sdk 489 · the same planned red, whic
 generators: no drift · no stray file.
 Group 6 (..965c876): engine 775 · Flutter 388, analyze clean · Swift core 486, SwiftUI 347, 0 warnings, iOS 18.5 simulator SwiftUI 409 TEST SUCCEEDED ·
 Kotlin core 480, sdk 489, BUILD SUCCESSFUL · the planned red is gone · generators: no drift · no stray file.
+After the rebase onto main 644d5d8 (steps 12 and 13 merged, ..7d05db9): engine 797 · Flutter 515, analyze clean · Swift
+core 560, SwiftUI 453 (521 on the iOS 18.5 simulator), 0 warnings · Kotlin core 572, sdk 600 · 25 action kinds advertised
+in both SDKs, one hash (2794034f…), 31 action fixtures · generators: no drift.
 
 ### Hand check (both devices, 2026-11-16; server :8094, static-flows at version 4)
 1 nothing saved, server down: the boot error with "No network and no cached config available" (iOS "Could not
