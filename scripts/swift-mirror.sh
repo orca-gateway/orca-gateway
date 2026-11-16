@@ -222,7 +222,8 @@ SWIFT
 
 # A plugin's check: a scratch library that imports it, built for macOS (run)
 # or the iOS simulator (ios). The plugin has no version to print, and needs
-# Apple-only frameworks (AVFoundation, MapKit), so it has no Linux run.
+# Apple-only frameworks (SwiftUI, through OrcaPlugin; AVFoundation, MapKit,
+# UserNotifications), so it has no Linux run.
 verify_plugin() {
   local url=$1 version=$2 mode=$3 identity=$4
   WORK=$(mktemp -d)
