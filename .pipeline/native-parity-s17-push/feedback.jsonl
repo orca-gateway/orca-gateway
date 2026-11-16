@@ -1,2 +1,3 @@
 {"ts":"2026-11-16T18:03:16Z","stage":"09","round":1,"template":null,"text":"standing rule (minor and patch auto-approved): question 2's default, C T3: firebase-messaging 25.0.2, the newest whose getToken is not deprecated (minSdk 23, Apache 2.0), so T8 reads the token as Flutter does with no suppression"}
 {"ts":"2026-11-16T18:06:03Z","stage":"09","round":2,"template":null,"text":"standing rule (minor and patch auto-approved): group 1 approved with the defaults (no task blocked; firebase-messaging 25.0.2 made in T3); next: group 2 (go)"}
+{"ts":"2026-11-16T18:19:04Z","stage":"09","round":3,"template":null,"text":"standing rule (minor and patch auto-approved): group 2 approved with the defaults (no task blocked); next: group 3 (go)"}

@@ -4,7 +4,7 @@
   "idea": "Native parity step 17 (Phase C), plugin 4 of 4: the push notification plugin (orca_push_notification) on sdk-swift and sdk-kotlin, matching the Flutter plugin (push_notification_plugin.dart on firebase_messaging): its five actions (requestNotificationPermission, getNotificationToken, showLocalNotification, subscribeToTopic, unsubscribeFromTopic), foreground messages shown as local notifications, and a notification tap handed to the host's onNotificationTap, which routes it through the SDK's deep link path; packaged as its own Swift and Gradle packages (the user's answer B). Plan: /Users/amrebada/.claude/plans/native-parity/plan.md (step 17); test cases C17.4 and C17.5 in /Users/amrebada/.claude/plans/native-parity/phase-c-tests.md",
   "kind": "feature",
   "created_at": "2026-11-16T17:33:21Z",
-  "updated_at": "2026-11-16T18:06:03Z",
+  "updated_at": "2026-11-16T18:19:04Z",
   "active_session": "7317184b-fcd8-4ef3-bc8c-3dc085f8486c",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "draft",
-      "rounds": 3,
-      "card": "cards/09-r2.md"
+      "rounds": 4,
+      "card": "cards/09-r3.md"
     },
     "10": {
       "status": "pending"
