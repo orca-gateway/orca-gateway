@@ -26,7 +26,7 @@ Cases count: 7 rows split per SDK = 14 cells, plus the fixture half (F1) and the
 D-forms); a row is ticked in phase-a-tests.md only when every half passes on both SDKs and the hand checks agree.
 
 ### Group 1
-Commits: F1 4828c73, S-core 1aeb7c5, K-core 8a9b9d5 (staged by path). Nothing pushed. S-core and K-core reviewed together
+Commits: F1 b6bfb81, S-core af614ce, K-core 57d9e6a (staged by path). Nothing pushed. S-core and K-core reviewed together
 (fit and quality, against Flutter): S-core passed; K-core went back once. F1 self-reviewed (a fixture and a test
 refactor). Group 1 approved under the standing rule.
 
@@ -65,7 +65,7 @@ Decided: as S-core; checkboxNext(null, two-state) is false, so the UI draws a tw
 false before it cycles (IB ~:209/:224), noted in both Checkbox briefs.
 
 ### Group 2
-Commits: E-ios1 1e3d957, K-check a86be4b, S-check 90f5330 (staged by path). Nothing pushed. K-check and S-check
+Commits: E-ios1 61733be, K-check 8f43dff, S-check 9aa7f51 (staged by path). Nothing pushed. K-check and S-check
 reviewed (fit and quality in one pass, against Flutter): K-check passed; S-check went back once. E-ios1 self-reviewed
 (two engine classes, a regenerated registry, a test pin). Group 2 approved under the standing rule.
 
@@ -101,7 +101,7 @@ Decided: Radio in shapes (D6 amended); no activeColor fills the iOS accent where
 (documented); an invisible hit fill so a disabled or unbound control still takes the touch, as Flutter's.
 
 ### Group 3
-Commits (after the rebase on 941e789): D-deg 3b6230d, D-deg2 ac1a765, S-switch c2d129d, K-switch eb9de1c. Nothing
+Commits (after the rebase on 941e789): D-deg 6f3bc8e, D-deg2 4cfa051, S-switch b8dc5b8, K-switch c1f6b44. Nothing
 pushed. S-switch reviewed and went back twice; K-switch went back four times (the year2023 Slider, the send on press,
 the disabled field, a test that pinned non-Flutter text colour). D-deg and D-deg2 self-reviewed (a demo page). Group 3
 approved under the standing rule.
@@ -139,7 +139,7 @@ Left documented: a drag back onto the drawn stop sends nothing (Compose filters 
 thumb shadow is approximate; the indicator is not in an overlay.
 
 ### Group 4
-Commits: E-ios2 f7ebc0b, K-tap 2f3ac6f, S-tap 35e7199 + 66b292d. Nothing pushed. K-tap reviewed and went back once (Flutter's
+Commits: E-ios2 7147912, K-tap 0b26b8f, S-tap aec21fc + 16ca192. Nothing pushed. K-tap reviewed and went back once (Flutter's
 500 ms long press, the FAB's ripple colours, which also opened K-theme); S-tap passed review, its nits go in as a rework. E-ios2 self-reviewed (two
 engine classes, a regenerated registry, a test pin).
 
@@ -172,13 +172,13 @@ Cases: A6.5, A6.7 (IconButton, FAB) sw → green, 13 tests (2 hosted, iOS only; 
 Changed: PressGestures (tap and/or a 500 ms long press); IconButtonNodeView as Kotlin's box; FloatingActionButtonNodeView
 56 / 16 or mini 40 / 12 in a 48 pt target, a shadow at elevation ?? 6, live whenever enabled, drawn unchanged and still
 blocking hits when disabled (Flutter's Material absorbs); tooltip is the accessibility label.
-Rework (review, 66b292d): PressGestures composes both triggers as one LongPressGesture(0.5, maximumDistance 18,
+Rework (review, 16ca192): PressGestures composes both triggers as one LongPressGesture(0.5, maximumDistance 18,
 Flutter's kTouchSlop).exclusively(before: TapGesture()), so a hold is never also a tap without relying on modifier
 order; the tooltip docs say a hold on a tooltipped button shows Flutter's bubble; 14 tests; `swift test` UI 522, core
 599; iOS scheme UI 653, core 599.
 
 ### Group 5
-Commits: K-fstyle 8af429b, K-ink 9c024b5, K-theme c34da82, S-fstyle c6e64df, S-ink e8d5d09 + addcf65. Nothing pushed. K-ink,
+Commits: K-fstyle a65e84e, K-ink 021da7c, K-theme b29dc87, S-fstyle a2d8af8, S-ink a3bef52 + f610ec0. Nothing pushed. K-ink,
 K-fstyle, S-fstyle and S-ink reviewed (fit and quality in one pass, against Flutter); K-theme checked against Flutter's
 `_colorSchemeLightM3` role by role.
 
@@ -208,11 +208,21 @@ Changed: InkWellNodeView beside GestureNodeView: tap, double tap and a 500 ms lo
 tap chained first; one exclusive long press after them, so a hold is never also a tap and the highlight goes off when
 it fires, as Flutter cancels the tap); the whole box takes touches; highlightColor ?? #BCBCBC66 under the unclipped
 child, clipped to borderRadius, fading over 200 ms; no ripple on iOS (D6), no `enabled`.
-Rework (review, addcf65): the long press takes S-tap's 500 ms / 18 pt gesture (kTouchSlop, pinned red first at 10);
+Rework (review, f610ec0): the long press takes S-tap's 500 ms / 18 pt gesture (kTouchSlop, pinned red first at 10);
 the doc states Flutter's highlight timing (on at kPressTimeout, 100 ms in, held through the double-tap wait; iOS while
 the finger is down, D6); `swift test` UI 522, core 599; iOS scheme UI 653, core 599.
 Left for the hand check: SwiftUI's 300 ms double-tap wait, the live press and a hold never also tapping (no package
 test can inject a touch).
+Rework (hand checks on the iPhone, three rounds): (1) a 0.7 s hold fired a tap: the inner taps beat the outer long
+press; fix 69b6457 made one exclusive gesture (long press, then a count-2 tap, then a tap), and single taps were lost;
+(2) the triggers became the FAB's LongPress-before-one-Tap with the double tap resolved in code (DoubleTapResolver,
+Flutter's 300 ms kDoubleTapTimeout, InkTaps schedules the deadline), but `.updating` on the long press lost every
+tap; (3) the triggers are exactly PressGestures.exclusive and the highlight is read by a gesture of its own
+(`.simultaneousGesture`, LongPress(.infinity, 18 pt).updating). Reviewed (fit and quality): the code passed, two doc
+lines fixed. `swift test` UI 526, core 600; iOS scheme UI 657, core 600, goldens pass. Hand check 4 passes: a tap
+fires once after the wait, two quick taps a double tap only, a 0.7 s hold the long press only, a swipe starting on
+it scrolls and fires nothing. Decision swift-inkwell-highlight-through-long-press (minor): the highlight stays until
+the lift, as Kotlin's press state.
 
 #### Task S-fstyle / K-fstyle · A field's text style as Flutter's (added at 09, K-switch review)
 Files: `sdk-swift/Sources/OrcaGateway/Widgets/Input.swift` · `.../TextFieldTests.swift` · `sdk-kotlin/sdk/.../widgets/
@@ -224,7 +234,7 @@ onSurface #1D1B20 (@0.38 disabled); a style on a bare field, the engine's 14 / w
 For the user: the bare field's white text is Flutter's own behaviour, likely a builder bug (followups).
 
 ### Group 6
-Commits: K-deg-a 0e81cde, S-deg-a 89a7813. Nothing pushed. Both self-reviewed (recordings and test strings; the diffs
+Commits: K-deg-a 681890a, S-deg-a 3a3aa64. Nothing pushed. Both self-reviewed (recordings and test strings; the diffs
 and the PNGs read by the main session; the two SDKs' recordings are byte-identical).
 
 #### Task K-deg-a · Kotlin warn and graceful pages re-recorded
@@ -245,7 +255,7 @@ Cases: T4.1 / T4.2 graceful, warn and the warn golden kept green: 3 red on the o
 Changed: as K-deg-a, the banner body pinned to the same string; the recordings are byte-identical to Kotlin's.
 
 ### Group 7
-Commits: K-deg-b 1e45792, S-deg-b e77a2a1. Nothing pushed. Both self-reviewed (the diffs and the goldens read by the
+Commits: K-deg-b c606081, S-deg-b 0975bc8. Nothing pushed. Both self-reviewed (the diffs and the goldens read by the
 main session; the require recordings are byte-identical); K-deg-b went back once (decision degrade-require-body).
 
 #### Task K-deg-b · Kotlin require page, DevTools test
@@ -265,8 +275,8 @@ red run possible; `swift test` UI 522, core 599; iOS scheme UI 653, core 599; on
 Changed: as K-deg-b; the devtools fixture's event-name table (~:118) left alone (it reads a fixture, not the registry).
 
 ### Group 8
-Commits: K-caps 4d77280, S-caps (pending); D-forms b7e73e7 (landed early, before G4). Nothing pushed. K-caps
-self-reviewed (a registration list, a sorted manifest, a regenerated file, count pins; the diff read by the main
+Commits: K-caps 8a0ad4b, S-caps 773ebc5, the forms engine test 13d7e8c; D-forms 01c1641 (landed early, before G4).
+Nothing pushed. K-caps and S-caps self-reviewed (a registration list, a sorted manifest, a regenerated file, count pins; the diff read by the main
 session).
 
 #### Task K-caps · Kotlin registers and advertises the nine
@@ -277,6 +287,28 @@ c1_kotlinAdvertisesTheSame77WidgetsAsSwift) red until S-caps by design, it compa
 core 622 with c1 the 1 failure, sdk 728, lint clean; degrade tests and goldens unmoved.
 Changed: standard() registers the nine (TextFormField → TextFieldWidget, Form → FormWidget); capabilities.json lists
 them (77, sorted); one generator run (Generated.swift byte-identical); README and KDoc say 77.
+
+#### Task S-caps · Swift advertises the nine
+Files: `sdk-swift/capabilities.json` · `sdk-swift/Sources/OrcaGatewayCore/Capabilities/Generated.swift` ·
+`.../CapabilitiesTests.swift` · `sdk-swift/Tests/OrcaGatewayTests/StructureWidgetTests.swift` · `sdk-swift/README.md`
+(added at 09: it counts the widgets)
+Cases: A6.x caps unit sw → testA6_xAdvertisesTheNineFormControls and the two 77 pins red first, then green; Kotlin's c1
+green with it; `swift test` UI 522, core 600; iOS scheme UI 653, core 600; no golden moved on either SDK.
+Changed: capabilities.json lists the nine (77, the same list as Kotlin's); one generator run, the same caps hash
+34e0cb4b… as Kotlin's (Generated.kt byte-identical); README says 77.
+
+#### Task D-forms · Demo page forms on parity-a
+Files: `examples/server/parity-a.ts` · `examples/server/index.ts` · `engine/test/parity-a-forms.test.ts` (new, committed
+13d7e8c once green)
+Cases: A6.x eng → green after S-caps: the page holds the nine, and each native vector gets it whole (2/2).
+Changed: one section per A6 row, every control bound through page state with a Text watching each key, tap counters
+for IconButton, the page FAB and InkWell, a disabled row and a no-handler row.
+
+### Hand checks (parity-a page `forms`, on main 677d114 + this branch)
+iPhone 16 Pro simulator (DA7254F5) and Android API 34 emulator (5594), details and screenshots in the scratchpad's
+s6/hand-checks.md. A6.1-A6.7 pass on both, after the three InkWell reworks on iOS. Found and left as follow-ups: the
+iOS keyboard opens for a disabled bare field (Flutter and Android open none); Compose widens the 40 dp IconButton's
+touch area to 48 dp (decision kotlin-min-touch-target); the Swift GestureDetector hold also fires onTap.
 
 ### Test run
 G4-G7 (on 941e789, last runs on the final files): `swift test` UI 522, core 599 · iOS scheme UI 653, core 599 ·
