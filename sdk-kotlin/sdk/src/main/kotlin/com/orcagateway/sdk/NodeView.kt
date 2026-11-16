@@ -48,23 +48,33 @@ internal val LocalOrcaNodeRecorder = compositionLocalOf<OrcaNodeSnapshot?> { nul
  */
 @Composable
 public fun NodeView(id: String, model: OrcaPageModel, modifier: Modifier = Modifier) {
-    val frozen = LocalOrcaFrozenNodes.current
-    val node = if (frozen != null) {
-        frozen[id] ?: return
-    } else {
-        val observer = remember(model, id) { NodeObserver(model, id) }
-        // Reading the revision ties this node to its watches: the node is
-        // resolved again only when one of them, or the tree, changed.
-        val revision = observer.revision
-        // Under an AnimatedBuilder the progress changes every frame, and the
-        // node is resolved again with it so its `tween` props move.
-        val progress = LocalOrcaAnimationProgress.current
-        val live = remember(observer, revision, progress) { model.resolve(id, progress) } ?: return
-        LocalOrcaNodeRecorder.current?.record(live)
-        if (hasLifecycleTriggers(live)) LifecycleTriggers(live, model)
-        live
-    }
+    val node = liveNode(id, model) ?: return
     WidgetView(node, model, modifier)
+}
+
+/**
+ * Node [id] as [NodeView] finds it, for it and for a parent that reads a
+ * child before drawing it (the parent then draws it with [WidgetView], not
+ * with NodeView, which would find it a second time): observing the node's
+ * own watches, recorded for a snapshot, its lifecycle triggers running;
+ * under [LocalOrcaFrozenNodes] the snapshot's. Null when there is no such
+ * node. Call it once per node and place.
+ */
+@Composable
+internal fun liveNode(id: String, model: OrcaPageModel): ResolvedNode? {
+    val frozen = LocalOrcaFrozenNodes.current
+    if (frozen != null) return frozen[id]
+    val observer = remember(model, id) { NodeObserver(model, id) }
+    // Reading the revision ties this node to its watches: the node is
+    // resolved again only when one of them, or the tree, changed.
+    val revision = observer.revision
+    // Under an AnimatedBuilder the progress changes every frame, and the
+    // node is resolved again with it so its `tween` props move.
+    val progress = LocalOrcaAnimationProgress.current
+    val live = remember(observer, revision, progress) { model.resolve(id, progress) } ?: return null
+    LocalOrcaNodeRecorder.current?.record(live)
+    if (hasLifecycleTriggers(live)) LifecycleTriggers(live, model)
+    return live
 }
 
 /** The registry's builder for the node's type, or nothing (logged once per type). */

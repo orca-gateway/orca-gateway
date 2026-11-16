@@ -43,6 +43,7 @@ public object GeneratedCapabilities {
         "Column",
         "ConstrainedBox",
         "Container",
+        "CustomScrollView",
         "DecoratedBox",
         "Divider",
         "Drawer",
@@ -78,6 +79,10 @@ public object GeneratedCapabilities {
         "Scrollbar",
         "SingleChildScrollView",
         "SizedBox",
+        "SliverAppBar",
+        "SliverGrid",
+        "SliverList",
+        "SliverToBoxAdapter",
         "Spacer",
         "Stack",
         "SubPage",
@@ -180,5 +185,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "d2da2c213f33a30bc3aaaf2b1d78a1f09bf367a4b8624ceac380e5c72ca2f35c"
+    public const val capsHash: String = "98c5151bb44b3657c2dc8d03167126cd66ec17de07eb083049fa359a18a1ee05"
 }

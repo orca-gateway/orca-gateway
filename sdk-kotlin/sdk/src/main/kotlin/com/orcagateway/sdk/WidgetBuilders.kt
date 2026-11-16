@@ -27,6 +27,7 @@ import com.orcagateway.sdk.widgets.ClipRectWidget
 import com.orcagateway.sdk.widgets.ColorFilteredWidget
 import com.orcagateway.sdk.widgets.ConstrainedBoxWidget
 import com.orcagateway.sdk.widgets.ContainerWidget
+import com.orcagateway.sdk.widgets.CustomScrollViewWidget
 import com.orcagateway.sdk.widgets.DecoratedBoxWidget
 import com.orcagateway.sdk.widgets.DividerWidget
 import com.orcagateway.sdk.widgets.DrawerWidget
@@ -60,6 +61,10 @@ import com.orcagateway.sdk.widgets.ScaffoldWidget
 import com.orcagateway.sdk.widgets.ScrollWidget
 import com.orcagateway.sdk.widgets.ScrollbarWidget
 import com.orcagateway.sdk.widgets.SizedBoxWidget
+import com.orcagateway.sdk.widgets.SliverAppBarWidget
+import com.orcagateway.sdk.widgets.SliverGridWidget
+import com.orcagateway.sdk.widgets.SliverListWidget
+import com.orcagateway.sdk.widgets.SliverToBoxAdapterWidget
 import com.orcagateway.sdk.widgets.SpacerWidget
 import com.orcagateway.sdk.widgets.StackWidget
 import com.orcagateway.sdk.widgets.SubPageWidget
@@ -209,6 +214,11 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("PageView") { node, model, modifier -> PageViewWidget(node, model, modifier) }
             register("Scrollbar") { node, model, modifier -> ScrollbarWidget(node, model, modifier) }
             register("PullToRefresh") { node, model, modifier -> PullToRefreshWidget(node, model, modifier) }
+            register("CustomScrollView") { node, model, modifier -> CustomScrollViewWidget(node, model, modifier) }
+            register("SliverAppBar") { node, model, modifier -> SliverAppBarWidget(node, model, modifier) }
+            register("SliverGrid") { node, model, modifier -> SliverGridWidget(node, model, modifier) }
+            register("SliverList") { node, model, modifier -> SliverListWidget(node, model, modifier) }
+            register("SliverToBoxAdapter") { node, model, modifier -> SliverToBoxAdapterWidget(node, model, modifier) }
         }
     }
 }

@@ -78,10 +78,6 @@ public data class SliverItems(
             return SliverItems(items, first?.id)
         }
 
-        /** The items of [scroll]'s children, each found with [node]; an id it does not know is skipped. */
-        public fun of(scroll: ResolvedNode, node: (String) -> ResolvedNode?): SliverItems =
-            of(scroll.childIds.mapNotNull(node))
-
         private fun gridLines(grid: ResolvedNode): List<SliverItem.GridLine> {
             val across = max(grid["crossAxisCount"]?.doubleValue?.toInt() ?: 2, 1)
             val lines = grid.childIds.chunked(across)

@@ -157,19 +157,6 @@ class SliverCoreTest {
         assertEquals(listOf("bar", "first", "grid#0", "grid#1", "r0", "r1", "r2", "stray"), SliverItems.of(longer).items.map { it.key })
     }
 
-    /** C-items-K: the scroll view's children are found through the lookup, in order; an id the lookup does not know is skipped. */
-    @Test
-    fun c_items_k_childrenThroughALookup() {
-        val nodes = listOf(
-            node("scroll", "CustomScrollView", listOf("bar", "gone", "list")),
-            node("bar", "SliverAppBar"),
-            node("list", "SliverList", listOf("a", "b")),
-        ).associateBy { it.id }
-        val got = SliverItems.of(nodes.getValue("scroll")) { nodes[it] }
-        assertEquals(listOf<SliverItem>(SliverItem.Bar("bar"), SliverItem.Box("a"), SliverItem.Box("b")), got.items)
-        assertEquals("bar", got.collapsingBarId)
-    }
-
     // ── C-geo-K ─────────────────────────────────────────────────────────────
 
     /** One row of Flutter's table: drag to [offset] (or, [released], lift the finger there) and read the bar. */
