@@ -4,12 +4,14 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.core.navigation.DeeplinkEvent
 import com.orcagateway.sdk.OrcaApp
 import com.orcagateway.sdk.client.OkHttpTransport
 import com.orcagateway.sdk.debug.OrcaDebugConfig
@@ -30,6 +32,9 @@ import java.net.URI
  * An app with a navigation config (app id `navigation`) boots from it with
  * the extra ORCA_BOOT set to `config`: the server's config says where the
  * app starts, and ORCA_PATH is not used.
+ *
+ * The app opens `orcacounter://` links (see "Deep links" in the README) and
+ * logs one `deeplink:` line for each under the tag `OrcaCounter`.
  *
  * Two plugins (DemoPlugins.kt) draw the ColoredBadge and run the device
  * actions of the `custom` app: start it with ORCA_APP_ID `custom`.
@@ -59,10 +64,23 @@ class MainActivity : ComponentActivity() {
                         enableOffline = offline,
                         enableSessionTracking = sessions,
                         plugins = plugins,
+                        onDeeplink = ::logDeeplink,
                     )
                 }
             }
         }
+    }
+
+    /**
+     * One line per `orcacounter://` link the app opened (the intent filter is
+     * in the manifest; OrcaApp reads the Intents itself): `adb logcat -s OrcaCounter`.
+     */
+    private fun logDeeplink(event: DeeplinkEvent) {
+        Log.i(
+            "OrcaCounter",
+            "deeplink: incoming=${event.incoming} resolvedLocation=${event.resolvedLocation} " +
+                "wasRedirected=${event.wasRedirected} isColdStart=${event.isColdStart}",
+        )
     }
 
     /**

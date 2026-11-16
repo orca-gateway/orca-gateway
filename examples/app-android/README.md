@@ -120,6 +120,36 @@ The `tabs` app in `examples/server/tabs.ts` shows the tab bar: extras `ORCA_APP_
 |---|---|---|---|
 | `ORCA_BOOT` | string | `path` | `config` boots from the server's navigation config; anything else starts at `ORCA_PATH` |
 
+## Deep links
+
+The manifest gives `MainActivity` an intent filter for the scheme `orcacounter` and
+`android:launchMode="singleTop"`; the activity holds no link code: `OrcaApp` reads the Intent and
+navigates to the link. A link needs routes to go to, so start one of the `ORCA_BOOT=config` demo
+apps (`navigation` or `tabs`, above) first, then send a link:
+
+```bash
+adb shell am start -a android.intent.action.VIEW -d "orcacounter:///home/product/42" com.orcagateway.examples.counter
+```
+
+The SDK keeps the URL's path and query and drops the scheme and the host, so write the link with
+three slashes: in `orcacounter://product/42`, `product` is the host and the location is `/42`. The
+running app gets the link as a new Intent and keeps the extras it was started with. To open the
+app with a link (a cold start), stop it (`adb shell am force-stop com.orcagateway.examples.counter`)
+and add the extras to the command: `--es ORCA_APP_ID navigation --es ORCA_BOOT config`.
+
+The host passes `onDeeplink` only to log a line per link:
+
+```bash
+adb logcat -s OrcaCounter
+```
+
+```
+I OrcaCounter: deeplink: incoming=orcacounter:///home/product/42 resolvedLocation=/home/product/42 wasRedirected=false isColdStart=false
+```
+
+A location no route matches shows "Page not found"; a protected route of `navigation` redirects to
+the login page while logged out (`wasRedirected=true`).
+
 ## Plugins
 
 The app registers two plugins ([`DemoPlugins.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/DemoPlugins.kt)),

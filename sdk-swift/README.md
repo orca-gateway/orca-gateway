@@ -105,6 +105,73 @@ and query), `isNotFound`, and `scaffoldTitle`, the fallback title of a route out
 `OrcaApp(router:)` draws a router made as above. Both show the "Page not found"
 page and the title bar. A config with tabs runs as one stack.
 
+## Deep links
+
+`OrcaApp` receives the app's links itself: it attaches `.onOpenURL` (URL scheme links) and
+`.onContinueUserActivity(NSUserActivityTypeBrowsingWeb)` (universal links), and goes to the
+link's location, which is the URL's path and query. Scheme, host and fragment are ignored, an
+empty path is `/` and a trailing slash is dropped: `https://shop.example/order/7?gift=1` and
+`orcashop://open/order/7?gift=1` both open `/order/7?gift=1` (in `orcashop://order/7`, `order`
+is the host, so the location is `/7`).
+
+A link is a `navigate(to:replace: true)`: the stack and the tab come from the config, the
+route's redirect rule applies (the asked query is dropped), and a location no route matches
+shows "Page not found", which requests no page and has a "Go to home page" button that goes to
+`/`. A link to the location already on screen navigates nothing.
+
+A link that opens the app is where the app starts, instead of the config's `initialRoute`: one
+that arrives during the version check or the config fetch is held until the router exists, and
+the only page requested is the link's. That is exact when the app boots from the config. With a
+`path` and no version check, or with `OrcaApp(router:)`, the first page shows at once; if iOS
+delivers the launch URL after that, the link is handled as a link to a running app:
+`isColdStart` is false and the first page was already requested. A host that needs it exact
+makes the router with `link:` (below) and passes it to `OrcaApp(router:)`.
+
+None of this needs a callback; to be told, pass `onDeeplink`:
+
+```swift
+OrcaApp(client: client, onDeeplink: { event in
+    analytics.link(event.incoming, opened: event.resolvedLocation, cold: event.isColdStart)
+})
+```
+
+It is called once per link, after the navigation and after `onRouteChanged`, with a
+`DeeplinkEvent`:
+
+| Field | What |
+|---|---|
+| `incoming` | the `URL` as the system delivered it |
+| `resolvedLocation` | the final location, path and query: the link's, or the redirect rule's target |
+| `pathParameters` | the matched route's path params, decoded; empty on "Page not found" |
+| `queryParameters` | the final location's query, decoded |
+| `wasRedirected` | a redirect rule sent the link to another path |
+| `isColdStart` | the link opened the app: it came before the first route was on screen |
+
+A host that receives links elsewhere (an app delegate, a push notification's payload) hands them
+to the router, and sets the callback on it; with `OrcaApp(router:)` the view still delivers the
+system's links to that router:
+
+```swift
+router.onDeeplink = { event in … }
+router.handleDeeplink(url)                      // isColdStart: false
+let router = OrcaRouter(client: client, config: config, link: launchURL)   // boots at the link
+let router = OrcaRouter(client: client, path: "home", onDeeplink: { … }, link: launchURL)
+```
+
+A router made with `link:` reports it once, `isColdStart` set, and drops one repeat of that exact
+URL while it is still on the location it booted at: under `OrcaApp(router:)` the system may
+deliver the launch URL again, and that is not a second link. `OrcaAppBoot.handleDeeplink(_:)`,
+for a host with its own root view, holds a link until the router exists (a cold start) and
+treats every link to an existing router as a link to a running app.
+
+The system only delivers links the app declares: a URL scheme under `CFBundleURLTypes` in the
+app's `Info.plist` (Xcode: target, Info, URL Types), and for universal links the Associated
+Domains capability (`applinks:shop.example`) with an `apple-app-site-association` file on that
+domain. See Apple's
+[custom URL scheme](https://developer.apple.com/documentation/xcode/defining-a-custom-url-scheme-for-your-app)
+and [universal links](https://developer.apple.com/documentation/xcode/supporting-universal-links-in-your-app)
+guides.
+
 ## Layout
 
 | Target | What | Platforms |

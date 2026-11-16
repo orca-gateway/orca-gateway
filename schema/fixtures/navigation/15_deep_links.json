@@ -1,0 +1,609 @@
+{
+  "name": "deep-links",
+  "description": "A link is a URL the platform hands to the app. Its location is the URL's path and query (scheme, host and fragment are dropped, an empty path is /, a trailing slash is dropped) and the app goes there as a `go`: the stack and the tab come from the config, the asked route's redirect rule is applied once. A warm link reaches a running app shown at `startAt`; a cold link is what opened the app, which then starts at the link instead of the initial route. `event` is what the deep link callback receives, once, after the navigation; its `wasRedirected` compares the link's location path with the final one, so a trailing slash or an empty path is not a redirect.",
+  "config": {
+    "appId": "fixture-app",
+    "appName": "Navigation fixture",
+    "initialRoute": "/home",
+    "tabs": [
+      {
+        "id": "home",
+        "label": "Home",
+        "icon": "circle",
+        "initialRoute": "/home"
+      },
+      {
+        "id": "search",
+        "label": "Search",
+        "icon": "circle",
+        "initialRoute": "/search"
+      }
+    ],
+    "initialAppState": {
+      "loggedIn": false
+    },
+    "flows": [
+      {
+        "name": "main",
+        "routes": [
+          {
+            "path": "home",
+            "requiredAppState": [],
+            "children": [
+              {
+                "path": "home/product/:id",
+                "requiredAppState": []
+              }
+            ]
+          },
+          {
+            "path": "search",
+            "requiredAppState": []
+          },
+          {
+            "path": "settings",
+            "requiredAppState": []
+          },
+          {
+            "path": "login",
+            "requiredAppState": []
+          },
+          {
+            "path": "account",
+            "requiredAppState": [],
+            "redirect": {
+              "when": "loggedIn",
+              "equals": false,
+              "to": "/login"
+            }
+          },
+          {
+            "path": "order/:id",
+            "requiredAppState": []
+          }
+        ]
+      }
+    ]
+  },
+  "links": [
+    {
+      "name": "an https link",
+      "link": "https://shop.example/settings",
+      "coldStart": false,
+      "expected": {
+        "kind": "page",
+        "location": "/settings",
+        "redirected": false,
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "pageRequests": [
+          "settings"
+        ],
+        "event": {
+          "resolvedLocation": "/settings",
+          "pathParameters": {},
+          "queryParameters": {},
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/settings"
+        }
+      }
+    },
+    {
+      "name": "a custom scheme link to the same route: scheme and host are ignored",
+      "link": "orcashop://open/settings",
+      "coldStart": false,
+      "expected": {
+        "kind": "page",
+        "location": "/settings",
+        "redirected": false,
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "pageRequests": [
+          "settings"
+        ],
+        "event": {
+          "resolvedLocation": "/settings",
+          "pathParameters": {},
+          "queryParameters": {},
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "orcashop://open/settings"
+        }
+      }
+    },
+    {
+      "name": "a host alone is not a path: the empty path is /",
+      "link": "orcashop://settings",
+      "coldStart": false,
+      "expected": {
+        "kind": "error",
+        "location": "/",
+        "redirected": false,
+        "stack": [],
+        "tabIndex": null,
+        "pageRequests": [],
+        "event": {
+          "resolvedLocation": "/",
+          "pathParameters": {},
+          "queryParameters": {},
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected. q6: Flutter's wasRedirected compares the link's raw path, so the empty path reads as a redirect to /.",
+        "event": {
+          "resolvedLocation": "orcashop://settings/",
+          "wasRedirected": true
+        }
+      }
+    },
+    {
+      "name": "the query is kept, the fragment is dropped",
+      "link": "https://shop.example/settings?tab=2&ref=mail#top",
+      "coldStart": false,
+      "expected": {
+        "kind": "page",
+        "location": "/settings?tab=2&ref=mail",
+        "redirected": false,
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "pageRequests": [
+          "settings"
+        ],
+        "event": {
+          "resolvedLocation": "/settings?tab=2&ref=mail",
+          "pathParameters": {},
+          "queryParameters": {
+            "tab": "2",
+            "ref": "mail"
+          },
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/settings?tab=2&ref=mail#top"
+        }
+      }
+    },
+    {
+      "name": "a trailing slash is dropped",
+      "link": "https://shop.example/settings/",
+      "coldStart": false,
+      "expected": {
+        "kind": "page",
+        "location": "/settings",
+        "redirected": false,
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "pageRequests": [
+          "settings"
+        ],
+        "event": {
+          "resolvedLocation": "/settings",
+          "pathParameters": {},
+          "queryParameters": {},
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected. q6: Flutter's wasRedirected compares the link's raw path, so the trailing slash reads as a redirect.",
+        "event": {
+          "resolvedLocation": "https://shop.example/settings",
+          "wasRedirected": true
+        }
+      }
+    },
+    {
+      "name": "the path is case-sensitive",
+      "link": "https://shop.example/Settings",
+      "coldStart": false,
+      "expected": {
+        "kind": "error",
+        "location": "/Settings",
+        "redirected": false,
+        "stack": [],
+        "tabIndex": null,
+        "pageRequests": [],
+        "event": {
+          "resolvedLocation": "/Settings",
+          "pathParameters": {},
+          "queryParameters": {},
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/Settings"
+        }
+      }
+    },
+    {
+      "name": "a route in a tab selects the tab",
+      "link": "https://shop.example/search",
+      "coldStart": false,
+      "expected": {
+        "kind": "page",
+        "location": "/search",
+        "redirected": false,
+        "stack": [
+          "search"
+        ],
+        "tabIndex": 1,
+        "pageRequests": [
+          "search"
+        ],
+        "event": {
+          "resolvedLocation": "/search",
+          "pathParameters": {},
+          "queryParameters": {},
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/search"
+        }
+      }
+    },
+    {
+      "name": "a nested child shows over its parent, in the parent's tab",
+      "link": "https://shop.example/home/product/42",
+      "coldStart": false,
+      "startAt": "/search",
+      "expected": {
+        "kind": "page",
+        "location": "/home/product/42",
+        "redirected": false,
+        "stack": [
+          "home",
+          "home/product/42"
+        ],
+        "tabIndex": 0,
+        "pageRequests": [
+          "home/product/42"
+        ],
+        "event": {
+          "resolvedLocation": "/home/product/42",
+          "pathParameters": {
+            "id": "42"
+          },
+          "queryParameters": {},
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q1: Flutter's pathParameters is always empty. q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/home/product/42",
+          "pathParameters": {}
+        }
+      }
+    },
+    {
+      "name": "a param route outside the tabs",
+      "link": "orcashop://open/order/7?gift=1",
+      "coldStart": false,
+      "expected": {
+        "kind": "page",
+        "location": "/order/7?gift=1",
+        "redirected": false,
+        "stack": [
+          "order/7"
+        ],
+        "tabIndex": null,
+        "pageRequests": [
+          "order/7"
+        ],
+        "event": {
+          "resolvedLocation": "/order/7?gift=1",
+          "pathParameters": {
+            "id": "7"
+          },
+          "queryParameters": {
+            "gift": "1"
+          },
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q1: Flutter's pathParameters is always empty. q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "orcashop://open/order/7?gift=1",
+          "pathParameters": {}
+        }
+      }
+    },
+    {
+      "name": "a protected route, logged out: redirected, the asked query dropped",
+      "link": "https://shop.example/account?from=mail",
+      "coldStart": false,
+      "expected": {
+        "kind": "page",
+        "location": "/login",
+        "redirected": true,
+        "stack": [
+          "login"
+        ],
+        "tabIndex": null,
+        "pageRequests": [
+          "login"
+        ],
+        "event": {
+          "resolvedLocation": "/login",
+          "pathParameters": {},
+          "queryParameters": {},
+          "wasRedirected": true,
+          "isColdStart": false
+        }
+      }
+    },
+    {
+      "name": "a protected route, logged out, cold",
+      "link": "https://shop.example/account?from=mail",
+      "coldStart": true,
+      "expected": {
+        "kind": "page",
+        "location": "/login",
+        "redirected": true,
+        "stack": [
+          "login"
+        ],
+        "tabIndex": null,
+        "pageRequests": [
+          "login"
+        ],
+        "event": {
+          "resolvedLocation": "/login",
+          "pathParameters": {},
+          "queryParameters": {},
+          "wasRedirected": true,
+          "isColdStart": true
+        }
+      }
+    },
+    {
+      "name": "the same route, logged in: not redirected",
+      "link": "https://shop.example/account?from=mail",
+      "coldStart": false,
+      "appState": {
+        "loggedIn": true
+      },
+      "expected": {
+        "kind": "page",
+        "location": "/account?from=mail",
+        "redirected": false,
+        "stack": [
+          "account"
+        ],
+        "tabIndex": null,
+        "pageRequests": [
+          "account"
+        ],
+        "event": {
+          "resolvedLocation": "/account?from=mail",
+          "pathParameters": {},
+          "queryParameters": {
+            "from": "mail"
+          },
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/account?from=mail"
+        }
+      }
+    },
+    {
+      "name": "an unknown link",
+      "link": "https://shop.example/nowhere?x=1",
+      "coldStart": false,
+      "expected": {
+        "kind": "error",
+        "location": "/nowhere?x=1",
+        "redirected": false,
+        "stack": [],
+        "tabIndex": null,
+        "pageRequests": [],
+        "event": {
+          "resolvedLocation": "/nowhere?x=1",
+          "pathParameters": {},
+          "queryParameters": {
+            "x": "1"
+          },
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/nowhere?x=1"
+        }
+      }
+    },
+    {
+      "name": "an unknown link, cold",
+      "link": "https://shop.example/nowhere?x=1",
+      "coldStart": true,
+      "expected": {
+        "kind": "error",
+        "location": "/nowhere?x=1",
+        "redirected": false,
+        "stack": [],
+        "tabIndex": null,
+        "pageRequests": [],
+        "event": {
+          "resolvedLocation": "/nowhere?x=1",
+          "pathParameters": {},
+          "queryParameters": {
+            "x": "1"
+          },
+          "wasRedirected": false,
+          "isColdStart": true
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/nowhere?x=1"
+        }
+      }
+    },
+    {
+      "name": "a cold link: the app starts at the link, not at the initial route",
+      "link": "https://shop.example/settings?tab=2",
+      "coldStart": true,
+      "expected": {
+        "kind": "page",
+        "location": "/settings?tab=2",
+        "redirected": false,
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "pageRequests": [
+          "settings"
+        ],
+        "event": {
+          "resolvedLocation": "/settings?tab=2",
+          "pathParameters": {},
+          "queryParameters": {
+            "tab": "2"
+          },
+          "wasRedirected": false,
+          "isColdStart": true
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/settings?tab=2"
+        }
+      }
+    },
+    {
+      "name": "a cold link to a nested child requests the parent and the child",
+      "link": "https://shop.example/home/product/42",
+      "coldStart": true,
+      "expected": {
+        "kind": "page",
+        "location": "/home/product/42",
+        "redirected": false,
+        "stack": [
+          "home",
+          "home/product/42"
+        ],
+        "tabIndex": 0,
+        "pageRequests": [
+          "home",
+          "home/product/42"
+        ],
+        "event": {
+          "resolvedLocation": "/home/product/42",
+          "pathParameters": {
+            "id": "42"
+          },
+          "queryParameters": {},
+          "wasRedirected": false,
+          "isColdStart": true
+        }
+      },
+      "flutter": {
+        "why": "q1: Flutter's pathParameters is always empty. q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/home/product/42",
+          "pathParameters": {}
+        }
+      }
+    },
+    {
+      "name": "a link to the location on screen: nothing is requested, the callback fires",
+      "link": "https://shop.example/settings",
+      "coldStart": false,
+      "startAt": "/settings",
+      "expected": {
+        "kind": "page",
+        "location": "/settings",
+        "redirected": false,
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "pageRequests": [],
+        "event": {
+          "resolvedLocation": "/settings",
+          "pathParameters": {},
+          "queryParameters": {},
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q5: Flutter reports the whole URL as resolvedLocation when the link is not redirected.",
+        "event": {
+          "resolvedLocation": "https://shop.example/settings"
+        }
+      }
+    },
+    {
+      "name": "the location on screen, delivered as a bare path",
+      "link": "/settings",
+      "coldStart": false,
+      "startAt": "/settings",
+      "expected": {
+        "kind": "page",
+        "location": "/settings",
+        "redirected": false,
+        "stack": [
+          "settings"
+        ],
+        "tabIndex": null,
+        "pageRequests": [],
+        "event": {
+          "resolvedLocation": "/settings",
+          "pathParameters": {},
+          "queryParameters": {},
+          "wasRedirected": false,
+          "isColdStart": false
+        }
+      },
+      "flutter": {
+        "why": "q4: Flutter sees no location change, so onDeeplink is not called.",
+        "event": null
+      }
+    }
+  ]
+}

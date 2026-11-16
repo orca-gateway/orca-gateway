@@ -1,6 +1,9 @@
 package com.orcagateway.sdk
 
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +30,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -36,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.util.Consumer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -46,6 +51,7 @@ import com.orcagateway.core.client.DeviceInfo
 import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.client.OrcaClientException
 import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.core.navigation.DeeplinkEvent
 import com.orcagateway.core.navigation.RouteChangeEvent
 import com.orcagateway.core.plugins.OrcaActionHandler
 import com.orcagateway.core.render.WidgetRegistry
@@ -57,6 +63,7 @@ import com.orcagateway.sdk.navigation.OrcaNavigation
 import com.orcagateway.sdk.navigation.OrcaRoute
 import com.orcagateway.sdk.navigation.OrcaRouter
 import com.orcagateway.sdk.navigation.TabShellScreen
+import com.orcagateway.sdk.navigation.deeplink
 import com.orcagateway.sdk.system.SystemActions
 import com.orcagateway.sdk.widgets.LocalOrcaPageDrawerHost
 import com.orcagateway.sdk.widgets.PageDrawerHost
@@ -154,6 +161,9 @@ public class OrcaPageLoader(
  *
  * [system] and [onRouteChanged] go to the router a load makes. OrcaApp keeps
  * a boot through a rotation and sets them to the shown activity's own.
+ *
+ * A deep link given before the router exists ([handleDeeplink]) is what
+ * opens the app: the router starts at the link instead of `initialRoute`.
  */
 public class OrcaAppBoot(
     public val client: OrcaClient,
@@ -178,6 +188,21 @@ public class OrcaAppBoot(
     private var started = false
     private var closed = false
 
+    // The link that arrived before there was a router; the next router starts at it.
+    private var pendingLink: String? = null
+
+    /**
+     * Open a deep link ([OrcaRouter.handleDeeplink]). With a router, it goes
+     * there. Before (the config is being fetched, or the fetch failed and
+     * may be retried) the link is held, the last one given, and the router
+     * then starts at it: `initialAppState` seeded, the redirect applied, one
+     * page request, and the link's event says `isColdStart`.
+     */
+    public fun handleDeeplink(link: String) {
+        val router = (phase as? Phase.Ready)?.router
+        if (router != null) router.handleDeeplink(link) else pendingLink = link
+    }
+
     /** Fetch the config once; [reload] fetches it again. */
     public suspend fun loadIfNeeded(context: Context) {
         if (started) return
@@ -193,7 +218,9 @@ public class OrcaAppBoot(
         phase = try {
             val config = client.fetchConfig()
             if (closed) return
-            Phase.Ready(OrcaRouter(client, config, system, onRouteChanged).also { it.plugins = plugins })
+            val link = pendingLink
+            pendingLink = null
+            Phase.Ready(OrcaRouter(client, config, system, onRouteChanged, link).also { it.plugins = plugins })
         } catch (e: CancellationException) {
             started = false
             throw e
@@ -238,6 +265,18 @@ public class OrcaAppBoot(
  *
  * Snackbars and toasts are handled by the page; `openUrl`, the clipboard and
  * share go to [system], by default the device's own ([SystemActions.android]).
+ *
+ * Deep links need no host code: inside a `ComponentActivity`, the link of
+ * the Intent that launched it (the data of an `ACTION_VIEW`) opens the app
+ * AT the link (instead of `initialRoute`, or of [path]), and the link of
+ * every new Intent (`android:launchMode="singleTop"`) goes there as
+ * [OrcaRouter.handleDeeplink] does, also one that arrives while the config is
+ * fetched. The launch Intent is read once: not again after a rotation, a
+ * restore from saved state, or when OrcaApp leaves the composition and comes
+ * back in the same activity. [onDeeplink] is called once per link, after the
+ * navigation and after [onRouteChanged], with where the link ended
+ * ([DeeplinkEvent]); links navigate without it too. Outside a
+ * `ComponentActivity` (a preview) no Intent is read.
  *
  * The router (with `path = null`, the boot and the router it makes) is made
  * once, like Swift's `StateObject`, and kept in the activity's
@@ -285,20 +324,33 @@ public fun OrcaApp(
     plugins: List<OrcaPlugin> = emptyList(),
     customActions: Map<String, OrcaActionHandler> = emptyMap(),
     widgets: WidgetBuilders = WidgetBuilders.shared,
+    onDeeplink: ((DeeplinkEvent) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val identified = remember { client.identified(SharedPreferencesKeyValueStore(context)) }
     // Keyed by the call site: two OrcaApps in one activity keep a router (or a boot) each.
     val site = currentCompositeKeyHashCode.toString(36)
+    // The link that opened the app, the first time only.
+    val launch = launchLink()
     if (path != null) {
-        val retained = viewModel(key = "com.orcagateway.sdk.OrcaApp:$site") { Retained(OrcaRouter(identified, path)) }
+        // A router made now starts at the link, so the host's path is never requested.
+        val retained = viewModel(key = "com.orcagateway.sdk.OrcaApp:$site") {
+            Retained(OrcaRouter(identified, path, system = null, coldLink = launch))
+        }
         val router = retained.value
-        AttachHost(router, system, onRouteChanged)
-        OrcaApp(router, modifier, enableOffline, enableSessionTracking, plugins, customActions, widgets)
+        AttachHost(router, system, onRouteChanged, onDeeplink)
+        NewIntentLinks { router.handleDeeplink(it) }
+        RouterApp(router, modifier, enableOffline, enableSessionTracking, plugins, customActions, widgets)
         return
     }
-    val retained = viewModel(key = "com.orcagateway.sdk.OrcaAppBoot:$site") { Retained(OrcaAppBoot(identified)) }
+    // A boot made now holds the link through the version check and the config fetch. Once per kept
+    // boot, as for the path above: an OrcaApp that left the composition and came back reads the
+    // launch Intent again, and that is not a new link.
+    val retained = viewModel(key = "com.orcagateway.sdk.OrcaAppBoot:$site") {
+        Retained(OrcaAppBoot(identified).also { boot -> launch?.let(boot::handleDeeplink) })
+    }
     val boot = retained.value
+    NewIntentLinks { boot.handleDeeplink(it) }
     // The plugins are merged first, so the config is asked with their names; once per kept boot.
     val prepare = {
         if (boot.plugins == null) boot.plugins = OrcaPluginHost.merge(boot.client, plugins, customActions, widgets)
@@ -319,7 +371,7 @@ public fun OrcaApp(
         when (val phase = boot.phase) {
             OrcaAppBoot.Phase.Loading -> LoadingView(modifier)
             is OrcaAppBoot.Phase.Ready -> {
-                AttachHost(phase.router, system, onRouteChanged)
+                AttachHost(phase.router, system, onRouteChanged, onDeeplink)
                 OrcaNavHost(phase.router, modifier)
             }
             is OrcaAppBoot.Phase.Failed -> ErrorView("Could not load this app", phase.message, modifier) {
@@ -330,11 +382,17 @@ public fun OrcaApp(
 }
 
 /**
- * While shown, the host's latest [system] and [onRouteChanged] are the
- * router's (OrcaApp(client) keeps the router, not the activity they belong to).
+ * While shown, the host's latest [system], [onRouteChanged] and [onDeeplink]
+ * are the router's (OrcaApp(client) keeps the router, not the activity they
+ * belong to). The link that opened the app is reported here, once.
  */
 @Composable
-private fun AttachHost(router: OrcaRouter, system: SystemActions?, onRouteChanged: ((RouteChangeEvent) -> Unit)?) {
+private fun AttachHost(
+    router: OrcaRouter,
+    system: SystemActions?,
+    onRouteChanged: ((RouteChangeEvent) -> Unit)?,
+    onDeeplink: ((DeeplinkEvent) -> Unit)?,
+) {
     DisposableEffect(router, system) {
         if (system != null) router.system = system
         onDispose { if (system != null && router.system === system) router.system = null }
@@ -342,6 +400,53 @@ private fun AttachHost(router: OrcaRouter, system: SystemActions?, onRouteChange
     DisposableEffect(router, onRouteChanged) {
         router.onRouteChanged = onRouteChanged
         onDispose { if (router.onRouteChanged === onRouteChanged) router.onRouteChanged = null }
+    }
+    DisposableEffect(router, onDeeplink) {
+        router.onDeeplink = onDeeplink
+        router.deliverColdLink()
+        onDispose { if (router.onDeeplink === onDeeplink) router.onDeeplink = null }
+    }
+}
+
+/** The `ComponentActivity` this context is, or wraps; null in a preview. */
+private tailrec fun Context.componentActivity(): ComponentActivity? = when (this) {
+    is ComponentActivity -> this
+    is ContextWrapper -> baseContext.componentActivity()
+    else -> null
+}
+
+/**
+ * The deep link of the Intent that launched the hosting activity, the first
+ * time this is composed, else null. That it was read is saved with the
+ * activity's state, so neither a recreation (a rotation) nor a restore after
+ * the process died reads it again; an activity brought back from the recents
+ * list carries its old Intent, which is not a new link either.
+ *
+ * What is saved lasts only while this stays in the composition: composed
+ * again in the same activity, it returns the link again. A caller gives it
+ * only to what it makes once per activity (the kept router or boot).
+ */
+@Composable
+private fun launchLink(): String? {
+    val activity = LocalContext.current.componentActivity()
+    // Not Compose state: it is written while composing, and nothing draws from it.
+    val read = rememberSaveable { booleanArrayOf(false) }
+    if (activity == null || read[0]) return null
+    read[0] = true
+    val intent = activity.intent ?: return null
+    if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
+    return intent.deeplink()
+}
+
+/** While shown, the deep link of every new Intent of the hosting activity goes to [onLink]. */
+@Composable
+private fun NewIntentLinks(onLink: (String) -> Unit) {
+    val activity = LocalContext.current.componentActivity() ?: return
+    val current by rememberUpdatedState(onLink)
+    DisposableEffect(activity) {
+        val listener = Consumer<Intent> { intent -> intent.deeplink()?.let { current(it) } }
+        activity.addOnNewIntentListener(listener)
+        onDispose { activity.removeOnNewIntentListener(listener) }
     }
 }
 
@@ -375,6 +480,13 @@ internal class Retained<T : AutoCloseable>(val value: T) : ViewModel(value)
  * router's pages get them, and a plugin conflict shows the error view with
  * Flutter's message and fetches nothing. They are merged once per router,
  * by the first OrcaApp that shows it.
+ *
+ * Deep links are handled as by OrcaApp(client), and reported to the
+ * router's own [OrcaRouter.onDeeplink]: the launch Intent's link once, as a
+ * cold start, before the first page is drawn (so the page the router stood
+ * on is not requested), and every new Intent's link. The router remembers
+ * that it took the launch link, so hiding and showing this in the same
+ * activity does not handle it again.
  */
 @Composable
 public fun OrcaApp(
@@ -385,6 +497,35 @@ public fun OrcaApp(
     plugins: List<OrcaPlugin> = emptyList(),
     customActions: Map<String, OrcaActionHandler> = emptyMap(),
     widgets: WidgetBuilders = WidgetBuilders.shared,
+) {
+    // launchLink() gives the link again when this is composed again in the same activity; the router knows it took it.
+    val first = launchLink().takeUnless { router.launchLinkTaken }
+    var launch by remember { mutableStateOf(first) }
+    NewIntentLinks { router.handleDeeplink(it) }
+    val link = launch
+    if (link != null) {
+        // In an effect, not while composing: the host's callbacks run. Nothing is drawn before it.
+        DisposableEffect(router) {
+            router.launchLinkTaken = true
+            router.handleDeeplink(link, isColdStart = true)
+            launch = null
+            onDispose {}
+        }
+        return
+    }
+    RouterApp(router, modifier, enableOffline, enableSessionTracking, plugins, customActions, widgets)
+}
+
+/** A router's pages behind the boot gate, with the plugins merged: what both OrcaApps draw. */
+@Composable
+private fun RouterApp(
+    router: OrcaRouter,
+    modifier: Modifier,
+    enableOffline: Boolean,
+    enableSessionTracking: Boolean,
+    plugins: List<OrcaPlugin>,
+    customActions: Map<String, OrcaActionHandler>,
+    widgets: WidgetBuilders,
 ) {
     // Once per router: one kept through a rotation keeps what it was given.
     val prepare = {
@@ -483,7 +624,7 @@ internal fun RoutePage(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoa
 private fun RouteFrame(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoader?) {
     val fallback = route.scaffoldTitle
     if (fallback == null) {
-        RouteBody(route, loader)
+        RouteBody(router, route, loader)
         return
     }
     val title = (loader?.phase as? OrcaPageLoader.Phase.Loaded)?.model?.page?.title ?: fallback
@@ -498,15 +639,16 @@ private fun RouteFrame(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoa
                 }
             },
         )
-        Box(Modifier.weight(1f)) { RouteBody(route, loader) }
+        Box(Modifier.weight(1f)) { RouteBody(router, route, loader) }
     }
 }
 
 /** What a route shows under its bar, if it has one. */
 @Composable
-private fun RouteBody(route: OrcaRoute, loader: OrcaPageLoader?) {
+private fun RouteBody(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoader?) {
     if (loader == null) {
-        NotFoundView(route.location)
+        // Flutter's default not-found screen: its button is a `go` to "/".
+        NotFoundView(route.location) { router.navigate("/", replace = true) }
         return
     }
     val context = LocalContext.current
@@ -548,9 +690,9 @@ internal fun ErrorView(title: String, message: String, modifier: Modifier = Modi
     }
 }
 
-/** The page of a location no route matches. */
+/** The page of a location no route matches, with a way out: [onHome]. */
 @Composable
-private fun NotFoundView(location: String) {
+private fun NotFoundView(location: String, onHome: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
@@ -563,6 +705,7 @@ private fun NotFoundView(location: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        TextButton(onClick = onHome) { Text("Go to home page") }
     }
 }
 

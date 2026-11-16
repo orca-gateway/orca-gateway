@@ -21,7 +21,8 @@ import kotlin.test.assertTrue
  * compares every field of `expected`. A file's `sessions` run on a
  * [TabShell]: boot at `config.initialRoute`, then one operation per step, with
  * the location, the tab index, the app state and the page requests compared
- * after the boot and after every step.
+ * after the boot and after every step. A file's `links` run on a [TabShell]
+ * through [DeepLink], one fresh shell per link.
  */
 class NavigationFixtureTest {
     @Test
@@ -42,11 +43,18 @@ class NavigationFixtureTest {
     @Test
     fun b9_10_everyNavigationFixturePasses() {
         val files = Fixtures.navigationFiles().map { it.name }
-        assertEquals(14, files.size, "navigation fixture files")
+        assertEquals(15, files.size, "navigation fixture files")
         val counts = files.map { runFile(it) }
         assertEquals(56, counts.sumOf { it.cases }, "navigation fixture cases")
         assertEquals(15, counts.sumOf { it.sessions }, "navigation fixture sessions")
         assertEquals(87, counts.sumOf { it.steps }, "navigation fixture session steps")
+        assertEquals(18, counts.sumOf { it.links }, "navigation fixture links")
+    }
+
+    /** L1, L3, L4: the links of file 15 pass on [DeepLink] and [TabShell], held to `expected` (never to `flutter`). */
+    @Test
+    fun l1_l3_l4_deepLinks() {
+        assertEquals(Counts(0, 0, 0, 18), countFiles("15_"))
     }
 
     /** B10.2-CK: the tab sessions of file 12 pass on [TabShell]. */
@@ -403,17 +411,23 @@ class NavigationFixtureTest {
             val name = names.singleOrNull { it.startsWith(prefix) }
                 ?: error("no single navigation fixture starts with $prefix")
             val ran = runFile(name)
-            total = Counts(total.cases + ran.cases, total.sessions + ran.sessions, total.steps + ran.steps)
+            total = Counts(
+                total.cases + ran.cases,
+                total.sessions + ran.sessions,
+                total.steps + ran.steps,
+                total.links + ran.links,
+            )
         }
         return total
     }
 
-    /** How much of a file ran: its cases, its sessions and the steps of those. */
-    private data class Counts(val cases: Int, val sessions: Int, val steps: Int)
+    /** How much of a file ran: its cases, its sessions, the steps of those, and its links. */
+    private data class Counts(val cases: Int, val sessions: Int, val steps: Int, val links: Int = 0)
 
     /**
-     * Runs every case and every session of one file and returns how many
-     * there were. A file carries `cases`, `sessions` or both, never neither.
+     * Runs every case, every session and every link of one file and returns
+     * how many there were. A file carries `cases`, `sessions` or both, or
+     * `links` alone.
      */
     private fun runFile(name: String): Counts {
         val fx = Fixtures.json("schema/fixtures/navigation/$name")
@@ -422,7 +436,12 @@ class NavigationFixtureTest {
         val table = RouteTable(config)
         val cases = fx["cases"].arrayValue.orEmpty()
         val sessions = fx["sessions"].arrayValue.orEmpty()
-        assertTrue(cases.isNotEmpty() || sessions.isNotEmpty(), "$name: no cases and no sessions")
+        val links = fx["links"].arrayValue.orEmpty()
+        if (links.isEmpty()) {
+            assertTrue(cases.isNotEmpty() || sessions.isNotEmpty(), "$name: no cases, no sessions and no links")
+        } else {
+            assertTrue(cases.isEmpty() && sessions.isEmpty() && fx["appState"].objectValue == null, "$name: links come alone")
+        }
 
         for (case in cases) {
             val at = "$name · ${case["name"].stringValue}"
@@ -439,7 +458,61 @@ class NavigationFixtureTest {
             }
             expected["appState"]?.let { assertJsonEqual(JsonValue.Object(appState), it, "$at: appState") }
         }
-        return Counts(cases.size, sessions.size, sessions.sumOf { runSession(name, config, table, it) })
+        links.forEach { runLink(name, config, table, it) }
+        return Counts(cases.size, sessions.size, sessions.sumOf { runSession(name, config, table, it) }, links.size)
+    }
+
+    /**
+     * One link on a fresh [TabShell], against `expected` only (`flutter` is
+     * the Flutter runner's). Cold: the shell starts at the link. Warm: it
+     * boots at `config.initialRoute`, goes to `startAt` when that is another
+     * location, and then the link arrives. The page requests are those of
+     * the link's own operation.
+     */
+    private fun runLink(name: String, config: NavConfig, table: RouteTable, case: JsonValue) {
+        val at = "$name · ${case["name"].stringValue ?: error("$name: a link has no name")}"
+        val link = case["link"].stringValue ?: error("$at: no link")
+        val cold = case["coldStart"].boolValue ?: error("$at: no coldStart")
+        val expected = case["expected"].objectValue ?: error("$at: no expected")
+        assertEquals(
+            setOf("kind", "location", "redirected", "stack", "tabIndex", "pageRequests", "event"),
+            expected.keys,
+            "$at: expected keys",
+        )
+        val appState = config.initialAppState + case["appState"].objectValue.orEmpty()
+        val shell = TabShell(table)
+        if (cold) {
+            assertNull(case.objectValue?.get("startAt"), "$at: a cold link has no startAt")
+        } else {
+            shell.go(config.initialRoute, appState)
+            val startAt = case["startAt"].stringValue ?: config.initialRoute
+            if (startAt != config.initialRoute) shell.go(startAt, appState)
+            assertEquals(startAt, shell.location, "$at: startAt")
+        }
+
+        val (resolution, change) = shell.open(DeepLink.location(link), appState)
+        val event = DeepLink.event(link, resolution, cold)
+
+        val top = shell.visible.last()
+        assertEquals(link, event.incoming, "$at: incoming")
+        val seen = obj(
+            "kind" to if (top.resolution.kind == RouteResolutionKind.Page) "page" else "error",
+            "location" to shell.location,
+            "redirected" to resolution.redirected,
+            "stack" to shell.visible.filter { it.resolution.kind == RouteResolutionKind.Page }.map { it.pagePath },
+            "tabIndex" to shell.tabIndex,
+            "pageRequests" to change.requested.map { it.pagePath },
+            "event" to mapOf(
+                "resolvedLocation" to event.resolvedLocation,
+                "pathParameters" to event.pathParameters,
+                "queryParameters" to event.queryParameters,
+                "wasRedirected" to event.wasRedirected,
+                "isColdStart" to event.isColdStart,
+            ),
+        )
+        assertJsonEqual(seen, JsonValue.Object(expected), at)
+        assertEquals(top.resolution.kind, resolution.kind, "$at: the event's resolution is what is shown")
+        assertEquals(shell.location, event.resolvedLocation, "$at: the event's location is the one shown")
     }
 
     /**

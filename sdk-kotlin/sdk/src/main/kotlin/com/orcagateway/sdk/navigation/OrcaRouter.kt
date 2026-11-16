@@ -1,5 +1,6 @@
 package com.orcagateway.sdk.navigation
 
+import android.content.Intent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -9,13 +10,17 @@ import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.NavConfig
 import com.orcagateway.core.models.RouteTransitionDef
 import com.orcagateway.core.models.TabDef
+import com.orcagateway.core.navigation.DeepLink
+import com.orcagateway.core.navigation.DeeplinkEvent
 import com.orcagateway.core.navigation.RouteChangeEvent
 import com.orcagateway.core.navigation.RouteChangeType
+import com.orcagateway.core.navigation.RouteResolution
 import com.orcagateway.core.navigation.RouteResolutionKind
 import com.orcagateway.core.navigation.RouteTable
 import com.orcagateway.core.navigation.TabShell
 import com.orcagateway.core.navigation.TabShellChange
 import com.orcagateway.core.navigation.TabShellEntry
+import com.orcagateway.core.navigation.open
 import com.orcagateway.core.state.ActionEffect
 import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
@@ -84,6 +89,9 @@ public class OrcaRoute(
  * location no route matches is a route with [OrcaRoute.isNotFound]. Built
  * from a path, there is no table: every path is a page.
  *
+ * A deep link ([handleDeeplink], [handleIntent]) is a `replace` navigation
+ * to the link's location, reported to [onDeeplink].
+ *
  * A config with [tabs] gives every tab its own stack (a
  * [TabShell][com.orcagateway.core.navigation.TabShell]): [root] and [stack]
  * are the stack on screen, the current tab's pages and then the routes over
@@ -115,10 +123,29 @@ public class OrcaRouter private constructor(
      * Nothing is reported while the top location stays the same.
      */
     public var onRouteChanged: ((RouteChangeEvent) -> Unit)?,
+    // The link that opened the app: the router starts at its location, not at `start`.
+    coldLink: String?,
 ) : AutoCloseable {
     /** A router without a config, starting at [path]: every path is a page. */
     public constructor(client: OrcaClient, path: String = "home", system: SystemActions? = null) :
-        this(client, system, null, path, null)
+        this(client, system, null, path, null, null)
+
+    /** A router without a config that [coldLink] opened: it starts at the link's location instead of [path]. */
+    internal constructor(client: OrcaClient, path: String, system: SystemActions?, coldLink: String?) :
+        this(client, system, null, path, null, coldLink)
+
+    /**
+     * A router for [config] that [coldLink] opened: it starts at the link's
+     * location instead of `initialRoute`, and the link's event waits for
+     * [deliverColdLink].
+     */
+    internal constructor(
+        client: OrcaClient,
+        config: NavConfig,
+        system: SystemActions?,
+        onRouteChanged: ((RouteChangeEvent) -> Unit)?,
+        coldLink: String?,
+    ) : this(client, system, RouteTable(config), config.initialRoute, onRouteChanged, coldLink)
 
     /**
      * A router for the server's [config] (`OrcaClient.fetchConfig`): app
@@ -131,7 +158,24 @@ public class OrcaRouter private constructor(
         config: NavConfig,
         system: SystemActions? = null,
         onRouteChanged: ((RouteChangeEvent) -> Unit)? = null,
-    ) : this(client, system, RouteTable(config), config.initialRoute, onRouteChanged)
+    ) : this(client, system, RouteTable(config), config.initialRoute, onRouteChanged, null)
+
+    /**
+     * Called once per deep link ([handleDeeplink]), after the navigation and
+     * after [onRouteChanged] reported it; also for a link that navigated
+     * nowhere (its location was on screen) and for one no route matches.
+     */
+    public var onDeeplink: ((DeeplinkEvent) -> Unit)? = null
+
+    /**
+     * OrcaApp(router) gave this router the launch Intent's link. Kept here, not
+     * in the composition: an OrcaApp hidden and shown again in the same
+     * activity does not handle that link a second time.
+     */
+    internal var launchLinkTaken: Boolean = false
+
+    // The event of the link that opened the app, until deliverColdLink hands it over.
+    private var coldEvent: DeeplinkEvent? = null
 
     /** The shared app scope, as the latest page or [setAppState] left it. */
     public var appState: Map<String, JsonValue> = table?.config?.initialAppState.orEmpty()
@@ -156,7 +200,7 @@ public class OrcaRouter private constructor(
     }
 
     /** The page under every pushed route. */
-    public var root: OrcaRoute by mutableStateOf(OrcaRoute(start))
+    public var root: OrcaRoute by mutableStateOf(coldLink?.let { pathRoute(DeepLink.location(it)) } ?: OrcaRoute(start))
         private set
 
     private var routes by mutableStateOf(emptyList<OrcaRoute>())
@@ -248,14 +292,71 @@ public class OrcaRouter private constructor(
     private var shownLocation: String
 
     init {
-        if (shell != null) {
-            val change = shell.go(start, appState)
+        val begin = coldLink?.let { DeepLink.location(it) } ?: start
+        val resolution = if (shell != null) {
+            // On a fresh shell a link's `open` is the `go` of its location.
+            val opened = shell.open(begin, appState)
             follow()
             // Before the first page request: no page is loaded yet.
-            change.tabIndexWrite?.let { writeTabIndex(it) }
+            opened.change.tabIndexWrite?.let { writeTabIndex(it) }
+            opened.resolution
+        } else {
+            pathResolution(begin)
         }
         shownLocation = top.location
         if (table != null) onRouteChanged?.invoke(RouteChangeEvent(shownLocation, null, RouteChangeType.Push))
+        if (coldLink != null) coldEvent = DeepLink.event(coldLink, resolution, coldStart = true)
+    }
+
+    /**
+     * Open a deep link, a URL the platform handed to the app
+     * (`https://shop.example/product/3?tab=specs`, `myapp://open/settings`):
+     * the router goes to its location, the URL's path and query
+     * ([DeepLink.location]; scheme, host and fragment are dropped), as
+     * [navigate] with `replace` does, so the stack and the tab come from the
+     * config and the route's redirect rule is applied. A link that ends on
+     * the location already on screen navigates nowhere and requests nothing.
+     * Then [onDeeplink] is called, once, after [onRouteChanged].
+     *
+     * [OrcaApp][com.orcagateway.sdk.OrcaApp] calls it for the activity's
+     * Intents; call it yourself for a link received elsewhere (a push
+     * notification). [isColdStart] is only reported in the event: pass true
+     * when the link is what opened the app.
+     */
+    public fun handleDeeplink(link: String, isColdStart: Boolean = false) {
+        val location = DeepLink.location(link)
+        val shell = shell
+        val resolution = if (shell != null) {
+            val opened = shell.open(location, appState)
+            apply(opened.change, RouteChangeType.Replace)
+            opened.resolution
+        } else {
+            if (location != top.location) {
+                root = pathRoute(location)
+                routes = emptyList()
+                routesChanged(RouteChangeType.Replace)
+            }
+            pathResolution(location)
+        }
+        onDeeplink?.invoke(DeepLink.event(link, resolution, isColdStart))
+    }
+
+    /**
+     * [handleDeeplink] for the link of [intent], the data of an
+     * `ACTION_VIEW` Intent, for a host that receives `onNewIntent` itself.
+     * False, and nothing happens, when the Intent carries no link.
+     */
+    public fun handleIntent(intent: Intent): Boolean {
+        val link = intent.deeplink() ?: return false
+        handleDeeplink(link)
+        return true
+    }
+
+    /** Hand the event of the link that opened the app to [onDeeplink], once; OrcaApp calls it when it shows the router. */
+    internal fun deliverColdLink() {
+        val event = coldEvent ?: return
+        coldEvent = null
+        onDeeplink?.invoke(event)
     }
 
     /** The loader of a route, made the first time it is asked for. */
@@ -493,8 +594,21 @@ public class OrcaRouter private constructor(
     private companion object {
         /** The app state key that holds the current tab's index (Flutter's `OrcaShell`). */
         const val TAB_INDEX = "_tabIndex"
+
+        /** Without a config, the route of a link's location: the page is its path, the query stays in the location. */
+        fun pathRoute(location: String): OrcaRoute = OrcaRoute(location.substringBefore('?'), location = location)
+
+        // No route: its `resolve` only reads the location, so the query is core's own decoding.
+        val noRoutes = RouteTable(NavConfig())
+
+        /** Without a config every path is a page: nothing redirects and there are no path parameters. */
+        fun pathResolution(location: String): RouteResolution =
+            noRoutes.resolve(location, emptyMap()).copy(kind = RouteResolutionKind.Page)
     }
 }
+
+/** The deep link an Intent carries: the data of an `ACTION_VIEW`, else null. */
+internal fun Intent.deeplink(): String? = if (action == Intent.ACTION_VIEW) dataString else null
 
 /**
  * What a page knows of the stack it is shown on, provided by

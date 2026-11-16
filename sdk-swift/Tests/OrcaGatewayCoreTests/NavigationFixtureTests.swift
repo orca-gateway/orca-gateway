@@ -32,20 +32,46 @@ final class NavigationFixtureTests: XCTestCase {
 
     func test_B9_10_everyNavigationFixturePasses() throws {
         let files = try Fixtures.navigation()
-        XCTAssertEqual(files.count, 14)
+        XCTAssertEqual(files.count, 15)
         var total = 0
         var sessions = (sessions: 0, steps: 0)
+        var links = 0
         for (name, fx) in files {
             let ran = try run(name, fx)
             let played = try runSessions(name, fx)
-            XCTAssertGreaterThan(ran.cases + played.sessions, 0, "\(name): no cases and no sessions")
+            let opened = try runLinks(name, fx)
+            XCTAssertGreaterThan(ran.cases + played.sessions + opened.links, 0,
+                                 "\(name): no cases, no sessions and no links")
             total += ran.cases
             sessions.sessions += played.sessions
             sessions.steps += played.steps
+            links += opened.links
         }
         XCTAssertEqual(total, 56)
         XCTAssertEqual(sessions.sessions, 15)
         XCTAssertEqual(sessions.steps, 87)
+        XCTAssertEqual(links, 18)
+    }
+
+    /// L1, L3, L4 (native parity step 11): 15_deep_links.json, every link
+    /// against `expected`; the `flutter` overrides are Flutter's alone.
+    func test_L1_L3_L4_deepLinks() throws {
+        let files = try Fixtures.navigation().filter { $0.name.hasPrefix("15_") }
+        XCTAssertEqual(files.count, 1, "one navigation fixture named 15_*")
+        var total = (links: 0, cold: 0, redirected: 0, errors: 0, onScreen: 0)
+        for (name, fx) in files {
+            let ran = try runLinks(name, fx)
+            total.links += ran.links
+            total.cold += ran.cold
+            total.redirected += ran.redirected
+            total.errors += ran.errors
+            total.onScreen += ran.onScreen
+        }
+        XCTAssertEqual(total.links, 18)
+        XCTAssertEqual(total.cold, 4)
+        XCTAssertEqual(total.redirected, 2, "L3")
+        XCTAssertEqual(total.errors, 4, "L4")
+        XCTAssertEqual(total.onScreen, 2)
     }
 
     func test_B10_2_tabSessions() throws {
@@ -231,6 +257,88 @@ final class NavigationFixtureTests: XCTestCase {
             }
         }
         return (sessions.count, steps)
+    }
+
+    // MARK: - Link runner
+
+    /// One file: every link on a fresh `TabShell` over the seeded app state
+    /// with the case's `appState` laid over it. Cold: the link is the first
+    /// thing the shell opens. Warm: the shell boots with a `go` to the
+    /// config's `initialRoute`, goes to `startAt` when that is another
+    /// location, and then opens the link. Compared with `expected`, every
+    /// key: the resolution's `kind` and `redirected`, the shell's `location`
+    /// and `tabIndex`, the page paths on screen as `stack`, the page paths
+    /// the link requested and the event `DeepLink.event` builds. The
+    /// `flutter` overrides are not read.
+    private func runLinks(_ name: String, _ fx: JSONValue, file: StaticString = #filePath, line: UInt = #line) throws
+        -> (links: Int, cold: Int, redirected: Int, errors: Int, onScreen: Int) {
+        let links = fx["links"].arrayValue ?? []
+        guard !links.isEmpty else { return (0, 0, 0, 0, 0) }
+        let config = try fx["config"].decode(NavConfig.self)
+        let table = RouteTable(config)
+        var count = (links: 0, cold: 0, redirected: 0, errors: 0, onScreen: 0)
+        for l in links {
+            let label = "\(name) · \(l["name"].stringValue ?? "?")"
+            guard let link = l["link"].stringValue, let cold = l["coldStart"].boolValue,
+                  let expected = l["expected"].objectValue, let url = URL(string: link) else {
+                XCTFail("\(label): a link needs a link that is a URL, coldStart and an expected object",
+                        file: file, line: line)
+                continue
+            }
+            var appState = config.initialAppState
+            for (key, value) in l["appState"].objectValue ?? [:] { appState[key] = value }
+
+            var shell = TabShell(table: table)
+            if !cold {
+                _ = shell.go(config.initialRoute, appState: appState)
+                if let startAt = l["startAt"].stringValue, startAt != config.initialRoute {
+                    _ = shell.go(startAt, appState: appState)
+                }
+            } else {
+                XCTAssertNil(l["startAt"].stringValue, "\(label): startAt is warm", file: file, line: line)
+            }
+            let shownBefore = shell.visible
+
+            let location = DeepLink.location(of: url)
+            XCTAssertEqual(DeepLink.location(of: link), location, "\(label): the string and the URL agree",
+                           file: file, line: line)
+            let opened = shell.open(link: location, appState: appState)
+            let event = DeepLink.event(link: url, resolution: opened.resolution, coldStart: cold)
+
+            let actual: JSONValue = .object([
+                "kind": .string(opened.resolution.kind.rawValue),
+                "location": .string(shell.location),
+                "redirected": .bool(opened.resolution.redirected),
+                "stack": .array(shell.visible.filter { $0.resolution.kind == .page }.map { .string($0.pagePath) }),
+                "tabIndex": shell.tabIndex.map(JSONValue.int) ?? .null,
+                "pageRequests": .array(opened.change.requested.map { .string($0.pagePath) }),
+                "event": .object([
+                    "resolvedLocation": .string(event.resolvedLocation),
+                    "pathParameters": .object(event.pathParameters.mapValues(JSONValue.string)),
+                    "queryParameters": .object(event.queryParameters.mapValues(JSONValue.string)),
+                    "wasRedirected": .bool(event.wasRedirected),
+                    "isColdStart": .bool(event.isColdStart),
+                ]),
+            ])
+            assertJSONEqual(actual, .object(expected), label, file: file, line: line)
+            XCTAssertEqual(event.incoming.absoluteString, link, "\(label): incoming is the link as given",
+                           file: file, line: line)
+            // The shell and the resolution tell the same story.
+            XCTAssertEqual(shell.location, opened.resolution.location, "\(label): location", file: file, line: line)
+            XCTAssertEqual(opened.resolution.stack, shell.visible.filter { $0.resolution.kind == .page }.map(\.pagePath),
+                           "\(label): stack", file: file, line: line)
+            XCTAssertEqual(shell.tabIndex, opened.resolution.tabIndex, "\(label): tabIndex", file: file, line: line)
+
+            count.links += 1
+            if cold { count.cold += 1 }
+            if opened.resolution.redirected { count.redirected += 1 }
+            if opened.resolution.kind == .error { count.errors += 1 }
+            if shell.visible == shownBefore {
+                XCTAssertFalse(cold, "\(label): a cold link shows something new", file: file, line: line)
+                count.onScreen += 1
+            }
+        }
+        return count
     }
 
     // MARK: - Beyond the fixtures
