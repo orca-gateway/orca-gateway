@@ -59,3 +59,8 @@ false one; colour-only Container measures 10 tall; a Row's flex children inside 
 an AppBar-less pushed page. Kotlin: RouteFrame's TopAppBar status-bar inset; a baseline-aligned Row in IntrinsicHeight.
 Both: LimitedBox in a plain Column. Carried from #36: Android app events for covered pages, the edge flick, viewport
 onVisible, iOS nested same-axis scroll, stale README action counts.
+
+### Merged
+PR #40 merged by amrebada at 2026-11-16T03:16:51Z (merge 6a7f0e0, head 2179ff2), every PR check green; main green
+at the merge (Engine, Schema, SDK, SDK Swift, SDK Kotlin CI). Gate 10 approved under the standing rule, Q1 answered by
+the merge itself; 11 skipped by default; 12 approved; 13-16 skipped (no deploy target).
