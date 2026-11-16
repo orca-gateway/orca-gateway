@@ -1,9 +1,13 @@
 package com.orcagateway.sdk.widgets
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.RememberObserver
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -327,23 +331,77 @@ private val NoPointerInput: Modifier = Modifier.pointerInput(Unit) {
     }
 }
 
-/** The `tag` of the Hero a node is drawn in (semantics): how a shared-element flight, and a test, finds it. */
+/** The `tag` of the Hero a node is drawn in (semantics): how a test finds it. */
 internal val OrcaHeroTag: SemanticsPropertyKey<String> = SemanticsPropertyKey("OrcaHeroTag")
 
+/** The `tag` of a Hero that is a shared element of its stack (semantics): set only where the flight is wired. */
+internal val OrcaSharedHero: SemanticsPropertyKey<String> = SemanticsPropertyKey("OrcaSharedHero")
+
 /**
- * Where a Hero's `tag` meets its child's modifier: the seam for the
- * shared-element flight (D10: `Modifier.sharedElement(key = tag)` inside
- * the single-stack NavHost's `SharedTransitionLayout`). Today it only marks
- * the child with [OrcaHeroTag]; an empty tag marks nothing.
+ * What a Hero needs to fly: the single-stack NavHost's [shared] scope and
+ * the [visibility] scope of the destination (one page) it is drawn on. One
+ * per page; [claim] keeps one shared element per tag on it.
  */
-internal fun Modifier.orcaHero(tag: String): Modifier =
-    if (tag.isEmpty()) this else semantics { this[OrcaHeroTag] = tag }
+internal class OrcaHeroStage(val shared: SharedTransitionScope, val visibility: AnimatedVisibilityScope) {
+    private val owners = HashMap<String, Any>()
+
+    /** Whether [owner] is the Hero that flies for [tag] on this page: the first one to ask. */
+    fun claim(tag: String, owner: Any): Boolean = owners.getOrPut(tag) { owner } === owner
+
+    fun release(tag: String, owner: Any) {
+        if (owners[tag] === owner) owners.remove(tag)
+    }
+}
+
+/** The page's [OrcaHeroStage]; null, the default, where no Hero flies (the tab shell, a page drawn on its own). */
+internal val LocalOrcaHeroStage = compositionLocalOf<OrcaHeroStage?> { null }
+
+/** One Hero's claim on its tag, given back when the Hero leaves the composition. */
+private class HeroClaim(private val stage: OrcaHeroStage, private val tag: String) : RememberObserver {
+    val owns: Boolean = stage.claim(tag, this)
+
+    override fun onRemembered() {}
+
+    override fun onForgotten() = stage.release(tag, this)
+
+    override fun onAbandoned() = stage.release(tag, this)
+}
+
+/**
+ * Where a Hero's `tag` meets its child's modifier (D10). A non-empty tag
+ * marks the child with [OrcaHeroTag], and on a page of the single-stack
+ * NavHost ([LocalOrcaHeroStage]) makes it a shared element with the tag as
+ * its key (`Modifier.sharedElement`, marked [OrcaSharedHero]): when two
+ * pages of the stack hold the tag as one replaces the other, the child
+ * flies from its place on the page that leaves to its place on the page
+ * that comes, over both.
+ *
+ * Just the child, no shared element: an empty tag, no stage, reduced motion
+ * ([orcaReduceMotion]), a layer drawn from a snapshot
+ * ([LocalOrcaFrozenNodes]), and every Hero after the first with one tag on
+ * a page (Compose expects one visible element per key in a scene).
+ */
+@Composable
+internal fun Modifier.orcaHero(tag: String): Modifier {
+    if (tag.isEmpty()) return this
+    val stage = LocalOrcaHeroStage.current
+    val flies = stage != null && !orcaReduceMotion() && LocalOrcaFrozenNodes.current == null &&
+        remember(stage, tag) { HeroClaim(stage, tag) }.owns
+    if (stage == null || !flies) return semantics { this[OrcaHeroTag] = tag }
+    // The marks go inside the shared element: they are where it is drawn, also in flight.
+    return with(stage.shared) {
+        sharedElement(rememberSharedContentState(key = tag), animatedVisibilityScope = stage.visibility)
+            .semantics {
+                this[OrcaHeroTag] = tag
+                this[OrcaSharedHero] = tag
+            }
+    }
+}
 
 /**
  * Flutter `Hero`: its child, drawn as if the Hero were not there; an empty
  * or missing `tag`, or no child, is Flutter's plain child or nothing. The
- * flight between two pages is not drawn yet ([orcaHero]): a push with a
- * Hero is a plain push.
+ * flight between two pages is [orcaHero]'s.
  */
 @Composable
 internal fun HeroWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {

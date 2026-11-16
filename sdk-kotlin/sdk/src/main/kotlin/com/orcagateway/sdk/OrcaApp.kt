@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
@@ -83,7 +84,9 @@ import com.orcagateway.sdk.navigation.OrcaRouter
 import com.orcagateway.sdk.navigation.TabShellScreen
 import com.orcagateway.sdk.navigation.deeplink
 import com.orcagateway.sdk.system.SystemActions
+import com.orcagateway.sdk.widgets.LocalOrcaHeroStage
 import com.orcagateway.sdk.widgets.LocalOrcaPageDrawerHost
+import com.orcagateway.sdk.widgets.OrcaHeroStage
 import com.orcagateway.sdk.widgets.PageDrawerHost
 import com.orcagateway.sdk.widgets.orcaReduceMotion
 import kotlinx.coroutines.CancellationException
@@ -582,6 +585,12 @@ private fun OrcaNavHost(router: OrcaRouter, modifier: Modifier) {
  * Flutter animates it in (the Swift SDK does as here).
  * With reduced motion ([orcaReduceMotion]) a route's transition is not
  * played: the page is there at once.
+ *
+ * The NavHost is a shared-transition scope, and each page gets an
+ * [OrcaHeroStage]: a Hero whose tag is on both pages as one replaces the
+ * other flies between its two places (on a pop, and on a push whose page
+ * is loaded before the push ends), while the route's transition plays as
+ * above. Otherwise only the route's transition plays.
  */
 @Composable
 private fun StackScreen(router: OrcaRouter, modifier: Modifier) {
@@ -612,29 +621,37 @@ private fun StackScreen(router: OrcaRouter, modifier: Modifier) {
     val shown = rememberSaveable { mutableStateOf(emptyList<String>()) }
     val atRoot = remember(router) { OrcaNavigation(router, canPop = false) }
     val pushed = remember(router) { OrcaNavigation(router, canPop = true) }
-    NavHost(navController, startDestination = ROOT_ROUTE, modifier = modifier) {
-        composable(ROOT_ROUTE, exitTransition = exit, popEnterTransition = popEnter) {
-            val root = router.root
-            CompositionLocalProvider(LocalOrcaNavigation provides atRoot) {
-                key(root.id) { RoutePage(router, root, if (root.isNotFound) null else router.loader(root)) }
+    // No layout of its own: the scope's modifier (the flight's overlay) goes on the NavHost.
+    SharedTransitionScope { overlay ->
+        val flights = this
+        NavHost(navController, startDestination = ROOT_ROUTE, modifier = modifier.then(overlay)) {
+            composable(ROOT_ROUTE, exitTransition = exit, popEnterTransition = popEnter) {
+                val root = router.root
+                val stage = remember(flights, this) { OrcaHeroStage(flights, this) }
+                CompositionLocalProvider(LocalOrcaNavigation provides atRoot, LocalOrcaHeroStage provides stage) {
+                    key(root.id) { RoutePage(router, root, if (root.isNotFound) null else router.loader(root)) }
+                }
             }
-        }
-        composable(
-            PAGE_ROUTE,
-            enterTransition = enter,
-            exitTransition = exit,
-            popEnterTransition = popEnter,
-            popExitTransition = popExit,
-        ) { entry ->
-            val id = entry.arguments?.getString(ROUTE_ID)
-            // Kept while a popped page leaves the screen, after the router dropped it.
-            // A not-found route has no loader: nothing is requested for it.
-            val page = remember(id) {
-                router.stack.firstOrNull { it.id.toString() == id }
-                    ?.let { route -> route to if (route.isNotFound) null else router.loader(route) }
-            }
-            if (page != null) {
-                CompositionLocalProvider(LocalOrcaNavigation provides pushed) { RoutePage(router, page.first, page.second) }
+            composable(
+                PAGE_ROUTE,
+                enterTransition = enter,
+                exitTransition = exit,
+                popEnterTransition = popEnter,
+                popExitTransition = popExit,
+            ) { entry ->
+                val id = entry.arguments?.getString(ROUTE_ID)
+                // Kept while a popped page leaves the screen, after the router dropped it.
+                // A not-found route has no loader: nothing is requested for it.
+                val page = remember(id) {
+                    router.stack.firstOrNull { it.id.toString() == id }
+                        ?.let { route -> route to if (route.isNotFound) null else router.loader(route) }
+                }
+                if (page != null) {
+                    val stage = remember(flights, this) { OrcaHeroStage(flights, this) }
+                    CompositionLocalProvider(LocalOrcaNavigation provides pushed, LocalOrcaHeroStage provides stage) {
+                        RoutePage(router, page.first, page.second)
+                    }
+                }
             }
         }
     }
