@@ -1,0 +1,95 @@
+{
+  "name": "restore-saved-state",
+  "description": "Saved entries are restored when state is set up: the saved app entry over the config's app state, then the page's local and session entries over its declared initials (a saved key the page does not declare is added), while an app-scoped definition leaves a key already set. Native parity step 14 (C14.6).",
+  "pageId": "home",
+  "state": {
+    "page": {},
+    "app": {
+      "theme": "light",
+      "lang": "en"
+    }
+  },
+  "saved": {
+    "local": {
+      "orca_saved_app": {
+        "theme": "dark"
+      },
+      "orca_saved_page_home": {
+        "count": 7,
+        "extra": true
+      }
+    },
+    "session": {
+      "orca_saved_page_home": {
+        "draft": "hi"
+      }
+    }
+  },
+  "load": {
+    "state": [
+      {
+        "key": "count",
+        "scope": "page",
+        "initial": 0
+      },
+      {
+        "key": "draft",
+        "scope": "page",
+        "initial": ""
+      },
+      {
+        "key": "title",
+        "scope": "page",
+        "initial": "T"
+      },
+      {
+        "key": "lang",
+        "scope": "app",
+        "initial": "fr"
+      }
+    ]
+  },
+  "actions": [
+    {
+      "type": "setState",
+      "key": "touched",
+      "scope": "page",
+      "value": {
+        "type": "static",
+        "value": true
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 7,
+        "draft": "hi",
+        "title": "T",
+        "extra": true,
+        "touched": true
+      },
+      "app": {
+        "theme": "dark",
+        "lang": "en"
+      }
+    },
+    "effects": [],
+    "saved": {
+      "local": {
+        "orca_saved_app": {
+          "theme": "dark"
+        },
+        "orca_saved_page_home": {
+          "count": 7,
+          "extra": true
+        }
+      },
+      "session": {
+        "orca_saved_page_home": {
+          "draft": "hi"
+        }
+      }
+    }
+  }
+}

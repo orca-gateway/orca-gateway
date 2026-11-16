@@ -1,0 +1,66 @@
+{
+  "name": "clear-state",
+  "description": "clearState sets the live page or app key to null (a key never held too) and removes it from both storages, deleting an entry it leaves with no key. Native parity step 14 (C14.6).",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 5
+    },
+    "app": {
+      "token": "t"
+    }
+  },
+  "saved": {
+    "local": {
+      "orca_saved_page_home": {
+        "count": 2,
+        "other": 1
+      },
+      "orca_saved_app": {
+        "token": "t"
+      }
+    },
+    "session": {
+      "orca_saved_page_home": {
+        "count": 9
+      }
+    }
+  },
+  "actions": [
+    {
+      "type": "clearState",
+      "key": "count",
+      "scope": "page"
+    },
+    {
+      "type": "clearState",
+      "key": "token",
+      "scope": "app"
+    },
+    {
+      "type": "clearState",
+      "key": "never",
+      "scope": "page"
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": null,
+        "never": null
+      },
+      "app": {
+        "token": null
+      }
+    },
+    "effects": [],
+    "saved": {
+      "local": {
+        "orca_saved_page_home": {
+          "other": 1
+        }
+      },
+      "session": {}
+    }
+  }
+}
