@@ -189,22 +189,18 @@ private fun ReorderableRow(
         Modifier
     } else {
         Modifier.pointerInput(drag, horizontal, direction) {
-            // Whether this row's gesture is the one that picked a row up: it
-            // then always lets it go, also when the row is no longer at that index.
+            // Whether this gesture is the one that picked the row up, as
+            // against a second finger on another row.
             var holding = false
             detectDragGesturesAfterLongPress(
                 onDragStart = { holding = drag.begin(at.value) },
                 onDrag = { _, amount ->
-                    if (holding && drag.from == at.value) {
-                        drag.moveBy((if (horizontal) amount.x else amount.y) * direction)
-                    }
+                    if (holding) drag.moveBy((if (horizontal) amount.x else amount.y) * direction)
                 },
                 onDragEnd = {
                     if (holding) {
                         holding = false
-                        val moved = drag.from != at.value
-                        val event = drag.end(count())
-                        if (!moved) event?.let { drop.value(it) }
+                        drag.end(count())?.let { drop.value(it) }
                     }
                 },
                 onDragCancel = {
