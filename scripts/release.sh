@@ -23,6 +23,10 @@ cd "$REPO_ROOT"
 #   maven: the tag push starts .github/workflows/sdk-kotlin-publish.yml, which
 #   signs and releases com.orcagateway:sdk-core and com.orcagateway:sdk to
 #   Maven Central (the signing key and Central token are GitHub secrets).
+#   A native plugin's packages, plugins/<name>/ios and plugins/<name>/android,
+#   are rows <name>-ios (mirror) and <name>-android (maven) of their own: the
+#   same workflows send them to orca-gateway/<name, with dashes>-swift and to
+#   com.orcagateway:<name, with dashes> (see mirror_url, maven_artifacts).
 # New packages go at the end, so the numbers people type stay the same.
 PACKAGES=(
   "engine|engine|engine-v|npm|engine/package.json"
@@ -35,11 +39,37 @@ PACKAGES=(
   "orca_voice_recorder|plugins/orca_voice_recorder|orca_voice_recorder-v|pub|plugins/orca_voice_recorder/pubspec.yaml"
   "sdk-swift|sdk-swift|sdk-swift-v|mirror|sdk-swift/VERSION"
   "sdk-kotlin|sdk-kotlin|sdk-kotlin-v|maven|sdk-kotlin/VERSION"
+  "orca_voice_recorder-ios|plugins/orca_voice_recorder/ios|orca_voice_recorder-ios-v|mirror|plugins/orca_voice_recorder/ios/VERSION"
+  "orca_voice_recorder-android|plugins/orca_voice_recorder/android|orca_voice_recorder-android-v|maven|plugins/orca_voice_recorder/android/VERSION"
 )
 
-# The public repository the mirror workflow pushes to. The override exists
-# for rehearsals against a local bare repository.
+# The public repository the mirror workflow pushes sdk-swift to. The override
+# exists for rehearsals against a local bare repository.
 SWIFT_MIRROR_URL="${SWIFT_MIRROR_URL:-https://github.com/orca-gateway/orca-gateway-swift.git}"
+
+# A plugin row's plugin: orca_voice_recorder-ios -> orca_voice_recorder.
+plugin_of() { local n=${1%-ios}; printf "%s" "${n%-android}"; }
+
+# The repository the mirror workflow pushes package $1 to: sdk-swift's above,
+# a plugin's orca-gateway/<plugin, with dashes>-swift. A plugin's override,
+# for rehearsals, is <PLUGIN>_SWIFT_MIRROR_URL (ORCA_VOICE_RECORDER_SWIFT_MIRROR_URL).
+mirror_url() {
+  local name=$1 plugin var
+  if [[ "$name" == "sdk-swift" ]]; then printf "%s" "$SWIFT_MIRROR_URL"; return; fi
+  plugin=$(plugin_of "$name")
+  var=$(printf "%s_SWIFT_MIRROR_URL" "$plugin" | tr '[:lower:]' '[:upper:]')
+  printf "%s" "${!var:-https://github.com/orca-gateway/${plugin//_/-}-swift.git}"
+}
+
+# What the Maven workflow releases for package $1.
+maven_artifacts() {
+  if [[ "$1" == "sdk-kotlin" ]]; then
+    printf "com.orcagateway:sdk-core and com.orcagateway:sdk"
+  else
+    local plugin; plugin=$(plugin_of "$1")
+    printf "com.orcagateway:%s" "${plugin//_/-}"
+  fi
+}
 
 # --- Output helpers ---------------------------------------------------------
 c_red()    { printf "\033[31m%s\033[0m" "$*"; }
@@ -266,21 +296,25 @@ check_pub_login() {
   printf "  %s pub.dev, credentials in %s\n" "$(c_green ok)" "$found"
 }
 
-# The mirror workflow pushes to SWIFT_MIRROR_URL with a deploy key; if the
-# repository is missing, the tag would start a job that cannot succeed.
+# The mirror workflow pushes to the package's mirror with a deploy key; if
+# the repository is missing, the tag would start a job that cannot succeed.
 check_swift_mirror() {
-  command -v swift >/dev/null 2>&1 || die "swift is required to validate sdk-swift"
-  GIT_TERMINAL_PROMPT=0 git ls-remote --quiet "$SWIFT_MIRROR_URL" >/dev/null 2>&1 \
-    || die "the mirror $SWIFT_MIRROR_URL is not reachable. Create it first (docs/User_Actions.md, Epic 23b, the iOS SDK mirror)."
+  local name=$1 url where="Epic 23b, the iOS SDK mirror"
+  url=$(mirror_url "$name")
+  [[ "$name" == "sdk-swift" ]] || where="the $(plugin_of "$name") Swift mirror"
+  command -v swift >/dev/null 2>&1 || die "swift is required to validate $name"
+  GIT_TERMINAL_PROMPT=0 git ls-remote --quiet "$url" >/dev/null 2>&1 \
+    || die "the mirror $url is not reachable. Create it first (docs/User_Actions.md, $where)."
   printf "  %s mirror %s (the deploy key secret is checked by CI)\n" \
-    "$(c_green ok)" "$SWIFT_MIRROR_URL"
+    "$(c_green ok)" "$url"
 }
 
-# Step 5 builds sdk-kotlin with the Gradle wrapper, which runs on JAVA_HOME's
-# java (else the one on PATH); Gradle 9 and AGP need 17 or newer. AGP finds the
-# Android SDK in local.properties' sdk.dir, else ANDROID_HOME or
-# ANDROID_SDK_ROOT. The Central token and signing key are not checked here:
-# they are GitHub secrets, read by the publish workflow.
+# Step 5 builds a maven package (sdk-kotlin, a plugin's android/) with the
+# Gradle wrapper, which runs on JAVA_HOME's java (else the one on PATH);
+# Gradle 9 and AGP need 17 or newer. AGP finds the Android SDK in the
+# package's local.properties sdk.dir, else ANDROID_HOME or ANDROID_SDK_ROOT.
+# The Central token and signing key are not checked here: they are GitHub
+# secrets, read by the publish workflow.
 check_maven_build() {
   local name=$1 path=$2 java out ver="" major sdk_dir=""
   local re='version "([0-9][^"]*)"'
@@ -319,7 +353,7 @@ for idx in "${SELECTED[@]}"; do
   case "${PKG_PUBS[$idx]}" in
     npm) check_npm_login "${PKG_NAMES[$idx]}" "${PKG_PATHS[$idx]}" ;;
     pub) NEED_PUB=1 ;;
-    mirror) check_swift_mirror ;;
+    mirror) check_swift_mirror "${PKG_NAMES[$idx]}" ;;
     maven) check_maven_build "${PKG_NAMES[$idx]}" "${PKG_PATHS[$idx]}" ;;
   esac
 done
@@ -425,6 +459,7 @@ read -r CONFIRM
 # One run of gen-native-capabilities.ts writes both native files, so it runs
 # once whichever of the two is selected and both are listed: a failure reverts
 # both, and the one whose VERSION did not move comes out unchanged.
+# A plugin's packages carry no capability vector: nothing to regenerate.
 GENERATED_FILES=()
 GENERATORS=()
 NEED_NATIVE_GEN=0
@@ -491,12 +526,18 @@ validate_pkg() {
       : # No registry validation; CI handles the build on tag push.
       ;;
     mirror)
-      # What a consumer resolves: the manifest, then a build of every target.
-      ( swift package --package-path "$path" describe >/dev/null \
-        && swift build --package-path "$path" ) >"$LOG" 2>&1 || return 1
+      if [[ "$name" == "sdk-swift" ]]; then
+        # What a consumer resolves: the manifest, then a build of every target.
+        ( swift package --package-path "$path" describe >/dev/null \
+          && swift build --package-path "$path" ) >"$LOG" 2>&1 || return 1
+      else
+        # A plugin package: its build, then its tests.
+        ( swift build --package-path "$path" \
+          && swift test --package-path "$path" ) >"$LOG" 2>&1 || return 1
+      fi
       ;;
     maven)
-      # Tests, lint and both artifacts with their POMs, published to the local
+      # Tests, lint and every artifact with its POM, published to the local
       # build/staging-repo; Central itself is the workflow's, on the tag push.
       ( cd "$path" && ./gradlew build publishAllPublicationsToStagingRepository \
         --console=plain ) >"$LOG" 2>&1 || return 1
@@ -576,11 +617,11 @@ publish_pkg() {
       ;;
     mirror)
       printf "  %s tag push triggers .github/workflows/sdk-swift-mirror.yml (split, push to %s, tag %s there)\n" \
-        "$(c_yellow "[$name]")" "$SWIFT_MIRROR_URL" "$4"
+        "$(c_yellow "[$name]")" "$(mirror_url "$name")" "$4"
       ;;
     maven)
-      printf "  %s tag push triggers .github/workflows/sdk-kotlin-publish.yml (signs and releases com.orcagateway:sdk-core and com.orcagateway:sdk %s to Maven Central)\n" \
-        "$(c_yellow "[$name]")" "$4"
+      printf "  %s tag push triggers .github/workflows/sdk-kotlin-publish.yml (signs and releases %s %s to Maven Central)\n" \
+        "$(c_yellow "[$name]")" "$(maven_artifacts "$name")" "$4"
       ;;
   esac
 }
