@@ -440,12 +440,14 @@ final class AppShellTests: XCTestCase {
     /// A page Scaffold's AppBar is a light navigation bar under a dark
     /// scheme, the app's (`colorScheme: .dark`) or the device's: the bar is
     /// drawn with the light scheme, over the Scaffold's light background,
-    /// its title dark on it. An AppBar backgroundColor still fills the bar.
+    /// its title dark on it, and the status bar asked for has dark content.
+    /// An AppBar backgroundColor still fills the bar.
     func testC18_3_APageAppBarIsALightNavigationBarUnderADarkScheme() throws {
         for (scheme, style) in [(ColorScheme?.some(.dark), UIUserInterfaceStyle.light), (nil, .dark)] {
             let hosted = try hostScaffold(appBar: [:], scheme: scheme, style: style)
             let label = scheme == nil ? "the device dark" : "the app dark"
             XCTAssertEqual(hosted.barStyle, .light, "\(label): the navigation bar is not light")
+            XCTAssertEqual(hosted.statusBarStyle, .light, "\(label): the status bar's content is not dark")
             let edge = hosted.bar.pixel(4, hosted.bar.height / 2)
             XCTAssertTrue(edge.r > 220 && edge.g > 220 && edge.b > 220, "\(label): the bar is not light: \(edge)")
             let title = try XCTUnwrap(hosted.bar.bounds(of: Pixels.isInk), "\(label): no dark title in the bar")
@@ -529,6 +531,28 @@ final class AppShellTests: XCTestCase {
         let bar: Pixels
         /// The colour scheme the navigation bar is drawn with.
         let barStyle: UIUserInterfaceStyle
+        /// The scheme the status bar asked for is drawn for (light: dark content).
+        let statusBarStyle: UIUserInterfaceStyle
+    }
+
+    /// The status bar the window's root asks for, followed through
+    /// `childForStatusBarStyle`: `.darkContent` is for a light scheme,
+    /// `.lightContent` for a dark one. `.default` from a navigation
+    /// controller showing its bar is drawn by its bar's style (on iOS 18.5
+    /// a bar turned light alone turns the status bar's content dark), else
+    /// by the controller's. The test bundle has no status bar to read.
+    func statusBarStyle(_ root: UIViewController) -> UIUserInterfaceStyle {
+        var controller = root
+        while let child = controller.childForStatusBarStyle { controller = child }
+        switch controller.preferredStatusBarStyle {
+        case .darkContent: return .light
+        case .lightContent: return .dark
+        default:
+            if let navigation = controller as? UINavigationController, !navigation.isNavigationBarHidden {
+                return navigation.navigationBar.traitCollection.userInterfaceStyle
+            }
+            return controller.traitCollection.userInterfaceStyle
+        }
     }
 
     /// `scaffoldPage(appBar: appBar)` as the root of a NavigationStack under
@@ -558,7 +582,8 @@ final class AppShellTests: XCTestCase {
         XCTAssertGreaterThan(frame.height, 20, "the navigation bar is not shown: \(frame)")
         let pixels = try Pixels(XCTUnwrap(image.cgImage))
         return HostedScaffold(bar: pixels.rows(Int(frame.minY)...Int(frame.maxY) - 1),
-                              barStyle: navigationBar.traitCollection.userInterfaceStyle)
+                              barStyle: navigationBar.traitCollection.userInterfaceStyle,
+                              statusBarStyle: statusBarStyle(host))
     }
     #endif
 }

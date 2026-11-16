@@ -283,6 +283,7 @@ private struct AppBarChrome: ViewModifier {
                 .toolbarBackground(background == nil ? .automatic : .visible, for: .navigationBar)
                 // Light as the page under it (ScaffoldView): its material and the status bar.
                 .toolbarColorScheme(.light, for: .navigationBar)
+                .background(LightNavigationBar())
                 #endif
         } else if let appBar {
             content.safeAreaInset(edge: .top, spacing: 0) {
@@ -320,6 +321,57 @@ private struct AppBarChrome: ViewModifier {
         return Props.text(title["data"])
     }
 }
+
+#if os(iOS)
+/// Keeps the navigation bar light while a page with an AppBar is in the
+/// window, before iOS 26. There `toolbarColorScheme` reaches the bar only
+/// while its background is `.visible`, and the AppBar's is `.automatic`
+/// (clear at the scroll edge): under a dark scheme the bar stayed dark, its
+/// scrolled-under material dark and the status bar's content light over the
+/// light page. The bar is the stack's: once no such page over it is in a
+/// window it is unpinned, unless something else restyled it meanwhile.
+private struct LightNavigationBar: UIViewRepresentable {
+    func makeUIView(context: Context) -> Pin { Pin() }
+    func updateUIView(_ view: Pin, context: Context) {}
+
+    final class Pin: UIView {
+        /// The pins in a window.
+        private static let shown = NSHashTable<Pin>.weakObjects()
+        private weak var bar: UINavigationBar?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if #available(iOS 26, *) { return }
+            if window != nil {
+                guard bar == nil, let bar = navigationBar() else { return }
+                self.bar = bar
+                Self.shown.add(self)
+                bar.overrideUserInterfaceStyle = .light
+            } else if let bar {
+                self.bar = nil
+                Self.shown.remove(self)
+                if bar.overrideUserInterfaceStyle == .light, !Self.shown.allObjects.contains(where: { $0.bar === bar }) {
+                    bar.overrideUserInterfaceStyle = .unspecified
+                }
+            }
+        }
+
+        /// The navigation bar of the controller this view is drawn in.
+        private func navigationBar() -> UINavigationBar? {
+            var responder: UIResponder? = self
+            while let next = responder, !(next is UIViewController) { responder = next.next }
+            return (responder as? UIViewController)?.navigationController?.navigationBar
+        }
+    }
+}
+#endif
 
 /// An AppBar outside a Scaffold's appBar slot, laid out as Flutter's
 /// NavigationToolbar: `toolbarHeight` high (default 56); the leading slot a
