@@ -38,7 +38,6 @@ import androidx.compose.material3.RippleDefaults
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
@@ -364,7 +363,7 @@ internal fun IconButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier
  * Flutter `FloatingActionButton` (`_buildFAB`): Material 3's
  * `FloatingActionButton`, or `SmallFloatingActionButton` when `mini` (40
  * in a 48 touch target, as Flutter pads it), in Flutter's `ThemeData()`
- * colours ([flutterLight]): `backgroundColor` (primaryContainer without
+ * colours ([FlutterLightScheme]): `backgroundColor` (primaryContainer without
  * one), the content in onPrimaryContainer, at `elevation` (6 without one;
  * pressed and focused 6, hovered 8, as both Material 3s). Enabled, a tap
  * fires `onTap` and a long press `onLongPress`, through a wrapper as
@@ -387,7 +386,7 @@ internal fun FloatingActionButtonWidget(node: ResolvedNode, model: OrcaPageModel
     val content: @Composable () -> Unit = { if (node.childIds.isNotEmpty()) ChildView(node, model) }
     val interactions = remember { MutableInteractionSource() }
     FlutterGestureTiming {
-        WithColorScheme(flutterLight) {
+        WithColorScheme(FlutterLightScheme) {
             val fill = Props.color(node["backgroundColor"]) ?: MaterialTheme.colorScheme.primaryContainer
             val ink = MaterialTheme.colorScheme.onPrimaryContainer
             val shape = if (mini) FloatingActionButtonDefaults.smallShape else FloatingActionButtonDefaults.shape
@@ -443,8 +442,9 @@ private fun fabOverlay(node: ResolvedNode, ink: Color, interactions: Interaction
  * kLongPressTimeout, 500 ms (gestures/constants.dart:29), where Compose
  * takes the platform's (400 on Android 12 and later); the rest of the view
  * configuration is the current one. Around the builders that keep
- * Flutter's own timing (IconButton and FloatingActionButton);
- * [ButtonWidget] and [GestureDetectorWidget] still take the platform's.
+ * Flutter's own timing (IconButton, FloatingActionButton and
+ * [InkWellWidget]); [ButtonWidget] and [GestureDetectorWidget] still take
+ * the platform's.
  */
 @Composable
 internal fun FlutterGestureTiming(content: @Composable () -> Unit) {
@@ -506,10 +506,3 @@ private fun labelled(node: ResolvedNode, modifier: Modifier): Modifier {
     val tooltip = node["tooltip"]?.stringValue?.takeIf { it.isNotEmpty() } ?: return modifier
     return modifier.semantics { contentDescription = tooltip }
 }
-
-/**
- * Flutter's `ThemeData()` colours, which the FAB is drawn in: Material 3's
- * default light scheme, but for onPrimaryContainer, #4F378B in Flutter
- * (color_scheme_defaults.g.dart) where Compose's is #21005D.
- */
-private val flutterLight = lightColorScheme(onPrimaryContainer = Color(0xFF4F378B))

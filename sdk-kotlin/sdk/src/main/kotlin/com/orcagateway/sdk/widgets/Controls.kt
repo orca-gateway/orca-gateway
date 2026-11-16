@@ -20,7 +20,6 @@ import androidx.compose.material3.SliderState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
@@ -218,7 +217,7 @@ internal fun SliderWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
         indicator.showValueIndicator(press)
     }
 
-    WithColorScheme(flutterLight) {
+    WithColorScheme(FlutterLightScheme) {
         val look = sliderLook(node, enabled, press.down)
         Slider(
             value = shown.toFloat(),
@@ -501,9 +500,6 @@ private fun Modifier.whilePressed(press: Press, rtl: Boolean, inset: Dp, onDown:
 internal fun FormWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
     ChildView(node, model, modifier)
 }
-
-/** Flutter's `ThemeData()` colours, which its Slider is drawn in. */
-private val flutterLight = lightColorScheme()
 
 /** The thumb slot: the overlay's diameter, Flutter's track inset on each side being half of it. */
 private val THUMB_SLOT = 48.dp

@@ -19,7 +19,6 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TriStateCheckbox
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberUpdatedState
@@ -62,11 +61,12 @@ import java.util.concurrent.ConcurrentHashMap
  * without `onChange` it still takes them and writes its `stateKey`.
  *
  * With a non-empty `label` it is Flutter's `CheckboxListTile` in
- * `ThemeData()`'s light colours: a row as wide as it is let be, at least
- * 56 high, padded 16 at the start and 24 at the end, the shrink-wrapped
- * box (40 x 40) leading, 16 of gap, the label the title in body large,
- * Flutter's disabled colour (black at 0.38) when not enabled; a tap
- * anywhere on the row toggles, and it is one checkbox for accessibility.
+ * `ThemeData()`'s light colours ([FlutterLightScheme]): a row as wide as
+ * it is let be, at least 56 high, padded 16 at the start and 24 at the
+ * end, the shrink-wrapped box (40 x 40) leading, 16 of gap, the label the
+ * title in body large, Flutter's disabled colour (black at 0.38) when not
+ * enabled; a tap anywhere on the row toggles, and it is one checkbox for
+ * accessibility.
  *
  * A state at `stateKey` that is not a bool (Flutter's builder throws) draws
  * the `value` prop, and is logged once per node.
@@ -92,7 +92,7 @@ internal fun CheckboxWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
         MaterialCheckbox(state, tristate, toggle, modifier, enabled, activeColor)
         return
     }
-    WithColorScheme(flutterLight) {
+    WithColorScheme(FlutterLightScheme) {
         Row(
             modifier
                 .fillMaxWidth()
@@ -190,9 +190,6 @@ internal fun RadioWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mod
         if (selected) Box(Modifier.size(10.dp).background(active, CircleShape))
     }
 }
-
-/** Flutter's `ThemeData()` colours, which CheckboxListTile is drawn in. */
-private val flutterLight = lightColorScheme()
 
 /** `ThemeData().disabledColor`, Colors.black38: a disabled list tile's title. */
 private val FLUTTER_DISABLED = Color(0x61000000)
