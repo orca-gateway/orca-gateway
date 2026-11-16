@@ -208,6 +208,80 @@ struct GestureNodeView: View {
     }
 }
 
+/// Flutter `InkWell` as the SDK's `_buildInkWell` builds it
+/// (layout_builders.dart:615-634): Material's InkWell on a transparent
+/// Material, its onTap, onLongPress and onDoubleTap always set, even for a
+/// node without those actions, and no `enabled`. So it always takes the
+/// touch over its whole box (HitTestBehavior.opaque; a GestureDetector
+/// around it gets none). The double tap is chained ahead of the tap
+/// (`Taps`), so a single tap fires `onTap` once a second tap can no longer
+/// come (SwiftUI's wait; Flutter's kDoubleTapTimeout is 300 ms), a second
+/// tap fires `onDoubleTap` instead, and a press held for Flutter's 500 ms
+/// (`PressGestures.longPressDuration`) fires `onLongPress` and no tap.
+///
+/// The ink lies under the child, as Flutter paints it on the Material (an
+/// opaque child hides it), clipped to `borderRadius` (a number, a circular
+/// radius); the child is not clipped. While pressed, from the touch down
+/// until it lifts or the long press fires (Flutter cancels the tap then),
+/// the highlight in `highlightColor`, ThemeData()'s #BCBCBC66 without one,
+/// fades in and out over Flutter's 200 ms. No ripple on iOS (D6):
+/// `splashColor` is not read.
+@MainActor
+struct InkWellNodeView: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+    /// What a tap fires; always attached, so never nil.
+    let tap: PressGestures.Fire?
+    /// What a double tap fires; always attached, so never nil.
+    let doubleTap: PressGestures.Fire?
+    /// What a long press fires; always attached, so never nil.
+    let longPress: PressGestures.Fire?
+    @State private var pressed = false
+
+    /// Flutter's pressed highlight fade, 200 ms (ink_well.dart:1036).
+    static let highlightFade: Double = 0.2
+    /// ThemeData()'s light `highlightColor` (theme_data.dart:595).
+    static let themeHighlight = Props.color(hex: "#BCBCBC66")
+
+    init(node: ResolvedNode, model: OrcaPageModel) {
+        self.node = node
+        self.model = model
+        // Flutter's builder sets all three, whatever the node's actions.
+        tap = PressGestures.fire("onTap", on: node, in: model, when: true)
+        doubleTap = PressGestures.fire("onDoubleTap", on: node, in: model, when: true)
+        longPress = PressGestures.fire("onLongPress", on: node, in: model, when: true)
+    }
+
+    var body: some View {
+        face(pressed: pressed)
+            .modifier(Taps(single: tap.map { fire in { _ = fire() } },
+                           double: doubleTap.map { fire in { _ = fire() } }))
+            // One gesture for the long press and the press: exclusive, so a
+            // hold is a long press and never also a tap (as PressGestures).
+            .onLongPressGesture(minimumDuration: PressGestures.longPressDuration,
+                                perform: { _ = longPress?() },
+                                onPressingChanged: { pressed = $0 })
+            .accessibilityAddTraits(.isButton)
+    }
+
+    /// The InkWell drawn `pressed` or at rest: its child over the ink, the
+    /// whole box taking touches.
+    func face(pressed: Bool) -> some View {
+        let shape = CornersShape(radii: CornerRadii(all: Props.number(node["borderRadius"]) ?? 0))
+        let highlight = Props.color(node["highlightColor"]) ?? Self.themeHighlight
+        return ChildView(node: node, model: model)
+            .background {
+                ZStack {
+                    Rectangle().hitFill()
+                    shape.fill(highlight)
+                        .opacity(pressed ? 1 : 0)
+                        .animation(.linear(duration: Self.highlightFade), value: pressed)
+                }
+            }
+            .contentShape(Rectangle())
+    }
+}
+
 /// Only the tap gestures that have actions. With both, the double tap is
 /// attached first, so a single tap fires once the double tap has failed
 /// (Flutter waits the same way, `kDoubleTapTimeout`); without a double tap,

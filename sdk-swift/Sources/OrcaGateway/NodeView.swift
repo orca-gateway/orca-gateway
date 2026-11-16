@@ -147,6 +147,7 @@ struct WidgetView: View {
         case "Positioned": PositionedView(node: node, model: model)
         case "ClipRRect": ClipRRectView(node: node, model: model)
         case "GestureDetector": GestureNodeView(node: node, model: model)
+        case "InkWell": InkWellNodeView(node: node, model: model)
         case "AnimatedBuilder":
             // In a frozen copy (an AnimatedSwitcher's outgoing child) the
             // builder is its child as it last resolved: no controller, no
