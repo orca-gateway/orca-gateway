@@ -66,6 +66,10 @@ final class DegradeTests: XCTestCase {
         XCTAssertEqual(tree.type, "FallbackPrompt")
         XCTAssertEqual(tree.props["severity"], "blocking")
         XCTAssertEqual(tree.props["title"], "Update required")
+        // The prompt names the one feature the engine found missing.
+        XCTAssertEqual(tree.props["body"]?.stringValue,
+                       "This screen needs features that this app version can't render "
+                           + "(widget.UnregisteredPluginWidget). Please update from your app store to continue.")
     }
 
     func testA426DrawsTheUpgradePageItCarries() async throws {
