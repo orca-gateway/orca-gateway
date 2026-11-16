@@ -164,6 +164,11 @@ enum RoutePush: Equatable {
 /// page is not loaded when the push begins).
 @MainActor
 public final class OrcaRouter: ObservableObject {
+    /// The app's one queue of snackbars and toasts (Flutter's root
+    /// ScaffoldMessenger): every page this router loads shows its own there
+    /// (`attach`), so a bar outlives the page that showed it, across
+    /// navigate, back and a tab switch, its time running.
+    let snackbars = OrcaSnackbars()
     /// The page under every pushed route: with tabs, the current tab's root.
     @Published public private(set) var root: OrcaRoute
     /// Pushed routes, bottom to top: the `NavigationStack` path. With tabs,
@@ -724,8 +729,10 @@ public final class OrcaRouter: ObservableObject {
     }
 
     /// Wire a page that just loaded: its commits keep the shared app scope,
-    /// its navigation and system effects come here, its effects are reported.
+    /// its navigation and system effects come here, its effects are reported,
+    /// its snackbars and toasts join the app's queue.
     func attach(_ model: OrcaPageModel) {
+        model.snackbars = snackbars
         // The page seeded its own app definitions; they are shared from now.
         // The scope may have moved on while the page was fetched (the host
         // or another page wrote): those values stay, and what the page

@@ -3,8 +3,9 @@ import Combine
 import os
 import SwiftUI
 
-/// A snackbar or toast on screen. Both are drawn as a floating message at the
-/// bottom; a snackbar spans the width.
+/// A snackbar or toast of the page's queue (the router's under OrcaApp).
+/// Both are drawn as a floating message at the bottom; a snackbar spans the
+/// width.
 public struct OrcaToast: Identifiable, Equatable, Sendable {
     public enum Style: Sendable { case snackbar, toast }
     public let id = UUID()
@@ -85,17 +86,29 @@ final class NodeRecorder {
 /// One rendered page: its nodes, its store, and the executor that runs its
 /// actions. Views resolve nodes through it and fire triggers into it.
 ///
-/// Snackbars and toasts are drawn by the page itself, and `animateForward` /
-/// `animateReverse` run on its animation registry. Navigation and system
-/// effects go to `effectHandler` (OrcaApp's router sets it), and a server
-/// action's structural changes edit the node tree here.
+/// Snackbars and toasts join `snackbars` (the router's queue once the page
+/// is attached to one), and `animateForward` / `animateReverse` run on its
+/// animation registry. Navigation and system effects go to `effectHandler`
+/// (OrcaApp's router sets it), and a server action's structural changes
+/// edit the node tree here.
 @MainActor
 public final class OrcaPageModel: ObservableObject {
     public private(set) var renderer: PageRenderer
     public let store: ElmStore
     public let executor: ActionExecutor
-    /// The snackbar or toast showing now.
-    @Published public var toast: OrcaToast?
+    /// The snackbar or toast at the head of `snackbars`, whatever its phase;
+    /// nil when the queue is idle. Read-only: the queue shows and times it.
+    /// The model tells its views when the head item changes, not at each
+    /// phase (as Kotlin's Compose state reads only the head).
+    public var toast: OrcaToast? { snackbars.head }
+    /// The queue this page's showSnackbar and showToast join, in arrival
+    /// order: its own until a router attaches the page, then the router's
+    /// one queue for the app.
+    var snackbars = OrcaSnackbars() {
+        didSet { watchHead() }
+    }
+    /// What sends `objectWillChange` when `snackbars`' head item changes.
+    private var headWatch: AnyCancellable?
     /// Bumped after every change to the node tree (a server action adding,
     /// updating, replacing or deleting components).
     @Published public private(set) var structureRevision = 0
@@ -171,6 +184,16 @@ public final class OrcaPageModel: ObservableObject {
         executor.registerHandler("refetchPage") { [weak self] _, _ in
             try await self?.onRefetchPage?()
         }
+        watchHead()
+    }
+
+    /// From now on, tell this model's views each time the head item of
+    /// `snackbars` changes (`toast`), not at each phase of one item.
+    private func watchHead() {
+        headWatch = snackbars.$queue
+            .map { $0.current?.id }
+            .removeDuplicates()
+            .sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     /// An inert page of `snapshot` alone, drawn by the same views as the
@@ -386,10 +409,11 @@ public final class OrcaPageModel: ObservableObject {
         guard !isInert else { return }
         switch effect.type {
         case "showSnackbar", "showToast":
-            toast = OrcaToast(
-                message: effect.payload["message"]?.stringValue ?? "",
-                duration: Double(effect.payload["duration"]?.intValue ?? 4000) / 1000,
-                style: effect.type == "showSnackbar" ? .snackbar : .toast)
+            // A8.4: to the back of the queue, nothing replaced; no duration
+            // is 4000 ms for a snackbar, 2000 for a toast.
+            snackbars.show(effect.type == "showSnackbar" ? .snackbar : .toast,
+                           message: effect.payload["message"]?.stringValue ?? "",
+                           durationMs: effect.payload["duration"]?.intValue)
         case "animateForward", "animateReverse":
             // Flutter: a missing or unknown id does nothing, no error.
             guard let id = effect.payload["animationId"]?.stringValue else { return }

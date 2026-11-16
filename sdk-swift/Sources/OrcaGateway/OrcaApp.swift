@@ -1,10 +1,10 @@
 #if canImport(SwiftUI)
 import SwiftUI
 
-/// One page with its snackbar and toast overlay, and the debug overlay
-/// while DevTools runs with `showOverlay` on. Put it inside a
-/// NavigationStack (OrcaApp does) so a Scaffold's AppBar becomes the
-/// navigation bar.
+/// One page with the snackbar and toast overlay (the head of its queue, the
+/// router's under OrcaApp), and the debug overlay while DevTools runs with
+/// `showOverlay` on. Put it inside a NavigationStack (OrcaApp does) so a
+/// Scaffold's AppBar becomes the navigation bar.
 @MainActor
 public struct OrcaPageView: View {
     @ObservedObject var model: OrcaPageModel
@@ -37,36 +37,122 @@ public struct OrcaPageView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear { model.appeared() }
         .overlay(alignment: .bottomTrailing) { debugOverlay }
-        .overlay(alignment: .bottom) { ToastView(model: model) }
-        .animation(.easeInOut(duration: 0.2), value: model.toast)
+        .overlay(alignment: .bottom) { ToastView(snackbars: model.snackbars) }
     }
 }
 
-/// The snackbar or toast at the bottom; it leaves after its duration.
+/// The head of the queue at the bottom while it is in (entering or
+/// showing): a toast as a pill, a snackbar across the width, both in the
+/// look they had before the queue. It slides and fades in, and out as the
+/// head starts to leave; the queue times it.
 @MainActor
 private struct ToastView: View {
-    @ObservedObject var model: OrcaPageModel
+    @ObservedObject var snackbars: OrcaSnackbars
 
     var body: some View {
-        if let toast = model.toast {
-            let snackbar = toast.style == .snackbar
-            Text(toast.message)
-                .font(.subheadline)
-                .foregroundColor(.white)
-                .multilineTextAlignment(.leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .frame(maxWidth: snackbar ? .infinity : nil, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: snackbar ? 6 : 22)
-                        .fill(Color(white: 0.18)))
-                .padding(16)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .accessibilityIdentifier("orca.toast")
-                .task(id: toast.id) {
-                    try? await Task.sleep(nanoseconds: UInt64(max(0, toast.duration) * 1_000_000_000))
-                    if model.toast?.id == toast.id { model.toast = nil }
-                }
+        let toast = snackbars.shown
+        ZStack {
+            if let toast {
+                let snackbar = toast.style == .snackbar
+                Text(toast.message)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: snackbar ? .infinity : nil, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: snackbar ? 6 : 22)
+                            .fill(Color(white: 0.18)))
+                    .padding(16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .accessibilityIdentifier("orca.toast")
+                    // Each item slides in and out on its own, also when
+                    // the head goes from one straight to the next.
+                    .id(toast.id)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: toast?.id)
+    }
+}
+
+/// The app's one queue of snackbars and toasts, D4's `SnackbarQueue` kept
+/// live: Flutter's root ScaffoldMessenger as showSnackbar and showToast use
+/// it (sdk/lib/src/state/action_executor.dart:393-423; material app.dart
+/// :990, scaffold.dart:371-392, :438-449, :661-674). OrcaRouter holds the
+/// app's, so a bar outlives the page that showed it, across navigate, back
+/// and a tab switch; a page with no router holds its own. Pages hand it
+/// their snackbars and toasts in arrival order; views draw its head.
+///
+/// Time is `clock`'s. Each change first brings the queue up to it, and the
+/// queue wakes itself (`sleep`) when its next phase is due, whatever is on
+/// screen: a bar's time runs once it is in, as the messenger's timer does
+/// with no Scaffold drawn. Tests set `clock`, set `sleep` to nil and pass
+/// time in with `tick()`.
+@MainActor
+final class OrcaSnackbars: ObservableObject {
+    @Published private(set) var queue = SnackbarQueue()
+    /// Now, in ms, on the scale of `OrcaPageModel.milliseconds(_:)`.
+    var clock: () -> Double = { OrcaPageModel.milliseconds(Date()) }
+    /// Waits the given ms, until the queue's next phase is due; nil: nothing
+    /// wakes the queue but `tick()`.
+    var sleep: ((Double) async -> Void)? = { ms in
+        try? await Task.sleep(nanoseconds: UInt64(max(ms, 1) * 1_000_000))
+    }
+    /// The clock's reading the queue was last brought up to.
+    private var last: Double?
+    private var wake: Task<Void, Never>?
+    /// Each queued item as an OrcaToast, made once so its id stays, by item
+    /// id.
+    private var toasts: [Int: OrcaToast] = [:]
+
+    /// The head, whatever its phase; nil when the queue is idle.
+    var head: OrcaToast? { queue.current.flatMap { toasts[$0.id] } }
+
+    /// The head while it is in: entering or showing, not leaving.
+    var shown: OrcaToast? { queue.phase == .leaving ? nil : head }
+
+    /// showSnackbar or showToast: the item joins the back of the queue; no
+    /// duration is the kind's (4000 ms, 2000 for a toast).
+    func show(_ kind: SnackbarQueue.Kind, message: String, durationMs: Int?) {
+        catchUp()
+        let item = queue.show(kind, message: message, durationMs: durationMs)
+        toasts[item.id] = OrcaToast(message: message, duration: Double(item.durationMs) / 1000,
+                                    style: kind == .snackbar ? .snackbar : .toast)
+        schedule()
+    }
+
+    /// Bring the queue up to `clock()`, then set the next wake.
+    func tick() {
+        catchUp()
+        schedule()
+    }
+
+    /// The phases due by `clock()` end in turn; a head that has left gives
+    /// way to the next.
+    private func catchUp() {
+        let now = clock()
+        if let last, now > last {
+            var next = queue
+            next.advance(by: now - last)
+            if next != queue {
+                queue = next
+                let live = Set(queue.items.map(\.id))
+                toasts = toasts.filter { live.contains($0.key) }
+            }
+        }
+        last = now
+    }
+
+    /// Wake at the queue's next phase change; none when it is idle.
+    private func schedule() {
+        wake?.cancel()
+        wake = nil
+        guard let sleep, let due = queue.untilNextChangeMs else { return }
+        wake = Task { [weak self] in
+            await sleep(due)
+            guard !Task.isCancelled else { return }
+            self?.tick()
         }
     }
 }

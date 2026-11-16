@@ -17,7 +17,7 @@ func recordedPage(_ name: String) throws -> PageResponse {
 }
 
 /// What the views do with a tap, without tapping through SwiftUI: the model
-/// runs the node's action, commits the state and shows the toast.
+/// runs the node's action, commits the state and queues the snackbar.
 @MainActor
 final class PageModelTests: XCTestCase {
     func testTapsCountAndResetShowsTheSnackbar() async throws {
@@ -33,8 +33,17 @@ final class PageModelTests: XCTestCase {
         XCTAssertNil(model.toast)
 
         let reset = try XCTUnwrap(model.resolve("14"))
+        // No wake of the queue's own: the phase below is exact.
+        model.snackbars.sleep = nil
         await model.fire("onTap", on: reset)?.value
         XCTAssertEqual(model.store.value("count"), 0)
+        // A8.4: the snackbar joins the page's queue (its own: no router);
+        // `toast` is the queue's head, read-only.
+        let queued = try XCTUnwrap(model.snackbars.queue.current)
+        XCTAssertEqual(queued.kind, .snackbar)
+        XCTAssertEqual(queued.message, "Counter reset to 0")
+        XCTAssertEqual(queued.durationMs, 4000)
+        XCTAssertEqual(model.snackbars.queue.phase, .entering)
         XCTAssertEqual(model.toast?.message, "Counter reset to 0")
         XCTAssertEqual(model.toast?.duration, 4)
         XCTAssertEqual(model.toast?.style, .snackbar)
@@ -68,7 +77,11 @@ final class PageModelTests: XCTestCase {
         ])))
         XCTAssertEqual(handled, [ActionEffect("navigate", ["route": "/next", "replace": false])])
         XCTAssertEqual(reported.map(\.type), ["navigate", "showToast"])
+        // A8.4: the toast goes to the page's queue, not to the handler, with
+        // a toast's 2000 ms.
+        XCTAssertEqual(model.snackbars.queue.items.map(\.kind), [.toast])
         XCTAssertEqual(model.toast?.message, "hi")
+        XCTAssertEqual(model.toast?.duration, 2)
     }
 
     func testAThrownActionIsReportedNotRaised() async {
