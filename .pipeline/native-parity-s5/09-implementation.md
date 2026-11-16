@@ -3,21 +3,21 @@
 ## Front page
 
 ### In one breath
-group 6 of 8 · tasks: 12 green, 0 blocked · A5.7 green on both SDKs (core and UI)
-K-bar, S-bar: Kotlin draws Flutter's Android thumb (48 min, 4 thick, 600 + 300 ms fade) from a pure
-ScrollbarThumb core; iOS shows its own indicator only under a Scrollbar and hides it elsewhere, as
-Flutter on mobile. thumbVisibility keeps the Kotlin thumb shown; iOS can only flash its indicator.
-Ahead: K-pull, S-pull (G7) and both caps tasks (G8) committed; one S-pull fix running.
+All 9 groups done · 21 tasks green, 0 blocked · A5.1-A5.7 ticked on both SDKs and both devices.
+Rebased twice on main (3518792, 644d5d8). On 644d5d8 a refetch keeps the pages mounted in SubPages,
+as Flutter's now does; six tests on each SDK pin it (R-sub, red on a naive merge, then green).
+Suites green on the final head. One Android oddity recorded as seen: 2 of 7 refetches during the
+emulator's worst stall reached the server but never landed; the other 5 and the JVM tests are fine.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-none
+none new (the iOS and Android differences are in phase-a-tests.md A5.4-A5.7)
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 7 (PullToRefresh), one Swift fix in progress. (default: go)
+2. Next: open the step 5 PR against main, then go on to step 6. (default: go)
 
 ## Appendix
 
@@ -262,14 +262,61 @@ Files: `sdk-swift/capabilities.json` · `.../Capabilities/Generated.swift` · `.
 Cases: A5.x caps unit sw → green (`testA5TheFiveScrollWidgetsAreAdvertised`, red first); pins 55 → 60; same hash as
 Kotlin; Generated.kt byte-identical. `bun test test/parity-a-lists.test.ts` 2/2: no native vector drops a node.
 
+### Group 9
+Hand-check fixes, the rebases and their fallout. Commits: S-nest 253258d, its rework 525cae2, merge fallout c90c9f3,
+R-sub f66edac (staged by path). Nothing pushed. S-nest reviewed (fit and quality; went back once, RTL); R-sub
+reviewed (fit and quality, passed). Group 9 approved under the standing rule.
+
+#### Task S-nest · Swift: a nested refresh list keeps its pull; a pager's drag stays with it
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Pager.swift` · `.../Widgets/Refresh.swift` · `.../PagerTests.swift` ·
+`.../RefreshTests.swift`
+Cases: A5.5 sw nested (found by the hand check: a pull at the top of the list inside the page's scroll view moved the
+page) and A5.4 sw (a drag along a pager no longer also scrolls the view around it) → green, red first.
+Changed: KeepPullAnchor finds the list's UIScrollView by its frame in the window and, on iOS 17.4+, stops the
+outer one taking the edge drag; the pager makes the outer pans wait for its own. Rework (review): the frame match
+used minX in right-to-left layouts; now maxX there (525cae2). iOS 16-17.3 keep UIKit's hand-off (no public switch).
+
+#### Task Merge · refetchPage onto main's SubPage (main session, in the rebase on 644d5d8)
+Files: `sdk-kotlin/core/.../render/PageRenderer.kt` (`replace(page, keep)`) · `sdk-kotlin/sdk/.../OrcaPageModel.kt`
+(`replacePage`) · `sdk-swift/Sources/OrcaGatewayCore/Render/PageRenderer.swift` (`replacing(with:keep:)`) ·
+`sdk-swift/Sources/OrcaGateway/OrcaPageModel.swift` (`replacePage`) · count pins and the unknown-kind tests.
+Changed: as Flutter's onRefetchPage and ComponentStore.init: page-state keys under a sub-page prefix are carried over,
+nodes under a mounted prefix stay (the new page wins on a shared id), the root is the new first node, and a SubPage
+whose node did not come back is unmounted. The not-yet-implemented kind in the executor tests is now closeDialog
+(refetchPage is implemented here). Decisions: refetch-keeps-subpages, unknown-kind-in-tests,
+reorderable-list-scroll-wrappers (main's ReorderableListView is not wired to Scrollbar/PullToRefresh here: follow-up).
+
+#### Task R-sub · tests for the merge, both SDKs
+Files: `sdk-kotlin/core/.../render/RenderTreeTest.kt` · `sdk-kotlin/sdk/.../widgets/SubPageTest.kt` ·
+`sdk-swift/Tests/OrcaGatewayCoreTests/RenderTreeTests.swift` · `sdk-swift/Tests/OrcaGatewayTests/SubPageTests.swift`
+Cases: A5.6 with SubPages → 6 cases (Flutter's `sub_page_widget_test.dart:860-902` ported with its data; an unmount
+case; a renderer unit case), each red on a temporary naive merge, then green with the sources restored. No fix needed.
+Decided: the host loads through the real OrcaPageLoader; Swift's unmount case shows the SubPage is forgotten by
+bringing its node back and seeing `detail/a` fetched again (its controllers are private); page state keeps the carried
+key after an unmount, as Flutter's (`component_store.dart:96-103` removes nodes only).
+
+### Rebases
+Onto 3518792, then 644d5d8 (main's Phase B steps 12-13: animation, Hero, transitions, reorderable lists, SubPage).
+Generated files were regenerated (`schema/gen-native-capabilities.ts`), never hand-merged; the capability lists are
+the union of both sides. Pins after: 68 widgets (63 on main), 24 action kinds (23 on main), render fixtures 53,
+action fixtures 29. The hashes in groups 1-8 are from before the rebases; the rebased commits keep their messages
+(`git log origin/main..HEAD`, 34 commits). Backups: `backup/native-parity-s5-pre-rebase`, `…-pre-rebase2`.
+
 ### Test run
-engine `bun test` 755/0 · `flutter test` 352 pass · Swift core 397, 2 expected reds · Kotlin core 398, 2 expected reds
+On 525cae2, then f66edac for the native suites: engine `bun test` 798/0 · `flutter test` 487 pass, `flutter analyze`
+clean · Kotlin `./gradlew cleanTest build --no-build-cache`: core 570, sdk 642, 0 failures, lint clean · `swift test`
+UI 456, core 548 · iOS scheme on the simulator UI 560, core 548, TEST SUCCEEDED · app-ios and app-android build.
+Hand checks (both devices, before and after the rebases): $SP/s5/hand-checks.md; evidence in phase-a-tests.md A5.
 
 ### Blocked
 none
 
 ### Not done
-none
+none. Not checkable by hand on this host: Android's fast fling (adb flings never reached the pager on the overloaded
+emulator; a slow swipe turns one page with offset = viewport) rests on `a5_4_kt_aFastFlingMovesOnePage`.
 
 ### For ship (stage 10) to know
-nothing
+Known differences and follow-ups go in the PR body: ListView separator wire bug; Flutter Scrollbar without a
+controller; same-axis nested drag in the Swift pager; KeepDrag for every nested scroll kind; duplicate Layout.swift
+helpers (FreePager/LazyScroll); RTL padding on eager grids; Gradle core:test undeclared inputs; ReorderableListView not
+wired to Scrollbar/PullToRefresh; the Android refetch oddity above; from s4: LocalPointerBlocked, InertButton, Modulate.
