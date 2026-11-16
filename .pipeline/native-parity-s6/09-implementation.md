@@ -3,20 +3,22 @@
 ## Front page
 
 ### In one breath
-group 1 of 8 · tasks: 3 green, 0 blocked · fixture 45 green (engine, Flutter), both cores green
-F1 Fixture 45 and target-check pins: 15 nodes, every declared prop; pins off Checkbox and FAB.
-S-core / K-core FormControls: checkbox cycle, radio selection, slider snapping; 14 twin cases each.
-Ahead (running): E-ios1 committed; S-check and K-check (Checkbox, Radio, the value binding).
+group 2 of 8 · tasks: 3 green, 0 blocked · Checkbox and Radio drawn and bound on both SDKs
+E-ios1 Checkbox and Radio gain the ios target (Epic 23b's degrade reversed, your call).
+S-check / K-check: the stateKey write, then onChange; a tap decides from the value drawn.
+Ahead: D-deg2 committed (degrade page on a made-up widget); S-switch running; K-switch in review.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 auto-decided (minor): a reversed slider range draws min, fraction 0 (Flutter asserts there).
+3 auto-decided (minor): the degrade demo moves to UnregisteredPluginWidget, a type no app
+registers (Phase B is drawing the slivers); the Kotlin Slider takes Flutter's year2023 look;
+the Swift Radio is drawn in shapes at Flutter's sizes, not SF Symbols (D6 amended).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 2 (Checkbox, Radio, iOS targets), already running. (default: go)
+2. Next: group 3 (Switch, Slider, TextFormField, Form), already running. (default: go)
 
 ## Appendix
 
@@ -62,9 +64,46 @@ imported. Two test names aligned with Swift's.
 Decided: as S-core; checkboxNext(null, two-state) is false, so the UI draws a two-state Checkbox's missing value as
 false before it cycles (IB ~:209/:224), noted in both Checkbox briefs.
 
+### Group 2
+Commits: E-ios1 682e6b6, K-check 1484a87, S-check ca4d7ec (staged by path). Nothing pushed. K-check and S-check
+reviewed (fit and quality in one pass, against Flutter): K-check passed; S-check went back once. E-ios1 self-reviewed
+(two engine classes, a regenerated registry, a test pin). Group 2 approved under the standing rule.
+
+#### Task E-ios1 · Checkbox and Radio gain ios
+Files: `engine/src/components/input/checkbox.ts` · `.../radio.ts` · `engine/src/core/widget-registry-gen.ts` ·
+`schema/widget-registry.json` · `engine/test/widget-targets.test.ts`
+Cases: A6.1 / A6.2 eng (the "drawn on iOS" target) and A6.x tgt → green, red first on the old orphan list; engine
+`bun test` 801/0.
+Changed: both classes take ["flutter", "web", "android", "ios"] and lose the "No native iOS counterpart (Epic 23b)" line;
+one generator run; IOS_ORPHANS = FloatingActionButton, InkWell, SnackBar, Tooltip, plus a positive check per widget.
+
+#### Task K-check · Kotlin Checkbox, Radio and value binding
+Files: `sdk-kotlin/sdk/.../widgets/Input.kt` · `.../widgets/Selection.kt` (new) · `.../widgets/CheckboxRadioTest.kt` (new)
+Cases: A6.1, A6.2, A6.7 (Checkbox, Radio) kt → green, 10 `a6_…` cases, red on stubs; `./gradlew cleanTest build
+--no-build-cache` core 584, sdk 652, lint clean.
+Changed: Input.kt's edit() and pageValue() are internal and take a JsonValue (TextField calls through). Selection.kt:
+an M3 Checkbox / TriStateCheckbox (a labelled one as a 56 dp ListTile-like row, padding 16/24, 40 dp leading box,
+ThemeData() light colours) and Flutter's own Radio (20 dp circle, 2 dp ring, 10 dp dot, #2196F3 / #757575 / #BDBDBD).
+
+#### Task S-check · Swift Checkbox, Radio and value binding
+Files: `sdk-swift/Sources/OrcaGateway/OrcaPageModel.swift` · `.../Widgets/Selection.swift` (new) · `.../NodeView.swift` ·
+`sdk-swift/Tests/OrcaGatewayTests/NativeWidgetTests.swift` · `.../CheckboxRadioTests.swift` (new)
+Cases: A6.1, A6.2, A6.7 (Checkbox, Radio) sw → green: 3 binding tests plus 15 view tests, red first (missing API, then
+two rework cases on the old code); `swift test` UI 468, core 562; iOS scheme on DA7254F5 UI 578, core 562 (logs on
+the final files, checksums matched).
+Changed: `valueChanged(_ JSONValue, on:)` writes stateKey in page scope, then fires onChange {value}, on one task
+chain; textChanged calls it. CheckboxNodeView (18 pt SF Symbols box in a 48 pt target; a labelled 56 pt row as
+Flutter's CheckboxListTile) and RadioNodeView (shapes at 20/2/10 pt) read their value once when built.
+Rework (review): taps re-read the store at tap time; Flutter decides from the built value (IB ~:153, :224/:236), as
+Kotlin does. Now each view reads in init; two new cases pin it. The first counts came from an earlier tree; both
+suites were rerun on the final files.
+Decided: Radio in shapes (D6 amended); no activeColor fills the iOS accent where Flutter's tile uses #6750A4
+(documented); an invisible hit fill so a disabled or unbound control still takes the touch, as Flutter's.
+
 ### Test run
 G1: engine `bun test` 799/0 · `flutter test test/conformance/` 260 · `swift test` UI 456, core 562 · Kotlin core 584,
 sdk 642, lint clean.
+G2: engine 801/0 · `swift test` UI 468, core 562 · iOS scheme UI 578, core 562 · Kotlin core 584, sdk 652, lint clean.
 
 ### Blocked
 none
