@@ -134,6 +134,8 @@ struct WidgetView: View {
         case "Flexible": FlexibleView(node: node, model: model)
         case "Spacer": SpacerNodeView()
         case "TextField": TextFieldNodeView(node: node, model: model)
+        case "Checkbox": CheckboxNodeView(node: node, model: model)
+        case "Radio": RadioNodeView(node: node, model: model)
         case "Stack": StackNodeView(node: node, model: model)
         case "Positioned": PositionedView(node: node, model: model)
         case "ClipRRect": ClipRRectView(node: node, model: model)

@@ -198,7 +198,78 @@ final class NativeWidgetTests: XCTestCase {
         XCTAssertNil(model.textChanged("x", on: try XCTUnwrap(model.resolve("f"))))
     }
 
+    // MARK: valueChanged (a form control's change)
+
+    /// A6.1 and A6.2 (design D4; input_builders.dart:155-162, :208-218): a
+    /// control's change writes the new value to its stateKey in page scope,
+    /// then fires onChange with eventData {value}: a Checkbox's bool, a
+    /// Slider's double, a Radio's string. onChange first copies the key, so
+    /// it sees the write; the app key of the same name is left alone.
+    func testA6_1AChangeWritesPageStateThenFiresOnChange() async throws {
+        for value: JSONValue in [.bool(true), .double(0.25), .string("b")] {
+            let model = try control(props: ["stateKey": "k"], onChange: true)
+
+            await model.valueChanged(value, on: try XCTUnwrap(model.resolve("c")))?.value
+
+            XCTAssertEqual(model.store.state.page["k"], value, "\(value): the page key")
+            XCTAssertEqual(model.store.state.app["k"], "app", "\(value): the app key was written")
+            XCTAssertEqual(model.store.value("seen"), value, "\(value): onChange ran before the write")
+            XCTAssertEqual(model.store.value("echo"), value, "\(value): onChange's event value")
+        }
+    }
+
+    /// A6.2: with no stateKey (the demo's binding, value V.pageState and
+    /// onChange SetState) the change only fires onChange.
+    func testA6_2AChangeWithoutAStateKeyOnlyFiresOnChange() async throws {
+        let model = try control(props: [:], onChange: true)
+
+        await model.valueChanged("b", on: try XCTUnwrap(model.resolve("c")))?.value
+
+        XCTAssertEqual(model.store.state.page["k"], "start")
+        XCTAssertEqual(model.store.value("echo"), "b")
+    }
+
+    /// A6.7: without onChange the stateKey write still happens and nothing
+    /// fires; with neither there is nothing to run.
+    func testA6_7AChangeWithoutOnChangeStillWritesTheStateKey() async throws {
+        let model = try control(props: ["stateKey": "k"], onChange: false)
+        let change = model.valueChanged(false, on: try XCTUnwrap(model.resolve("c")))
+        XCTAssertNotNil(change, "a stateKey alone is a binding")
+        await change?.value
+        XCTAssertEqual(model.store.state.page["k"], false)
+        XCTAssertEqual(model.store.value("echo"), "unset")
+
+        let bare = try control(props: [:], onChange: false)
+        XCTAssertNil(bare.valueChanged(true, on: try XCTUnwrap(bare.resolve("c"))))
+    }
+
     // MARK: helpers
+
+    /// A page of one Checkbox `c` with `props`, its registry widened by the
+    /// type (advertised only in group 8); with `onChange`, its onChange
+    /// copies the key `k` to `seen`, then the event's value to `echo`. Page
+    /// `k` starts "start", app `k` "app", `seen` and `echo` "unset".
+    func control(props: [String: JSONValue], onChange: Bool) throws -> OrcaPageModel {
+        var node: [String: JSONValue] = [
+            "id": "c", "type": "Checkbox", "kind": "input", "childMode": "none",
+            "props": .object(props), "children": [], "watches": [],
+        ]
+        if onChange {
+            node["actions"] = ["onChange": ["type": "actionGroup", "mode": "sequential", "actions": [
+                ["type": "setState", "key": "seen", "value": ["type": "state", "key": "k"]],
+                ["type": "setState", "key": "echo", "value": ["type": "event", "key": "value"]],
+            ]]]
+        }
+        let page = try JSONValue.object([
+            "pageId": "p", "title": "T",
+            "state": [["key": "k", "scope": "page", "initial": "start"], ["key": "k", "scope": "app", "initial": "app"],
+                      ["key": "seen", "scope": "page", "initial": "unset"],
+                      ["key": "echo", "scope": "page", "initial": "unset"]],
+            "components": [.object(node)],
+        ]).decode(PageResponse.self)
+        return OrcaPageModel(page: page, registry: WidgetRegistry(types: Set(GeneratedCapabilities.widgets)
+            .union(["Checkbox"])))
+    }
 
     func page(field: JSONValue) throws -> PageResponse {
         try JSONValue.object([
