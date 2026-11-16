@@ -77,8 +77,12 @@ public struct ImplicitAnimation: Equatable, Sendable {
 /// How the props of an implicitly animated widget are mixed between two
 /// states. `t` is the curved progress and may leave 0...1 (elastic, back).
 public enum AnimationMix {
+    /// The props mixed as plain numbers. Any other number (`duration`,
+    /// `elevation`, ...) is the target at once.
+    public static let numberProps: Set<String> = ["width", "height", "opacity", "widthFactor", "heightFactor"]
+
     /// One prop by its name: `alignment`, `padding` / `margin`, `decoration`
-    /// and `color` by their own mixes, any other pair of numbers as numbers.
+    /// and `color` by their own mixes, the `numberProps` as numbers.
     /// Everything else, a null side included, is `to` from the start.
     public static func prop(_ key: String, from: JSONValue, to: JSONValue, _ t: Double) -> JSONValue {
         if from == to || from.isNull || to.isNull { return to }
@@ -93,7 +97,7 @@ public enum AnimationMix {
             guard case .string(let a) = from, case .string(let b) = to else { return to }
             return color(a, b, t).map(JSONValue.string) ?? to
         default:
-            guard let a = from.doubleValue, let b = to.doubleValue else { return to }
+            guard numberProps.contains(key), let a = from.doubleValue, let b = to.doubleValue else { return to }
             return .double(number(a, b, t))
         }
     }
@@ -161,8 +165,9 @@ public enum AnimationMix {
 
     /// Two box decorations: the colour, the corner radius and the border's
     /// width and colour are mixed; every other part (gradient, shadows, border
-    /// style) and any part with a null side is the target's. Nil when either
-    /// is not an object.
+    /// style) and any part with a null side is the target's, as is the border
+    /// when either side has `style: "none"` (no border to mix with). Nil when
+    /// either is not an object.
     public static func decoration(_ a: JSONValue, _ b: JSONValue, _ t: Double) -> JSONValue? {
         guard case .object(let x) = a, case .object(let y) = b else { return nil }
         var out = y
@@ -176,7 +181,8 @@ public enum AnimationMix {
                 out["borderRadius"] = .object(sides(cornerNames, p, q, t))
             }
         }
-        if case .object(let p)? = x["border"], case .object(let q)? = y["border"] {
+        if case .object(let p)? = x["border"], case .object(let q)? = y["border"],
+           p["style"]?.stringValue != "none", q["style"]?.stringValue != "none" {
             var border = q
             // Dart `_parseBorder`: width 1 and black when missing.
             border["width"] = .double(number(p["width"]?.doubleValue ?? 1, q["width"]?.doubleValue ?? 1, t))

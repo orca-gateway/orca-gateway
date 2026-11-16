@@ -1,10 +1,14 @@
 import Foundation
 
 /// The `duration` prop of an animated widget: whole milliseconds (Dart
-/// `propOr<int>('duration', 300)`). Anything that is not a whole number is the
-/// default; a negative one is 0. A duration of 0 or less means "jump".
+/// `propOr<int>('duration', 300)`). A number's fraction is cut off (300.5 is
+/// 300, 0.5 is 0) and a negative one is 0; anything that is not a number is
+/// the default. A duration of 0 or less means "jump".
 public enum AnimationDuration {
-    public static func milliseconds(_ value: JSONValue?, default fallback: Double) -> Double {
+    /// The duration of an animated widget that names none.
+    public static let defaultMs: Double = 300
+
+    public static func milliseconds(_ value: JSONValue?, default fallback: Double = defaultMs) -> Double {
         guard let ms = value?.dartInt else { return fallback }
         return Swift.max(0, Double(ms))
     }
@@ -46,8 +50,8 @@ public struct AnimationController: Equatable, Sendable {
     /// The value while no run is live.
     private var rest: Double = 0
     private var run: Run?
-    /// A run that had ended, unreported, when the next one replaced it.
-    private var pendingCompletion = false
+    /// The runs that have ended and that `takeCompletion` has not reported.
+    private var completions = 0
 
     public init(durationMs: Double = 300, curve: String? = nil, repeats: Bool = false,
                 reverses: Bool = false, reduceMotion: Bool = false) {
@@ -91,16 +95,13 @@ public struct AnimationController: Equatable, Sendable {
         run = .once(from: current, to: 0, start: now, span: jumps ? 0 : current * durationMs)
     }
 
-    /// True exactly once each time a run has reached 1 or reached 0; never for
-    /// a repeat. The UI asks on every frame tick and fires `onComplete`.
+    /// True once for each run that has reached 1 or reached 0 by `now`; never
+    /// for a repeat. Two runs that ended since the last call give true twice.
+    /// The UI asks on every frame tick and fires `onComplete`.
     public mutating func takeCompletion(at now: Double) -> Bool {
-        if pendingCompletion {
-            pendingCompletion = false
-            return true
-        }
-        guard case .once(_, let to, _, _)? = run, ended(at: now) else { return false }
-        rest = to
-        run = nil
+        settle(at: now)
+        guard completions > 0 else { return false }
+        completions -= 1
         return true
     }
 
@@ -159,10 +160,12 @@ public struct AnimationController: Equatable, Sendable {
         return !(span > 0) || now >= start + span
     }
 
-    /// Before a new run replaces the current one: keep an ended run's
-    /// completion for the next `takeCompletion`.
+    /// Turns a run that has ended into a rest and counts its completion.
     private mutating func settle(at now: Double) {
-        if ended(at: now) { pendingCompletion = true }
+        guard case .once(_, let to, _, _)? = run, ended(at: now) else { return }
+        rest = to
+        run = nil
+        completions += 1
     }
 }
 

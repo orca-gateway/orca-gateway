@@ -100,6 +100,17 @@ final class AnimationCoreTests: XCTestCase {
         XCTAssertEqual(AnimationDuration.milliseconds(-40, default: 300), 0)
     }
 
+    func testDurationCutsAFractionOffAndDefaultsTo300() {
+        // Dart `(value as num).toInt()`: towards zero, not "not a whole number is the default".
+        XCTAssertEqual(AnimationDuration.milliseconds(.double(300.5), default: 100), 300)
+        XCTAssertEqual(AnimationDuration.milliseconds(.double(0.5), default: 100), 0)
+        XCTAssertEqual(AnimationDuration.milliseconds(.double(-0.5), default: 100), 0)
+        // The default of the default is 300, as the Kotlin twin's DEFAULT_MS.
+        XCTAssertEqual(AnimationDuration.milliseconds(nil), 300)
+        XCTAssertEqual(AnimationDuration.milliseconds("fast"), 300)
+        XCTAssertEqual(AnimationDuration.milliseconds(120), 120)
+    }
+
     // MARK: Controller
 
     private func controller(_ duration: Double = 300, curve: String? = "linear", repeats: Bool = false,
@@ -142,6 +153,30 @@ final class AnimationCoreTests: XCTestCase {
         XCTAssertEqual(c.value(at: 600), 0)
         XCTAssertTrue(c.takeCompletion(at: 900))
         XCTAssertFalse(c.takeCompletion(at: 900))
+    }
+
+    func test_B12_1_everyRunThatEndedBetweenTwoCallsCompletes() {
+        var c = controller()
+        c.forward(at: 0)
+        c.forward(at: 400)
+        c.forward(at: 800)
+        // Three runs ended (300, 700, 1100) and nobody asked: three completions.
+        XCTAssertTrue(c.takeCompletion(at: 1200))
+        XCTAssertTrue(c.takeCompletion(at: 1200))
+        XCTAssertTrue(c.takeCompletion(at: 1200))
+        XCTAssertFalse(c.takeCompletion(at: 1200))
+        XCTAssertEqual(c.value(at: 1200), 1)
+        XCTAssertEqual(c.status(at: 1200), .completed)
+
+        // A forward and a reverse that both ended, then a repeat: two, and the repeat adds none.
+        var r = controller(repeats: true)
+        r.forward(at: 0)
+        r.reverse(at: 300)
+        r.start(at: 700)
+        XCTAssertTrue(r.takeCompletion(at: 5000))
+        XCTAssertTrue(r.takeCompletion(at: 5000))
+        XCTAssertFalse(r.takeCompletion(at: 5000))
+        XCTAssertTrue(r.isRunning(at: 5000))
     }
 
     func test_B12_1_reverseFromTheMiddleTakesValueTimesDurationAndCompletesAtZero() {
@@ -411,6 +446,43 @@ final class AnimationCoreTests: XCTestCase {
         XCTAssertEqual(start, ["width": .null, "color": "#FF0000", "label": "new", "margin": ["top": 8]])
         XCTAssertNil(start["height"])
         XCTAssertEqual(a.value(at: 150), start)
+    }
+
+    func test_B12_2_onlyTheFiveNumberPropsAreMixedAsNumbers() {
+        var a = ImplicitAnimation(durationMs: 300, curve: "linear")
+        a.retarget(to: ["width": 100, "height": 10, "opacity": 0, "widthFactor": 0.2, "heightFactor": 1,
+                        "duration": 300, "elevation": 2, "flex": 1], at: 0)
+        a.retarget(to: ["width": 200, "height": 30, "opacity": 1, "widthFactor": 0.6, "heightFactor": 0,
+                        "duration": 600, "elevation": 8, "flex": 3], at: 0)
+        let mid = a.value(at: 150)
+        XCTAssertEqual(mid["width"]?.doubleValue ?? -1, 150, accuracy: 1e-9)
+        XCTAssertEqual(mid["height"]?.doubleValue ?? -1, 20, accuracy: 1e-9)
+        XCTAssertEqual(mid["opacity"]?.doubleValue ?? -1, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(mid["widthFactor"]?.doubleValue ?? -1, 0.4, accuracy: 1e-9)
+        XCTAssertEqual(mid["heightFactor"]?.doubleValue ?? -1, 0.5, accuracy: 1e-9)
+        // Any other number is the target at once, exactly as sent.
+        XCTAssertEqual(mid["duration"], 600)
+        XCTAssertEqual(mid["elevation"], 8)
+        XCTAssertEqual(mid["flex"], 3)
+        XCTAssertEqual(a.value(at: 0)["duration"], 600)
+
+        XCTAssertEqual(AnimationMix.prop("duration", from: 300, to: 600, 0.5), 600)
+        XCTAssertEqual(AnimationMix.prop("width", from: 300, to: 600, 0.5), .double(450))
+        XCTAssertEqual(AnimationMix.prop("width", from: "wide", to: 600, 0.5), 600)
+    }
+
+    func test_B12_2_aBorderWithStyleNoneOnEitherSideSnaps() {
+        let plain: JSONValue = ["border": ["color": "#FF0000", "width": 1]]
+        let none: JSONValue = ["border": ["color": "#0000FF", "width": 3, "style": "none"]]
+        let solid: JSONValue = ["border": ["color": "#0000FF", "width": 3, "style": "solid"]]
+        // From "none": no border to start from, the target's border as it was sent.
+        XCTAssertEqual(AnimationMix.decoration(none, plain, 0.5)?["border"], ["color": "#FF0000", "width": 1])
+        // To "none": the same.
+        XCTAssertEqual(AnimationMix.decoration(plain, none, 0.5)?["border"],
+                       ["color": "#0000FF", "width": 3, "style": "none"])
+        // Any other style still mixes and keeps the target's style.
+        XCTAssertEqual(AnimationMix.decoration(plain, solid, 0.5)?["border"],
+                       ["color": "#800080FF", "width": 2.0, "style": "solid"])
     }
 
     func test_B12_3_opacityAt150Of300() {
