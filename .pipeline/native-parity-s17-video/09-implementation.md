@@ -3,22 +3,23 @@
 ## Front page
 
 ### In one breath
-group 3 of 4 · tasks: 5 green, 0 blocked · cases: 12 of 16 green · engine bun test: 813 pass
-T7 Swift player: AVPlayer, Flutter's five triggers and actions; 25 tests, 24 on the simulator.
-T8 Kotlin player: MediaPlayer on a TextureView, the same; 19 tests; INTERNET in its manifest.
-T9 release.sh rows 13-14; T10 the mirror line, LICENSE and rehearsal; T11 the CI matrices.
-Reviews fixed: Swift now fails a non-number param as Flutter and Kotlin do; dead fields removed.
+group 4 of 4 · tasks: 4 green, 0 blocked · cases: 16 of 16 green · engine bun test: 822 pass
+T12 and T13: both demo apps link and register the player; /video checked by hand on both.
+T14: the iOS, Android and pub READMEs' native parts. T15: your walkthrough and the release table.
+Hand checks found 2 gaps from Flutter, both fixed: iOS loading took a Column's height;
+Android was blank until the first play. Also ported: iOS sets the audio session to playback.
+The branch is on main d82ed11 (PR #48), rebased with no conflict.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided: a covered page stops its video (Flutter plays on) · the play mark follows the
-player · a voice release test already in main now ends its list at row 15 (still exact)
+3 auto-decided: iOS loading never fills a height (in a height-bound box it sits at the top) ·
+Android seeks to show the first frame · iOS sets the audio session to playback on the first player
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 4: both demo apps, the READMEs, your walkthrough; then hand checks. (default: go)
+2. `A` approves the stage; then stage 10 opens the video PR. (default: approve, standing rule)
 
 ## Appendix
 
@@ -286,6 +287,17 @@ xcodebuild test on the iOS 18.5 simulator 24, TEST SUCCEEDED · the video Gradle
 on swift-mirror.sh · every workflow parses · the pub dry run as at baseline.
 After T7's rework (2109cee) and T8's (81cbd9d), the two video packages again (SC/s17v/g3run2): swift test 25, 0
 warnings · xcodebuild test on the iOS 18.5 simulator 24, TEST SUCCEEDED · the Gradle package BUILD SUCCESSFUL, 19 + 6.
+
+Group 4, after T12-T15 and the reworks of T7 (audio session, loading), T8 (first frame), T12 and T14, on
+feat/native-parity-s17-video rebased onto origin/main d82ed11 (PR #48 merged; no conflict) (SC/s17v/g4run): `cd cli
+&& dart test` 45 pass · `dart analyze` no issues · `cd engine && bun test` 822 pass, 0 fail · `cd sdk && flutter
+test` 543 pass · `flutter analyze` no issues · sdk-swift core 604, SwiftUI 494, 0 failures, 0 compiler warnings (the
+6 runtime SwiftUI notes of the C18 tests, as at baseline) · sdk-kotlin BUILD SUCCESSFUL · voice packages: swift test
+24, Gradle BUILD SUCCESSFUL · the video Swift package's swift test 26, 0 warnings; xcodebuild test on the iOS 18.5
+simulator 27, TEST SUCCEEDED · the video Gradle package BUILD SUCCESSFUL, 26 tests (20 + 6), lint clean · the
+generators leave no diff · `bash -n` of release.sh and swift-mirror.sh, shellcheck clean · every workflow parses ·
+the pub dry run as at baseline (1 warning, 1 hint) · examples/app-ios `xcodebuild build` BUILD SUCCEEDED, 0 Swift
+warnings · examples/app-android `:app:assembleDebug` BUILD SUCCESSFUL · the READMEs check 217 pass.
 
 ### Blocked
 none
