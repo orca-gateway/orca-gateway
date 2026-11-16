@@ -1,7 +1,9 @@
 package com.orcagateway.core.state
 
+import com.orcagateway.core.client.MemoryKeyValueStore
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
+import com.orcagateway.core.models.StateDefinition
 import com.orcagateway.core.models.StateScope
 import com.orcagateway.core.plugins.OrcaActionHandler
 import com.orcagateway.core.support.ActionStub
@@ -13,6 +15,8 @@ import com.orcagateway.core.support.jsonOf
 import com.orcagateway.core.support.obj
 import com.orcagateway.core.support.props
 import com.orcagateway.core.support.runSuspend
+import kotlinx.serialization.builtins.ListSerializer
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -31,8 +35,21 @@ import kotlin.test.assertTrue
  * `steps` run in order, each with the widget and trigger that fired it
  * (`source`, so once can dedupe) and its own `event` in place of the
  * fixture's; `actions` run as steps with the fixture's event and no source.
+ *
+ * Saved state (fixtures 48-50, native parity step 14, C14.6): the executor
+ * saves through a [SavedState] over an in-memory store, its page the
+ * fixture's `pageId`. `saved` seeds that store and the session map; `load`
+ * sets state up as a boot and a page load do, through the store's seed and
+ * SavedState's restores; `expected.saved` is compared exactly, local as the
+ * store holds it and session through [SavedState.sessionEntries].
  */
 class ActionFixtureTest {
+    /** The session storage is process-wide: no fixture leaves its entries to another test. */
+    @AfterTest
+    fun resetSession() {
+        SavedState.resetSession()
+    }
+
     private class Step(val action: Action, val source: ActionSource?, val event: Map<String, JsonValue>?)
 
     private fun steps(fx: JsonValue): List<Step> {
@@ -52,9 +69,36 @@ class ActionFixtureTest {
         val steps = steps(fx)
         assertTrue(steps.all { runs(it.action, handlers) }, "$name: every kind implemented")
 
-        val store = ElmStore(fx["state"].decode(StoreState.serializer()))
+        // `saved` seeds both storages: local as the store holds it (one JSON
+        // object per entry), session through its reset; every fixture starts
+        // from its own.
+        val saved = fx["saved"]
+        val local = MemoryKeyValueStore(entries(saved, "local").members.mapValues { it.value.encoded() })
+        SavedState.resetSession(entries(saved, "session").members.mapValues { it.value.objectValue.orEmpty() })
+        val savedState = SavedState(local)
+
+        val pageId = fx["pageId"].stringValue ?: error("$name: a fixture has a pageId")
+        val state = fx["state"].decode(StoreState.serializer())
+        val load = fx["load"]
+        val store: ElmStore
+        if (load.isNull) {
+            // Seeded as is: nothing is restored.
+            store = ElmStore(state)
+            store.pageId = pageId
+        } else {
+            // A boot, then a page load: the app state, the saved app entry
+            // over it; the page seeded from `load.state` (an app definition
+            // only while its key is null), its saved entry over that.
+            assertTrue(state.page.isEmpty(), "$name: with load, state.page is {}")
+            store = ElmStore(StoreState(app = state.app))
+            savedState.restore(into = store)
+            store.pageId = pageId
+            store.seed(load["state"].decode(ListSerializer(StateDefinition.serializer())))
+            savedState.restorePage(into = store, pageId = pageId)
+        }
         val client = fx["serverResponses"].objectValue?.let { ActionStub.client(ActionStub(it)) }
         val executor = ActionExecutor(store, client)
+        executor.savedState = savedState
         val effects = ArrayList<JsonValue>()
         executor.onEffect = { effects.add(it.json) }
         for (handler in handlers) {
@@ -69,7 +113,20 @@ class ActionFixtureTest {
         for (step in steps) executor.execute(step.action, eventData = step.event, source = step.source)
         assertJsonEqual(jsonOf(store.state), fx["expected"]["state"], "$name: state")
         assertJsonEqual(JsonValue.Array(effects), fx["expected"]["effects"], "$name: effects")
+
+        // `expected.saved`, exactly: the local store holds no entry it does
+        // not list, nor does the session map (an absent storage is empty).
+        val wantSaved = fx["expected"]["saved"]
+        if (!wantSaved.isNull) {
+            val stored = local.snapshot().mapValues { JsonValue.parse(it.value) }
+            assertJsonEqual(JsonValue.Object(stored), entries(wantSaved, "local"), "$name: saved local, as the store holds it")
+            val session = SavedState.sessionEntries.mapValues { JsonValue.Object(it.value) }
+            assertJsonEqual(JsonValue.Object(session), entries(wantSaved, "session"), "$name: saved session")
+        }
     }
+
+    /** The entries of [storage] (`local` or `session`) in a fixture's `saved`: an absent storage is none. */
+    private fun entries(saved: JsonValue, storage: String): JsonValue.Object = JsonValue.Object(saved[storage].objectValue.orEmpty())
 
     /**
      * A built-in the executor implements, an action a fixture handler takes,
@@ -87,9 +144,9 @@ class ActionFixtureTest {
     private suspend fun runFixture(file: String) = runFixture(file, Fixtures.json("schema/fixtures/actions/$file"))
 
     @Test
-    fun allTwentyNineActionFixturesPass() = runSuspend {
+    fun allThirtyTwoActionFixturesPass() = runSuspend {
         val files = Fixtures.files("actions")
-        assertEquals(29, files.size)
+        assertEquals(32, files.size)
         for ((name, fx) in files) runFixture(name, fx)
     }
 
@@ -112,6 +169,15 @@ class ActionFixtureTest {
     /** A5.6: refetchPage emits no effect and leaves the state as it was (Flutter awaits a null onRefetchPage). */
     @Test
     fun a5_6_refetchPageEmitsNothing() = runSuspend { runFixture("48_refetchPage.json") }
+
+    @Test
+    fun c14_6_K_persistStateSavesASnapshotInOneStorage() = runSuspend { runFixture("48_persist_state.json") }
+
+    @Test
+    fun c14_6_K_clearStateNullsTheKeyAndRemovesItsSavedCopies() = runSuspend { runFixture("49_clear_state.json") }
+
+    @Test
+    fun c14_6_K_savedEntriesAreRestoredWhenStateIsSetUp() = runSuspend { runFixture("50_restore_saved_state.json") }
 
     // MARK: source and once
 
