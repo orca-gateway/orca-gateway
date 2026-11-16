@@ -60,19 +60,23 @@ public object ScrollbarThumb {
  * Material's Android timing, fed samples of the scroll view and asked for
  * the opacity at a time in ms (a frame's):
  *
- * - each move shows it over [ScrollbarThumb.FADE_DURATION] and cancels the
- *   timer (:2027-2037); the end of a scroll starts the timer, which hides
- *   it over the same time [ScrollbarThumb.TIME_TO_FADE] later
- *   (:2038-2041, :1675-1682);
+ * - each sample while a scroll is under way, and each move, shows it over
+ *   [ScrollbarThumb.FADE_DURATION] and cancels the timer: Flutter handles
+ *   ScrollUpdateNotification and OverscrollNotification alike (:2027-2037),
+ *   and a scroll under way (past the touch slop) sends one or the other,
+ *   so a drag against an edge shows it too; the end of a scroll starts the
+ *   timer, which hides it over the same time
+ *   [ScrollbarThumb.TIME_TO_FADE] later (:2038-2041, :1675-1682);
  * - with [thumbVisibility] every sample shows it and no timer runs
- *   (:1981-1988, :1676);
+ *   (:1981-1988, :1676); turning it on shows it and stops the timer,
+ *   turning it off hides it with no wait ([setThumbVisibility]);
  * - content that does not scroll hides it with no wait (:2014-2024).
  *
  * The opacity is the controller's value on `Curves.fastOutSlowIn`
  * (:1479-1482). Scrolls are told apart as [ScrollObserver] does for the
  * scroll triggers.
  */
-public class ScrollbarFade(private val thumbVisibility: Boolean) {
+public class ScrollbarFade(private var thumbVisibility: Boolean) {
     private val observer = ScrollObserver()
 
     /** The controller's value at [since]; it then moves toward 1 ([direction] 1) or 0 (-1), linearly. */
@@ -91,7 +95,7 @@ public class ScrollbarFade(private val thumbVisibility: Boolean) {
             thumbVisibility -> animate(now, 1)
             metrics.maxExtent <= metrics.minExtent -> animate(now, -1)
             else -> {
-                if ("onScrolling" in events) {
+                if (inProgress || "onScrolling" in events) {
                     animate(now, 1)
                     fadeAt = null
                 }
@@ -100,17 +104,37 @@ public class ScrollbarFade(private val thumbVisibility: Boolean) {
         }
     }
 
+    /**
+     * The node's thumbVisibility from [now] on, Flutter `didUpdateWidget`
+     * (:1657-1667): turned on, the thumb shows and the timer stops; turned
+     * off, it hides over [ScrollbarThumb.FADE_DURATION] with no wait. The
+     * same value changes nothing.
+     */
+    public fun setThumbVisibility(now: Long, thumbVisibility: Boolean) {
+        runTimer(now)
+        if (thumbVisibility == this.thumbVisibility) return
+        this.thumbVisibility = thumbVisibility
+        if (thumbVisibility) fadeAt = null
+        animate(now, if (thumbVisibility) 1 else -1)
+    }
+
     /** How opaque the thumb is at [now], 0 (hidden) to 1. */
     public fun opacity(now: Long): Double {
         runTimer(now)
         return fastOutSlowIn(valueAt(now))
     }
 
-    /** Whether the opacity stays as it is after [now] until the next sample: no fade under way, no timer. */
-    public fun isSettled(now: Long): Boolean {
+    /**
+     * When the opacity next changes with no new sample: [now] while a fade
+     * is under way, the timer's end while it only waits, null when settled.
+     */
+    public fun nextChange(now: Long): Long? {
         runTimer(now)
-        return fadeAt == null && valueAt(now) == if (direction > 0) 1.0 else 0.0
+        return if (valueAt(now) != if (direction > 0) 1.0 else 0.0) now else fadeAt
     }
+
+    /** Whether the opacity stays as it is after [now] until the next sample: no fade under way, no timer. */
+    public fun isSettled(now: Long): Boolean = nextChange(now) == null
 
     private fun valueAt(now: Long): Double =
         (value + direction * (now - since).toDouble() / ScrollbarThumb.FADE_DURATION).coerceIn(0.0, 1.0)

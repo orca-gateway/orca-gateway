@@ -88,14 +88,42 @@ class ScrollbarThumbTest {
         assertEquals(0.0, fade.opacity(0), "at rest")
         assertTrue(fade.isSettled(0), "at rest it is settled")
 
-        fade.observe(100, metrics(0.0, 200.0, 100.0), inProgress = true)
-        assertEquals(0.0, fade.opacity(100), "a touch alone shows nothing")
         fade.observe(116, metrics(10.0, 200.0, 100.0), inProgress = true)
         assertFalse(fade.isSettled(116), "fading in")
         assertEquals(0.7756, fade.opacity(266), 0.01, "half way in: fastOutSlowIn(0.5)")
         assertEquals(1.0, fade.opacity(416), "shown 300 ms after the first move")
         assertEquals(1.0, fade.opacity(5000), "shown for as long as the drag lasts")
         assertTrue(fade.isSettled(5000), "shown and no timer while the drag lasts")
+    }
+
+    /**
+     * A5.7 (kt core): a scroll under way that does not move the offset, a
+     * drag against either edge (Flutter's OverscrollNotification, handled as
+     * a ScrollUpdateNotification), shows the thumb and stops the timer as a
+     * move does; it fades 600 ms after the scroll ends. Content that cannot
+     * scroll still shows none.
+     */
+    @Test
+    fun a5_7_kt_aScrollAgainstAnEdgeShowsTheThumb() {
+        for (edge in listOf(0.0, 200.0)) {
+            val fade = ScrollbarFade(thumbVisibility = false)
+            fade.observe(0, metrics(edge, 200.0, 100.0), inProgress = false)
+            fade.observe(100, metrics(edge, 200.0, 100.0), inProgress = true)
+            assertEquals(0.7756, fade.opacity(250), 0.01, "at $edge, half way in: fastOutSlowIn(0.5)")
+            assertEquals(1.0, fade.opacity(400), "at $edge, shown 300 ms after the scroll began")
+            fade.observe(1000, metrics(edge, 200.0, 100.0), inProgress = false)
+            fade.observe(1400, metrics(edge, 200.0, 100.0), inProgress = true)
+            assertEquals(1.0, fade.opacity(2000), "at $edge, a scroll during the wait stops the timer")
+            fade.observe(2000, metrics(edge, 200.0, 100.0), inProgress = false)
+            assertEquals(1.0, fade.opacity(2599), "at $edge, kept 600 ms after the scroll ended")
+            assertEquals(0.0, fade.opacity(2900), "at $edge, gone 900 ms after it")
+        }
+
+        val fits = ScrollbarFade(thumbVisibility = false)
+        fits.observe(0, metrics(0.0, 0.0, 100.0), inProgress = false)
+        fits.observe(100, metrics(0.0, 0.0, 100.0), inProgress = true)
+        assertEquals(0.0, fits.opacity(400), "content that fits: no thumb while a scroll is under way")
+        assertTrue(fits.isSettled(400), "content that fits: settled")
     }
 
     /** A5.7 (kt core): once the scroll ends the thumb stays 600 ms, then fades over 300 ms. */
@@ -143,6 +171,50 @@ class ScrollbarThumbTest {
         fade.observe(500, metrics(50.0, 200.0, 100.0), inProgress = false)
         assertEquals(1.0, fade.opacity(10_000), "still shown long after the scroll ended")
         assertTrue(fade.isSettled(500), "no fade timer")
+    }
+
+    /**
+     * A5.7 (kt core): turning thumbVisibility off hides the thumb over 300 ms
+     * with no wait; turning it on during the wait shows it and stops the
+     * timer (Flutter `didUpdateWidget`).
+     */
+    @Test
+    fun a5_7_kt_turningThumbVisibilityOffFadesTheThumb() {
+        val fade = ScrollbarFade(thumbVisibility = true)
+        fade.observe(0, metrics(0.0, 200.0, 100.0), inProgress = false)
+        assertEquals(1.0, fade.opacity(300), "shown")
+        fade.setThumbVisibility(1000, false)
+        assertEquals(1.0, fade.opacity(1000), "still shown as it is turned off")
+        assertEquals(0.7756, fade.opacity(1150), 0.01, "half way out with no wait: fastOutSlowIn(0.5)")
+        assertEquals(0.0, fade.opacity(1300), "gone 300 ms later")
+        assertTrue(fade.isSettled(1300), "gone and settled")
+
+        val waiting = shownAndEndedAt(2000)
+        waiting.setThumbVisibility(2100, true)
+        assertEquals(1.0, waiting.opacity(5000), "turned on during the wait: the timer is stopped")
+        assertTrue(waiting.isSettled(5000), "shown and no timer")
+        waiting.setThumbVisibility(5000, true)
+        assertEquals(1.0, waiting.opacity(5300), "the same value changes nothing")
+    }
+
+    /**
+     * A5.7 (kt core): when the opacity next changes with no new sample: at
+     * once while it fades, at the timer's end while it only waits, never
+     * once settled.
+     */
+    @Test
+    fun a5_7_kt_theNextChangeIsTheTimersEndDuringTheWait() {
+        val fade = shownAndEndedAt(1000)
+        assertEquals(1600L, fade.nextChange(1000), "waiting: the fade starts at 1600")
+        assertEquals(1600L, fade.nextChange(1599), "still waiting")
+        assertEquals(1700L, fade.nextChange(1700), "fading out")
+        assertNull(fade.nextChange(1900), "gone and settled")
+
+        val showing = ScrollbarFade(thumbVisibility = false)
+        showing.observe(0, metrics(0.0, 200.0, 100.0), inProgress = false)
+        showing.observe(100, metrics(80.0, 200.0, 100.0), inProgress = false)
+        assertEquals(200L, showing.nextChange(200), "a jump: fading in")
+        assertEquals(700L, showing.nextChange(400), "shown, then waiting until 600 ms after the jump")
     }
 
     /** A5.7 (kt core): content that stops scrolling hides a shown thumb over 300 ms, with no wait. */

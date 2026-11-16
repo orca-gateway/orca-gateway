@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.models.StateDefinition
+import com.orcagateway.core.models.StateScope
 import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
@@ -67,9 +69,13 @@ class ScrollbarTest {
      * GridView and PageView known to the core: they are advertised in a
      * later group).
      */
-    private fun show(vararg nodes: ComponentNode, direction: LayoutDirection = LayoutDirection.Ltr) {
+    private fun show(
+        vararg nodes: ComponentNode,
+        direction: LayoutDirection = LayoutDirection.Ltr,
+        state: List<StateDefinition> = emptyList(),
+    ): OrcaPageModel {
         val registry = WidgetRegistry(types = WidgetRegistry.shared.types + setOf("Scrollbar", "ListView", "GridView", "PageView"))
-        val model = OrcaPageModel(page(*nodes), registry = registry).apply {
+        val model = OrcaPageModel(page(*nodes, state = state), registry = registry).apply {
             builders = WidgetBuilders.standard().apply {
                 register("Scrollbar") { node, model, modifier -> ScrollbarWidget(node, model, modifier.testTag(node.id)) }
                 register("SingleChildScrollView") { node, model, modifier ->
@@ -88,6 +94,7 @@ class ScrollbarTest {
             }
         }
         compose.mainClock.advanceTimeBy(1_000)
+        return model
     }
 
     private fun scrollbar(id: String, child: String, vararg props: Pair<String, Any?>) = ComponentNode(
@@ -140,6 +147,24 @@ class ScrollbarTest {
         assertPixel(Color.White, 98, 2, "above the thumb, which has moved down", picture)
     }
 
+    /**
+     * A5.7 (kt ui): a drag down on a list at its top does not move it but
+     * shows the thumb, at offset 0 (Flutter's OverscrollNotification shows
+     * it as a move does).
+     */
+    @Test
+    fun a5_7_kt_aDragAgainstTheTopOfAListShowsTheThumb() {
+        show(scrollbar("bar", "l"), lazy("ListView", "l", ids("r")), *rows("r", height = 50))
+        assertPixel(Color.White, 98, 24, "no thumb before a scroll")
+
+        drag("l", 50f, 20f, 0f, 60f)
+        compose.mainClock.advanceTimeBy(400)
+
+        val picture = draw()
+        assertPixel(thumb, 98, 24, "on the thumb, still at the top", picture)
+        assertPixel(Color.White, 98, 60, "below the 48-long thumb, which has not moved", picture)
+    }
+
     /** A5.7 (kt ui): the thumb stays 600 ms after the scroll ends, then fades out over 300 ms. */
     @Test
     fun a5_7_kt_theThumbIsGoneAfterTheFade() {
@@ -166,6 +191,33 @@ class ScrollbarTest {
         lift("s")
         compose.mainClock.advanceTimeBy(5_000)
         assertPixel(thumb, 98, 50, "still shown 5 s after the scroll ended")
+    }
+
+    /**
+     * A5.7 (kt ui): turning thumbVisibility off (a page state here) fades the
+     * thumb out over 300 ms with no wait, as Flutter's `didUpdateWidget`;
+     * it is not hidden at once.
+     */
+    @Test
+    fun a5_7_kt_turningThumbVisibilityOffFadesTheThumb() {
+        val model = show(
+            ComponentNode(
+                "bar", "Scrollbar", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single,
+                mapOf("thumbVisibility" to JsonValue.obj("type" to "state", "key" to "always")), listOf("s"),
+                watches = listOf("always"),
+            ),
+            scrollView("s", "b"), sizedBox("b", 40, 300),
+            state = listOf(StateDefinition("always", StateScope.Page, JsonValue.Bool(true))),
+        )
+        assertPixel(thumb, 98, 24, "shown with thumbVisibility")
+
+        compose.runOnIdle { model.store.dispatch(mapOf("always" to JsonValue.Bool(false))) }
+        repeat(6) { frame ->
+            compose.mainClock.advanceTimeBy(16)
+            assertPixel(thumb, 98, 24, "still shown ${(frame + 1) * 16} ms after it is turned off")
+        }
+        compose.mainClock.advanceTimeBy(400)
+        assertPixel(Color.White, 98, 24, "gone 500 ms after it")
     }
 
     /** A5.7 (kt ui): the thickness prop sets the thumb's width. */

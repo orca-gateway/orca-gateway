@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -29,6 +30,7 @@ import com.orcagateway.core.render.ScrollbarThumb
 import com.orcagateway.sdk.ChildView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.style.Props
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
 /**
@@ -66,7 +68,8 @@ private val THUMB_COLOR = Color(0xFFBCBCBC)
  * bottom for a horizontal view) for the scroll view directly inside it
  * (Flutter's depth-0 notifications; a scroll view nested in that one is
  * not followed), as [ScrollbarThumb] places it and [ScrollbarFade] shows
- * it: while scrolling, until 600 ms after, always with `thumbVisibility`.
+ * it: while scrolling, until 600 ms after, always with `thumbVisibility`
+ * (turned off, it fades out with no wait, as Flutter's `didUpdateWidget`).
  * The thumb takes no touch, as on Android in Flutter. Its track is the
  * whole viewport: Flutter also keeps it clear of the MediaQuery padding
  * (the system bars), which a Scrollbar inside a page body rarely meets.
@@ -79,14 +82,23 @@ internal fun ScrollbarWidget(node: ResolvedNode, model: OrcaPageModel, modifier:
     val thumbVisibility = Props.bool(node["thumbVisibility"]) ?: false
     val thickness = Props.length(node["thickness"]) ?: ScrollbarThumb.THICKNESS.dp
     val host = remember { ScrollbarHost() }
-    val fade = remember(thumbVisibility) { ScrollbarFade(thumbVisibility) }
+    val fade = remember { ScrollbarFade(thumbVisibility) }
+    val visibility = rememberUpdatedState(thumbVisibility)
     val opacity = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(host, fade) {
-        snapshotFlow { host.source?.let { it.metrics() to it.inProgress() } }.collectLatest { sample ->
+        // A new thumbVisibility alone sends the same sample again: it is observed once.
+        var seen: Pair<ScrollMetrics, Boolean>? = null
+        val samples = snapshotFlow { visibility.value to host.source?.let { it.metrics() to it.inProgress() } }
+        samples.collectLatest { (always, sample) ->
             var now = withFrameMillis { it }
-            if (sample != null) fade.observe(now, sample.first, sample.second)
+            fade.setThumbVisibility(now, always)
+            if (sample != null && sample != seen) fade.observe(now, sample.first, sample.second)
+            seen = sample
             opacity.floatValue = fade.opacity(now).toFloat()
-            while (!fade.isSettled(now)) {
+            // Every frame while it fades; a plain wait while only the fade timer runs.
+            while (true) {
+                val next = fade.nextChange(now) ?: break
+                if (next > now) delay(next - now)
                 now = withFrameMillis { it }
                 opacity.floatValue = fade.opacity(now).toFloat()
             }
