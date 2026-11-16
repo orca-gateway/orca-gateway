@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 3 of 6 · tasks: 5 green, 0 blocked · A4.1, A4.2 and ColorFiltered (A4.3) green on both SDKs
-Opacity, RotatedBox, the clips, DecoratedBox, ColorFiltered: pixels, sizes and taps as Flutter.
+group 4 of 6 · tasks: 7 green, 0 blocked · A4.4 (AbsorbPointer, IgnorePointer) green on both SDKs
+Rebased on main (PR #40, #37 merged); D1's demo page is in, its native check red till G6.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-4 auto-decided (minor): Swift draws opacity below 0.02 invisibly so taps still land (Flutter keeps
-them); DecoratedBox takes taps over its whole (rounded) box, filled or not; one shared hit fill on
-Swift; Kotlin RotatedBox answers intrinsics with swapped axes (a Row sized it 300 tall, not 60).
+3 auto-decided (minor): Kotlin AbsorbPointer lays a hit node over its child instead of consuming
+(D6 amended: ancestors still get taps and drags, as in Flutter); a blocked Kotlin button draws M3's
+look without its clickable (pixel-equal); natives cut ColorFiltered to its box, Flutter does not.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 4, AbsorbPointer and IgnorePointer (running on both SDKs). (default: go)
+2. Next: group 5 rest, InteractiveViewer on both SDKs (running). (default: go)
 
 ## Appendix
 
@@ -128,3 +128,56 @@ Review: fit pass (48 dp note) · quality pass with one should-fix (intrinsics) a
 Not done: nothing. Known: ColorFiltered's layer is the box's size (a child's overflow is cut; Flutter's is unbounded);
 below API 29 "multiply" paints the colour over the child (Modulate would be closer: follow-up); Compose's 48 dp
 minimum touch target can give a small target a tap just outside its shape, SDK-wide.
+
+### Group 4
+Commits: S-touch 2c8e51f (aa43f9f after the rebase), K-touch a6a8af7 (staged by path); D1 (group 5) a4c7c33 landed
+first, its files disjoint. Nothing pushed. Gate 09 group 3 approved under the standing rule. Rebase: with the tree
+clean, step 4 was rebased on main 6a7f0e0 in a scratch worktree and the branch moved with `git reset --keep` (only
+#37's files rewritten here); 11 commits applied without conflict; the fixture pins hold both changes (render 45,
+navigation 15).
+
+#### Task S-touch · Swift AbsorbPointer and IgnorePointer
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Touch.swift` (new) · `.../NodeView.swift` ·
+`sdk-swift/Tests/OrcaGatewayTests/TouchTests.swift` (new)
+Cases: A4.4 sw → green: TouchTests 6/6 on the simulator (macOS runs the size case only); `swift test` 260 + 372; iOS
+scheme 319 + 372, 0 warnings, goldens unchanged. All 6 red first.
+Changed: AbsorbPointerView (absorbing: the child `.allowsHitTesting(false)` under a `Rectangle().hitFill()` overlay;
+false: the child alone); IgnorePointerView (`.allowsHitTesting(!ignoring)`); the same modifiers either way, so a
+page-state flip keeps the child (the same field instance takes the next hit). SwiftUI ancestors still get the tap,
+as Flutter's do (the fill sits inside their subtree).
+Decisions: hitFill rather than a clear layer (a clear layer let the field behind take the hit); no child → nothing.
+Review: main session (both lenses; small task): Flutter's hitTest rules (proxy_box.dart:3751-3752, :3952-3953) match;
+tests cover the four overlaps and the flip, fields told apart by placeholder · pass
+Not done: nothing.
+
+#### Task K-touch · Kotlin AbsorbPointer and IgnorePointer
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Touch.kt` (new) · `.../widgets/Gesture.kt` ·
+`.../widgets/Buttons.kt` · `sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/widgets/TouchTest.kt` (new); approved
+outside the row: one line each in `.../widgets/Effects.kt` and `.../widgets/Backdrop.kt` (hit nodes read the local).
+Cases: A4.4 kt → green: TouchTest 17/17 (the four overlaps and the flip with a GestureDetector and an ElevatedButton
+child, size, an ancestor GestureDetector fires, a scroll drag from an absorbed area scrolls, Ignore > Absorb, Ignore >
+DecoratedBox and > BlurView pass through, blocked buttons pixel-equal); ButtonTest, GestureDetectorTest, EffectsTest,
+BackdropTest green; `./gradlew build` sdk 420, core 381, lint 0 errors; no golden moved.
+Changed: LocalPointerBlocked; AbsorbPointer = the child plus `Box(matchParentSize().pointerInput(Unit) {})` over it
+(nothing consumed); IgnorePointer = no pointer input; Gesture.kt and the three button builders read the local (a
+blocked button = InertButton: M3 1.4.0's at-rest look without the clickable, role and disabled state kept).
+Decisions: s4-kotlin-absorb-overlay, s4-kotlin-inert-button. Pixel test: one column of six buttons captured four times
+in place (plain, ignored, plain again, absorbed) through the hardware capture: noise 0, both blocked pictures 0 off;
+removing the shadow fails by 36, disabled colours by 177.
+Review: fit rework (nesting, ancestors; uncovered list) · quality rework (tolerance evidence, semantics, copied parts
+pinned, M3 version in the KDoc; Initial-pass consume replaced) · pass
+Not done (follow-up): builders that do not read the local still take touches under IgnorePointer and keep their
+semantics actions under either wrapper: BasicTextField, scroll views, Content.kt's link, Card, the AppBar IconButtons,
+NavigationBarItem. InertButton mirrors M3 1.4.0: re-check when the BOM moves material3. No focus target when blocked.
+
+#### Task D1 · Demo page effects on parity-a (group 5, landed early)
+Files: `examples/server/parity-a.ts` · `examples/server/index.ts` · `engine/test/parity-a-effects.test.ts` (new)
+Cases: A4.x eng → "the effects page holds all 11" green; "each native vector gets the effects page whole" red as
+planned until G6 (both vectors drop exactly the 11; green with them added in memory). `bun test` 753 + 1 expected
+fail. The page serves 277 nodes of 27 types.
+Changed: `effectsPage` (sections A4.1-A4.5 per D7, 5 page-state keys, 6 helpers), route and console line, header.
+Decisions: BackdropFilter and the multiply ColorFiltered each in a ClipRect (Flutter's would reach the nearest clip;
+s4-colorfiltered-unclipped); GestureDetector behind, ElevatedButton in front in the touch Stacks.
+Review: one reviewer, both lenses: rework (multiply caption: clear corners take the colour; zoom caption: drag
+sideways, up/down scrolls the page; one clearBox helper) · pass
+Not done: hand checks after G6.
