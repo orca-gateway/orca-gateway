@@ -119,11 +119,23 @@ class AnimationCoreTest {
         assertEquals(300.0, AnimationDuration.milliseconds(JsonValue.Null))
         assertEquals(300.0, AnimationDuration.milliseconds(JsonValue.String("500")))
         assertEquals(500.0, AnimationDuration.milliseconds(JsonValue.Int(500)))
-        assertEquals(120.5, AnimationDuration.milliseconds(JsonValue.Double(120.5)))
+        // Dart reads the prop as an int: a fraction is cut off.
+        assertEquals(120.0, AnimationDuration.milliseconds(JsonValue.Double(120.5)))
         assertEquals(0.0, AnimationDuration.milliseconds(JsonValue.Int(0)))
         assertEquals(0.0, AnimationDuration.milliseconds(JsonValue.Int(-40)))
         assertEquals(300.0, AnimationDuration.milliseconds(JsonValue.Double(Double.NaN)))
         assertEquals(200.0, AnimationDuration.milliseconds(null, 200.0))
+    }
+
+    @Test
+    fun durationIsReadAsDartsInt() {
+        assertEquals(300.0, AnimationDuration.milliseconds(JsonValue.Double(300.5)))
+        assertEquals(0.0, AnimationDuration.milliseconds(JsonValue.Double(0.5)))
+        assertEquals(0.0, AnimationDuration.milliseconds(JsonValue.Double(-0.5)))
+        assertEquals(0.0, AnimationDuration.milliseconds(JsonValue.Double(-40.9)))
+        assertEquals(250.0, AnimationDuration.milliseconds(JsonValue.Double(250.0)))
+        assertEquals(200.0, AnimationDuration.milliseconds(JsonValue.Double(Double.POSITIVE_INFINITY), 200.0))
+        assertEquals(200.0, AnimationDuration.milliseconds(JsonValue.Bool(true), 200.0))
     }
 
     // MARK: Controller (B12.1, core half)
@@ -295,6 +307,25 @@ class AnimationCoreTest {
         assertFalse(c.isRunning(10.0))
         assertTrue(c.takeCompletion(10.0))
         assertFalse(c.takeCompletion(10.0))
+    }
+
+    @Test
+    fun b12_1_aJumpingRunHasEndedAlsoWhenReadBeforeItsStartTime() {
+        for (c in listOf(controller(durationMs = 0.0), controller(durationMs = -5.0), controller(reduceMotion = true))) {
+            c.forward(100.0)
+            assertEquals(1.0, c.value(50.0))
+            assertEquals(1.0, c.progress(50.0))
+            assertEquals(AnimationStatus.Completed, c.status(50.0))
+            assertFalse(c.isRunning(50.0))
+            assertTrue(c.takeCompletion(50.0))
+            assertFalse(c.takeCompletion(50.0))
+
+            c.reverse(200.0)
+            assertEquals(0.0, c.value(150.0))
+            assertEquals(AnimationStatus.Dismissed, c.status(150.0))
+            assertTrue(c.takeCompletion(150.0))
+            assertFalse(c.takeCompletion(150.0))
+        }
     }
 
     // MARK: Reduced motion (B12.7-K)
@@ -493,11 +524,61 @@ class AnimationCoreTest {
     }
 
     @Test
-    fun b12_3_aMissingAlignmentIsCenterAsInFlutter() {
+    fun b12_3_anAlignmentOnlyOneSideHasSnaps() {
+        // Design D7: a null side snaps. Nothing to topLeft: topLeft at once.
+        val appears = AnimationMix.props(props(), props("alignment" to s("topLeft")), 0.5)
+        assertEquals(props("alignment" to s("topLeft")), appears)
+        // topLeft to nothing: no key at all.
+        val leaves = AnimationMix.props(props("alignment" to s("topLeft")), props(), 0.5)
+        assertEquals(props(), leaves)
+        assertEquals(s("topRight"), AnimationMix.props(props("alignment" to JsonValue.Null), props("alignment" to s("topRight")), 0.5)["alignment"])
+        assertEquals(JsonValue.Null, AnimationMix.props(props("alignment" to s("topRight")), props("alignment" to JsonValue.Null), 0.5)["alignment"])
+
         val a = implicit()
         a.retarget(props("opacity" to n(1.0)), 0.0)
         a.retarget(props("opacity" to n(1.0), "alignment" to s("topRight")), 0.0)
-        assertEquals(AlignmentBias(0.5, -0.5), AlignmentBias.of(a.value(150.0)!!["alignment"]))
+        assertEquals(s("topRight"), a.value(150.0)!!["alignment"])
+    }
+
+    @Test
+    fun b12_3_anAlignmentThatIsNotANameOrACompletePointSnaps() {
+        val half = o("x" to n(1.0))
+        assertEquals(half, AnimationMix.props(props("alignment" to s("topLeft")), props("alignment" to half), 0.5)["alignment"])
+        assertEquals(s("topLeft"), AnimationMix.props(props("alignment" to half), props("alignment" to s("topLeft")), 0.5)["alignment"])
+        val text = o("x" to s("1"), "y" to n(1.0))
+        assertEquals(s("topLeft"), AnimationMix.props(props("alignment" to text), props("alignment" to s("topLeft")), 0.5)["alignment"])
+        assertEquals(s("topLeft"), AnimationMix.props(props("alignment" to n(1.0)), props("alignment" to s("topLeft")), 0.5)["alignment"])
+        // A complete point and a name mix; a name outside the nine is the centre.
+        val point = o("x" to n(1.0), "y" to n(1.0))
+        assertEquals(AlignmentBias(0.0, 0.0).json, AnimationMix.props(props("alignment" to point), props("alignment" to s("topLeft")), 0.5)["alignment"])
+        assertEquals(AlignmentBias(-0.5, -0.5).json, AnimationMix.props(props("alignment" to s("topLeft")), props("alignment" to s("sideways")), 0.5)["alignment"])
+        // The same value on both sides stays as it was handed in.
+        assertEquals(s("topLeft"), AnimationMix.props(props("alignment" to s("topLeft")), props("alignment" to s("topLeft")), 0.5)["alignment"])
+    }
+
+    @Test
+    fun b12_2_aLiveRunKeepsTheDurationAndCurveItStartedWith() {
+        val a = implicit()
+        a.retarget(props("width" to n(100.0)), 0.0)
+        a.retarget(props("width" to n(200.0)), 0.0)
+        a.durationMs = 600.0
+        a.curve = "easeIn"
+        assertEquals(150.0, number(a.value(150.0)!!["width"]))
+        assertTrue(a.isRunning(299.0))
+        assertFalse(a.isRunning(300.0))
+        assertEquals(n(200.0), a.value(300.0)!!["width"])
+        // The next retarget runs with the new ones: easeIn(0.5) = 0.31640625 over 600 ms.
+        a.retarget(props("width" to n(300.0)), 1000.0)
+        assertNear(200.0 + 100.0 * 0.31640625, number(a.value(1300.0)!!["width"]))
+        assertTrue(a.isRunning(1599.0))
+        assertFalse(a.isRunning(1600.0))
+        // A duration of 0 set mid-run does not cut the run short either.
+        a.retarget(props("width" to n(400.0)), 2000.0)
+        a.durationMs = 0.0
+        assertTrue(a.isRunning(2300.0))
+        a.retarget(props("width" to n(500.0)), 2300.0)
+        assertFalse(a.isRunning(2300.0))
+        assertEquals(n(500.0), a.value(2300.0)!!["width"])
     }
 
     @Test

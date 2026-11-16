@@ -25,12 +25,15 @@ public object Curves {
         override fun transform(t: Double): Double {
             var start = 0.0
             var end = 1.0
-            while (true) {
-                val midpoint = (start + end) / 2
+            var midpoint = 0.5
+            // Flutter loops until it converges; the bound only guards a curve whose x is not monotonic.
+            repeat(CUBIC_MAX_STEPS) {
+                midpoint = (start + end) / 2
                 val estimate = evaluate(a, c, midpoint)
                 if (abs(t - estimate) < CUBIC_ERROR_BOUND) return evaluate(b, d, midpoint)
                 if (estimate < t) start = midpoint else end = midpoint
             }
+            return evaluate(b, d, midpoint)
         }
 
         private fun evaluate(a: Double, b: Double, m: Double): Double =
@@ -67,6 +70,7 @@ public object Curves {
     }
 
     private const val CUBIC_ERROR_BOUND = 0.001
+    private const val CUBIC_MAX_STEPS = 64
 
     /** The period of Flutter's three elastic curves. */
     private const val PERIOD = 0.4
@@ -166,13 +170,12 @@ public object AnimationDuration {
     public const val DEFAULT_MS: Double = 300.0
 
     /**
-     * [value] in milliseconds: any finite number, a negative one being 0 (a
-     * duration of 0 or less jumps to the end state); anything else is
-     * [default].
+     * [value] in whole milliseconds, read as Dart's int (a fraction is cut
+     * off), a negative one being 0 (a duration of 0 or less jumps to the end
+     * state); anything else is [default].
      */
     public fun milliseconds(value: JsonValue?, default: Double = DEFAULT_MS): Double {
-        val number = value?.doubleValue ?: return default
-        if (!number.isFinite()) return default
-        return maxOf(number, 0.0)
+        val whole = value?.dartInt ?: return default
+        return maxOf(whole.toDouble(), 0.0)
     }
 }

@@ -37,7 +37,8 @@ public class AnimationController(
     private class Rest(val value: Double) : Motion
 
     private class Run(val from: Double, val to: Double, val start: Double, val length: Double) : Motion {
-        fun ended(now: Double): Boolean = now >= start + length
+        /** A run with no length (a jump) has ended whatever the time, also one before its [start]. */
+        fun ended(now: Double): Boolean = !(length > 0) || now >= start + length
     }
 
     private class Repeat(val start: Double) : Motion

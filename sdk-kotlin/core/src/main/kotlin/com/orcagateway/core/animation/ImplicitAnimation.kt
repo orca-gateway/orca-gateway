@@ -13,6 +13,8 @@ import com.orcagateway.core.resolver.roundHalfAwayFromZero
  * The first target is shown as it is. A new target starts a run of the full
  * [durationMs] from the value on screen, also in the middle of a run. With
  * [reduceMotion], or a duration of 0 or less, a new target is shown at once.
+ * A live run keeps the [durationMs] and [curve] it began with: a change of
+ * either applies from the next [retarget].
  */
 public class ImplicitAnimation<T : Any>(
     public var durationMs: Double = AnimationDuration.DEFAULT_MS,
@@ -22,6 +24,8 @@ public class ImplicitAnimation<T : Any>(
 ) {
     private var from: T? = null
     private var start = 0.0
+    private var runDurationMs = 0.0
+    private var runCurve: String? = null
 
     /** The latest target; null before the first [retarget]. */
     public var target: T? = null
@@ -33,6 +37,8 @@ public class ImplicitAnimation<T : Any>(
         from = value(now)
         target = to
         start = now
+        runDurationMs = durationMs
+        runCurve = curve
     }
 
     /** What to draw at [now]; null before the first target. */
@@ -40,12 +46,12 @@ public class ImplicitAnimation<T : Any>(
         val to = target ?: return null
         val origin = from
         if (origin == null || !isRunning(now)) return to
-        return mix(origin, to, Curves.apply(curve, (now - start) / durationMs))
+        return mix(origin, to, Curves.apply(runCurve, (now - start) / runDurationMs))
     }
 
     /** Whether the value still moves at [now]: the UI ticks only while true. */
     public fun isRunning(now: Double): Boolean =
-        from != null && !reduceMotion && durationMs > 0 && now < start + durationMs
+        from != null && !reduceMotion && runDurationMs > 0 && now < start + runDurationMs
 }
 
 /** Flutter's `Alignment(x, y)`: -1 is left or top, 0 the centre, 1 right or bottom. */
@@ -76,6 +82,16 @@ public data class AlignmentBias(public val x: Double, public val y: Double) {
         public fun of(value: JsonValue?): AlignmentBias {
             val o = value?.objectValue ?: return named(value?.stringValue)
             return AlignmentBias(o["x"]?.doubleValue ?: 0.0, o["y"]?.doubleValue ?: 0.0)
+        }
+
+        /**
+         * What a mix accepts: a name (one outside the nine is the centre) or
+         * a complete `{x, y}`; null for anything else, which snaps.
+         */
+        internal fun mixable(value: JsonValue?): AlignmentBias? {
+            value?.stringValue?.let { return named(it) }
+            val o = value?.objectValue ?: return null
+            return AlignmentBias(o["x"]?.doubleValue ?: return null, o["y"]?.doubleValue ?: return null)
         }
     }
 }
@@ -139,9 +155,8 @@ public object AnimationMix {
      * `height`, `opacity`, `widthFactor`, `heightFactor` as numbers, `color`
      * as a colour, `padding` and `margin` as insets, `decoration` by parts,
      * and `alignment` as a point, written `{x, y}` ([AlignmentBias.of] reads
-     * it; a side without one is the centre, as in Flutter; two equal points
-     * leave [to]'s own value). Every other
-     * prop, and one a side lacks, is [to]'s.
+     * it), when each side is a name or a complete `{x, y}` and the two
+     * differ. Every other prop, and one a side lacks, is [to]'s.
      */
     public fun props(from: Map<String, JsonValue>, to: Map<String, JsonValue>, t: Double): Map<String, JsonValue> {
         val mixed = to.toMutableMap()
@@ -156,11 +171,13 @@ public object AnimationMix {
                 "color" -> colorValue(a, b, t)?.let { mixed[key] = it }
                 in insets -> edgeInsets(a, b, t)?.let { mixed[key] = it }
                 "decoration" -> decoration(a, b, t)?.let { mixed[key] = it }
+                "alignment" -> if (a != b) {
+                    val p = AlignmentBias.mixable(a)
+                    val q = AlignmentBias.mixable(b)
+                    if (p != null && q != null) mixed[key] = alignment(p, q, t).json
+                }
             }
         }
-        val a = AlignmentBias.of(from["alignment"])
-        val b = AlignmentBias.of(to["alignment"])
-        if (a != b) mixed["alignment"] = alignment(a, b, t).json
         return mixed
     }
 
