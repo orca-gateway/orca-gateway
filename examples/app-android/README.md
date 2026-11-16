@@ -179,16 +179,75 @@ The green badge prints `hapticFeedback light`, "Trigger Haptic" `hapticFeedback 
 has no confetti or store SDK, so the handlers behind "Show Confetti", "Rate This App", "Pay $29.99"
 and the orange badge only log the action they get.
 
-## Force update and sessions
+## Offline, force update and sessions
 
-Two boolean extras turn on `OrcaApp`'s `enableOffline` and `enableSessionTracking`. The run task
-does not pass them: install the app once with `task example:android:run`, then start it with
-`adb shell am start`. `-S` stops the running app first, so the new extras apply.
+Two boolean extras turn on `OrcaApp`'s `enableOffline` and `enableSessionTracking`, and a third
+makes the host run the offline boot itself. The run task does not pass them: install the app once
+with `task example:android:run`, then start it with `adb shell am start`. `-S` stops the running
+app first, so the new extras apply, and the next launch is a cold start.
 
 | Extra | Type | Default | What |
 |---|---|---|---|
-| `ORCA_OFFLINE` | boolean | off | ask the server's `/version` before the first page |
+| `ORCA_OFFLINE` | boolean | off | ask the server's `/version` before the first page; with `ORCA_BOOT config`, also save the config and its static pages, and boot from them when the server cannot be reached |
+| `ORCA_PRELOAD` | boolean | off | with `ORCA_BOOT config` only: the host awaits `preload` under its own splash, then gives `OrcaApp` the config; implies the offline cache |
 | `ORCA_SESSIONS` | boolean | off | send a session start and end as the app comes and goes |
+
+**Offline.** The example server's `static-flows` app has one static flow, `main`, at version 4:
+its `home` and `about` pages come pre-rendered in `/config`, and `profile` is a dynamic route
+(`isDynamic`), which never does. Boot it from its config with the offline cache on:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
+  --ez ORCA_OFFLINE true --es ORCA_APP_ID static-flows --es ORCA_BOOT config
+```
+
+The app shows a spinner, then "Home (Static)". At boot the SDK asks `/version` with the flow
+versions it saved (none yet), fetches `/config` and saves it with the pages of `home` and `about`
+(files in the app's `files/orca_gateway`). Those two pages then open with no request, `about` too
+though it was never visited; `profile` is asked of the server each time. The server's console
+shows it: `request_start` lines for `"path":"/version"` and `"path":"/config"`, none for
+`/page/home`. Launch again with the same command: only `/version` this time. The versions match,
+so the saved config is used and `/config` is not asked.
+
+To check it offline:
+
+1. Boot once with the server up (the command above).
+2. Stop the server, then launch again with the same command. `/version` fails, so the app boots
+   from the saved config: "Home (Static)" opens, "Go to About" opens "About (Static)", and "Go to
+   Profile" shows "Could not load this page" with the connection error: a dynamic page is never
+   cached.
+3. With nothing saved the boot fails. Clear the app's data and launch again, the server still
+   down: "Could not load this app" with "No network and no cached config available", and "Try
+   again".
+
+   ```bash
+   adb shell pm clear com.orcagateway.examples.counter
+   ```
+
+4. A new flow version fetches the config again. Start the server from source (`task
+   example:dev:server`, which restarts when a file is saved), launch once, then set `version: 4`
+   to `version: 5` in `examples/server/static-flows.ts` and launch again: the console shows
+   `/version`, then `/config`, and the pages are saved again. Set it back to 4 when done (that is
+   a new version too: one more fetch).
+
+**The host's preload.** `ORCA_PRELOAD` boots the same way, run by the host
+([`PreloadedApp` in `MainActivity.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/MainActivity.kt)):
+it shows its own splash, a spinner over "Checking version...", awaits `preload(client, manager)`
+with a `StaticFlowManager` over `offlineStore(context)`, then shows `OrcaApp` with
+`preloadedConfig` and that manager. `OrcaApp` then asks no `/version` and no `/config` of its
+own, and the home page comes from the cache. The manager is over the files `ORCA_OFFLINE` uses, so
+the two boots share one cache, and `ORCA_OFFLINE` adds nothing to this one.
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
+  --ez ORCA_PRELOAD true --es ORCA_APP_ID static-flows --es ORCA_BOOT config
+```
+
+The offline check above holds as it is, with two texts of the host's own: with nothing saved and
+the server down, the plain line "No network and no cached config available" (the message of the
+`OfflineBootException` that `preload` throws); with `ORCA_FORCE_UPDATE=1` (below), a plain
+"Update required", which `OrcaApp` never sees, as in Flutter. With a path (no `ORCA_BOOT config`)
+the extra is ignored: there is no config to preload.
 
 **Force update.** With `ORCA_FORCE_UPDATE=1` the server's static-flows app answers `/version` with
 `forceUpdate: true`. Start the server that way, then that app with the check on:
@@ -220,11 +279,8 @@ To see the offline queue, stop the server while the app is open, send the app to
 start the server again and bring the app back. The end that failed was queued: the console prints
 `Session started`, then `Offline sessions registered: device=<id> count=1`.
 
-Not there yet: `ORCA_OFFLINE` runs only the version check. The offline cache of static flows and
-`preload()` arrive with plan step 14, so with the server down the app still cannot load a page.
-
-Both extras work with `ORCA_BOOT config` too: the version check then comes before `/config`, and a
-force update fetches neither the config nor a page.
+`ORCA_OFFLINE` and `ORCA_SESSIONS` work with `ORCA_BOOT config` too: the version check then comes
+before `/config`, and a force update fetches neither the config nor a page.
 
 ## Error screens, dark mode, locale and splash
 

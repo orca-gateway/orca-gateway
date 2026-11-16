@@ -379,19 +379,64 @@ DevTools also shows how a value was made, as the Flutter SDK sends it:
 - **debugLog.** It shows as its `action` event (family `custom`), and its line goes to logcat under
   the action's tag (`orca` when it has none).
 
-## Sessions, analytics and version check
+## Offline, sessions and analytics
 
 `OrcaApp` takes two switches, both off by default. Both overloads have them, `OrcaApp(client)` and
 `OrcaApp(router)`:
 
 ```kotlin
-OrcaApp(client, path = "home", enableOffline = true, enableSessionTracking = true)
+OrcaApp(client, enableOffline = true, enableSessionTracking = true)
 ```
 
-`enableOffline` asks the server's `/version` before the first page. When the answer says
-`forceUpdate: true`, the app shows "Update required. Please update the app." and loads no page. Any
-other answer, or none, lets the app start. The offline cache of static flows and `preload()` come
-later (plan step 14), so for now this switch runs only the check.
+`enableOffline` boots offline-first, as the Flutter SDK does. It asks the server's `/version`
+before anything else; a `forceUpdate: true` answer shows "Update required. Please update the app."
+and fetches nothing more. With a `path`, or `OrcaApp(router)`, that check is all it does: any other
+answer, or none, lets the app start, and nothing is cached, since there is no config. Booting from
+the config (`OrcaApp(client)` with no path), it keeps the app's static flows on the device, in
+files under `context.filesDir/orca_gateway`:
+
+- A static flow (`isStatic` on the server) comes in `/config` with its pages pre-rendered. They
+  are saved at boot with the config, and then served with no request: any static page, visited or
+  not, also offline and after a restart.
+- `/version` is asked with the flow versions saved. When every flow's version equals the saved
+  one, the saved config is used and `/config` is not asked. When one differs (a missing one too),
+  the whole `/config` is fetched and saved again, and the saved pages of a versioned flow it no
+  longer has are deleted.
+- Offline is any `/version` failure (no connectivity monitor): the app boots from the saved
+  config. With none saved, the error view says "No network and no cached config available".
+- Dynamic routes (`isDynamic`) and pages outside static flows are never cached: they are always
+  asked of the server, and offline they show the page's error view. A page the network answers is
+  never saved.
+- A flow without a version is reported by `/version` as 0 and never saved, so an app with one
+  counts as changed and fetches `/config` on every launch, as in Flutter.
+- A failed `/config` fails the boot (error view, "Try again"); the saved config is not used then.
+
+The same boot can run under your own splash: await `preload` with a `StaticFlowManager` over
+`offlineStore(context)`, the files `enableOffline` uses, and give `OrcaApp` the config and the same
+manager. It then asks no `/version` and no `/config`, and its first frame is the app. The
+force-update answer is yours to show (`OrcaApp` never sees it), and offline with nothing saved
+`preload` throws `OfflineBootException`:
+
+```kotlin
+import com.orcagateway.core.client.PreloadResult
+import com.orcagateway.core.client.StaticFlowManager
+import com.orcagateway.core.client.preload
+import com.orcagateway.sdk.offlineStore
+
+val manager = remember { StaticFlowManager(offlineStore(context)) }
+val result by produceState<PreloadResult?>(null) {
+    // File work off the main thread; catch OfflineBootException to show your own error.
+    value = withContext(Dispatchers.IO) { preload(client, manager) }
+}
+when (val ready = result) {
+    null -> Splash()
+    PreloadResult.ForceUpdate -> UpdateRequired()
+    is PreloadResult.Success -> OrcaApp(client, preloadedConfig = ready.config, staticFlowManager = manager)
+}
+```
+
+The [Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android#offline-force-update-and-sessions)
+runs both boots against the example server's `static-flows` app.
 
 `enableSessionTracking` posts a session start to `/session` when the app process comes to the
 foreground, and an end when it goes to the background. It follows the process through
