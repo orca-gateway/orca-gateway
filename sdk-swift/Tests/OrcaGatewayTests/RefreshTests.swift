@@ -151,6 +151,22 @@ final class RefreshTests: XCTestCase {
         XCTAssertNil(try XCTUnwrap(views.first, "no UIScrollView").refreshControl)
     }
 
+    /// A5.5: a ListView or GridView with no limit on its scroll axis (a
+    /// shrinkWrap one in a Column) is drawn without a scroll view, so it is
+    /// not pulled, and a list inside it, set in a sized box, is nested, so
+    /// it gets no control either (Flutter's depth 1).
+    func testA5_5AListInAColumnIsNoScrollViewAndAListInsideItGetsNoRefreshControl() throws {
+        for type in ["ListView", "GridView"] {
+            let hosted = try HostedPull([pull(["col"]), node("col", "Column", [:], ["s"])]
+                + scrolling(type, "s", horizontal: false, extra: ["shrinkWrap": true],
+                            holding: scrolling("ListView", "n", horizontal: false)))
+            defer { hosted.close() }
+            let views = hosted.scrollViews
+            XCTAssertEqual(views.count, 1, "\(type): only the list inside")
+            XCTAssertNil(try XCTUnwrap(views.first, "no UIScrollView: \(type)").refreshControl, type)
+        }
+    }
+
     #elseif canImport(AppKit)
     /// A5.5 on macOS: a PullToRefresh draws the scroll view inside it (the
     /// system has no pull to refresh on a scroll view).
@@ -178,14 +194,16 @@ final class RefreshTests: XCTestCase {
     }
 
     /// Scroll kind `type` as node `id` along `horizontal` (else vertical,
-    /// a PageView not snapping) over six boxes of 100 by 100 named from
-    /// `id`, longer than the 100-point window; the first box holds the
-    /// first node of `inner` when given.
-    func scrolling(_ type: String, _ id: String, horizontal: Bool, holding inner: [JSONValue] = []) -> [JSONValue] {
+    /// a PageView not snapping), with `extra` props, over six boxes of 100
+    /// by 100 named from `id`, longer than the 100-point window; the first
+    /// box holds the first node of `inner` when given.
+    func scrolling(_ type: String, _ id: String, horizontal: Bool, extra: [String: JSONValue] = [:],
+                   holding inner: [JSONValue] = []) -> [JSONValue] {
         var props: [String: JSONValue] = horizontal ? ["scrollDirection": "horizontal"] : [:]
         if type == "PageView" {
             props = ["pageSnapping": false, "scrollDirection": horizontal ? "horizontal" : "vertical"]
         }
+        props.merge(extra) { $1 }
         let boxes = (0..<6).map { "\(id)-\($0)" }
         let innerRoot: [String] = inner.first.flatMap { $0.objectValue?["id"]?.stringValue }.map { [$0] } ?? []
         let items = boxes.enumerated().map { index, box in

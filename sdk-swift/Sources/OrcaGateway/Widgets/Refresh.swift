@@ -48,8 +48,11 @@ extension EnvironmentValues {
 /// it, so they are not read; the pull needed is the system's own (Flutter's
 /// is a sixth of the view's height). A snapping PageView is drawn without a
 /// scroll view, so it is not pulled (Flutter refreshes a vertical one at its
-/// first page). macOS has no pull to refresh on a scroll view: the child is
-/// drawn as is.
+/// first page). Nor is a ListView or GridView with no limit on its scroll
+/// axis (a shrinkWrap one in a Column), drawn as a stack that does not
+/// scroll, as Flutter's, which fits its content and takes no drag
+/// (widgets/scroll_physics.dart:241-250). macOS has no pull to refresh on a
+/// scroll view: the child is drawn as is.
 @MainActor
 struct PullToRefreshView: View {
     let node: ResolvedNode
@@ -68,22 +71,30 @@ struct PullToRefreshView: View {
 struct RefreshOnPull: ViewModifier {
     let node: ResolvedNode
     @Environment(\.orcaRefresh) private var refresh
+    @Environment(\.orcaUnbounded) private var unbounded
 
     func body(content: Content) -> some View {
         let inner = content.environment(\.orcaRefresh, nil)
-        if let refresh, Self.pulled(node) {
+        if let refresh, Self.pulled(node, unbounded: unbounded) {
             inner.refreshable { await refresh() }
         } else {
             inner
         }
     }
 
-    /// Whether the scroll kind `node` is drawn with a vertical scroll view:
-    /// a PageView only when vertical and not snapping.
-    static func pulled(_ node: ResolvedNode) -> Bool {
+    /// Whether the scroll kind `node`, offered no limit on the `unbounded`
+    /// axes, is pulled: a SingleChildScrollView unless horizontal; a
+    /// ListView or GridView unless horizontal or unbounded vertically
+    /// (then drawn as a stack that does not scroll); a PageView only when
+    /// vertical and not snapping. `refreshable` on a view with no scroll
+    /// view of its own would pass on to the first vertical one inside it.
+    static func pulled(_ node: ResolvedNode, unbounded: TightAxes) -> Bool {
         let direction = node["scrollDirection"]?.stringValue
-        guard node.type == "PageView" else { return direction != "horizontal" }
-        return direction == "vertical" && Props.bool(node["pageSnapping"]) == false
+        switch node.type {
+        case "PageView": return direction == "vertical" && Props.bool(node["pageSnapping"]) == false
+        case "ListView", "GridView": return direction != "horizontal" && !unbounded.contains(.vertical)
+        default: return direction != "horizontal"
+        }
     }
 }
 #endif
