@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 4 of 6 · tasks: 7 green, 0 blocked · A4.4 (AbsorbPointer, IgnorePointer) green on both SDKs
-Rebased on main (PR #40, #37 merged); D1's demo page is in, its native check red till G6.
+group 5 of 6 · tasks: 10 green, 0 blocked · A4.5 (InteractiveViewer) green on both SDKs, core + ui
+S-caps (group 6) is in: iOS gets the effects page whole; the iPhone hand check passed all five rows.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided (minor): Kotlin AbsorbPointer lays a hit node over its child instead of consuming
-(D6 amended: ancestors still get taps and drags, as in Flutter); a blocked Kotlin button draws M3's
-look without its clickable (pixel-equal); natives cut ColorFiltered to its box, Flutter does not.
+4 auto-decided (minor), all documented: iOS pinches about a fixed point (SwiftUI gives no live
+one); zoomed in, both natives pan on an up/down drag where Flutter scrolls the page; a zoomed iOS
+text field takes taps past the clip; fling inertia is not ported (as planned).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 5 rest, InteractiveViewer on both SDKs (running). (default: go)
+2. Next: K-caps (running), then suites, the Android hand check, the PR. (default: go)
 
 ## Appendix
 
@@ -181,3 +181,42 @@ s4-colorfiltered-unclipped); GestureDetector behind, ElevatedButton in front in 
 Review: one reviewer, both lenses: rework (multiply caption: clear corners take the colour; zoom caption: drag
 sideways, up/down scrolls the page; one clearBox helper) · pass
 Not done: hand checks after G6.
+
+### Group 5
+Commits: D1 a4c7c33 (recorded under group 4), S-zoom 3d4026d, K-zoom a61ff21 (staged by path); S-caps f2aa9d1 (group
+6) landed before K-zoom closed, its files disjoint. Nothing pushed. Gate 09 group 4 approved under the standing rule.
+
+#### Task S-zoom · Swift InteractiveViewer and ViewerTransform
+Files: `sdk-swift/Sources/OrcaGatewayCore/Render/ViewerTransform.swift` (new) · `.../ViewerTransformTests.swift` (new) ·
+`sdk-swift/Sources/OrcaGateway/Widgets/Viewer.swift` (new) · `.../NodeView.swift` · `.../ViewerTests.swift` (new)
+Cases: A4.5 sw (core + ui) → green: ViewerTransformTests 15, ViewerTests 10 (12 on iOS); `swift test` 287 + 395; iOS
+scheme 348 + 395, 0 warnings, no golden moved. Red first (compile; the dispatch; the clip).
+Changed: ViewerPoint/Size, ViewerTransform, ViewerLimits (ports of _matrixScale, _matrixTranslate, _exceedsBy),
+ViewerGesture (Flutter's gesture typing, focal tracking, reference update); InteractiveViewerView (child at the
+viewer's proposal, scaled about the top-left then offset, clipped, hitFill box), Pinch modifier and ViewerFeed glue.
+Decisions: s4-swift-fixed-focal, s4-swift-uikit-clip-hits, s4-zoomed-drag-in-scroll; a pinch restarts the gesture
+(Flutter's _reconfigure); the drag attaches only while panEnabled and zoomed in.
+Review: fit pass (every core number re-derived) · quality pass · doc rework (two known differences in the code) · pass
+Not done: fling inertia (planned). Hand check done (below).
+
+#### Task K-zoom · Kotlin InteractiveViewer and ViewerTransform
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/render/ViewerTransform.kt` (new) · `.../ViewerTransformTest.kt`
+(new) · `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Viewer.kt` (new) · `.../ViewerTest.kt` (new);
+approved outside the row: Touch.kt KDoc (the viewer reads LocalPointerBlocked).
+Cases: A4.5 kt (core + ui) → green: ViewerTransformTest 15 (Swift's names and numbers), ViewerTest 16; `./gradlew
+build` core 396, sdk 436, lint clean, no golden moved. Red first (compile; then each rework case for its reason).
+Changed: the core (Swift's twin); InteractiveViewerWidget (child at the viewer's constraints, graphicsLayer with
+TransformOrigin(0,0), clipToBounds, no pointer loop under LocalPointerBlocked); a pointer loop consuming only a pinch
+or a zoomed-in drag (a parent scroll scrolls at rest, taps reach children, a second finger landing on a child
+restarts the pinch); the transform saved across recreation; limits read through rememberUpdatedState.
+Decisions: s4-zoomed-drag-in-scroll; gesture start at the slop-crossing event's previous centroid
+(detectTransformGestures; Flutter starts at its current focal point); restart on a finger landing or lifting.
+Review: fit pass · quality rework (multi-finger pinch over a child; zoomed-in assert; rememberSaveable; KDoc) · pass
+Not done: fling inertia (planned).
+
+### Hand check, iPhone (q3), after S-caps
+On page `effects` (iPhone 16 Pro simulator, server 8131): A4.1 Opacity and RotatedBox (40 x 120 pt), A4.2 clips and
+DecoratedBox (80 x 40 vs Container 92 x 52), A4.3 multiply (olive centre, corners #64B5F6) and srcIn, BackdropFilter
+and BlurView frosted in their boxes, A4.4 Absorb (front taps move nothing, grey counts behind) and Ignore (true
+counts behind, flipped false counts front), A4.5 (pinch stops at 2.5 and at 1, the pan stops at the grid's edge and
+follows the finger after a 10 pt slop, at scale 1 the page scrolls through the grid): all pass. Android after K-caps.
