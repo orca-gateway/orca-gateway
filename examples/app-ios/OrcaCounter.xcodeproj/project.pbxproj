@@ -7,9 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		27B7727CD16AE043EE457D4E /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 115060BD7B8CD9450070C304 /* FirebaseCore */; };
 		3298DDA8A8DE1744DFB5F5EF /* OrcaVoiceRecorder in Frameworks */ = {isa = PBXBuildFile; productRef = FE5DF8D0B97DA8E15F6E58C4 /* OrcaVoiceRecorder */; };
 		35F924E598070FF95BB5BB23 /* OrcaGateway in Frameworks */ = {isa = PBXBuildFile; productRef = 271ABCF6A7038C97601E5E1D /* OrcaGateway */; };
 		5B3C705F32A3BB0AAD59C337 /* OrcaGoogleMap in Frameworks */ = {isa = PBXBuildFile; productRef = 8CDBDA0A3CE485F67459961A /* OrcaGoogleMap */; };
+		22D016B3021E4787CB9E991A /* OrcaPushNotification in Frameworks */ = {isa = PBXBuildFile; productRef = 699E526ED98F930654976976 /* OrcaPushNotification */; };
 		68E643A5C320047427610BD9 /* OrcaVideoPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 5DD9512B7A3C2B91BB7D8BE2 /* OrcaVideoPlayer */; };
 /* End PBXBuildFile section */
 
@@ -34,6 +36,8 @@
 				3298DDA8A8DE1744DFB5F5EF /* OrcaVoiceRecorder in Frameworks */,
 				68E643A5C320047427610BD9 /* OrcaVideoPlayer in Frameworks */,
 				5B3C705F32A3BB0AAD59C337 /* OrcaGoogleMap in Frameworks */,
+				22D016B3021E4787CB9E991A /* OrcaPushNotification in Frameworks */,
+				27B7727CD16AE043EE457D4E /* FirebaseCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -80,6 +84,8 @@
 				FE5DF8D0B97DA8E15F6E58C4 /* OrcaVoiceRecorder */,
 				5DD9512B7A3C2B91BB7D8BE2 /* OrcaVideoPlayer */,
 				8CDBDA0A3CE485F67459961A /* OrcaGoogleMap */,
+				699E526ED98F930654976976 /* OrcaPushNotification */,
+				115060BD7B8CD9450070C304 /* FirebaseCore */,
 			);
 			productName = OrcaCounter;
 			productReference = 3ABC39466C40CE89310220B0 /* OrcaCounter.app */;
@@ -114,6 +120,8 @@
 				B2699E0D5109622C6FD16D66 /* XCLocalSwiftPackageReference "../../plugins/orca_voice_recorder/ios" */,
 				A9C76B23D8BD7F3E7247B38A /* XCLocalSwiftPackageReference "OrcaVideoPlayer" */,
 				4F2AFA644D7450A61D15F08B /* XCLocalSwiftPackageReference "OrcaGoogleMap" */,
+				4490FFBFEC3C88A25828F261 /* XCLocalSwiftPackageReference "OrcaPushNotification" */,
+				9EEA0869E88D1E8AC80A0D2D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3851F61B14A5A344F29BC837 /* Products */;
@@ -196,6 +204,7 @@
 		27D53094E5D17C4F601BB43E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = OrcaCounter.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -223,6 +232,7 @@
 		E38565DC1109FB0AEA7B8EC7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = OrcaCounter.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -271,6 +281,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		4490FFBFEC3C88A25828F261 /* XCLocalSwiftPackageReference "OrcaPushNotification" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = OrcaPushNotification;
+		};
 		4F2AFA644D7450A61D15F08B /* XCLocalSwiftPackageReference "OrcaGoogleMap" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = OrcaGoogleMap;
@@ -289,7 +303,23 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		9EEA0869E88D1E8AC80A0D2D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.17.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		115060BD7B8CD9450070C304 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9EEA0869E88D1E8AC80A0D2D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
 		271ABCF6A7038C97601E5E1D /* OrcaGateway */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = OrcaGateway;
@@ -297,6 +327,10 @@
 		5DD9512B7A3C2B91BB7D8BE2 /* OrcaVideoPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = OrcaVideoPlayer;
+		};
+		699E526ED98F930654976976 /* OrcaPushNotification */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = OrcaPushNotification;
 		};
 		8CDBDA0A3CE485F67459961A /* OrcaGoogleMap */ = {
 			isa = XCSwiftPackageProductDependency;
