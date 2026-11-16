@@ -1,8 +1,7 @@
 # native-parity-s8 · design in force (plan step 8, written at stage 08; 05-07 skipped)
 
 Repo: /Users/amrebada/workspace/orca-gateway/open-source/.claude/worktrees/native-parity-phase-a-35cc97 (paths below from
-there), branch feat/native-parity-s8 stacked on feat/native-parity-s7 (step 7 is PR #52, not merged yet; rebase when it
-is). Flutter (`sdk/`) is the reference. Facts with every file:line: .pipeline/native-parity-s8/inventory.md
+there), branch feat/native-parity-s8 on main 4a7f389b (step 7 merged as PR #52). Flutter (`sdk/`) is the reference. Facts with every file:line: .pipeline/native-parity-s8/inventory.md
 (abbreviations PB, LB, SB, BH, BB, AE, OP, FW, MUI, SW, SWC, KT, KTC as there). Swift deploys to iOS 16 / macOS 13;
 Kotlin minSdk 24, Compose BOM 2026.05.01 (material3 1.4.0).
 
