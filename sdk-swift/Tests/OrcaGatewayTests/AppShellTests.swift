@@ -6,29 +6,51 @@ import XCTest
 @testable import OrcaGateway
 
 /// The engine for the app-shell tests: `/version` answers a fresh check, or
-/// a forceUpdate one; `/config` opens `initialRoute`, or answers 500; both
-/// take a moment, so a screen shown meanwhile is drawn. A page is `plain`
-/// (one EnvProbe), `scaffold` (a Scaffold whose body is an EnvProbe),
-/// `drawer` (a Scaffold whose body is an EnvProbe and whose drawer slot is a
-/// Drawer holding another), and a 404 for any other name. Every request is
-/// kept.
+/// a forceUpdate one, or fails while `offline`; `/config` opens
+/// `initialRoute`, or answers 500; both take a moment, so a screen shown
+/// meanwhile is drawn. A page is `plain` (one EnvProbe), `scaffold` (a
+/// Scaffold whose body is an EnvProbe), `drawer` (a Scaffold whose body is an
+/// EnvProbe and whose drawer slot is a Drawer holding another), and a 404 for
+/// any other name. Every request is kept, and told to `seen` as it goes out.
 final class ShellStub: HTTPTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var _requests: [HTTPRequest] = []
+    private var _offline: Bool
     private let forceUpdate: Bool
     private let configFails: Bool
     private let initialRoute: String
+    private let seen: Seen?
 
-    init(forceUpdate: Bool = false, configFails: Bool = false, initialRoute: String = "/plain") {
+    init(forceUpdate: Bool = false, configFails: Bool = false, offline: Bool = false,
+         initialRoute: String = "/plain", seen: Seen? = nil) {
         self.forceUpdate = forceUpdate
         self.configFails = configFails
+        _offline = offline
         self.initialRoute = initialRoute
+        self.seen = seen
     }
 
     var requests: [HTTPRequest] {
         lock.lock()
         defer { lock.unlock() }
         return _requests
+    }
+
+    /// The requests' last path components, in order.
+    var asked: [String] { requests.map { $0.url.lastPathComponent } }
+
+    /// No network: `/version` fails, after its moment.
+    var offline: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _offline
+        }
+        set {
+            lock.lock()
+            _offline = newValue
+            lock.unlock()
+        }
     }
 
     var pageRequests: [HTTPRequest] { requests.filter { $0.url.path.contains("/page/") } }
@@ -46,9 +68,11 @@ final class ShellStub: HTTPTransport, @unchecked Sendable {
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         record(request)
+        if let seen { await seen.asked(request.url.lastPathComponent) }
         let path = request.url.path
         if path.hasSuffix("/version") {
             try await Task.sleep(nanoseconds: 150_000_000)
+            if offline { throw URLError(.notConnectedToInternet) }
             let answer: JSONValue = ["flows": [:], "forceUpdate": .bool(forceUpdate)]
             return HTTPResponse(status: 200, body: try answer.encoded())
         }
@@ -100,8 +124,9 @@ final class ShellStub: HTTPTransport, @unchecked Sendable {
 }
 
 /// What the host's views and the pages' probes saw: each one's name as it
-/// appeared, with the colour scheme and locale it read, and every error the
-/// host's error view was given.
+/// appeared, with the colour scheme and locale it read, the ones on screen
+/// as each request went out, and every error the host's error view was
+/// given.
 @MainActor
 final class Seen {
     struct Sight {
@@ -112,6 +137,10 @@ final class Seen {
 
     var sights: [Sight] = []
     var errors: [Error] = []
+    /// The names on screen now: appeared and not gone yet.
+    private(set) var onScreen: [String] = []
+    /// `onScreen` as each request went out, by its last path component.
+    private(set) var onScreenAt: [String: [String]] = [:]
 
     var names: [String] { sights.map(\.name) }
 
@@ -119,11 +148,21 @@ final class Seen {
 
     func saw(_ name: String, _ scheme: ColorScheme, _ locale: Locale) {
         sights.append(Sight(name: name, scheme: scheme, locale: locale.identifier))
+        onScreen.append(name)
+    }
+
+    func left(_ name: String) {
+        if let index = onScreen.firstIndex(of: name) { onScreen.remove(at: index) }
+    }
+
+    func asked(_ request: String) {
+        onScreenAt[request] = onScreen
     }
 }
 
 /// A host view, or a page's EnvProbe: its name, drawn; on appearing it
-/// tells `seen` the colour scheme and locale it reads.
+/// tells `seen` the colour scheme and locale it reads, and on going that it
+/// left.
 struct HostScreen: View {
     let name: String
     let seen: Seen
@@ -131,7 +170,9 @@ struct HostScreen: View {
     @Environment(\.locale) private var locale
 
     var body: some View {
-        Text(verbatim: name).onAppear { seen.saw(name, scheme, locale) }
+        Text(verbatim: name)
+            .onAppear { seen.saw(name, scheme, locale) }
+            .onDisappear { seen.left(name) }
     }
 }
 
@@ -141,7 +182,11 @@ struct HostScreen: View {
 /// sdk/lib/src/widgets/orca_app.dart, at boot only), and its colour scheme and
 /// locale (Flutter `OrcaMaterialAppConfig.themeMode` and `locale`), which
 /// reach everything the app draws but a Scaffold, kept light as Flutter's
-/// builders wrap it in `Theme(data: ThemeData())`. No header changes.
+/// builders wrap it in `Theme(data: ThemeData())`. No header changes. C14.2:
+/// the config boot with `enableOffline` runs `preload` under one splash, as
+/// Flutter's `_initializeWithOffline`, and shows its forceUpdate and its
+/// error through the same views. Each such boot keeps its cache in memory,
+/// so a run never finds the config an earlier one saved.
 @MainActor
 final class AppShellTests: XCTestCase {
     let spinner = ProgressView<EmptyView, EmptyView>.self
@@ -168,6 +213,22 @@ final class AppShellTests: XCTestCase {
 
     func configBoot(_ stub: ShellStub) -> OrcaAppBoot {
         OrcaAppBoot(client: stub.client(), path: nil, system: SystemRecorder().actions(), onRouteChanged: nil)
+    }
+
+    /// An empty offline cache, in memory.
+    func memoryCache() -> StaticFlowManager {
+        StaticFlowManager(store: MemoryKeyValueStore())
+    }
+
+    /// OrcaApp's config boot with `enableOffline` over `stub`.
+    func offlineBoot(_ stub: ShellStub) -> OrcaAppBoot {
+        OrcaAppBoot(client: stub.client(), path: nil, system: SystemRecorder().actions(), onRouteChanged: nil,
+                    plugins: nil, enableOffline: true, staticFlowManager: memoryCache())
+    }
+
+    func isReady(_ boot: OrcaAppBoot) -> Bool {
+        if case .ready = boot.phase { return true }
+        return false
     }
 
     func gate(offline: Bool, failure: String? = nil) -> OrcaBootModel {
@@ -209,7 +270,7 @@ final class AppShellTests: XCTestCase {
         let views = BootViews(loading: screen("loading", seen), splash: screen("splash", seen))
         let checking = gate(offline: true)
         XCTAssertEqual(checking.phase, .checking)
-        let stub = ShellStub()
+        let stub = ShellStub(seen: seen)
         let gateView = OrcaBootView(boot: checking, client: stub.client(), views: views) { Text("page") }
         XCTAssertEqual(ViewTree.first(HostScreen.self, in: gateView)?.name, "splash")
         XCTAssertNil(ViewTree.first(spinner, in: gateView))
@@ -223,12 +284,16 @@ final class AppShellTests: XCTestCase {
         XCTAssertNotNil(ViewTree.first(spinner, in: plainGate))
         XCTAssertNotNil(ViewTree.first(spinner, in: AppBootContent(boot: configBoot(stub))))
 
-        // Through OrcaApp: the version check, then /config, then the page.
-        let app = OrcaApp(client: stub.client(), path: nil, enableOffline: true, widgets: probes(seen),
+        // Through OrcaApp: preload's version check, then /config, under one
+        // splash on screen from the first request to the page.
+        let app = OrcaApp(client: stub.client(), path: nil, enableOffline: true,
+                          staticFlowManager: memoryCache(), widgets: probes(seen),
                           loadingView: screen("loading", seen), splashView: screen("splash", seen))
         try await host(app) { seen.names.contains("plain") }
-        XCTAssertEqual(seen.names, ["splash", "splash", "plain"])
-        XCTAssertEqual(stub.requests.map { $0.url.lastPathComponent }, ["version", "config", "plain"])
+        XCTAssertEqual(seen.names, ["splash", "plain"])
+        XCTAssertEqual(seen.onScreenAt["version"], ["splash"])
+        XCTAssertEqual(seen.onScreenAt["config"], ["splash"])
+        XCTAssertEqual(stub.asked, ["version", "config", "plain"])
     }
 
     func testC18_1_WithOnlyALoadingViewThatViewShowsInBothPlaces() async throws {
@@ -350,11 +415,12 @@ final class AppShellTests: XCTestCase {
 
     func testC18_3_WithColorSchemeDarkTheAppReadsDarkAndAScaffoldPageReadsLight() async throws {
         let seen = Seen()
-        let app = OrcaApp(client: ShellStub().client(), path: nil, enableOffline: true, widgets: probes(seen),
+        let app = OrcaApp(client: ShellStub().client(), path: nil, enableOffline: true,
+                          staticFlowManager: memoryCache(), widgets: probes(seen),
                           splashView: screen("splash", seen), colorScheme: .dark)
         try await host(app.environment(\.colorScheme, .light)) { seen.names.contains("plain") }
-        XCTAssertEqual(seen.names, ["splash", "splash", "plain"])
-        XCTAssertEqual(seen.sights.map(\.scheme), [.dark, .dark, .dark], "the boot screens and the page read dark")
+        XCTAssertEqual(seen.names, ["splash", "plain"])
+        XCTAssertEqual(seen.sights.map(\.scheme), [.dark, .dark], "the boot screen and the page read dark")
 
         let scaffold = Seen()
         let router = OrcaRouter(client: ShellStub().client(), path: "scaffold", system: SystemRecorder().actions())
@@ -466,10 +532,11 @@ final class AppShellTests: XCTestCase {
         let seen = Seen()
         let stub = ShellStub()
         let app = OrcaApp(client: stub.client(device: DeviceInfo()), path: nil, enableOffline: true,
-                          widgets: probes(seen), splashView: screen("splash", seen),
-                          locale: Locale(identifier: chosen))
+                          staticFlowManager: memoryCache(), widgets: probes(seen),
+                          splashView: screen("splash", seen), locale: Locale(identifier: chosen))
         try await host(app) { seen.names.contains("plain") }
-        XCTAssertEqual(seen.sights.map(\.locale), [chosen, chosen, chosen], "the boot screens and the page")
+        XCTAssertEqual(seen.names, ["splash", "plain"])
+        XCTAssertEqual(seen.sights.map(\.locale), [chosen, chosen], "the boot screen and the page")
         XCTAssertEqual(stub.pageRequests.count, 1)
         XCTAssertEqual(stub.pageRequests.first?.headers["x-orca-locale"], device, "the page asks with the device's")
         XCTAssertFalse(stub.requests.contains { $0.headers["x-orca-locale"] == chosen }, "no request sends it")
@@ -483,6 +550,73 @@ final class AppShellTests: XCTestCase {
         }
         XCTAssertEqual(routed.first("plain")?.locale, chosen)
         XCTAssertEqual(routerStub.pageRequests.first?.headers["x-orca-locale"], device)
+    }
+
+    // MARK: C14.2
+
+    func testC14_2_PreloadsForceUpdateShowsTheHostsForceUpdateViewAfterTheSplashElseTheSDKsLine() async throws {
+        let seen = Seen()
+        let stub = ShellStub(forceUpdate: true, seen: seen)
+        let app = OrcaApp(client: stub.client(), path: nil, enableOffline: true, staticFlowManager: memoryCache(),
+                          widgets: probes(seen), splashView: screen("splash", seen),
+                          forceUpdateView: screen("forceUpdate", seen))
+        try await host(app, settle: 0.2) { seen.names.contains("forceUpdate") }
+        XCTAssertEqual(seen.names, ["splash", "forceUpdate"])
+        XCTAssertEqual(seen.onScreenAt["version"], ["splash"])
+        XCTAssertEqual(stub.asked, ["version"], "no /config, no page")
+
+        let boot = offlineBoot(ShellStub(forceUpdate: true))
+        await boot.startIfNeeded()
+        XCTAssertTrue(boot.updateRequired)
+        XCTAssertNotNil(ViewTree.first(ForceUpdateView.self, in: AppBootContent(boot: boot)), "the default")
+        let hosted = AppBootContent(boot: boot, views: BootViews(forceUpdate: screen("forceUpdate", seen)))
+        XCTAssertEqual(ViewTree.first(HostScreen.self, in: hosted)?.name, "forceUpdate")
+        XCTAssertNil(ViewTree.first(ForceUpdateView.self, in: hosted))
+    }
+
+    func testC14_2_OfflineWithNothingSavedTheBootErrorIsSomethingWentWrongAndTryAgainRunsPreloadAgain()
+        async throws
+    {
+        let stub = ShellStub(offline: true)
+        let boot = offlineBoot(stub)
+        await boot.startIfNeeded()
+        XCTAssertEqual(boot.error as? OfflineBootError, OfflineBootError())
+
+        // Flutter's buildOrcaError classes it as any Exception, and shows no
+        // other text for it.
+        let sdkScreen = try XCTUnwrap(ViewTree.first(OrcaErrorView.self, in: AppBootContent(boot: boot)))
+        XCTAssertEqual(sdkScreen.info.kind, .unknown)
+        let drawn = ViewTree.strings(in: sdkScreen)
+        for shown in ["Something Went Wrong", "An unexpected error occurred. Please try again.", "Try again"] {
+            XCTAssertTrue(drawn.contains(shown), "missing \(shown): \(drawn)")
+        }
+        XCTAssertFalse(drawn.contains("No network and no cached config available"))
+
+        stub.offline = false
+        try XCTUnwrap(sdkScreen.retry)()
+        var waited = 0
+        while !isReady(boot), waited < 200 {
+            waited += 1
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(isReady(boot), "Try again did not boot: \(boot.phase)")
+        XCTAssertEqual(stub.asked, ["version", "version", "config"], "Try again runs preload again")
+
+        // A host error view is given the error and drawn alone, after the
+        // splash, with no retry.
+        let seen = Seen()
+        let appStub = ShellStub(offline: true, seen: seen)
+        let app = OrcaApp(client: appStub.client(), path: nil, enableOffline: true, staticFlowManager: memoryCache(),
+                          widgets: probes(seen), splashView: screen("splash", seen), errorView: errorScreen(seen))
+        try await host(app) { seen.names.contains("error") }
+        XCTAssertEqual(seen.names, ["splash", "error"])
+        XCTAssertEqual(seen.onScreenAt["version"], ["splash"])
+        XCTAssertEqual(seen.errors.first as? OfflineBootError, OfflineBootError())
+        XCTAssertEqual(appStub.asked, ["version"])
+        let failed = offlineBoot(ShellStub(offline: true))
+        await failed.startIfNeeded()
+        XCTAssertNil(ViewTree.first(OrcaErrorView.self, in: AppBootContent(boot: failed, views: BootViews(
+            error: errorScreen(seen)))), "only the host's view, no retry")
     }
 
     // MARK: helpers
