@@ -25,9 +25,9 @@ final class ActionFixtureTests: XCTestCase {
         func append(_ effect: JSONValue) { list.append(effect) }
     }
 
-    @MainActor func testAllThirtyTwoActionFixturesPass() async throws {
+    @MainActor func testAllThirtyThreeActionFixturesPass() async throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 32)
+        XCTAssertEqual(files.count, 33)
         for (name, fx) in files { try await run(name, fx) }
     }
 
@@ -66,6 +66,18 @@ final class ActionFixtureTests: XCTestCase {
     /// emits no effect, as Flutter's executor awaits a null onRefetchPage.
     @MainActor func testA5_6_RefetchPageEmitsNothing_fixture48() async throws {
         try await run(fixture: "48_refetchPage.json")
+    }
+
+    /// A8.1: fixture 52, openDialog (heightFactor 0.4) then closeDialog with
+    /// no dialog layer wired: the state stays and no effect goes out, as
+    /// Flutter's executor calls a null onOpenDialog and has no context to pop.
+    @MainActor func testA8_1_OpenAndCloseDialogLeaveTheStateAndEmitNothing_fixture52() async throws {
+        let file = "52_open_close_dialog.json"
+        let fx = try Fixtures.json("schema/fixtures/actions/\(file)")
+        XCTAssertEqual(fx["actions"].arrayValue?.compactMap { $0["type"].stringValue }, ["openDialog", "closeDialog"])
+        XCTAssertEqual(fx["expected"]["state"], fx["state"], "no state change")
+        XCTAssertEqual(fx["expected"]["effects"], [], "no effect")
+        try await run(file, fx)
     }
 
     @MainActor func testC14_6_PersistStateSavesASnapshotAndMovesAKeyBetweenStorages_fixture49() async throws {
@@ -131,10 +143,11 @@ final class ActionFixtureTests: XCTestCase {
     func testImplementsLooksInsideOnceAndAlways() {
         XCTAssertTrue(ActionExecutor.implements(.once(.init(action: .goBack))))
         XCTAssertTrue(ActionExecutor.implements(.always(.init(action: .debugLog(.init())))))
-        XCTAssertFalse(ActionExecutor.implements(.once(.init(action: .closeDialog))))
-        // Was refetchPage until native parity step 5 made it a known kind;
-        // closeDialog, as Kotlin's twin (ActionFixtureTest.kt).
-        XCTAssertFalse(ActionExecutor.implements(.always(.init(action: .once(.init(action: .closeDialog))))))
+        XCTAssertFalse(ActionExecutor.implements(.once(.init(action: Self.unhandled))))
+        // Was refetchPage until native parity step 5, then closeDialog until
+        // step 8 made both known kinds; a `custom:` kind no executor lists,
+        // as Kotlin's twin (ActionFixtureTest.kt).
+        XCTAssertFalse(ActionExecutor.implements(.always(.init(action: .once(.init(action: Self.unhandled))))))
     }
 
     // MARK: baseline rules
@@ -150,10 +163,10 @@ final class ActionFixtureTests: XCTestCase {
         var seen: [ActionEffect] = []
         executor.onEffect = { seen.append($0) }
         try await executor.execute(.refetchPage)
-        try await executor.execute(.closeDialog)
+        try await executor.execute(Self.unhandled)
         XCTAssertEqual(store.state, state)
         XCTAssertEqual(seen, [])
-        XCTAssertFalse(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .closeDialog]))))
+        XCTAssertFalse(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, Self.unhandled]))))
         XCTAssertTrue(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .setState(.init(key: "a", value: 1))]))))
     }
 
@@ -253,6 +266,9 @@ final class ActionFixtureTests: XCTestCase {
 
     private static let buy = ActionSource(widgetId: "buy", trigger: "onTap")
     private static let other = ActionSource(widgetId: "cancel", trigger: "onTap")
+    /// A kind no executor implements: a `custom:` action with no handler
+    /// registered does nothing (fixture 46).
+    private static let unhandled = Action.custom(["type": "custom:noSuchKind"])
 
     /// `page[key] += 1`, as the fixtures write it.
     private static func inc(_ key: String) -> Action {

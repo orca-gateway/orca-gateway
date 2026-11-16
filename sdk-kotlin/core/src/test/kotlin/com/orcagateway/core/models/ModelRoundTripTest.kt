@@ -29,7 +29,7 @@ class ModelRoundTripTest {
     @Test
     fun allRenderFixturesRoundTrip() {
         val files = Fixtures.files("render")
-        assertEquals(56, files.size, "render fixtures 01-46, 60-69")
+        assertEquals(57, files.size, "render fixtures 01-47, 60-69")
         var nodes = 0
         for ((name, fixture) in files) {
             val expected = fixture["expected"]
@@ -61,6 +61,22 @@ class ModelRoundTripTest {
         assertTrue(types.containsAll(listOf("BottomNavigationBar", "BottomNavItem", "Drawer", "Scaffold")), "$types")
     }
 
+    /**
+     * A8.1-A8.5: render fixture 47 (a keyed Dialog, a BottomSheet in a Scaffold slot, a Tooltip, a SnackBar,
+     * openDialog and closeDialog) decodes into nodes and encodes back equal.
+     */
+    @Test
+    fun a8_1to5_overlayWidgetsAndDialogKindsRoundTrip() {
+        val expected = Fixtures.json("schema/fixtures/render/47_overlay_widgets.json")["expected"]
+        val nodes = decodeModel<List<ComponentNode>>(expected)
+        assertJsonEqual(jsonOf(nodes), expected, "47")
+        val types = nodes.map { it.type }.toSet()
+        assertTrue(types.containsAll(listOf("Scaffold", "Dialog", "BottomSheet", "Tooltip", "SnackBar")), "$types")
+        val kinds = HashSet<String>()
+        for (node in nodes) node.actions.orEmpty().values.forEach { collectKinds(it, kinds) }
+        assertTrue(kinds.containsAll(listOf("openDialog", "closeDialog")), "$kinds")
+    }
+
     @Test
     fun renderFixtureNodesDecodeTheirFields() {
         val fixture = Fixtures.json("schema/fixtures/render/06_nested_state.json")
@@ -76,7 +92,7 @@ class ModelRoundTripTest {
     @Test
     fun allActionFixturesRoundTrip() {
         val files = Fixtures.files("actions")
-        assertEquals(32, files.size, "action fixtures 01-19, 30-35 and 45-51")
+        assertEquals(33, files.size, "action fixtures 01-19, 30-35 and 45-52")
         val kinds = HashSet<String>()
         for ((name, fixture) in files) {
             // Plugin action names a fixture registers handlers for (45-47).
