@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 4 of 6 · tasks: 2 green, 0 blocked · cases: C19.1-C19.4, C19.6, C19.7 green · suites green
-T10 Swift: a setState's event carries its trace and the widgets watching its key; debugLog pinned.
-One rework: widgets added by a server action were sorted by id; now Flutter's arrival order.
-T11 Kotlin: the same; passed both reviews first time.
+group 5 of 6 · tasks: 2 green, 0 blocked · cases: C19.1-C19.7 green (C19.5: unit) · suites green
+T12 Swift: Flutter's five debug options on the host config, the logTimings line, the timing chip.
+T13 Kotlin: the same; both passed both reviews first time.
+Known difference: a page a host draws itself (not via OrcaApp): "-ms" on iOS, no chip on Android.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided: a page-nodes hook on the executor, the wire type in affectedWidgets, one resolve
+4 auto-decided: chip drawn at the loader (Kotlin) or page view (Swift), INFO log line, tap seam
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 5 (the host's debug options, logTimings, the timing overlay). (default: go)
+2. Next: group 6 (ORCA_OVERLAY and ORCA_BODIES demo switches, the READMEs). (default: go)
 
 ## Appendix
 
@@ -137,7 +137,32 @@ Decisions: the hook a plain var like onEffect/onMutation (set once at init, one 
 type, not the degraded one (Flutter's node.type)
 Review fit: pass · Review quality: pass
 
+### Group 5
+#### T12 · Swift overlay, debug config, logTimings (7b85c9d)
+Files: sdk-swift/Sources/OrcaGateway/Debug/DebugOverlay.swift (new) · OrcaApp.swift · Debug/DevToolsClient.swift ·
+Tests/OrcaGatewayTests/DebugOverlayTests.swift (new)
+Cases: C19.5/S unit part → green (SwiftUI 268 = 261 + 7; core 398; red first: compile)
+Changed: OrcaDebugConfig gains showOverlay, logTimings, captureStateChanges, captureNetworkRequests, includeBodies
+(Flutter's defaults, after the old fields); start copies the four core ones and the overlay switch, stop resets both;
+the loader keeps loadTimeMs (= renderComplete) and logs "[OrcaDebug] Timing: <pageId> - <path>" with logTimings;
+OrcaPageView draws Flutter's chip bottom-right (under the toast) only while DevTools and showOverlay are on.
+Decisions: the tap tested through DebugOverlayModel.tap() · the chip lives in OrcaPageView (a host-drawn page shows
+"-ms") · the line through os.Logger category "OrcaDebug", tested via OSLogStore as A2.6
+Review fit: pass (look, rounding, touch pass-through and z-order checked) · Review quality: pass
+#### T13 · Kotlin overlay, debug config, logTimings (d27b49e)
+Files: sdk-kotlin/sdk/.../debug/DebugOverlay.kt (new) · OrcaApp.kt · debug/DevToolsClient.kt ·
+sdk/src/test/.../debug/DebugOverlayTest.kt (new)
+Cases: C19.5/K unit part → green (sdk 385 = 376 + 9; core 399; red first: compile)
+Changed: the five fields after appVersion; start/stop as T12; Phase.Loaded carries renderCompleteMs; the first-frame
+hook sends the timing and, with logTimings, Log.i under the SDK's tag; RouteBody draws page and chip in a Box.
+Decisions: drawn at the loader (stack, pushed and tab pages; OrcaPageView is the renderer below, as Flutter draws only
+from OrcaPage) · INFO level (Flutter's debugPrint lands as I/flutter) · the loader always measures, so a chip shown
+after DevTools starts late shows a real load where Flutter shows "-ms" (harmless)
+Review fit: pass · Review quality: pass
+
 ### Test run
+Group 5 (..7b85c9d): `swift build --build-tests` 0 warnings · `swift test` core 398, SwiftUI 268, 0 failures ·
+`./gradlew build` core 399, sdk 385, 0 failures · sdk `flutter test` 357 · Files changed: the tasks' only.
 Group 4 (..6977b2a): `swift build --build-tests` 0 warnings · `swift test` core 398, SwiftUI 261, 0 failures ·
 `./gradlew build` core 399, sdk 376, 0 failures · sdk `flutter test` 357 · Files changed: the tasks' only.
 Group 3 (..a2891fe): `swift build --build-tests` 0 warnings · `swift test` core 390, SwiftUI 258, 0 failures ·
@@ -157,4 +182,6 @@ none
 none
 
 ### For ship (stage 10) to know
-nothing yet
+- Hand checks: the chip on both devices (look, tap, touches pass through), DevTools showing a traced rebuild, a
+  traced setState and bodies from both natives.
+- PR body: a page a host draws itself outside OrcaApp shows "-ms" on iOS and no chip on Android (both fit D6).

@@ -4,7 +4,7 @@
   "idea": "Native parity step 19 (Phase C): DevTools and debug parity on both sdk-swift and sdk-kotlin, matching the Flutter SDK: an on-screen debug overlay; prop traces and transform traces from the resolvers (resolveWithTrace in both cores); affected widgets on action events; request and response bodies on network events; capture toggles; a debugLog sink. Plan: /Users/amrebada/.claude/plans/native-parity/plan.md (step 19); test cases C19.1-C19.7 in /Users/amrebada/.claude/plans/native-parity/phase-c-tests.md",
   "kind": "feature",
   "created_at": "2026-11-16T03:33:10Z",
-  "updated_at": "2026-11-16T05:10:09Z",
+  "updated_at": "2026-11-16T05:27:33Z",
   "active_session": "7317184b-fcd8-4ef3-bc8c-3dc085f8486c",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "draft",
-      "rounds": 5,
-      "card": "cards/09-r4.md"
+      "rounds": 6,
+      "card": "cards/09-r5.md"
     },
     "10": {
       "status": "pending"
