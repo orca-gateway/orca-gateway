@@ -213,12 +213,17 @@ struct GestureNodeView: View {
 /// Material, its onTap, onLongPress and onDoubleTap always set, even for a
 /// node without those actions, and no `enabled`. So it always takes the
 /// touch over its whole box (HitTestBehavior.opaque; a GestureDetector
-/// around it gets none). The double tap is chained ahead of the tap
-/// (`Taps`), so a single tap fires `onTap` once a second tap can no longer
-/// come (SwiftUI's wait; Flutter's kDoubleTapTimeout is 300 ms), a second
-/// tap fires `onDoubleTap` instead, and a press held for Flutter's 500 ms,
-/// moving at most its 18 pt touch slop (`pressGesture`), fires
-/// `onLongPress` and no tap.
+/// around it gets none). The three are one gesture (`gestures`), as
+/// Flutter's gesture arena decides between its recognizers: a press held
+/// for Flutter's 500 ms, moving at most its 18 pt touch slop, fires
+/// `onLongPress` and never a tap; a press lifted sooner is a tap, and a
+/// single tap fires `onTap` once a second tap can no longer come (SwiftUI's
+/// wait; Flutter's kDoubleTapTimeout is 300 ms), a second tap firing
+/// `onDoubleTap` instead. The gesture holds no drag (what takes a
+/// ScrollView's pan from it on iOS 18), so a swipe that starts on the
+/// InkWell is left to a ScrollView around it, as Flutter's scrollable wins
+/// its arena once the touch moves past the slop: the long press needs
+/// 500 ms held still and the taps end only on the lift.
 ///
 /// The ink lies under the child, as Flutter paints it on the Material (an
 /// opaque child hides it), clipped to `borderRadius` (a number, a circular
@@ -228,10 +233,10 @@ struct GestureNodeView: View {
 /// a long press competing, fires at kPressTimeout, 100 ms after the touch
 /// (tap.dart:212, :343), and keeps it on after the lift until the tap fires
 /// once the 300 ms double-tap window ends, or until the long press cancels
-/// it. iOS shows it while the finger is down (D6): from the touch until the
-/// finger lifts, moves past the slop, or the long press fires, as Kotlin
-/// documents for its ripple. No ripple on iOS (D6): `splashColor` is not
-/// read.
+/// it. iOS shows it while the finger is down (D6), as the long press's own
+/// pressing state: from the touch until the finger lifts, moves past the
+/// slop, or the long press fires, as Kotlin documents for its ripple. No
+/// ripple on iOS (D6): `splashColor` is not read.
 @MainActor
 struct InkWellNodeView: View {
     let node: ResolvedNode
@@ -242,16 +247,24 @@ struct InkWellNodeView: View {
     let doubleTap: PressGestures.Fire?
     /// What a long press fires; always attached, so never nil.
     let longPress: PressGestures.Fire?
-    @State private var pressed = false
+    /// The long press's pressing state, the highlight's: reset by SwiftUI
+    /// once the long press ends or fails.
+    @GestureState private var pressed = false
 
     /// Flutter's pressed highlight fade, 200 ms (ink_well.dart:1036).
     static let highlightFade: Double = 0.2
     /// ThemeData()'s light `highlightColor` (theme_data.dart:595).
     static let themeHighlight = Props.color(hex: "#BCBCBC66")
-    /// The long press the InkWell attaches: Flutter's, held 500 ms and
-    /// moving at most kTouchSlop, 18 pt (`PressGestures.longPressGesture`).
-    static var pressGesture: LongPressGesture {
+
+    /// The InkWell's three triggers as one gesture, each part able to succeed
+    /// only once the ones before it have failed: first Flutter's long press
+    /// (`PressGestures.longPressGesture`, 500 ms within 18 pt), its pressing
+    /// state written to `pressing`; then a double tap; then a single tap.
+    static func gestures(pressing: GestureState<Bool>)
+        -> ExclusiveGesture<GestureStateGesture<LongPressGesture, Bool>, ExclusiveGesture<TapGesture, TapGesture>> {
         PressGestures.longPressGesture
+            .updating(pressing) { current, state, _ in state = current }
+            .exclusively(before: TapGesture(count: 2).exclusively(before: TapGesture()))
     }
 
     init(node: ResolvedNode, model: OrcaPageModel) {
@@ -265,14 +278,13 @@ struct InkWellNodeView: View {
 
     var body: some View {
         face(pressed: pressed)
-            .modifier(Taps(single: tap.map { fire in { _ = fire() } },
-                           double: doubleTap.map { fire in { _ = fire() } }))
-            // One gesture for the long press and the press: exclusive, so a
-            // hold is a long press and never also a tap (as PressGestures).
-            .onLongPressGesture(minimumDuration: Self.pressGesture.minimumDuration,
-                                maximumDistance: Self.pressGesture.maximumDistance,
-                                perform: { _ = longPress?() },
-                                onPressingChanged: { pressed = $0 })
+            .gesture(Self.gestures(pressing: $pressed).onEnded { ended in
+                switch ended {
+                case .first: _ = longPress?()
+                case .second(.first): _ = doubleTap?()
+                case .second(.second): _ = tap?()
+                }
+            })
             .accessibilityAddTraits(.isButton)
     }
 

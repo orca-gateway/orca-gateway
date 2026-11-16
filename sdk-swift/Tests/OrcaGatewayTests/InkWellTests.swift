@@ -27,10 +27,12 @@ final class InkWellTests: XCTestCase {
 
     /// A6.6: a tap fires onTap once. onDoubleTap is always set (Flutter's
     /// builder sets all three), so a node with only onTap still has its
-    /// double tap and long press attached, firing nothing: the double tap is
-    /// chained ahead of the tap, so SwiftUI holds a single tap until a second
-    /// one can no longer come (Flutter waits its 300 ms kDoubleTapTimeout);
-    /// how long SwiftUI waits is a hand check.
+    /// double tap and long press attached, firing nothing: the double tap
+    /// comes before the tap in the InkWell's gesture
+    /// (`testA6_6TheThreeTriggersAreOneGestureTheLongPressFirst`), so SwiftUI
+    /// holds a single tap until a second one can no longer come (Flutter
+    /// waits its 300 ms kDoubleTapTimeout); how long SwiftUI waits is a hand
+    /// check.
     func testA6_6ATapFiresOnTapOnlyOnceTheDoubleTapTimeoutHasPassed() async throws {
         let model = try page([inkWell("w", "c", on: ["onTap"]), sizedBox("c", 100, 50)])
         let well = try view(model, "w")
@@ -54,22 +56,50 @@ final class InkWellTests: XCTestCase {
     }
 
     /// A6.6: a long press fires onLongPress and no tap. The InkWell's long
-    /// press (`InkWellNodeView.pressGesture`, read by the gesture it attaches)
-    /// waits Flutter's kLongPressTimeout, 500 ms (gestures/constants.dart:29),
-    /// and allows Flutter's kTouchSlop, 18 (:65), not SwiftUI's default 10.
-    /// That SwiftUI then delivers a hold as the long press alone, and gives
-    /// it up past 18 pt, needs a touch, which a package test cannot inject:
-    /// a hand check.
+    /// press (the first of `InkWellNodeView.gestures`, the gesture it
+    /// attaches) waits Flutter's kLongPressTimeout, 500 ms
+    /// (gestures/constants.dart:29), and allows Flutter's kTouchSlop, 18
+    /// (:65), not SwiftUI's default 10. That SwiftUI then delivers a hold as
+    /// the long press alone, and gives it up past 18 pt, needs a touch,
+    /// which a package test cannot inject: a hand check.
     func testA6_6ALongPressFiresOnLongPressAfterFlutters500ms() async throws {
         let model = try page([inkWell("w", "c"), sizedBox("c", 100, 50)])
 
         await (try view(model, "w")).longPress?()?.value
 
         XCTAssertEqual(fired(model), counts(longPress: 1))
-        let press = InkWellNodeView.pressGesture
+        let press = InkWellNodeView.gestures(pressing: GestureState(initialValue: false)).first.base
         XCTAssertEqual(press.minimumDuration, 0.5, "Flutter's kLongPressTimeout")
         XCTAssertEqual(press.maximumDistance, 18, "Flutter's kTouchSlop")
         XCTAssertEqual(LongPressGesture().maximumDistance, 10, "SwiftUI's default slop")
+    }
+
+    /// A6.6: the three triggers are one gesture, as Flutter's gesture arena
+    /// decides between its recognizers: the long press first (500 ms, 18 pt),
+    /// so a tap can succeed only once it has failed, the press lifted
+    /// sooner, and once it succeeds no tap can (a hold is never a tap); then
+    /// the double tap, so a single tap succeeds only once a second one can no
+    /// longer come; then the single tap. The pressed highlight is the long
+    /// press's own pressing state. Read from the gesture the view attaches
+    /// (`InkWellNodeView.gestures`). What a package test cannot reach, as it
+    /// cannot inject a touch: that SwiftUI delivers a 0.7 s hold as the long
+    /// press alone, a quick tap once its double-tap wait is over, a double
+    /// tap as one, resets the highlight on the lift, and lets a swipe that
+    /// starts on the InkWell scroll a ScrollView around it (hand checks).
+    func testA6_6TheThreeTriggersAreOneGestureTheLongPressFirst() {
+        let gestures = InkWellNodeView.gestures(pressing: GestureState(initialValue: false))
+
+        XCTAssertEqual(gestures.first.base.minimumDuration, 0.5, "first, the long press: Flutter's kLongPressTimeout")
+        XCTAssertEqual(gestures.first.base.maximumDistance, 18, "first, the long press: Flutter's kTouchSlop")
+        XCTAssertEqual(gestures.second.first.count, 2, "then the double tap")
+        XCTAssertEqual(gestures.second.second.count, 1, "then the single tap")
+
+        var pressed = false
+        var transaction = Transaction()
+        gestures.first.body(true, &pressed, &transaction)
+        XCTAssertTrue(pressed, "the long press's pressing state does not drive the highlight")
+        gestures.first.body(false, &pressed, &transaction)
+        XCTAssertFalse(pressed, "the highlight outlives the long press's pressing state")
     }
 
     /// A6.6: while pressed the highlight fills the InkWell in
