@@ -409,9 +409,9 @@ extension OrcaPageModel {
     func subPageLeft(_ key: String, token: UUID) {
         guard subPageViews[key]?.token == token else { return }
         subPageViews[key] = nil
-        let ids = subPages.unmount(key)
-        guard !ids.isEmpty else { return }
-        renderer.removeNodes(ids)
+        let prefixes = subPages.unmount(key)
+        guard !prefixes.isEmpty else { return }
+        renderer.removePages(under: prefixes)
         structureRevision += 1
     }
 
@@ -424,9 +424,11 @@ extension OrcaPageModel {
 
     /// Mounts a fetched page in the SubPage `key` through the core's
     /// reducer, and applies the change: nodes and state keys out, nodes and
-    /// seeds in.
-    func mountSubPage(_ key: String, mode: String, page: PageResponse) throws {
-        guard !isInert else { return }
+    /// seeds in. Gives the prefix the page was mounted under; nil on a
+    /// frozen copy, where nothing is mounted.
+    @discardableResult
+    func mountSubPage(_ key: String, mode: String, page: PageResponse) throws -> String? {
+        guard !isInert else { return nil }
         var next = subPages
         let change = next.mount(
             key, mode: mode, response: try JSONValue(encoding: page), pageStateKeys: store.state.page.keys)
@@ -434,6 +436,7 @@ extension OrcaPageModel {
         subPages = next
         store.commit(store.state.applying(change))
         structureRevision += 1
+        return change.prefix
     }
 
     /// The `updateSubPage` action (contract S7). A `subPageId` that names no

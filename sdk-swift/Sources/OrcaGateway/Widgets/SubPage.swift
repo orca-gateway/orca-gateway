@@ -31,7 +31,7 @@ struct SubPageNodeView: View {
             let roots = Self.frozenRoots(of: node.id, in: model)
             SubPageContent(
                 drawing: roots.isEmpty ? node.childIds.first.map(SubPageDrawing.child) ?? .pages([]) : .pages(roots),
-                model: model)
+                identities: roots, model: model)
         } else {
             LiveSubPage(node: node, model: model)
         }
@@ -66,15 +66,21 @@ private struct LiveSubPage: View {
 
     var body: some View {
         let request = SubPageNodeView.request(of: node)
-        SubPageContent(drawing: controller.drawing(childId: node.childIds.first), model: model)
+        SubPageContent(
+            drawing: controller.drawing(childId: node.childIds.first), identities: controller.identities,
+            model: model)
             .onAppear { controller.want(request) }
             .onChange(of: request) { controller.want($0) }
     }
 }
 
+/// Draws a `SubPageDrawing`. Each page is a view of its own under its entry
+/// of `identities` (one per root): a new identity is a new view, with fresh
+/// state, and a kept one keeps its view when a page joins.
 @MainActor
 private struct SubPageContent: View {
     let drawing: SubPageDrawing
+    let identities: [String]
     let model: OrcaPageModel
 
     var body: some View {
@@ -88,15 +94,31 @@ private struct SubPageContent: View {
                 .foregroundColor(.red)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         case .pages(let roots):
-            // One page draws exactly as its root.
-            if roots.count == 1 {
-                NodeView(id: roots[0], model: model).id(roots[0])
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(roots, id: \.self) { NodeView(id: $0, model: model) }
+            // One stack for one page and for several, so the first page
+            // keeps its views when another joins. Around one page the stack
+            // is that page: it takes what the page is offered and has its size.
+            let pages = Array(zip(identities, roots))
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(pages, id: \.0) { _, root in
+                    NodeView(id: root, model: model).modifier(JoinedPage(joined: pages.count > 1))
                 }
             }
         }
+    }
+}
+
+/// A page among several takes the width the SubPage has, as a child of
+/// Flutter's `Column(crossAxisAlignment: stretch)`: its root is forced to
+/// that width (`orcaTight`), and one that does not fill it sits at the start.
+/// A page alone is left as it is.
+private struct JoinedPage: ViewModifier {
+    let joined: Bool
+    @Environment(\.orcaTight) private var tight
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.orcaTight, joined ? .horizontal : tight)
+            .frame(maxWidth: joined ? .infinity : nil, alignment: .leading)
     }
 }
 
@@ -116,6 +138,11 @@ final class SubPageController: ObservableObject {
     @Published private var failure: String?
     /// Bumped when the mounted pages change.
     @Published private var revision = 0
+    /// Counts the mounts that are not a join. It is part of the identity of
+    /// each drawn page, so a page that replaces another gets views of its
+    /// own: nothing of the old page (a nested SubPage, an animation
+    /// controller, a text field's text) carries over, even with the same ids.
+    private var generation = 0
     /// The request of the node, as last asked for.
     private var request: SubPageRequest?
     /// Counts the fetches started for the node's own request; an answer that
@@ -142,6 +169,27 @@ final class SubPageController: ObservableObject {
         return .pages(model?.subPages[key]?.roots ?? [])
     }
 
+    /// The identity of each drawn page, in the order of the drawing's roots:
+    /// the count of replaces, then the page's prefix.
+    var identities: [String] {
+        (model?.subPages[key]?.pages ?? []).filter { $0.rootId != nil }.map { "\(generation)/\($0.prefix)" }
+    }
+
+    /// The message of a failed fetch, as Kotlin draws it (Flutter prints the
+    /// same text after its exception's name): `Failed to fetch page: <status>`
+    /// for a status other than 200.
+    static func message(of error: Error) -> String {
+        if case OrcaClientError.http(let status, _) = error { return "Failed to fetch page: \(status)" }
+        return error.localizedDescription
+    }
+
+    /// Whether this is still the view of a SubPage of the page: its node is
+    /// in the store and no newer view of the same SubPage has taken its
+    /// place (the page it was in was replaced by one with the same ids).
+    private func isCurrent(in model: OrcaPageModel) -> Bool {
+        model.renderer.nodes[key] != nil && model.subPageView(key) === self
+    }
+
     /// The view is on screen asking for `next` (contract S4): fetch it, as a
     /// replace, unless it is what was last asked for. What is mounted stays
     /// on screen while the fetch runs.
@@ -156,12 +204,12 @@ final class SubPageController: ObservableObject {
         fetch = Task { [weak self] in
             do {
                 let page = try await model.fetchSubPage(next)
-                guard let self, !Task.isCancelled, mine == self.load else { return }
+                guard let self, !Task.isCancelled, mine == self.load, self.isCurrent(in: model) else { return }
                 try self.mount(page, mode: "replace", in: model)
             } catch {
-                guard let self, !Task.isCancelled, mine == self.load else { return }
+                guard let self, !Task.isCancelled, mine == self.load, self.isCurrent(in: model) else { return }
                 self.loading = false
-                self.failure = error.localizedDescription
+                self.failure = Self.message(of: error)
             }
         }
     }
@@ -172,14 +220,15 @@ final class SubPageController: ObservableObject {
         guard let model else { return }
         let page = try await model.fetchSubPage(next)
         // Gone, or replaced by another view of the same SubPage, meanwhile.
-        guard model.subPageView(key) === self else { return }
+        guard isCurrent(in: model) else { return }
         // The update wins over a fetch of the node's own that is still out.
         load += 1
         try mount(page, mode: mode, in: model)
     }
 
     private func mount(_ page: PageResponse, mode: String, in model: OrcaPageModel) throws {
-        try model.mountSubPage(key, mode: mode, page: page)
+        // Page 0 is only ever mounted by a replace; a join mounts `K#j:`.
+        if try model.mountSubPage(key, mode: mode, page: page) == SubPage.prefix(key: key) { generation += 1 }
         loading = false
         failure = nil
         revision += 1

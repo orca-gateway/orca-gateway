@@ -114,14 +114,19 @@ public struct SubPageMounted: Sendable, Equatable {
 }
 
 /// What one `SubPageMounts.apply` asks of the host page, in this order: take
-/// `removedNodeIds` out of the node store and `removedStateKeys` out of the
-/// page state, then put `nodes` in the store and write `seeds`.
+/// every node under `removedPrefixes` out of the node store and
+/// `removedStateKeys` out of the page state, then put `nodes` in the store
+/// and write `seeds`.
 public struct SubPageChange: Sendable, Equatable {
     /// Prefix of the page this step mounted.
     public let prefix: String
     public let nodes: [JSONValue]
     public let seeds: [String: JSONValue]
+    /// Ids of the merged nodes of the pages that leave.
     public let removedNodeIds: [String]
+    /// Prefix of each page that leaves. Every node of the store under one of
+    /// them leaves: the listed ones and the ones added since the mount.
+    public let removedPrefixes: [String]
     public let removedStateKeys: [String]
 }
 
@@ -154,6 +159,7 @@ public struct SubPageMounts: Sendable, Equatable {
         -> SubPageChange {
         let join = SubPage.same(mode, "join") && !pages.isEmpty
         let removedNodeIds = join ? [] : nodeIds
+        let removedPrefixes = join ? [] : prefixes
         let removedStateKeys = join ? [] : pageStateKeys.filter(owns)
         if join {
             joins += 1
@@ -166,7 +172,7 @@ public struct SubPageMounts: Sendable, Equatable {
         pages.append(SubPageMounted(prefix: prefix, nodes: merged.nodes))
         return SubPageChange(
             prefix: prefix, nodes: merged.nodes, seeds: merged.state,
-            removedNodeIds: removedNodeIds, removedStateKeys: removedStateKeys)
+            removedNodeIds: removedNodeIds, removedPrefixes: removedPrefixes, removedStateKeys: removedStateKeys)
     }
 
     /// Whether a page-state key is under `K:` or `K#<digits>:`.

@@ -22,7 +22,7 @@ final class ActionFixtureTests: XCTestCase {
 
     @MainActor func testAllTwentySixActionFixturesPass() async throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 27)
+        XCTAssertEqual(files.count, 28)
         for (name, fx) in files { try await run(name, fx) }
     }
 
@@ -163,6 +163,12 @@ final class ActionFixtureTests: XCTestCase {
     /// the group runs on.
     @MainActor func testB12_1_S_AnimateUnknownIdStillEmitsAndTheGroupGoesOn_fixture33() async throws {
         try await run(fixture: "33_animate_unknown_id.json")
+    }
+
+    /// B13.5-S: fixture 35, an updateSubPage naming no mounted SubPage does
+    /// nothing and the group runs on.
+    @MainActor func testB13_5_S_UpdateSubPageUnknownIdDoesNothingAndTheGroupGoesOn_fixture35() async throws {
+        try await run(fixture: "35_update_sub_page_unknown_id.json")
     }
 
     /// B12.1-S: the two animation effects go out as data, then to the

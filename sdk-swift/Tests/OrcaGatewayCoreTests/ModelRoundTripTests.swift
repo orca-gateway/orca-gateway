@@ -36,7 +36,7 @@ final class ModelRoundTripTests: XCTestCase {
 
     func testAllActionFixturesRoundTrip() throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 27, "action fixtures 01-19, 30-34, 45-47")
+        XCTAssertEqual(files.count, 28, "action fixtures 01-19, 30-35, 45-47")
         var kinds = Set<String>()
         for (name, fixture) in files {
             // A fixture runs either `actions` or `steps` [{action, source?, event?}].
@@ -71,9 +71,8 @@ final class ModelRoundTripTests: XCTestCase {
         // Every advertised kind appears in the fixtures, except the three
         // component kinds: a fixture compares state and effects, not the node
         // tree, so ComponentMutationTests pins them against Dart's
-        // ComponentStore instead. updateSubPage is the same: it changes the
-        // node tree after a fetch, which schema/fixtures/subpage pins.
-        let structural: Set<String> = ["addComponent", "updateComponent", "deleteComponent", "updateSubPage"]
+        // ComponentStore instead.
+        let structural: Set<String> = ["addComponent", "updateComponent", "deleteComponent"]
         XCTAssertTrue(kinds.isSuperset(of: Set(GeneratedCapabilities.actionKinds).subtracting(structural)),
                       "\(kinds)")
     }

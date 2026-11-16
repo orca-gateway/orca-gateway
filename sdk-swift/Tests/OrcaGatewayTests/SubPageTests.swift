@@ -102,8 +102,9 @@ final class SubPageTests: XCTestCase {
         stage.wait("the error") { stage.drawing != .spinner }
 
         guard case .error(let text)? = stage.drawing else { return XCTFail("drew \(String(describing: stage.drawing))") }
-        let failure = OrcaClientError.http(status: 404, body: "{}")
-        XCTAssertEqual(text, "SubPage error: \(failure.localizedDescription)")
+        // The message Kotlin draws (Flutter prints its exception: the same
+        // text after `OrcaClientException(404): `).
+        XCTAssertEqual(text, "SubPage error: Failed to fetch page: 404")
         XCTAssertEqual(stage.model.subPages.prefixes, [])
     }
 
@@ -233,6 +234,114 @@ final class SubPageTests: XCTestCase {
         XCTAssertEqual(stage.model.store.state.page["detail:count"], 5)
     }
 
+    func test_B13_5_anUpdateDuringTheFirstFetchWinsAndTheLateFirstAnswerIsDropped() throws {
+        let stub = SubPagePages()
+        stub.hold("a")
+        let stage = try Stage(stub, subPage: ["pageId": "a"])
+        defer { stage.close() }
+        stage.wait("the first fetch") { stub.pagePaths == ["a"] }
+
+        try stage.tap("replace")
+        stage.wait("page b") { stage.model.renderer.nodes["detail:1"]?.props["data"] == "B" }
+        XCTAssertEqual(stage.drawing, .pages(["detail:0"]))
+
+        stub.release()
+        stage.wait("the late answer") { stub.answered == ["b", "a"] }
+        stage.pump(0.3)
+        XCTAssertEqual(stage.model.renderer.nodes["detail:1"]?.props["data"], "B", "the late first answer was mounted")
+        XCTAssertNil(stage.model.renderer.nodes["detail:7"])
+        XCTAssertEqual(stage.model.store.state.page, ["count": 1, "detail:name": "b"])
+        XCTAssertEqual(stub.pagePaths, ["a", "b?from=host"])
+    }
+
+    /// A page that replaces another gets fresh UI state, even with the same
+    /// node ids: the AnimatedBuilder of the new page has a controller of its
+    /// own under the id, and the old one leaving does not take that
+    /// registration away. A join keeps what is drawn.
+    func test_B13_5_aReplacedPageGetsFreshUIStateAndAJoinKeepsIt() throws {
+        let stub = SubPagePages()
+        let stage = try Stage(stub, subPage: ["pageId": "anim"])
+        defer { stage.close() }
+        let animations = stage.model.animations
+        func now() -> Double { stage.model.frameClock() }
+        func progress(_ id: String = "detail:spin") -> Double { animations.progress(id: id, at: now()) }
+
+        stage.wait("the builder") { animations.forward(id: "detail:spin", at: now()) }
+        XCTAssertFalse(animations.forward(id: "spin", at: now()), "the id was registered without the prefix")
+        stage.wait("the run") { progress() == 1 }
+
+        // The same page again: every id is the same.
+        try stage.run(Self.update("detail", "anim"))
+        stage.wait("the second fetch") { stub.answered == ["anim", "anim"] }
+        stage.wait("a controller of its own") { progress() == 0 }
+        // Time for the old page's views to be torn down.
+        stage.pump(0.3)
+        XCTAssertTrue(animations.forward(id: "detail:spin", at: now()), "the old builder took the new one's id with it")
+        stage.wait("the new run") { progress() == 1 }
+
+        try stage.run(Self.update("detail", "anim", mode: "join"))
+        stage.wait("the joined builder") { animations.forward(id: "detail#1:spin", at: now()) }
+        stage.pump(0.3)
+        XCTAssertEqual(progress(), 1, "a join rebuilt the first page")
+        XCTAssertEqual(stub.pagePaths, ["anim", "anim", "anim"])
+    }
+
+    /// S5: joined pages are one below the other, each as wide as the SubPage;
+    /// a single page is drawn exactly as its root.
+    func test_B13_5_joinedPagesAreDrawnOneBelowTheOtherAtFullWidth() throws {
+        let frames = ProbeFrames()
+        let widgets = WidgetBuilders()
+        widgets.register("Probe") { node, _ in
+            AnyView(Probe(id: node.id, width: CGFloat(node["width"]?.intValue ?? 0), frames: frames))
+        }
+        let stage = try Stage(SubPagePages(), subPage: ["pageId": "probe"], widgets: widgets)
+        defer { stage.close() }
+        stage.wait("the page") { frames["detail:0"] != nil }
+        stage.pump(0.2)
+        XCTAssertEqual(frames["detail:0"]?.width, 40, "a single page was not drawn as its root")
+
+        try stage.run(Self.update("detail", "wide", mode: "join"))
+        stage.wait("the joined page") { frames["detail#1:0"] != nil }
+        stage.pump(0.2)
+        let first = try XCTUnwrap(frames["detail:0"])
+        let second = try XCTUnwrap(frames["detail#1:0"])
+        XCTAssertEqual(stage.drawing, .pages(["detail:0", "detail#1:0"]))
+        // The SubPage is offered the window's width, whatever its pages'
+        // own widths (40 and 120) are.
+        let width = stage.width
+        XCTAssertEqual([first.minX, second.minX], [0, 0])
+        XCTAssertEqual([first.width, second.width], [width, width], "a joined page is not as wide as the SubPage")
+        XCTAssertEqual(second.minY, first.maxY, "the joined page is not right below the first")
+    }
+
+    /// A node added to a sub-page after its mount (addComponent) leaves with
+    /// the page: on a replace and when the SubPage node goes.
+    func test_B13_5_aNodeAddedInsideLeavesWithItsPage() throws {
+        let add: [JSONValue] = [["type": "addComponent", "parentId": "3", "components": [Self.text("note", "Note")]]]
+        func mounted(_ stage: Stage) -> [String] {
+            stage.model.renderer.nodes.keys.filter { $0.hasPrefix("detail:") }.sorted()
+        }
+
+        let stage = try Stage(SubPagePages(actions: add), subPage: ["pageId": "a"])
+        defer { stage.close() }
+        stage.wait("page a") { stage.model.renderer.nodes["detail:7"] != nil }
+        try stage.tap("detail:6")
+        stage.wait("the note") { stage.model.renderer.nodes["detail:note"] != nil }
+        XCTAssertEqual(stage.model.renderer.nodes["detail:3"]?.children.last, "detail:note")
+        try stage.tap("replace")
+        stage.wait("page b") { stage.model.renderer.nodes["detail:1"]?.props["data"] == "B" }
+        XCTAssertEqual(mounted(stage), ["detail:0", "detail:1", "detail:2"])
+
+        let other = try Stage(SubPagePages(actions: add), subPage: ["pageId": "a"])
+        defer { other.close() }
+        other.wait("page a") { other.model.renderer.nodes["detail:7"] != nil }
+        try other.tap("detail:6")
+        other.wait("the note") { other.model.renderer.nodes["detail:note"] != nil }
+        try other.tap("remove")
+        other.wait("the unmount") { other.model.subPages.prefixes.isEmpty }
+        XCTAssertEqual(other.model.renderer.nodes.keys.filter { $0.hasPrefix("detail") }, [])
+    }
+
     // MARK: B13.4 unmount, nesting, frozen layers
 
     func test_B13_4_whenTheSubPageNodeGoesItsNodesAreRemovedAndItsStateKeysStay() throws {
@@ -259,6 +368,34 @@ final class SubPageTests: XCTestCase {
         XCTAssertEqual(stub.pagePaths, ["nest", "b"])
 
         // The longest prefix is the inner page's.
+        try stage.tap("outer:inner:2")
+        stage.wait("the answer") { stage.model.store.state.page["outer:inner:name"] == "x" }
+        XCTAssertEqual(stub.actionBodies.last?["pageState"], ["name": "b"])
+    }
+
+    /// A page replaced by one with the same nested SubPage: the nested one
+    /// is mounted anew, once, with the state its page starts with.
+    func test_B13_5_aNestedSubPageOfAReplacedPageIsMountedAnew() throws {
+        let stub = SubPagePages(actions: [["type": "setState", "key": "name", "scope": "page", "value": "x"]])
+        let stage = try Stage(stub, subPage: ["pageId": "nest"], key: "outer")
+        defer { stage.close() }
+        stage.wait("the inner page") { stage.drawn.contains("outer:inner:1") }
+        try stage.tap("outer:inner:2")
+        stage.wait("the answer") { stage.model.store.state.page["outer:inner:name"] == "x" }
+
+        try stage.run(Self.update("outer", "nest"))
+        stage.wait("the inner page, again") { stub.answered == ["nest", "b", "nest", "b"] }
+        stage.wait("its state") { stage.model.store.state.page["outer:inner:name"] == "b" }
+        stage.pump(0.3)
+        XCTAssertEqual(stub.pagePaths, ["nest", "b", "nest", "b"])
+        XCTAssertEqual(stage.model.subPages.prefixes, ["outer:", "outer:inner:"])
+        XCTAssertEqual(stage.model.store.state.page, ["count": 1, "outer:inner:name": "b"])
+        XCTAssertEqual(
+            stage.model.renderer.nodes.keys.filter { $0.hasPrefix("outer:") }.sorted(),
+            ["outer:0", "outer:inner", "outer:inner:0", "outer:inner:1", "outer:inner:2"])
+        XCTAssertNotNil(stage.model.subPageView("outer:inner"))
+
+        // The new inner page answers to its own server action.
         try stage.tap("outer:inner:2")
         stage.wait("the answer") { stage.model.store.state.page["outer:inner:name"] == "x" }
         XCTAssertEqual(stub.actionBodies.last?["pageState"], ["name": "b"])
@@ -309,6 +446,15 @@ final class SubPageTests: XCTestCase {
         ["key": .string(key), "scope": "page", "initial": initial]
     }
 
+    /// An updateSubPage action.
+    nonisolated static func update(_ subPageId: String, _ pageId: String, mode: String? = nil) -> JSONValue {
+        var action: [String: JSONValue] = [
+            "type": "updateSubPage", "subPageId": .string(subPageId), "pageId": .string(pageId),
+        ]
+        if let mode { action["mode"] = .string(mode) }
+        return .object(action)
+    }
+
     /// The pages the stub serves, by page id.
     nonisolated static let pages: [String: JSONValue] = [
         // Scaffold(appBar: AppBar(title), body: Column[count, set, bump, "A"])
@@ -338,6 +484,32 @@ final class SubPageTests: XCTestCase {
         "c": [
             "pageId": "c", "title": "C", "state": [count(3)],
             "components": [column("0", ["1"]), text("1", page("count"), watches: ["count"])],
+        ],
+        // Column[label, AnimatedBuilder(spin, held at 0)[text]]
+        "anim": [
+            "pageId": "anim", "title": "Anim", "state": [],
+            "components": [
+                column("0", ["1", "2"]),
+                text("1", "Anim"),
+                ["id": "2", "type": "AnimatedBuilder", "kind": "layout", "childMode": "single",
+                 "props": ["animationId": "spin", "autoStart": false, "duration": 100], "children": ["3"],
+                 "watches": []],
+                text("3", "Animated"),
+            ],
+        ],
+        "probe": [
+            "pageId": "probe", "title": "Probe", "state": [],
+            "components": [
+                ["id": "0", "type": "Probe", "kind": "primitive", "childMode": "none", "props": ["width": 40],
+                 "children": [], "watches": []],
+            ],
+        ],
+        "wide": [
+            "pageId": "wide", "title": "Wide", "state": [],
+            "components": [
+                ["id": "0", "type": "Probe", "kind": "primitive", "childMode": "none", "props": ["width": 120],
+                 "children": [], "watches": []],
+            ],
         ],
         "nest": [
             "pageId": "nest", "title": "Nest", "state": [],
@@ -397,14 +569,19 @@ private final class Stage {
     private var window: HostWindow?
 
     init(_ stub: SubPagePages, subPage props: JSONValue, key: String = "detail", watches: [JSONValue] = [],
-         state: [String: JSONValue] = [:], app: [String: JSONValue] = [:], loadingChild: Bool = false) throws {
+         state: [String: JSONValue] = [:], app: [String: JSONValue] = [:], loadingChild: Bool = false,
+         widgets: WidgetBuilders = WidgetBuilders()) throws {
         let page = try SubPageTests.host(
             key: key, subPage: props, watches: watches, state: state, loadingChild: loadingChild)
             .decode(PageResponse.self)
         self.key = key
-        model = OrcaPageModel(page: page, store: ElmStore(app: app), client: OrcaClient(
-            baseURL: URL(string: "http://stub.invalid")!, appId: "fixture-app",
-            device: DeviceInfo(osVersion: "test"), transport: stub))
+        model = OrcaPageModel(
+            page: page, store: ElmStore(app: app),
+            registry: WidgetRegistry(types: Set(GeneratedCapabilities.widgets).union(widgets.types)),
+            client: OrcaClient(
+                baseURL: URL(string: "http://stub.invalid")!, appId: "fixture-app",
+                device: DeviceInfo(osVersion: "test"), transport: stub),
+            widgets: widgets)
         model.onError = { [weak self] _ in self?.errors += 1 }
         window = HostWindow(NodeView(id: "root", model: model).environment(\.orcaNodeRecorder, recorder))
     }
@@ -428,6 +605,15 @@ private final class Stage {
         return model.fire("onTap", on: node)
     }
 
+    /// Run an action of the host page, as a host node's trigger does.
+    func run(_ action: JSONValue) throws {
+        let action = try action.decode(Action.self)
+        Task { await model.run(action) }
+    }
+
+    /// Width of the window's content.
+    var width: CGFloat { window?.width ?? 0 }
+
     func pump(_ seconds: Double = 0.05) {
         RunLoop.main.run(until: Date().addingTimeInterval(seconds))
     }
@@ -442,6 +628,32 @@ private final class Stage {
     func close() {
         window?.close()
         window = nil
+    }
+}
+
+/// Where each Probe was last laid out, in the window, by node id.
+@MainActor
+private final class ProbeFrames {
+    private var frames: [String: CGRect] = [:]
+    subscript(id: String) -> CGRect? { frames[id] }
+    func set(_ id: String, _ frame: CGRect) { frames[id] = frame }
+}
+
+/// A host widget 20 high that is `width` wide, or as wide as its parent
+/// forces (`orcaTight`), as a Container is.
+private struct Probe: View {
+    let id: String
+    let width: CGFloat
+    let frames: ProbeFrames
+    @Environment(\.orcaTight) private var tight
+
+    var body: some View {
+        Color.red
+            .frame(width: tight.contains(.horizontal) ? nil : width, height: 20)
+            .background(GeometryReader { geometry in
+                let _ = frames.set(id, geometry.frame(in: .global))
+                Color.clear
+            })
     }
 }
 
@@ -474,6 +686,14 @@ private final class HostWindow {
         #endif
     }
 
+    var width: CGFloat {
+        #if canImport(UIKit)
+        window.bounds.width
+        #elseif canImport(AppKit)
+        window.contentView?.bounds.width ?? 0
+        #endif
+    }
+
     func close() {
         #if canImport(UIKit)
         window.isHidden = true
@@ -492,6 +712,8 @@ private final class SubPagePages: HTTPTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var _requests: [HTTPRequest] = []
     private var held = false
+    private var heldPages: Set<String> = []
+    private var _answered: [String] = []
     private let actions: [JSONValue]
 
     init(actions: [JSONValue] = []) { self.actions = actions }
@@ -518,8 +740,22 @@ private final class SubPagePages: HTTPTransport, @unchecked Sendable {
             .compactMap { $0.body.flatMap { try? JSONValue.decode($0) } }
     }
 
-    func hold() { locked { held = true } }
-    func release() { locked { held = false } }
+    /// The page ids answered so far, in the order of the answers.
+    var answered: [String] { locked { _answered } }
+
+    /// Page fetches wait from now on: all of them, or those of one page.
+    func hold(_ page: String? = nil) {
+        locked {
+            if let page { heldPages.insert(page) } else { held = true }
+        }
+    }
+
+    func release() {
+        locked {
+            held = false
+            heldPages = []
+        }
+    }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         locked { _requests.append(request) }
@@ -530,8 +766,9 @@ private final class SubPagePages: HTTPTransport, @unchecked Sendable {
                 ? [["type": "setState", "key": "count", "scope": "page", "value": 6]] : actions
             return HTTPResponse(status: 200, body: try JSONValue.object(["actions": .array(answer)]).encoded())
         }
-        while locked({ held }) { try await Task.sleep(nanoseconds: 10_000_000) }
         let name = request.url.path.components(separatedBy: "/page/").last ?? ""
+        while locked({ held || heldPages.contains(name) }) { try await Task.sleep(nanoseconds: 10_000_000) }
+        locked { _answered.append(name) }
         guard let page = SubPageTests.pages[name] else { return HTTPResponse(status: 404, body: Data("{}".utf8)) }
         return HTTPResponse(status: 200, body: try page.encoded())
     }

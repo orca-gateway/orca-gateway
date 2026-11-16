@@ -86,18 +86,71 @@ final class SubPageHostTests: XCTestCase {
         XCTAssertEqual(registry.prefixes, ["detail:"])
     }
 
-    func test_B13_4_unmountGivesTheNodeIdsToRemoveAndForgetsTheSubPage() {
+    func test_B13_4_unmountGivesThePrefixesToRemoveAndForgetsTheSubPage() {
         var registry = SubPageRegistry()
         var renderer = host()
         let change = registry.mount("detail", mode: "replace", response: page("a", text: "A"), pageStateKeys: [])
         XCTAssertNoThrow(try renderer.apply(change))
 
-        let ids = registry.unmount("detail")
-        XCTAssertEqual(ids.sorted(), ["detail:0", "detail:1"])
-        renderer.removeNodes(ids)
+        let prefixes = registry.unmount("detail")
+        XCTAssertEqual(prefixes, ["detail:"])
+        renderer.removePages(under: prefixes)
         XCTAssertEqual(renderer.nodes.keys.sorted(), ["detail", "root"])
         XCTAssertEqual(registry.prefixes, [])
         XCTAssertEqual(registry.unmount("detail"), [])
+    }
+
+    /// A page that leaves (a replace, an unmount) takes every node under its
+    /// prefix with it: the ones an addComponent put there since the mount,
+    /// and a SubPage among them, which is unmounted too. A host node whose
+    /// id only starts like the SubPage's stays.
+    func test_B13_5_aPageThatLeavesTakesTheNodesAddedSinceAndItsNestedSubPages() throws {
+        var registry = SubPageRegistry()
+        var renderer = PageRenderer(page: PageResponse(pageId: "host", title: "Host", components: [
+            ComponentNode(id: "root", type: "Column", kind: .layout, childMode: .multi, children: ["feed", "feedback"]),
+            ComponentNode(id: "feed", type: "SubPage", kind: .layout, childMode: .single),
+            ComponentNode(id: "feedback", type: "Text", kind: .primitive, childMode: .none),
+        ]))
+        var state = StoreState(page: ["count": 1])
+        func mount(_ key: String, _ mode: String, _ response: JSONValue) throws {
+            let change = registry.mount(key, mode: mode, response: response, pageStateKeys: state.page.keys)
+            try renderer.apply(change)
+            state = state.applying(change)
+        }
+        func add(_ id: String, type: String = "Text", under parent: String) {
+            renderer.apply(.add(parentId: parent, components: [
+                ComponentNode(id: id, type: type, kind: type == "Text" ? .primitive : .layout,
+                              childMode: type == "Text" ? .none : .single),
+            ], position: nil))
+        }
+        let hostIds = ["feed", "feedback", "root"]
+
+        // Replace: a note and a nested SubPage were added under `feed:`.
+        try mount("feed", "replace", page("a", text: "A"))
+        add("feed:note", under: "feed:0")
+        add("feed:inner", type: "SubPage", under: "feed:0")
+        try mount("feed:inner", "replace", page("b", text: "B", state: [count]))
+        add("feed:inner:note", under: "feed:inner:0")
+        try mount("feed", "join", page("j", text: "J"))
+        add("feed#1:note", under: "feed#1:0")
+        XCTAssertEqual(Set(registry.prefixes), ["feed:", "feed#1:", "feed:inner:"])
+        XCTAssertEqual(state.page["feed:inner:count"], 5)
+
+        try mount("feed", "replace", page("c", text: "C"))
+        XCTAssertEqual(renderer.nodes.keys.sorted(), (hostIds + ["feed:0", "feed:1"]).sorted())
+        XCTAssertEqual(renderer.nodes["feed:0"]?.children, ["feed:1"])
+        XCTAssertEqual(registry.prefixes, ["feed:"])
+        XCTAssertNil(registry["feed:inner"], "the nested SubPage stayed mounted")
+        XCTAssertEqual(state.page, ["count": 1])
+
+        // Unmount: the SubPage node is deleted, with a note added since.
+        add("feed:note", under: "feed:0")
+        add("feed:inner", type: "SubPage", under: "feed:0")
+        try mount("feed:inner", "replace", page("b", text: "B"))
+        renderer.apply(.delete(id: "feed"))
+        renderer.removePages(under: registry.unmount("feed"))
+        XCTAssertEqual(renderer.nodes.keys.sorted(), ["feedback", "root"])
+        XCTAssertEqual(registry.prefixes, [])
     }
 
     // MARK: B13.5 the executor

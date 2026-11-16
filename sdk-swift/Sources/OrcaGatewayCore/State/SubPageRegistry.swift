@@ -21,36 +21,58 @@ public struct SubPageRegistry: Sendable, Equatable {
 
     /// Mounts a fetched `response` in the SubPage `key` (see
     /// `SubPageMounts.apply`; the first load is a `replace`) and gives the
-    /// change to apply to the host page.
+    /// change to apply to the host page. A replace takes the old pages out
+    /// whole (`SubPageChange.removedPrefixes`): a SubPage that was in one of
+    /// them is forgotten here.
     public mutating func mount(
         _ key: String, mode: String, response: JSONValue, pageStateKeys: some Sequence<String>
     ) -> SubPageChange {
         var pages = mounts[key] ?? SubPageMounts(subPageKey: key)
         let change = pages.apply(mode: mode, response: response, pageStateKeys: pageStateKeys)
+        forget(under: change.removedPrefixes)
         mounts[key] = pages
         return change
     }
 
-    /// The SubPage `key` left the page: forgets its pages and gives the ids
-    /// of their nodes, to take out of the node store. Its state keys stay.
+    /// The SubPage `key` left the page: forgets its pages, and the SubPages
+    /// that were in them, and gives the prefixes of all those pages, to take
+    /// out of the node store (`PageRenderer.removePages`). Its state keys stay.
     public mutating func unmount(_ key: String) -> [String] {
-        mounts.removeValue(forKey: key)?.nodeIds ?? []
+        guard let own = mounts.removeValue(forKey: key)?.prefixes else { return [] }
+        return own + forget(under: own)
+    }
+
+    /// Forgets every SubPage whose node is in a page mounted under one of
+    /// `prefixes`; gives the prefixes of the pages they had.
+    @discardableResult
+    private mutating func forget(under prefixes: [String]) -> [String] {
+        var gone: [String] = []
+        for key in mounts.keys.sorted(by: { $0.utf8.lexicographicallyPrecedes($1.utf8) })
+        where prefixes.contains(where: { SubPage.starts(key, with: $0) }) {
+            gone += mounts.removeValue(forKey: key)?.prefixes ?? []
+        }
+        return gone
     }
 }
 
 extension PageRenderer {
-    /// Applies a sub-page change to the node map: the removed nodes go, the
-    /// new ones come in. They hang under no parent; the SubPage draws them
-    /// from their root. Throws, changing nothing, when a node does not decode.
+    /// Applies a sub-page change to the node map: the pages that leave go
+    /// whole, the new nodes come in. They hang under no parent; the SubPage
+    /// draws them from their root. Throws, changing nothing, when a node does
+    /// not decode.
     public mutating func apply(_ change: SubPageChange) throws {
         let added = try change.nodes.map { try $0.decode(ComponentNode.self) }
-        removeNodes(change.removedNodeIds)
+        removePages(under: change.removedPrefixes)
         for node in added { nodes[node.id] = node }
     }
 
-    /// Takes the nodes with these ids out of the node map, and only them.
-    public mutating func removeNodes(_ ids: some Sequence<String>) {
-        for id in ids { nodes[id] = nil }
+    /// Takes the pages mounted under `prefixes` out of the node map: every
+    /// node whose id starts with one of them, so the nodes added to a page
+    /// since its mount (addComponent) and the pages of a SubPage inside it
+    /// go too.
+    public mutating func removePages(under prefixes: [String]) {
+        guard !prefixes.isEmpty else { return }
+        nodes = nodes.filter { id, _ in !prefixes.contains { SubPage.starts(id, with: $0) } }
     }
 }
 
