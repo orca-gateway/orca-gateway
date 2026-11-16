@@ -236,52 +236,72 @@ final class SnackbarQueueHostTests: XCTestCase {
         }
     }
 
-    // MARK: - On screen (until S-bar draws M3's bar in the Scaffold)
+    // MARK: - On screen
 
-    /// A8.4: the page draws the head while it is in, at the bottom in
-    /// today's look: a snackbar across the width, a toast as a pill; nothing
-    /// while it leaves or when the queue is idle. A page that did not show
-    /// the bar draws it too: the queue is the router's.
+    /// A8.4: every page of the router draws the queue's head while it is in,
+    /// the pushed page that did not show it too (the queue is the router's):
+    /// a snackbar as M3's bar in the page's root Scaffold, across the width
+    /// at the bottom, revealed by height as it enters and as it leaves
+    /// (SnackbarBar: 37.2 of its 48 at mid-way, fastOutSlowIn of 0.5); a
+    /// toast as today's pill while it enters and shows, not while it leaves;
+    /// nothing once the queue is idle.
     func testA8_4_ThePageDrawsTheHeadWhileItIsIn() async throws {
-        let router = router()
+        let router = scaffoldRouter()
         let home = try await loaded(router, router.root)
         await home.run(.actionGroup(.init(actions: [snackbar("one"), toast("t")])))
         router.navigate(to: "next")
         let next = try await loaded(router, router.top)
         let queue = router.snackbars
 
+        pass(125, queue)
         for page in [home, next] {
-            let bar = try XCTUnwrap(Self.bar(in: try draw(page)), "\(page.page.pageId): no bar while entering")
-            XCTAssertEqual(bar.minX, 16, accuracy: 1, "\(page.page.pageId)")
-            XCTAssertEqual(bar.maxX, 284, accuracy: 1, "\(page.page.pageId): not across the width")
-            XCTAssertEqual(bar.maxY, 184, accuracy: 1, "\(page.page.pageId): not 16 above the bottom")
+            let pixels = try draw(page)
+            let bar = try XCTUnwrap(Self.snackbar(in: pixels), "\(page.page.pageId): no bar while entering")
+            XCTAssertEqual(bar.minX, 0, accuracy: 1, "\(page.page.pageId)")
+            XCTAssertEqual(bar.maxX, 300, accuracy: 1, "\(page.page.pageId): not across the width")
+            XCTAssertEqual(bar.maxY, 200, accuracy: 1, "\(page.page.pageId): not at the bottom")
+            XCTAssertEqual(bar.height, Self.midway, accuracy: 1, "\(page.page.pageId): not part way in")
+            XCTAssertNil(Self.pill(in: pixels), "\(page.page.pageId): the snackbar drawn as a pill")
         }
-        pass(250 + 2000, queue)
-        XCTAssertNotNil(Self.bar(in: try draw(next)), "no bar while showing")
+        pass(125 + 2000, queue)
+        let showing = try XCTUnwrap(Self.snackbar(in: try draw(next)), "no bar while showing")
+        XCTAssertEqual(showing.height, 48, accuracy: 1, "not fully in while showing")
         pass(2000, queue)
         XCTAssertEqual(queue.queue.phase, .leaving)
-        XCTAssertNil(Self.bar(in: try draw(next)), "the bar is drawn while it leaves")
+        pass(125, queue)
+        let leaving = try XCTUnwrap(Self.snackbar(in: try draw(next)), "the bar went at once as it began to leave")
+        XCTAssertEqual(leaving.height, Self.midway, accuracy: 1, "not leaving by height")
 
-        pass(250, queue)
+        pass(125, queue)
         XCTAssertEqual(next.toast?.style, .toast)
-        let pill = try XCTUnwrap(Self.bar(in: try draw(next)), "no toast")
+        let toast = try draw(next)
+        let pill = try XCTUnwrap(Self.pill(in: toast), "no toast")
         XCTAssertLessThan(pill.width, 268, "the toast spans the width")
         XCTAssertEqual(pill.maxY, 184, accuracy: 1)
+        // The bar would cover both edges (the pill's anti-aliased text may
+        // come near its colour).
+        XCTAssertFalse(SnackbarBarTests.isBar(toast.pixel(1, 195)) || SnackbarBarTests.isBar(toast.pixel(298, 195)),
+                       "the bar is drawn once it has left")
+        pass(250 + 2000, queue)
+        XCTAssertEqual(queue.queue.phase, .leaving)
+        XCTAssertNil(Self.pill(in: try draw(next)), "the toast is drawn while it leaves")
 
-        pass(250 + 2000 + 250, queue)
+        pass(250, queue)
         XCTAssertNil(queue.queue.phase)
-        XCTAssertNil(Self.bar(in: try draw(next)), "a bar with the queue idle")
+        let idle = try draw(next)
+        XCTAssertNil(Self.pill(in: idle), "a toast with the queue idle")
+        XCTAssertNil(Self.snackbar(in: idle), "a bar with the queue idle")
     }
 
     #if canImport(UIKit)
     /// A8.4, hosted: the page on screen follows the queue as time passes in:
-    /// a pushed page that never showed the bar draws it, drops it once it
-    /// starts to leave, and draws the next show. Animations are off: with
-    /// them on, this host kept drawing the leaving bar and never drew an
-    /// entering one, as if the slide never ran; the 0.2 s slide and fade
-    /// are a hand check.
+    /// a pushed page that never showed the bar draws it in its root
+    /// Scaffold, lets it go by height once it starts to leave, drops it once
+    /// it has left, and draws the next show as it enters. Animations are off
+    /// (the bar moves by the queue's time alone; the toast pill's 0.2 s
+    /// slide and fade are a hand check).
     func testA8_4_AHostedPageFollowsTheRoutersQueue() async throws {
-        let router = router()
+        let router = scaffoldRouter()
         let home = try await loaded(router, router.root)
         await home.run(snackbar("kept"))
         router.navigate(to: "next")
@@ -299,18 +319,24 @@ final class SnackbarQueueHostTests: XCTestCase {
         host.view.layoutIfNeeded()
 
         pass(1000, queue)
-        let shown = try XCTUnwrap(Self.bar(in: try snapshot(window)), "the pushed page draws no bar")
-        XCTAssertEqual(shown.maxX - shown.minX, 268, accuracy: 1)
+        let shown = try XCTUnwrap(Self.snackbar(in: try snapshot(window)), "the pushed page draws no bar")
+        XCTAssertEqual(shown.width, 300, accuracy: 1)
+        XCTAssertEqual(shown.height, 48, accuracy: 1)
+        XCTAssertEqual(shown.maxY, 200, accuracy: 1)
 
         pass(3250, queue)
         XCTAssertEqual(queue.queue.phase, .leaving)
-        XCTAssertNil(Self.bar(in: try snapshot(window)), "the bar stayed once leaving")
-        pass(250, queue)
+        pass(125, queue)
+        let leaving = try XCTUnwrap(Self.snackbar(in: try snapshot(window)), "the bar went at once as it began to leave")
+        XCTAssertEqual(leaving.height, Self.midway, accuracy: 1, "not leaving by height")
+        pass(125, queue)
         XCTAssertNil(queue.queue.phase)
-        XCTAssertNil(Self.bar(in: try snapshot(window)), "a bar with the queue idle")
+        XCTAssertNil(Self.snackbar(in: try snapshot(window)), "a bar with the queue idle")
 
         await home.run(snackbar("again"))
-        XCTAssertNotNil(Self.bar(in: try snapshot(window)), "the next show is not drawn")
+        pass(125, queue)
+        let again = try XCTUnwrap(Self.snackbar(in: try snapshot(window)), "the next show is not drawn")
+        XCTAssertEqual(again.height, Self.midway, accuracy: 1, "not entering by height")
     }
 
     /// The window at scale 1, once the views have caught up.
@@ -337,13 +363,39 @@ final class SnackbarQueueHostTests: XCTestCase {
         return try Pixels(XCTUnwrap(renderer.cgImage, "the page is not drawn"))
     }
 
-    /// The bounds of today's bar fill (white 0.18) in the bottom half: nil
-    /// when none is drawn.
-    static func bar(in pixels: Pixels) -> CGRect? {
+    /// A router on path `home` whose pages `home` and `next` are each a root
+    /// Scaffold over a green body, on the test's clock.
+    private func scaffoldRouter() -> OrcaRouter {
+        func page(_ id: String) -> [JSONValue] {
+            [["id": .string(id), "type": "Scaffold", "kind": "structure", "childMode": "none",
+              "props": ["body": .string("\(id)Body")], "children": [.string("\(id)Body")], "watches": []],
+             ["id": .string("\(id)Body"), "type": "Container", "kind": "layout", "childMode": "none",
+              "props": ["color": "#00FF00"], "children": [], "watches": []]]
+        }
+        let pages = ScaffoldPages(components: ["home": page("home"), "next": page("next")])
+        let router = OrcaRouter(client: pages.client, path: "home", system: SystemRecorder().actions())
+        manual(router.snackbars)
+        return router
+    }
+
+    /// How much of the 48 bar shows half-way in or out: 48 x fastOutSlowIn(0.5).
+    static let midway: CGFloat = 48 * 0.7755613
+
+    /// The bounds of the toast pill's fill (white 0.18) in the bottom half:
+    /// nil when none is drawn.
+    static func pill(in pixels: Pixels) -> CGRect? {
         let top = pixels.height / 2
         return pixels.rows(top...(pixels.height - 1)).bounds { p in
             p.a > 250 && abs(Int(p.r) - 46) <= 6 && abs(Int(p.g) - 46) <= 6 && abs(Int(p.b) - 46) <= 6
         }.map { $0.offsetBy(dx: 0, dy: CGFloat(top)) }
+    }
+
+    /// The bounds of M3's bar fill (#322F35) in the bottom half: nil when
+    /// none is drawn.
+    static func snackbar(in pixels: Pixels) -> CGRect? {
+        let top = pixels.height / 2
+        return pixels.rows(top...(pixels.height - 1)).bounds(of: SnackbarBarTests.isBar)
+            .map { $0.offsetBy(dx: 0, dy: CGFloat(top)) }
     }
 }
 

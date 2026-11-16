@@ -10,8 +10,9 @@ import SwiftUI
 /// state goes to the router and every loaded page; its navigation and system
 /// effects are performed and reported as a page's are; its persistState and
 /// clearState go to the router's saved state; the app's plugin widgets and
-/// custom action handlers are a page's too. A widget this SDK cannot draw
-/// degrades as on a page.
+/// custom action handlers are a page's too; its snackbars and toasts join
+/// the app's queue, as Flutter's shell executor shows them on the root
+/// messenger. A widget this SDK cannot draw degrades as on a page.
 @MainActor
 final class ShellTree {
     static let pageId = "__shell__"
@@ -27,6 +28,7 @@ final class ShellTree {
         let page = router.plugins?.page(response, store: store, client: router.client)
             ?? OrcaPageModel(page: response, store: store, client: router.client)
         self.page = page
+        page.snackbars = router.snackbars
         // persistState and clearState save through the app's saved state, as
         // Flutter's shell executor does with the app's StateManager; Flutter
         // restores no page entry for the shell, so neither does this.
@@ -305,6 +307,13 @@ private struct TabStack: View {
 /// takes them from its body: the tab bar the bottom one, the top bar under
 /// a drawer the top one, so a SafeArea in the page adds neither and keeps
 /// its content between the bars.
+///
+/// Under the tab bar (the system's or the server's) the shell draws the
+/// app's snackbar right above it, over the page, as OrcaShell's Scaffold is
+/// the root one there (orca_shell.dart:114-117): the page's own Scaffold is
+/// nested and draws none, nor lifts its FAB. A route over the shell has no
+/// tab bar: it is a titled route, whose own Scaffold draws the bar
+/// (`RoutePage`).
 @MainActor
 private struct ShellBar: ViewModifier {
     let model: TabShellModel
@@ -316,10 +325,15 @@ private struct ShellBar: ViewModifier {
         let server = model.showsServerBar(for: route)
         let menu = model.menuTitle(for: route)
         let page = $page
-        let bottom: Edge.Set = model.hidesBar(for: route) ? [] : .bottom
+        let underTabs = !model.hidesBar(for: route)
+        let bottom: Edge.Set = underTabs ? .bottom : []
         let taken = bottom.union(menu == nil ? [] : .top)
         content
             .environment(\.orcaSafeAreaTaken, taken)
+            .environment(\.orcaSnackbarDrawn, underTabs)
+            .overlay {
+                if underTabs { SnackbarOverlay(snackbars: model.router.snackbars, reachesBottomEdge: false) }
+            }
             .overlay(alignment: .leading) {
                 if model.opensDrawerByEdge(for: route), !self.page.hasLeadingDrawer {
                     DrawerEdgeGrip(edge: .leading) { model.openDrawer() }

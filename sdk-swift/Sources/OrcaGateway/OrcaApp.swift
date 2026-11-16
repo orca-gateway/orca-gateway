@@ -1,10 +1,11 @@
 #if canImport(SwiftUI)
 import SwiftUI
 
-/// One page with the snackbar and toast overlay (the head of its queue, the
-/// router's under OrcaApp), and the debug overlay while DevTools runs with
-/// `showOverlay` on. Put it inside a NavigationStack (OrcaApp does) so a
-/// Scaffold's AppBar becomes the navigation bar.
+/// One page with the toast overlay (the head of its queue, the router's
+/// under OrcaApp, when it is a toast; a snackbar is drawn by the root
+/// Scaffold on screen, `SnackbarSlot`), and the debug overlay while DevTools
+/// runs with `showOverlay` on. Put it inside a NavigationStack (OrcaApp does)
+/// so a Scaffold's AppBar becomes the navigation bar.
 @MainActor
 public struct OrcaPageView: View {
     @ObservedObject var model: OrcaPageModel
@@ -42,28 +43,25 @@ public struct OrcaPageView: View {
 }
 
 /// The head of the queue at the bottom while it is in (entering or
-/// showing): a toast as a pill, a snackbar across the width, both in the
-/// look they had before the queue. It slides and fades in, and out as the
-/// head starts to leave; the queue times it.
+/// showing) and a toast, as the pill it was before the queue (a known
+/// difference: Flutter's toast is a floating SnackBar). It slides and fades
+/// in, and out as the head starts to leave; the queue times it. A snackbar
+/// head is not drawn here.
 @MainActor
 private struct ToastView: View {
     @ObservedObject var snackbars: OrcaSnackbars
 
     var body: some View {
-        let toast = snackbars.shown
+        let toast = snackbars.shown.flatMap { $0.style == .toast ? $0 : nil }
         ZStack {
             if let toast {
-                let snackbar = toast.style == .snackbar
                 Text(toast.message)
                     .font(.subheadline)
                     .foregroundColor(.white)
                     .multilineTextAlignment(.leading)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .frame(maxWidth: snackbar ? .infinity : nil, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: snackbar ? 6 : 22)
-                            .fill(Color(white: 0.18)))
+                    .background(RoundedRectangle(cornerRadius: 22).fill(Color(white: 0.18)))
                     .padding(16)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .accessibilityIdentifier("orca.toast")
@@ -112,6 +110,48 @@ final class OrcaSnackbars: ObservableObject {
     /// The head while it is in: entering or showing, not leaving.
     var shown: OrcaToast? { queue.phase == .leaving ? nil : head }
 
+    /// How far the head is in at `clock()`, 0 (out) ... 1 (fully in),
+    /// linear: the queue's `reveal` brought up to now without changing the
+    /// queue, so a bar sampling it each frame moves between the queue's own
+    /// phase changes. 0 when idle, or when the head has gone by now.
+    var reveal: Double {
+        var now = queue
+        if let last { now.advance(by: clock() - last) }
+        return now.current?.id == queue.current?.id ? now.reveal : 0
+    }
+
+    /// What reads a bar's message out as it appears: VoiceOver's
+    /// announcement on iOS, nothing elsewhere. Tests put their own here.
+    static var announcer: (String) -> Void = { message in
+        #if canImport(UIKit) && !os(watchOS)
+        UIAccessibility.post(notification: .announcement, argument: message)
+        #endif
+    }
+    /// The bar last read out.
+    private var announced: UUID?
+
+    /// A bar for `toast` appeared: read its message out once (Flutter's live
+    /// region on the SnackBar, snack_bar.dart:849-851). A pushed page
+    /// showing the same bar, or the bar drawn again, says nothing more.
+    func announce(_ toast: OrcaToast) {
+        guard announced != toast.id else { return }
+        announced = toast.id
+        Self.announcer(toast.message)
+    }
+
+    /// A swipe took `toast` off the screen: if it is still the head it goes
+    /// at once, whatever its phase, with no leave, and the next enters
+    /// (Flutter's Dismissible, then removeCurrentSnackBar, snack_bar.dart
+    /// :859-871, :865). A bar that has gone meanwhile changes nothing.
+    func swipe(_ toast: OrcaToast) {
+        catchUp()
+        if head?.id == toast.id {
+            queue.swipe()
+            prune()
+        }
+        schedule()
+    }
+
     /// showSnackbar or showToast: the item joins the back of the queue; no
     /// duration is the kind's (4000 ms, 2000 for a toast).
     func show(_ kind: SnackbarQueue.Kind, message: String, durationMs: Int?) {
@@ -137,11 +177,16 @@ final class OrcaSnackbars: ObservableObject {
             next.advance(by: now - last)
             if next != queue {
                 queue = next
-                let live = Set(queue.items.map(\.id))
-                toasts = toasts.filter { live.contains($0.key) }
+                prune()
             }
         }
         last = now
+    }
+
+    /// Forget the OrcaToast of every item no longer queued.
+    private func prune() {
+        let live = Set(queue.items.map(\.id))
+        toasts = toasts.filter { live.contains($0.key) }
     }
 
     /// Wake at the queue's next phase change; none when it is idle.
@@ -836,8 +881,30 @@ struct RoutePage: View {
             .accessibilityIdentifier("orca.notFound")
         } else {
             LoadedRoutePage(route: route, loader: router.loader(for: route))
+                .modifier(TitledRouteSnackbar(snackbars: route.scaffoldTitle == nil ? nil : router.snackbars))
                 .environment(\.orcaPage, OrcaPageContext(router: router, route: route, isStackRoot: isStackRoot))
                 .environment(\.orcaSafeAreaTaken, taken.union(barEdges))
+        }
+    }
+}
+
+/// A titled route (`scaffoldTitle`: a tabbed config's route outside every
+/// tab) is wrapped by Flutter in a root Scaffold of its own, with its page,
+/// spinner or error inside (navigation_handler.dart:111-147, :372;
+/// orca_page.dart:218-247): that Scaffold draws the app's snackbar at the
+/// bottom edge, the inset inside, also over a page with no Scaffold, and a
+/// Scaffold in the page is nested (draws none, its FAB stays). `snackbars`
+/// nil: not a titled route, nothing changes.
+private struct TitledRouteSnackbar: ViewModifier {
+    let snackbars: OrcaSnackbars?
+
+    func body(content: Content) -> some View {
+        if let snackbars {
+            content
+                .environment(\.orcaSnackbarDrawn, true)
+                .overlay { SnackbarOverlay(snackbars: snackbars, reachesBottomEdge: true) }
+        } else {
+            content
         }
     }
 }
