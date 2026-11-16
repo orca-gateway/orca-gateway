@@ -27,6 +27,7 @@ import com.orcagateway.sdk.widgets.ClipRectWidget
 import com.orcagateway.sdk.widgets.ColorFilteredWidget
 import com.orcagateway.sdk.widgets.ConstrainedBoxWidget
 import com.orcagateway.sdk.widgets.ContainerWidget
+import com.orcagateway.sdk.widgets.CustomScrollViewWidget
 import com.orcagateway.sdk.widgets.DecoratedBoxWidget
 import com.orcagateway.sdk.widgets.DividerWidget
 import com.orcagateway.sdk.widgets.DrawerWidget
@@ -60,6 +61,10 @@ import com.orcagateway.sdk.widgets.ScaffoldWidget
 import com.orcagateway.sdk.widgets.ScrollWidget
 import com.orcagateway.sdk.widgets.ScrollbarWidget
 import com.orcagateway.sdk.widgets.SizedBoxWidget
+import com.orcagateway.sdk.widgets.SliverAppBarWidget
+import com.orcagateway.sdk.widgets.SliverGridWidget
+import com.orcagateway.sdk.widgets.SliverListWidget
+import com.orcagateway.sdk.widgets.SliverToBoxAdapterWidget
 import com.orcagateway.sdk.widgets.SpacerWidget
 import com.orcagateway.sdk.widgets.StackWidget
 import com.orcagateway.sdk.widgets.SubPageWidget
@@ -124,7 +129,7 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 68 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 73 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
@@ -133,9 +138,11 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
          * and Hero, the 13 layout wrappers of native parity step 3 (A3.1),
          * the 11 effect and touch wrappers of native parity step 4
          * (A4.x), S13's ReorderableListView and SubPage, S18's
-         * UnsupportedWidgetPlaceholder, and the five scroll widgets of native
+         * UnsupportedWidgetPlaceholder, the five scroll widgets of native
          * parity step 5 (A5.x: ListView, GridView, PageView, Scrollbar,
-         * PullToRefresh). Keep the two lists in step: the caps
+         * PullToRefresh), and step 13's CustomScrollView, SliverAppBar,
+         * SliverList, SliverGrid and SliverToBoxAdapter (B13.1, B13.2).
+         * Keep the two lists in step: the caps
          * vector advertises what this draws (WidgetBuildersTest checks it).
          */
         public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
@@ -209,6 +216,11 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("PageView") { node, model, modifier -> PageViewWidget(node, model, modifier) }
             register("Scrollbar") { node, model, modifier -> ScrollbarWidget(node, model, modifier) }
             register("PullToRefresh") { node, model, modifier -> PullToRefreshWidget(node, model, modifier) }
+            register("CustomScrollView") { node, model, modifier -> CustomScrollViewWidget(node, model, modifier) }
+            register("SliverAppBar") { node, model, modifier -> SliverAppBarWidget(node, model, modifier) }
+            register("SliverGrid") { node, model, modifier -> SliverGridWidget(node, model, modifier) }
+            register("SliverList") { node, model, modifier -> SliverListWidget(node, model, modifier) }
+            register("SliverToBoxAdapter") { node, model, modifier -> SliverToBoxAdapterWidget(node, model, modifier) }
         }
     }
 }

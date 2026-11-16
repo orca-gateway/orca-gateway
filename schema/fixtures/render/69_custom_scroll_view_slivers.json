@@ -1,0 +1,784 @@
+{
+  "name": "custom-scroll-view-slivers",
+  "description": "Column holding two CustomScrollViews and the four sliver widgets with every prop each can carry on the wire. `scroll` is the plain vertical default (no props) with onScrollBegin, onScrolling and onScrollEnd (the last two store the event offset); its slivers arrive as children: a SliverAppBar with backgroundColor #1A237E, elevation 4, centerTitle, floating, snap, expandedHeight 200, collapsedHeight 80, pinned bound to pageState `pinned` (true), the slots title (a Text reading pageState `title`), leading, flexibleSpace (a raw Container, no FlexibleSpaceBar), action_0 and action_1 as props holding node ids (and in children, in that order), and an onInit action from `actionTriggers`; a SliverToBoxAdapter with one child; a SliverGrid with crossAxisCount 3, mainAxisSpacing 8, crossAxisSpacing 4, childAspectRatio 1.5 over five cells (two lines); and a SliverList of three rows with no props. `strip` is horizontal with shrinkWrap true and reverse bound to pageState `reversed` (true), holding an adapter, a list and a SliverToBoxAdapter with no child (it draws nothing). Every static prop reaches the wire unchanged, the actions ride on their nodes, the two bindings stay state Values with their keys in the watches, and every client resolver resolves each prop to the listed value.",
+  "input": {
+    "type": "Column",
+    "key": "page",
+    "children": [
+      {
+        "type": "Expanded",
+        "key": "main",
+        "children": [
+          {
+            "type": "CustomScrollView",
+            "key": "scroll",
+            "children": [
+              {
+                "type": "SliverAppBar",
+                "key": "bar",
+                "props": {
+                  "backgroundColor": "#1A237E",
+                  "elevation": 4,
+                  "centerTitle": true,
+                  "floating": true,
+                  "pinned": {
+                    "type": "state",
+                    "key": "pinned",
+                    "scope": "page"
+                  },
+                  "snap": true,
+                  "expandedHeight": 200,
+                  "collapsedHeight": 80
+                },
+                "slots": [
+                  {
+                    "name": "title",
+                    "widget": {
+                      "type": "Text",
+                      "key": "bar_title",
+                      "props": {
+                        "data": {
+                          "type": "state",
+                          "key": "title",
+                          "scope": "page"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "name": "leading",
+                    "widget": {
+                      "type": "Icon",
+                      "key": "bar_leading",
+                      "props": {
+                        "name": "menu"
+                      }
+                    }
+                  },
+                  {
+                    "name": "flexibleSpace",
+                    "widget": {
+                      "type": "Container",
+                      "key": "bar_space",
+                      "props": {
+                        "color": "#3949AB"
+                      }
+                    }
+                  },
+                  {
+                    "name": "action_0",
+                    "widget": {
+                      "type": "Icon",
+                      "key": "bar_search",
+                      "props": {
+                        "name": "search"
+                      }
+                    }
+                  },
+                  {
+                    "name": "action_1",
+                    "widget": {
+                      "type": "Icon",
+                      "key": "bar_more",
+                      "props": {
+                        "name": "more_vert"
+                      }
+                    }
+                  }
+                ],
+                "actions": {
+                  "onInit": {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "barReady",
+                    "value": {
+                      "type": "static",
+                      "value": true
+                    }
+                  }
+                }
+              },
+              {
+                "type": "SliverToBoxAdapter",
+                "key": "adapter",
+                "children": [
+                  {
+                    "type": "Text",
+                    "key": "heading",
+                    "props": {
+                      "data": "Featured"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "SliverGrid",
+                "key": "grid",
+                "props": {
+                  "crossAxisCount": 3,
+                  "mainAxisSpacing": 8,
+                  "crossAxisSpacing": 4,
+                  "childAspectRatio": 1.5
+                },
+                "children": [
+                  {
+                    "type": "Text",
+                    "key": "cell_a",
+                    "props": {
+                      "data": "A"
+                    }
+                  },
+                  {
+                    "type": "Text",
+                    "key": "cell_b",
+                    "props": {
+                      "data": "B"
+                    }
+                  },
+                  {
+                    "type": "Text",
+                    "key": "cell_c",
+                    "props": {
+                      "data": "C"
+                    }
+                  },
+                  {
+                    "type": "Text",
+                    "key": "cell_d",
+                    "props": {
+                      "data": "D"
+                    }
+                  },
+                  {
+                    "type": "Text",
+                    "key": "cell_e",
+                    "props": {
+                      "data": "E"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "SliverList",
+                "key": "list",
+                "children": [
+                  {
+                    "type": "Text",
+                    "key": "row_a",
+                    "props": {
+                      "data": "Alpha"
+                    }
+                  },
+                  {
+                    "type": "Text",
+                    "key": "row_b",
+                    "props": {
+                      "data": "Bravo"
+                    }
+                  },
+                  {
+                    "type": "Text",
+                    "key": "row_c",
+                    "props": {
+                      "data": "Charlie"
+                    }
+                  }
+                ]
+              }
+            ],
+            "actions": {
+              "onScrollBegin": {
+                "type": "setState",
+                "scope": "page",
+                "key": "scrolling",
+                "value": {
+                  "type": "static",
+                  "value": true
+                }
+              },
+              "onScrolling": {
+                "type": "setState",
+                "scope": "page",
+                "key": "offset",
+                "value": {
+                  "type": "event",
+                  "key": "offset"
+                }
+              },
+              "onScrollEnd": {
+                "type": "actionGroup",
+                "mode": "sequential",
+                "actions": [
+                  {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "scrolling",
+                    "value": {
+                      "type": "static",
+                      "value": false
+                    }
+                  },
+                  {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "offset",
+                    "value": {
+                      "type": "event",
+                      "key": "offset"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "SizedBox",
+        "key": "strip_box",
+        "props": {
+          "height": 48
+        },
+        "children": [
+          {
+            "type": "CustomScrollView",
+            "key": "strip",
+            "props": {
+              "scrollDirection": "horizontal",
+              "reverse": {
+                "type": "state",
+                "key": "reversed",
+                "scope": "page"
+              },
+              "shrinkWrap": true
+            },
+            "children": [
+              {
+                "type": "SliverToBoxAdapter",
+                "key": "strip_adapter",
+                "children": [
+                  {
+                    "type": "Text",
+                    "key": "strip_head",
+                    "props": {
+                      "data": "Tags"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "SliverList",
+                "key": "strip_list",
+                "children": [
+                  {
+                    "type": "Text",
+                    "key": "tag_a",
+                    "props": {
+                      "data": "One"
+                    }
+                  },
+                  {
+                    "type": "Text",
+                    "key": "tag_b",
+                    "props": {
+                      "data": "Two"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "SliverToBoxAdapter",
+                "key": "strip_empty"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "title": "Catalogue",
+      "pinned": true,
+      "reversed": true,
+      "scrolling": false,
+      "offset": 0,
+      "barReady": false
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "page",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "main",
+        "strip_box"
+      ],
+      "watches": []
+    },
+    {
+      "id": "strip_box",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "height": 48
+      },
+      "children": [
+        "strip"
+      ],
+      "watches": []
+    },
+    {
+      "id": "strip",
+      "type": "CustomScrollView",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "scrollDirection": "horizontal",
+        "reverse": {
+          "type": "state",
+          "key": "reversed",
+          "scope": "page"
+        },
+        "shrinkWrap": true
+      },
+      "children": [
+        "strip_adapter",
+        "strip_list",
+        "strip_empty"
+      ],
+      "watches": [
+        "reversed"
+      ]
+    },
+    {
+      "id": "strip_empty",
+      "type": "SliverToBoxAdapter",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "strip_list",
+      "type": "SliverList",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "tag_a",
+        "tag_b"
+      ],
+      "watches": []
+    },
+    {
+      "id": "tag_b",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Two"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "tag_a",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "One"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "strip_adapter",
+      "type": "SliverToBoxAdapter",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "strip_head"
+      ],
+      "watches": []
+    },
+    {
+      "id": "strip_head",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Tags"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "main",
+      "type": "Expanded",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "scroll"
+      ],
+      "watches": []
+    },
+    {
+      "id": "scroll",
+      "type": "CustomScrollView",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "bar",
+        "adapter",
+        "grid",
+        "list"
+      ],
+      "watches": [],
+      "actions": {
+        "onScrollBegin": {
+          "type": "setState",
+          "scope": "page",
+          "key": "scrolling",
+          "value": {
+            "type": "static",
+            "value": true
+          }
+        },
+        "onScrolling": {
+          "type": "setState",
+          "scope": "page",
+          "key": "offset",
+          "value": {
+            "type": "event",
+            "key": "offset"
+          }
+        },
+        "onScrollEnd": {
+          "type": "actionGroup",
+          "mode": "sequential",
+          "actions": [
+            {
+              "type": "setState",
+              "scope": "page",
+              "key": "scrolling",
+              "value": {
+                "type": "static",
+                "value": false
+              }
+            },
+            {
+              "type": "setState",
+              "scope": "page",
+              "key": "offset",
+              "value": {
+                "type": "event",
+                "key": "offset"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "list",
+      "type": "SliverList",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "row_a",
+        "row_b",
+        "row_c"
+      ],
+      "watches": []
+    },
+    {
+      "id": "row_c",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Charlie"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "row_b",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Bravo"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "row_a",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Alpha"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "grid",
+      "type": "SliverGrid",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisCount": 3,
+        "mainAxisSpacing": 8,
+        "crossAxisSpacing": 4,
+        "childAspectRatio": 1.5
+      },
+      "children": [
+        "cell_a",
+        "cell_b",
+        "cell_c",
+        "cell_d",
+        "cell_e"
+      ],
+      "watches": []
+    },
+    {
+      "id": "cell_e",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "E"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "cell_d",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "D"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "cell_c",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "C"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "cell_b",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "B"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "cell_a",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "A"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "adapter",
+      "type": "SliverToBoxAdapter",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "heading"
+      ],
+      "watches": []
+    },
+    {
+      "id": "heading",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Featured"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "bar",
+      "type": "SliverAppBar",
+      "kind": "structure",
+      "childMode": "none",
+      "props": {
+        "backgroundColor": "#1A237E",
+        "elevation": 4,
+        "centerTitle": true,
+        "floating": true,
+        "pinned": {
+          "type": "state",
+          "key": "pinned",
+          "scope": "page"
+        },
+        "snap": true,
+        "expandedHeight": 200,
+        "collapsedHeight": 80,
+        "title": "bar_title",
+        "leading": "bar_leading",
+        "flexibleSpace": "bar_space",
+        "action_0": "bar_search",
+        "action_1": "bar_more"
+      },
+      "children": [
+        "bar_title",
+        "bar_leading",
+        "bar_space",
+        "bar_search",
+        "bar_more"
+      ],
+      "watches": [
+        "pinned"
+      ],
+      "actions": {
+        "onInit": {
+          "type": "setState",
+          "scope": "page",
+          "key": "barReady",
+          "value": {
+            "type": "static",
+            "value": true
+          }
+        }
+      }
+    },
+    {
+      "id": "bar_more",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "more_vert"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "bar_search",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "search"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "bar_space",
+      "type": "Container",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "color": "#3949AB"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "bar_leading",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "menu"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "bar_title",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "state",
+          "key": "title",
+          "scope": "page"
+        }
+      },
+      "children": [],
+      "watches": [
+        "title"
+      ]
+    }
+  ],
+  "resolved": {
+    "strip": {
+      "scrollDirection": "horizontal",
+      "reverse": true,
+      "shrinkWrap": true
+    },
+    "bar": {
+      "backgroundColor": "#1A237E",
+      "elevation": 4,
+      "centerTitle": true,
+      "floating": true,
+      "pinned": true,
+      "snap": true,
+      "expandedHeight": 200,
+      "collapsedHeight": 80,
+      "title": "bar_title",
+      "leading": "bar_leading",
+      "flexibleSpace": "bar_space",
+      "action_0": "bar_search",
+      "action_1": "bar_more"
+    },
+    "bar_title": {
+      "data": "Catalogue"
+    },
+    "bar_space": {
+      "color": "#3949AB"
+    },
+    "grid": {
+      "crossAxisCount": 3,
+      "mainAxisSpacing": 8,
+      "crossAxisSpacing": 4,
+      "childAspectRatio": 1.5
+    },
+    "heading": {
+      "data": "Featured"
+    }
+  }
+}

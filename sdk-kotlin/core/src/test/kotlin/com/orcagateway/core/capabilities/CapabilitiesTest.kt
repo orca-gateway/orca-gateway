@@ -75,12 +75,16 @@ class CapabilitiesTest {
      *
      * A5.x: native parity step 5 adds its five scroll widgets ([A5]), so the
      * pin moves from 63 to 68; Swift lands the same five in the same step.
+     *
+     * B13.1-K, B13.2-K: native parity step 13 adds CustomScrollView and the
+     * four slivers ([SLIVERS]), so the pin moves from 68 to 73; Swift lands
+     * the same five in the same step.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame68WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame73WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(68, kotlin.size)
+        assertEquals(73, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -103,6 +107,7 @@ class CapabilitiesTest {
         assertTrue("SubPage" in GeneratedCapabilities.widgets, "not advertised: SubPage")
         assertTrue("UnsupportedWidgetPlaceholder" in GeneratedCapabilities.widgets, "S18's UnsupportedWidgetPlaceholder is not advertised")
         assertTrue(kotlin.containsAll(A5), "missing: ${A5 - kotlin.toSet()}")
+        assertTrue(kotlin.containsAll(SLIVERS), "missing: ${SLIVERS - kotlin.toSet()}")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
@@ -111,17 +116,18 @@ class CapabilitiesTest {
      * A3.1: Compose draws the 13 layout wrappers, so the generated vector
      * advertises them and the core registry lets them through instead of
      * degrading them; WidgetBuildersTest pins standard() to the same set.
-     * The pin is 68: with S12's 5 animated ones (49), then native parity
+     * The pin is 73: with S12's 5 animated ones (49), then native parity
      * step 4's 11 effect and touch wrappers (A4.x, 60), then S13's
      * ReorderableListView and SubPage, then S18's
      * UnsupportedWidgetPlaceholder (63), then native parity step 5's five
-     * scroll widgets (A5.x).
+     * scroll widgets (A5.x, 68), then step 13's CustomScrollView and four
+     * slivers (B13.1-K, B13.2-K).
      */
     @Test
     fun a3_1_theThirteenLayoutWrappersAreAdvertisedAndLetThrough() {
         val advertised = GeneratedCapabilities.widgets.toSet()
         assertEquals(emptySet(), A3_1 - advertised, "not advertised")
-        assertEquals(68, GeneratedCapabilities.widgets.size)
+        assertEquals(73, GeneratedCapabilities.widgets.size)
         assertEquals(emptySet(), A3_1 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
@@ -280,5 +286,8 @@ class CapabilitiesTest {
 
         /** Native parity step 5's scroll widgets (A5.1-A5.5, A5.7), sorted. */
         val A5 = setOf("GridView", "ListView", "PageView", "PullToRefresh", "Scrollbar")
+
+        /** Native parity step 13: CustomScrollView and the four slivers. */
+        val SLIVERS = setOf("CustomScrollView", "SliverAppBar", "SliverGrid", "SliverList", "SliverToBoxAdapter")
     }
 }

@@ -41,6 +41,7 @@ public enum GeneratedCapabilities {
         "Column",
         "ConstrainedBox",
         "Container",
+        "CustomScrollView",
         "DecoratedBox",
         "Divider",
         "Drawer",
@@ -76,6 +77,10 @@ public enum GeneratedCapabilities {
         "Scrollbar",
         "SingleChildScrollView",
         "SizedBox",
+        "SliverAppBar",
+        "SliverGrid",
+        "SliverList",
+        "SliverToBoxAdapter",
         "Spacer",
         "Stack",
         "SubPage",
@@ -180,5 +185,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "d09c9ce9219403406d59212c559377a4085a2ea127ff30dcd468dad61eca8933"
+    public static let capsHash = "95244b6b9210dbf1d7a8edf36ee3acab03f4b7281e7224f24cb2dee2f7da28b8"
 }

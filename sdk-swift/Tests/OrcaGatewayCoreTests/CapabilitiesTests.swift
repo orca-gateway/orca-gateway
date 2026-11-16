@@ -37,17 +37,18 @@ final class CapabilitiesTests: XCTestCase {
 
     /// A3.1: native parity step 3's 13 layout wrappers are drawn by SwiftUI,
     /// so the generated vector advertises them, each once and sorted like
-    /// capabilities.json. The pin is 68: with step 12's 5 animated widgets
+    /// capabilities.json. The pin is 73: with step 12's 5 animated widgets
     /// (49), then native parity step 4's 11 effect and touch wrappers (A4.x,
     /// 60), then step 13's ReorderableListView and SubPage, then S18's
     /// UnsupportedWidgetPlaceholder (63), then native parity step 5's five
-    /// scroll widgets (A5.x).
-    func testA3_1TheThirteenLayoutWrappersAreAdvertisedSixtyEightInAll() throws {
+    /// scroll widgets (A5.x, 68), then step 13's CustomScrollView and four
+    /// sliver widgets (B13.1, B13.2).
+    func testA3_1TheThirteenLayoutWrappersAreAdvertisedSeventyThreeInAll() throws {
         let advertised = Set(GeneratedCapabilities.widgets)
         XCTAssertEqual(Self.a3_1.subtracting(advertised), [], "not advertised")
         XCTAssertTrue(Self.a3_1.isSubset(of: try manifestIOSWidgets()), "a wrapper lacks the ios target")
-        XCTAssertEqual(GeneratedCapabilities.widgets.count, 68)
-        XCTAssertEqual(advertised.count, 68)
+        XCTAssertEqual(GeneratedCapabilities.widgets.count, 73)
+        XCTAssertEqual(advertised.count, 73)
         XCTAssertEqual(GeneratedCapabilities.widgets, GeneratedCapabilities.widgets.sorted())
     }
 

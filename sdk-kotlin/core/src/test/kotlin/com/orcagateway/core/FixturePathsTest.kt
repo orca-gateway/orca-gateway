@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class FixturePathsTest {
     @Test
     fun theConformanceFixturesAreReachable() {
-        assertEquals(53, Fixtures.renderFiles().size)
+        assertEquals(54, Fixtures.renderFiles().size)
         assertEquals(32, Fixtures.actionFiles().size)
     }
 

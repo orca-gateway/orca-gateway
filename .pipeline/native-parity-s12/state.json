@@ -4,9 +4,9 @@
   "idea": "Native parity step 12 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase B): finish animation on sdk-swift and sdk-kotlin. Actions animateForward, animateReverse and the registry by animationId; AnimatedContainer, AnimatedOpacity, AnimatedAlign, AnimatedSwitcher; Hero; per-route page transitions (iOS: keep NavigationStack, fade and slide-up only). Test cases B12.1-B12.7. Stages 01-07 skipped as covered by the approved plan file.",
   "kind": "feature",
   "created_at": "2026-11-15T23:54:47Z",
-  "updated_at": "2026-11-16T01:20:19Z",
+  "updated_at": "2026-11-16T09:45:27Z",
   "active_session": "fe23fb0a-f62c-4a83-a51f-655a2e0bf8ff",
-  "current": "12",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -62,19 +62,24 @@
       "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "PR #41 merged to main by the user on 2026-11-16 with all checks green"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     }
   },
   "gates": {

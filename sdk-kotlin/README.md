@@ -2,7 +2,7 @@
 
 > [!WARNING]
 > **Alpha (`0.1.0-alpha.1`).** The native Android client for Orca Gateway (Epic 23b) works for the
-> pages its 68 widgets and 26 action kinds cover, but its API may still change between alphas, so
+> pages its 73 widgets and 26 action kinds cover, but its API may still change between alphas, so
 > use it with care. The Flutter SDK
 > ([`orca_gateway`](https://github.com/orca-gateway/orca-gateway/tree/main/sdk)) stays the stable
 > one; use it for production apps.
@@ -88,7 +88,7 @@ It needs JDK 17 or later and brings no HTTP library: `OrcaClient` sends through 
 | Module | What | Platforms |
 |---|---|---|
 | `core` | Wire models (`ComponentNode`, `Value`, `Action`, `PageResponse`), `ValueResolver` (9 Value kinds, 31 transforms, 13 BoolExpr ops), `ElmStore` with page and app scopes, the action executor with effects as data, the render tree, `OrcaClient` with the 412 caps handshake behind an `HttpTransport` interface, the generated capability vector, DevTools events (`DevToolsEvent`, `OrcaDebug`). kotlinx.serialization only. Artifact `com.orcagateway:sdk-core`. | JVM 17+, Android |
-| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with 68 widgets (those in [`capabilities.json`](capabilities.json)) and the degrade policies (an unknown widget becomes a FallbackPrompt; the server's `warn` banner, its `require` blocking prompt and the 426 upgrade page are drawn like any page), `OrcaTheme` button styles, `OrcaApp` on `OrcaRouter` (a `NavHost`) with its error screen (`OrcaErrorView`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
+| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with 73 widgets (those in [`capabilities.json`](capabilities.json)) and the degrade policies (an unknown widget becomes a FallbackPrompt; the server's `warn` banner, its `require` blocking prompt and the 426 upgrade page are drawn like any page), `OrcaTheme` button styles, `OrcaApp` on `OrcaRouter` (a `NavHost`) with its error screen (`OrcaErrorView`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
 
 Build: Gradle 9 through the committed wrapper, Kotlin 2.4, AGP 9, any JDK 17 or later, and an
 Android SDK with platform 36 (`ANDROID_HOME` or `local.properties`).
@@ -287,6 +287,50 @@ To try it, run the `subpage` app of the example server in the
 [Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android), booted
 from its config (`ORCA_APP_ID=subpage ORCA_BOOT=config`): a host page and a sub-page that each count on
 their own, a param sent to the sub-page, and two buttons, Replace with B and Join C.
+
+## Sliver scrolling
+
+`CustomScrollView` draws its slivers as one lazy list, a column by default or a row with
+`scrollDirection: "horizontal"`: only what is near the screen is built. `reverse`, `shrinkWrap` and the
+`onScrollBegin`, `onScrolling` and `onScrollEnd` triggers work as on a ListView.
+
+- **What is drawn.** A `SliverList` gives one row per child, as wide as the view. A `SliverGrid` gives one
+  row per line of `crossAxisCount` cells (2 by default) with GridView's cell size (`crossAxisSpacing`,
+  `childAspectRatio`) and `mainAxisSpacing` between the lines. A `SliverToBoxAdapter` gives its child, or
+  nothing without one. Any other widget put directly in the view is drawn as a row too.
+- **The bar.** A `SliverAppBar` that is the first sliver collapses as Flutter's does, to the same heights:
+  from `expandedHeight` (else 56) down to `collapsedHeight` (else 56) with `pinned`, off the screen
+  without; with `floating` it comes back as soon as the finger drags back, and with `snap` it then opens
+  or closes whole when the finger lifts, over 300 ms. It draws `backgroundColor`, the `flexibleSpace`
+  slot as wide as the bar, at its top and at most as high (a slot that expands fills the bar, any other
+  keeps its own height, as in Flutter), and a toolbar row 56 high with `leading`, `title` (`centerTitle`) and the
+  `action_0` … slots, which fades as an unpinned bar leaves. On a pushed page with no `leading` it shows a
+  back arrow. It is drawn by the SDK, not by a Material top app bar.
+- **Limits.**
+  - The bar collapses only as the first sliver of a vertical view that is not reversed. Anywhere else
+    (not first, a horizontal or reversed view, a view inside a Column with no height limit) it is a box of
+    its full height that scrolls with the rest.
+  - A floating bar follows drags, flings and the accessibility scroll action. A programmatic jump
+    (`scrollToItem`) never brings it back by itself, as in Flutter; a drag back after one, or after a
+    scrolled position is restored (a rotation), does, by as much as the finger moves. Past the bar the
+    offset of a jump or a restore is an estimate from the rows on screen, exact when the rows are one
+    height: with rows of mixed heights the bar may open early or late by the difference when the top of the
+    list comes back on screen. After a jump back toward the start the bar may open further than Flutter's when
+    the top of the list next comes on screen.
+  - `elevation` draws no shadow: SliverAppBar has no `shadowColor`, and Flutter's Material 3 shadow is
+    transparent.
+  - The bar reaches under the status bar only where nothing above has already taken that inset; the body
+    of a Scaffold starts below the status bar, so there the bar has no top padding.
+  - The scroll metrics sent with the triggers (`offset`, `maxExtent`) are exact when every row has one
+    height and an estimate from the rows on screen otherwise, as for a ListView; with a bar and mixed
+    slivers they are an estimate.
+  - A sliver outside a CustomScrollView (Flutter throws) is still drawn: a SliverList as a column, a
+    SliverGrid with every cell laid out, a SliverToBoxAdapter as its child, a SliverAppBar as the box.
+
+To try it, run the `slivers` app of the example server in the
+[Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android), booted
+from its config (`ORCA_APP_ID=slivers ORCA_BOOT=config`): three tabs with a pinned, a floating and a plain
+bar over a grid and a list of 40 rows.
 
 ## Saved state
 

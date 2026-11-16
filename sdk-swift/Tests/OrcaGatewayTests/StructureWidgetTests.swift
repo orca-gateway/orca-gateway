@@ -257,12 +257,13 @@ final class StructureWidgetTests: XCTestCase {
     /// layout wrappers (A3.1) and step 12 its 5 animated widgets, then to 60
     /// when step 4 advertised its 11 effect and touch wrappers (A4.x), then
     /// to 62 with step 13's ReorderableListView and SubPage, to 63 when
-    /// S18 added UnsupportedWidgetPlaceholder, and to 68 when native parity
-    /// step 5 advertised its five scroll widgets (A5.x).
-    func test_B10_C_S_sixtyEightWidgetsAreAdvertisedWithTheThreeNewOnes() {
+    /// S18 added UnsupportedWidgetPlaceholder, to 68 when native parity
+    /// step 5 advertised its five scroll widgets (A5.x), and to 73 with
+    /// step 13's CustomScrollView and four sliver widgets (B13.1, B13.2).
+    func test_B10_C_S_seventyThreeWidgetsAreAdvertisedWithTheThreeNewOnes() {
         let widgets = GeneratedCapabilities.widgets
-        XCTAssertEqual(widgets.count, 68)
-        XCTAssertEqual(Set(widgets).count, 68)
+        XCTAssertEqual(widgets.count, 73)
+        XCTAssertEqual(Set(widgets).count, 73)
         XCTAssertTrue(Set(widgets).isSuperset(of: ["BottomNavigationBar", "BottomNavItem", "Drawer"]))
         XCTAssertEqual(WidgetRegistry.shared.types, Set(widgets))
     }

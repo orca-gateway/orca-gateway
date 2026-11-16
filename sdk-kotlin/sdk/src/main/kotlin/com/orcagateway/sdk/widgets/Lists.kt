@@ -131,16 +131,9 @@ internal fun GridViewWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
     val horizontal = node["scrollDirection"]?.stringValue == "horizontal"
     val shrinkWrap = Props.bool(node["shrinkWrap"]) ?: false
     val insets = Props.insets(node["padding"]) ?: Insets.Zero
-    val mainSpacing = max(Props.number(node["mainAxisSpacing"]) ?: 0.0, 0.0)
-    val crossSpacing = max(Props.number(node["crossAxisSpacing"]) ?: 0.0, 0.0)
-    val cells = OrcaGridCells(
-        crossAxisCount = Props.number(node["crossAxisCount"])?.toInt() ?: 2,
-        mainAxisSpacing = mainSpacing,
-        crossAxisSpacing = crossSpacing,
-        childAspectRatio = Props.number(node["childAspectRatio"]) ?: 1.0,
-        horizontal = horizontal,
-        padding = GridPadding(insets.top, insets.left, insets.bottom, insets.right),
-    )
+    val cells = gridCells(node, horizontal, insets)
+    val mainSpacing = max(cells.mainAxisSpacing, 0.0)
+    val crossSpacing = max(cells.crossAxisSpacing, 0.0)
     BoxWithConstraints(modifier, propagateMinConstraints = true) {
         if (!constraints.hasBoundedWidth || !constraints.hasBoundedHeight) {
             // As ListView's: nothing inside reports to a Scrollbar around it.
@@ -172,14 +165,28 @@ internal fun GridViewWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
 }
 
 /**
+ * The core's cells of a GridView or SliverGrid [node]: `crossAxisCount` (2),
+ * `mainAxisSpacing` (0), `crossAxisSpacing` (0) and `childAspectRatio` (1),
+ * running along a [horizontal] or vertical scroll axis inside [insets].
+ */
+internal fun gridCells(node: ResolvedNode, horizontal: Boolean, insets: Insets = Insets.Zero): OrcaGridCells = OrcaGridCells(
+    crossAxisCount = Props.number(node["crossAxisCount"])?.toInt() ?: 2,
+    mainAxisSpacing = max(Props.number(node["mainAxisSpacing"]) ?: 0.0, 0.0),
+    crossAxisSpacing = max(Props.number(node["crossAxisSpacing"]) ?: 0.0, 0.0),
+    childAspectRatio = Props.number(node["childAspectRatio"]) ?: 1.0,
+    horizontal = horizontal,
+    padding = GridPadding(insets.top, insets.left, insets.bottom, insets.right),
+)
+
+/**
  * Every cell of a grid with no limit on an axis, each forced to the box
  * [cells] gives it: as wide as the limit across (0 with none), as long as
  * its rows. Placed relative, so a right-to-left layout mirrors it as
  * Flutter's reversed cross axis does.
  */
 @Composable
-private fun EagerGrid(node: ResolvedNode, model: OrcaPageModel, cells: OrcaGridCells) {
-    Layout(content = { for (id in node.childIds) NodeView(id, model) }) { measurables, constraints ->
+internal fun EagerGrid(node: ResolvedNode, model: OrcaPageModel, cells: OrcaGridCells, modifier: Modifier = Modifier) {
+    Layout(content = { for (id in node.childIds) NodeView(id, model) }, modifier = modifier) { measurables, constraints ->
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toDp().value.toDouble() else 0.0
         val height = if (constraints.hasBoundedHeight) constraints.maxHeight.toDp().value.toDouble() else 0.0
         val frames = measurables.indices.map { cells.frame(it, width, height) }
@@ -203,7 +210,7 @@ private fun EagerGrid(node: ResolvedNode, model: OrcaPageModel, cells: OrcaGridC
  * viewport, or with [shrinkWrap] only across, hugging its content along
  * the scroll axis.
  */
-private fun viewSize(horizontal: Boolean, shrinkWrap: Boolean): Modifier = when {
+internal fun viewSize(horizontal: Boolean, shrinkWrap: Boolean): Modifier = when {
     !shrinkWrap -> Modifier.fillMaxSize()
     horizontal -> Modifier.fillMaxHeight()
     else -> Modifier.fillMaxWidth()
