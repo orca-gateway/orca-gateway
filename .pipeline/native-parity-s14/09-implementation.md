@@ -3,38 +3,47 @@
 ## Front page
 
 ### In one breath
-`group g of n · tasks: a green, b blocked · cases: k of m green · <command>: <summary>`,
-then one line per task of this group: `<id> <title>: <what changed, in a clause>`.
+group 1 of 7 · tasks: 1 green, 0 blocked · cases: C14.1-C14.5 Flutter fixtures green · all green
+T1: 14 offline cases Flutter runs through its real preload and flow cache; 7 breaks caught.
+Flutter matched every row correction; its two quirks are pinned on purpose and said so.
 
 ### New for you
-nothing new, or the concepts the digests' decisions lean on → learning/<topic>.md
+nothing new
 
 ### Trade-offs
-`n needs you: <a review finding or a priced decision>`
-· `n auto-decided: <what> (your call, <date>)` · none
+1 auto-decided: a /config failure pinned by status, not Flutter's text (the natives carry a status)
 
 ### Questions for you
-1. Each blocked task: retry with your words, or `skip task <id> <why>`? (default: retry once)
-2. Next: group g+1? (default: go; `A` starts it). On the last group, `A` approves the stage.
-then any priced decision from a digest, with its default.
+1. Blocked tasks: none. (default: none)
+2. Next: group 2 (the store, the flow cache and preload in both cores). (default: go)
+3. needs: decision 3 for G5-G7: persistState/clearState in all three SDKs, or drop. (default: wait)
 
 ## Appendix
 
-### Group g
-One digest per task, in dependency order, in the shape of `templates/digest.md` (at most 12 lines,
-at most 3 decisions, both review verdicts). Earlier groups keep their section above; the newest
-is last.
+### Group 1
+#### T1 · Offline fixtures, Flutter as oracle (6835ab0)
+Files: schema/offline-fixture.schema.json (new) · schema/fixtures/offline/01_static_flow_boot.json (new) ·
+schema/fixtures/offline/README.md (new) · sdk/test/conformance/offline_fixtures_test.dart (new) ·
+schema/navigation-config.schema.json
+Cases: C14.1/F-C14.5/F → green (flutter test 364 = 349 + 15; analyze clean; red first; 7 deliberate breaks caught)
+Changed: a draft-07 format; 14 cases (first boot, fresh, fresh with no saved config, stale, offline with a saved
+config, a /version 500 is offline, offline with nothing saved, forceUpdate, cleanup, an unversioned removed flow keeps
+its pages, a dynamic route never served, the cache never reads the config's pages, the unversioned-flow quirk, a stale
+/config failure with no fallback); the runner drives Flutter's real OrcaApp.preload + StaticFlowManager over MockClient
+and an in-memory SharedPreferencesAsync; forceUpdate's schema description now says it blocks with its screen.
+Decisions: the store fake implements SharedPreferencesAsync (no new dependency) · a /config failure as {status} ·
+the store after checked by key set, exact versions, pages by path set
+Review fit: pass · Review quality: pass
 
 ### Test run
-`<command>` · `<summary line>` · failures one per line (`<file> › <name>: <first line>`),
-or `none`.
+Group 1 (..6835ab0): sdk `flutter test` 364, `flutter analyze` clean · engine `bun test` 751 · Swift and Kotlin
+unchanged (no file of theirs touched). Files changed: the task's only.
 
 ### Blocked
-Tasks not green after their rework pass: `<id> · <the finding or the last red line> · what was
-tried`. Or `none`.
+none
 
 ### Not done
-Tasks skipped on your word, each with the 07 cases it leaves uncovered. Or `none`.
+none
 
 ### For ship (stage 10) to know
-Migrations, config, env or data a deploy needs; what still runs by hand. Or `nothing`.
+- G5-G7 wait on the user's decision 3 (persistState/clearState).
