@@ -1,0 +1,594 @@
+{
+  "name": "sequence-edges",
+  "description": "S7 edges. Any mode that is not `join` is a replace. A join with nothing mounted mounts page 0. A page without components is mounted without a root. A replace only removes keys under `K:` or `K#<digits>:`: a host key that merely starts with the sub-page key, or with `K#` and no number before the colon, stays.",
+  "kind": "sequence",
+  "cases": [
+    {
+      "name": "an unknown mode replaces",
+      "subPageKey": "detail",
+      "pageState": {},
+      "steps": [
+        {
+          "op": "mount",
+          "response": {
+            "pageId": "profile",
+            "title": "",
+            "state": [
+              {
+                "key": "name",
+                "scope": "page",
+                "initial": "Ann"
+              },
+              {
+                "key": "theme",
+                "scope": "app",
+                "initial": "dark"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "name",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "name"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "detail:name": "Ann"
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "append",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0"
+            ],
+            "removedNodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "state": {
+              "detail:count": 4
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "",
+          "response": {
+            "pageId": "profile",
+            "title": "",
+            "state": [
+              {
+                "key": "name",
+                "scope": "page",
+                "initial": "Ann"
+              },
+              {
+                "key": "theme",
+                "scope": "app",
+                "initial": "dark"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "name",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "name"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "removedNodeIds": [
+              "detail:0"
+            ],
+            "state": {
+              "detail:name": "Ann"
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "JOIN",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0"
+            ],
+            "removedNodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "state": {
+              "detail:count": 4
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a join with nothing mounted mounts page 0",
+      "subPageKey": "detail",
+      "pageState": {},
+      "steps": [
+        {
+          "op": "update",
+          "mode": "join",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "detail:count": 4
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "join",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:",
+              "detail#1:"
+            ],
+            "roots": [
+              "detail:0",
+              "detail#1:0"
+            ],
+            "nodeIds": [
+              "detail#1:0",
+              "detail:0"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "detail:count": 4,
+              "detail#1:count": 4
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a page without components has no root",
+      "subPageKey": "detail",
+      "pageState": {},
+      "steps": [
+        {
+          "op": "mount",
+          "response": {
+            "pageId": "empty",
+            "title": "",
+            "state": [
+              {
+                "key": "note",
+                "scope": "page",
+                "initial": "none"
+              }
+            ],
+            "components": []
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [],
+            "nodeIds": [],
+            "removedNodeIds": [],
+            "state": {
+              "detail:note": "none"
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "join",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:",
+              "detail#1:"
+            ],
+            "roots": [
+              "detail#1:0"
+            ],
+            "nodeIds": [
+              "detail#1:0"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "detail:note": "none",
+              "detail#1:count": 4
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "host keys that only look like the sub-page's",
+      "subPageKey": "detail",
+      "pageState": {
+        "detail": "the bare key",
+        "detailed": 1,
+        "detailed:count": 2,
+        "detail#x:count": 3,
+        "detail#:count": 4,
+        "detail#1": 5,
+        "detail.count": 6,
+        "my:detail:count": 7,
+        "detail:left": 8,
+        "detail#12:left": 9
+      },
+      "steps": [
+        {
+          "op": "mount",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "detail": "the bare key",
+              "detailed": 1,
+              "detailed:count": 2,
+              "detail#x:count": 3,
+              "detail#:count": 4,
+              "detail#1": 5,
+              "detail.count": 6,
+              "my:detail:count": 7,
+              "detail:count": 4
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "replace",
+          "response": {
+            "pageId": "profile",
+            "title": "",
+            "state": [
+              {
+                "key": "name",
+                "scope": "page",
+                "initial": "Ann"
+              },
+              {
+                "key": "theme",
+                "scope": "app",
+                "initial": "dark"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "name",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "name"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "removedNodeIds": [
+              "detail:0"
+            ],
+            "state": {
+              "detail": "the bare key",
+              "detailed": 1,
+              "detailed:count": 2,
+              "detail#x:count": 3,
+              "detail#:count": 4,
+              "detail#1": 5,
+              "detail.count": 6,
+              "my:detail:count": 7,
+              "detail:name": "Ann"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

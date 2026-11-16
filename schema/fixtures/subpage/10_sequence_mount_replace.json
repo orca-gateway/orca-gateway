@@ -1,0 +1,441 @@
+{
+  "name": "sequence-mount-replace",
+  "description": "S5 and S7, replace. The first load mounts the page as page 0 under `K:`. A replace removes the nodes of every mounted page and every page-state key under `K:` or `K#<n>:`, then mounts the new page as page 0: its seeds are written after the removal. Host keys are never touched. Replacing with the page already shown is a refresh: same nodes, state back to the seeds.",
+  "kind": "sequence",
+  "cases": [
+    {
+      "name": "mount, then replace with another page",
+      "subPageKey": "detail",
+      "pageState": {
+        "hostCount": 1
+      },
+      "steps": [
+        {
+          "op": "mount",
+          "response": {
+            "pageId": "profile",
+            "title": "",
+            "state": [
+              {
+                "key": "name",
+                "scope": "page",
+                "initial": "Ann"
+              },
+              {
+                "key": "theme",
+                "scope": "app",
+                "initial": "dark"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "name",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "name"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:name": "Ann"
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "replace",
+          "response": {
+            "pageId": "posts",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 12
+              },
+              {
+                "key": "sort",
+                "scope": "page",
+                "initial": "new"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "total",
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Posts"
+                },
+                "children": [],
+                "watches": []
+              },
+              {
+                "id": "total",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1",
+              "detail:total"
+            ],
+            "removedNodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "state": {
+              "hostCount": 1,
+              "detail:count": 12,
+              "detail:sort": "new"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a refresh of the same page resets its state",
+      "subPageKey": "detail",
+      "pageState": {
+        "hostCount": 1
+      },
+      "steps": [
+        {
+          "op": "mount",
+          "response": {
+            "pageId": "profile",
+            "title": "",
+            "state": [
+              {
+                "key": "name",
+                "scope": "page",
+                "initial": "Ann"
+              },
+              {
+                "key": "theme",
+                "scope": "app",
+                "initial": "dark"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "name",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "name"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:name": "Ann"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "key": "detail:name",
+          "value": "Cy",
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:name": "Cy"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "key": "detail:draft",
+          "value": "typed by the user",
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:name": "Cy",
+              "detail:draft": "typed by the user"
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "replace",
+          "response": {
+            "pageId": "profile",
+            "title": "",
+            "state": [
+              {
+                "key": "name",
+                "scope": "page",
+                "initial": "Bea"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "1",
+                  "2"
+                ],
+                "watches": []
+              },
+              {
+                "id": "2",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "v2"
+                },
+                "children": [],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "name",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "name"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1",
+              "detail:2"
+            ],
+            "removedNodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "state": {
+              "hostCount": 1,
+              "detail:name": "Bea"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "the first load clears what an earlier mount left behind",
+      "subPageKey": "detail",
+      "pageState": {
+        "hostCount": 1,
+        "detail:stale": true,
+        "detail#3:count": 8
+      },
+      "steps": [
+        {
+          "op": "mount",
+          "response": {
+            "pageId": "profile",
+            "title": "",
+            "state": [
+              {
+                "key": "name",
+                "scope": "page",
+                "initial": "Ann"
+              },
+              {
+                "key": "theme",
+                "scope": "app",
+                "initial": "dark"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "name",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "name"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:name": "Ann"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

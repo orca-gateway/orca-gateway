@@ -1,0 +1,439 @@
+{
+  "name": "merge-state-keys",
+  "description": "S2e. Every field that names a page-state key gets the prefix: `key` of setState, clearState and persistState with page scope, the `stateKey` prop of an input, and the page-scoped references inside any action (a setState value, a condition, a serverAction's params, a snackbar message). Nested groups, conditions, lifecycle hooks, once and always are walked. App-scoped actions and a serverAction's `id` are left alone.",
+  "kind": "merge",
+  "cases": [
+    {
+      "name": "form with a save button",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "form",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "1",
+              "2"
+            ],
+            "watches": []
+          },
+          {
+            "id": "2",
+            "type": "ElevatedButton",
+            "kind": "button",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "3"
+            ],
+            "watches": [],
+            "actions": {
+              "onTap": {
+                "type": "actionGroup",
+                "mode": "sequential",
+                "actions": [
+                  {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "saving",
+                    "value": {
+                      "type": "static",
+                      "value": true
+                    }
+                  },
+                  {
+                    "type": "setState",
+                    "scope": "app",
+                    "key": "lastEmail",
+                    "value": {
+                      "type": "state",
+                      "key": "email",
+                      "scope": "page"
+                    }
+                  },
+                  {
+                    "type": "clearState",
+                    "scope": "page",
+                    "key": "error"
+                  },
+                  {
+                    "type": "clearState",
+                    "scope": "app",
+                    "key": "draft"
+                  },
+                  {
+                    "type": "persistState",
+                    "scope": "page",
+                    "key": "email",
+                    "storage": "local"
+                  },
+                  {
+                    "type": "persistState",
+                    "scope": "app",
+                    "key": "token",
+                    "storage": "session"
+                  },
+                  {
+                    "type": "conditionalAction",
+                    "branches": [
+                      {
+                        "when": {
+                          "op": "eq",
+                          "left": {
+                            "type": "state",
+                            "key": "email",
+                            "scope": "page"
+                          },
+                          "right": {
+                            "type": "state",
+                            "key": "lastEmail",
+                            "scope": "app"
+                          }
+                        },
+                        "then": {
+                          "type": "setState",
+                          "scope": "page",
+                          "key": "unchanged",
+                          "value": {
+                            "type": "static",
+                            "value": true
+                          }
+                        }
+                      }
+                    ],
+                    "else": {
+                      "type": "lifecycle",
+                      "action": {
+                        "type": "serverAction",
+                        "id": "save",
+                        "params": {
+                          "email": {
+                            "type": "state",
+                            "key": "email",
+                            "scope": "page"
+                          },
+                          "device": {
+                            "type": "state",
+                            "key": "deviceId",
+                            "scope": "app"
+                          }
+                        }
+                      },
+                      "onLoading": {
+                        "type": "setState",
+                        "scope": "page",
+                        "key": "saving",
+                        "value": {
+                          "type": "static",
+                          "value": true
+                        }
+                      },
+                      "onSuccess": [
+                        {
+                          "type": "setState",
+                          "scope": "page",
+                          "key": "saving",
+                          "value": {
+                            "type": "static",
+                            "value": false
+                          }
+                        },
+                        {
+                          "type": "showSnackbar",
+                          "message": {
+                            "type": "state",
+                            "key": "message",
+                            "scope": "page"
+                          }
+                        }
+                      ],
+                      "onError": {
+                        "type": "setState",
+                        "scope": "page",
+                        "key": "error",
+                        "value": {
+                          "type": "event",
+                          "key": "message"
+                        }
+                      },
+                      "onComplete": {
+                        "type": "once",
+                        "action": {
+                          "type": "always",
+                          "action": {
+                            "type": "clearState",
+                            "scope": "page",
+                            "key": "draft"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Save"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "TextField",
+            "kind": "input",
+            "childMode": "none",
+            "props": {
+              "value": {
+                "type": "state",
+                "key": "email",
+                "scope": "page"
+              },
+              "stateKey": "email"
+            },
+            "children": [],
+            "watches": [
+              "email"
+            ],
+            "actions": {
+              "onChange": {
+                "type": "setState",
+                "scope": "page",
+                "key": "email",
+                "value": {
+                  "type": "event",
+                  "key": "value"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail:1",
+              "detail:2"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:2",
+            "type": "ElevatedButton",
+            "kind": "button",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "detail:3"
+            ],
+            "watches": [],
+            "actions": {
+              "onTap": {
+                "type": "actionGroup",
+                "mode": "sequential",
+                "actions": [
+                  {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "detail:saving",
+                    "value": {
+                      "type": "static",
+                      "value": true
+                    }
+                  },
+                  {
+                    "type": "setState",
+                    "scope": "app",
+                    "key": "lastEmail",
+                    "value": {
+                      "type": "state",
+                      "key": "detail:email",
+                      "scope": "page"
+                    }
+                  },
+                  {
+                    "type": "clearState",
+                    "scope": "page",
+                    "key": "detail:error"
+                  },
+                  {
+                    "type": "clearState",
+                    "scope": "app",
+                    "key": "draft"
+                  },
+                  {
+                    "type": "persistState",
+                    "scope": "page",
+                    "key": "detail:email",
+                    "storage": "local"
+                  },
+                  {
+                    "type": "persistState",
+                    "scope": "app",
+                    "key": "token",
+                    "storage": "session"
+                  },
+                  {
+                    "type": "conditionalAction",
+                    "branches": [
+                      {
+                        "when": {
+                          "op": "eq",
+                          "left": {
+                            "type": "state",
+                            "key": "detail:email",
+                            "scope": "page"
+                          },
+                          "right": {
+                            "type": "state",
+                            "key": "lastEmail",
+                            "scope": "app"
+                          }
+                        },
+                        "then": {
+                          "type": "setState",
+                          "scope": "page",
+                          "key": "detail:unchanged",
+                          "value": {
+                            "type": "static",
+                            "value": true
+                          }
+                        }
+                      }
+                    ],
+                    "else": {
+                      "type": "lifecycle",
+                      "action": {
+                        "type": "serverAction",
+                        "id": "save",
+                        "params": {
+                          "email": {
+                            "type": "state",
+                            "key": "detail:email",
+                            "scope": "page"
+                          },
+                          "device": {
+                            "type": "state",
+                            "key": "deviceId",
+                            "scope": "app"
+                          }
+                        }
+                      },
+                      "onLoading": {
+                        "type": "setState",
+                        "scope": "page",
+                        "key": "detail:saving",
+                        "value": {
+                          "type": "static",
+                          "value": true
+                        }
+                      },
+                      "onSuccess": [
+                        {
+                          "type": "setState",
+                          "scope": "page",
+                          "key": "detail:saving",
+                          "value": {
+                            "type": "static",
+                            "value": false
+                          }
+                        },
+                        {
+                          "type": "showSnackbar",
+                          "message": {
+                            "type": "state",
+                            "key": "detail:message",
+                            "scope": "page"
+                          }
+                        }
+                      ],
+                      "onError": {
+                        "type": "setState",
+                        "scope": "page",
+                        "key": "detail:error",
+                        "value": {
+                          "type": "event",
+                          "key": "message"
+                        }
+                      },
+                      "onComplete": {
+                        "type": "once",
+                        "action": {
+                          "type": "always",
+                          "action": {
+                            "type": "clearState",
+                            "scope": "page",
+                            "key": "detail:draft"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "detail:3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Save"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:1",
+            "type": "TextField",
+            "kind": "input",
+            "childMode": "none",
+            "props": {
+              "value": {
+                "type": "state",
+                "key": "detail:email",
+                "scope": "page"
+              },
+              "stateKey": "detail:email"
+            },
+            "children": [],
+            "watches": [
+              "detail:email"
+            ],
+            "actions": {
+              "onChange": {
+                "type": "setState",
+                "scope": "page",
+                "key": "detail:email",
+                "value": {
+                  "type": "event",
+                  "key": "value"
+                }
+              }
+            }
+          }
+        ],
+        "state": {}
+      }
+    }
+  ]
+}

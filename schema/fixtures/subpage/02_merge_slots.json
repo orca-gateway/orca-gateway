@@ -1,0 +1,231 @@
+{
+  "name": "merge-slots",
+  "description": "S2b. A structure widget names its slot nodes in props (`appBar`, `body`, `title`, `action_0`): a top-level string prop whose value is one of that node's own `children` ids is a slot reference and gets the prefix. A string prop that only looks like an id (the Text nodes whose `data` is \"title\" and \"2\", ids of other nodes) is not one of the node's own children and is left alone. A ListView `separator` is not a slot: the encoder writes that widget inline in props, and it is copied.",
+  "kind": "merge",
+  "cases": [
+    {
+      "name": "scaffold, app bar, list with a separator",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "inbox",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Scaffold",
+            "kind": "structure",
+            "childMode": "none",
+            "props": {
+              "appBar": "1",
+              "body": "list"
+            },
+            "children": [
+              "1",
+              "list"
+            ],
+            "watches": []
+          },
+          {
+            "id": "list",
+            "type": "ListView",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {
+              "separator": {
+                "kind": "primitive",
+                "childMode": "none",
+                "type": "Divider",
+                "props": {}
+              }
+            },
+            "children": [
+              "4",
+              "5"
+            ],
+            "watches": []
+          },
+          {
+            "id": "5",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "2"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "4",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "title"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "AppBar",
+            "kind": "structure",
+            "childMode": "none",
+            "props": {
+              "title": "title",
+              "action_0": "2"
+            },
+            "children": [
+              "title",
+              "2"
+            ],
+            "watches": []
+          },
+          {
+            "id": "2",
+            "type": "TextButton",
+            "kind": "button",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Edit"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "title",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Inbox"
+            },
+            "children": [],
+            "watches": []
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Scaffold",
+            "kind": "structure",
+            "childMode": "none",
+            "props": {
+              "appBar": "detail:1",
+              "body": "detail:list"
+            },
+            "children": [
+              "detail:1",
+              "detail:list"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:list",
+            "type": "ListView",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {
+              "separator": {
+                "kind": "primitive",
+                "childMode": "none",
+                "type": "Divider",
+                "props": {}
+              }
+            },
+            "children": [
+              "detail:4",
+              "detail:5"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:5",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "2"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:4",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "title"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:1",
+            "type": "AppBar",
+            "kind": "structure",
+            "childMode": "none",
+            "props": {
+              "title": "detail:title",
+              "action_0": "detail:2"
+            },
+            "children": [
+              "detail:title",
+              "detail:2"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:2",
+            "type": "TextButton",
+            "kind": "button",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "detail:3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Edit"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:title",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Inbox"
+            },
+            "children": [],
+            "watches": []
+          }
+        ],
+        "state": {}
+      }
+    }
+  ]
+}

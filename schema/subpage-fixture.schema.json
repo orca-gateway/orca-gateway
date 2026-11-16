@@ -1,0 +1,287 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/subpage-fixture.json",
+  "title": "SubPage conformance fixture",
+  "description": "Executable spec for how a client embeds a page inside a page (the SubPage widget and the updateSubPage action). Every Orca SDK (Flutter, Swift, Kotlin) loads these files and drives its pure sub-page core with them. One file has one `kind` and several cases. `merge`: a prefix and a page response in, the rewritten nodes and the state seeds out. `actions`: a prefix and a bare action list in, the rewritten list out. `request`: a case carries either `fetch` (page id and resolved params in, path and query out) or `action` (mounted prefixes, the id of the node that fired and the page state in, the matched prefix and the posted page state out). `sequence`: a SubPage key, a starting host page state and steps; after each step the mounted prefixes, the drawn roots, the mounted node ids, the node ids the step removed and the whole page state. The contract is the oracle, not any one SDK: see fixtures/subpage/README.md.",
+  "type": "object",
+  "required": ["name", "description", "kind", "cases"],
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "kind": { "const": "merge" },
+        "cases": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/MergeCase" } }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "kind": { "const": "actions" },
+        "cases": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/ActionsCase" } }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "kind": { "const": "request" },
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "oneOf": [{ "$ref": "#/definitions/FetchCase" }, { "$ref": "#/definitions/PostedStateCase" }] }
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "kind": { "const": "sequence" },
+        "cases": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/SequenceCase" } }
+      }
+    }
+  ],
+  "definitions": {
+    "Prefix": {
+      "type": "string",
+      "pattern": "^.+:$",
+      "description": "`K:` for page 0 of the SubPage with id K, `K#j:` for its j-th joined page (j from 1)."
+    },
+    "Node": {
+      "type": "object",
+      "description": "A component node as the engine encoder emits it (component-node.schema.json).",
+      "required": ["id", "type", "kind", "childMode", "props", "children", "watches"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "kind": { "enum": ["layout", "primitive", "input", "button", "structure"] },
+        "childMode": { "enum": ["single", "multi", "none"] },
+        "props": { "type": "object" },
+        "children": { "type": "array", "items": { "type": "string" } },
+        "watches": { "type": "array", "items": { "type": "string" } },
+        "actions": { "type": "object", "additionalProperties": { "$ref": "#/definitions/Action" } }
+      }
+    },
+    "Action": {
+      "type": "object",
+      "description": "An action as action.schema.json defines it, or as a server returns it.",
+      "required": ["type"],
+      "properties": { "type": { "type": "string" } }
+    },
+    "StateDefinition": {
+      "type": "object",
+      "required": ["key", "scope", "initial"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string" },
+        "scope": { "enum": ["page", "app"] },
+        "initial": {}
+      }
+    },
+    "PageResponse": {
+      "type": "object",
+      "description": "A page response body (page-response.schema.json).",
+      "required": ["pageId", "title", "state", "components"],
+      "additionalProperties": false,
+      "properties": {
+        "pageId": { "type": "string" },
+        "title": { "type": "string" },
+        "state": { "type": "array", "items": { "$ref": "#/definitions/StateDefinition" } },
+        "components": { "type": "array", "items": { "$ref": "#/definitions/Node" } }
+      }
+    },
+    "MergeCase": {
+      "type": "object",
+      "required": ["name", "prefix", "response", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "prefix": { "$ref": "#/definitions/Prefix" },
+        "response": { "$ref": "#/definitions/PageResponse" },
+        "expected": {
+          "type": "object",
+          "required": ["nodes", "state"],
+          "additionalProperties": false,
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "description": "The response's nodes, rewritten, in the same order.",
+              "items": { "$ref": "#/definitions/Node" }
+            },
+            "state": {
+              "type": "object",
+              "description": "The seeds: prefixed page-state key to initial value."
+            }
+          }
+        }
+      }
+    },
+    "ActionsCase": {
+      "type": "object",
+      "required": ["name", "prefix", "actions", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "prefix": { "$ref": "#/definitions/Prefix" },
+        "actions": { "type": "array", "items": { "$ref": "#/definitions/Action" } },
+        "expected": {
+          "type": "array",
+          "description": "The same list, rewritten, in the same order.",
+          "items": { "$ref": "#/definitions/Action" }
+        }
+      }
+    },
+    "FetchCase": {
+      "type": "object",
+      "required": ["name", "fetch", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "fetch": {
+          "type": "object",
+          "required": ["pageId"],
+          "additionalProperties": false,
+          "properties": {
+            "pageId": { "type": "string", "description": "The resolved `pageId` prop." },
+            "params": { "type": "object", "description": "The resolved `params` prop: plain JSON values, no Value objects." }
+          }
+        },
+        "expected": {
+          "type": "object",
+          "required": ["path", "query"],
+          "additionalProperties": false,
+          "properties": {
+            "path": { "type": "string", "description": "The page path handed to the page route." },
+            "query": {
+              "type": "string",
+              "description": "The query string without its question mark; empty when nothing is sent, and then the request has no question mark."
+            }
+          }
+        }
+      }
+    },
+    "PostedStateCase": {
+      "type": "object",
+      "required": ["name", "action", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "action": {
+          "type": "object",
+          "required": ["prefixes", "sourceId", "pageState"],
+          "additionalProperties": false,
+          "properties": {
+            "prefixes": {
+              "type": "array",
+              "description": "The prefix of every page mounted in the host page, nested ones included, in no particular order.",
+              "items": { "$ref": "#/definitions/Prefix" }
+            },
+            "sourceId": {
+              "type": ["string", "null"],
+              "description": "Id of the node that fired the action, null when there is none."
+            },
+            "pageState": { "type": "object", "description": "The host page's whole page state." }
+          }
+        },
+        "expected": {
+          "type": "object",
+          "required": ["prefix", "pageState"],
+          "additionalProperties": false,
+          "properties": {
+            "prefix": {
+              "type": ["string", "null"],
+              "description": "The longest mounted prefix the source id starts with; null when none does."
+            },
+            "pageState": { "type": "object", "description": "What the serverAction posts as `pageState`." }
+          }
+        }
+      }
+    },
+    "SequenceCase": {
+      "type": "object",
+      "required": ["name", "subPageKey", "pageState", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "subPageKey": { "type": "string", "description": "Id of the SubPage node in the host page's node store." },
+        "pageState": { "type": "object", "description": "The host page's page state before the first step." },
+        "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/Step" } }
+      }
+    },
+    "Step": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "The first load of the SubPage: the fetched page is mounted as a replace.",
+          "required": ["op", "response", "expected"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "mount" },
+            "response": { "$ref": "#/definitions/PageResponse" },
+            "expected": { "$ref": "#/definitions/Mounted" }
+          }
+        },
+        {
+          "type": "object",
+          "description": "An updateSubPage whose fetch answered with `response`.",
+          "required": ["op", "mode", "response", "expected"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "update" },
+            "mode": { "type": "string", "description": "The resolved `mode`. Only `join` joins; any other string replaces." },
+            "response": { "$ref": "#/definitions/PageResponse" },
+            "expected": { "$ref": "#/definitions/Mounted" }
+          }
+        },
+        {
+          "type": "object",
+          "description": "A write to the host page's page state between two loads (a setState that ran).",
+          "required": ["op", "key", "value", "expected"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "set" },
+            "key": { "type": "string" },
+            "value": {},
+            "expected": { "$ref": "#/definitions/Mounted" }
+          }
+        }
+      ]
+    },
+    "Mounted": {
+      "type": "object",
+      "description": "What holds once the step is done.",
+      "required": ["prefixes", "roots", "nodeIds", "removedNodeIds", "state"],
+      "additionalProperties": false,
+      "properties": {
+        "prefixes": {
+          "type": "array",
+          "description": "Prefix of each mounted page, oldest first.",
+          "items": { "$ref": "#/definitions/Prefix" }
+        },
+        "roots": {
+          "type": "array",
+          "description": "Id of the root node of each mounted page that has one, oldest first: the drawing order, top to bottom.",
+          "items": { "type": "string" }
+        },
+        "nodeIds": {
+          "type": "array",
+          "description": "Ids of every node this SubPage has in the host's node store, sorted by code point.",
+          "items": { "type": "string" }
+        },
+        "removedNodeIds": {
+          "type": "array",
+          "description": "Ids this step took out of the node store before it put its own nodes in, sorted by code point.",
+          "items": { "type": "string" }
+        },
+        "state": { "type": "object", "description": "The host page's whole page state." }
+      }
+    }
+  }
+}
