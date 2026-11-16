@@ -49,6 +49,19 @@ one commit per task (reworks as their own commits), the stage records, and the w
   shade, and Map Integration drew Google's map with its pin (no MapsDynamite crash: #53's entry is now on the branch).
 - Follow-up: harden the map's iOS simulator tests (wait on a signal, not a fixed pump), its own PR.
 
+### With the user's Firebase project (2026-11-17)
+- The user's GoogleService-Info.plist and google-services.json sit one folder up in the main checkout
+  (examples/app-ios/, examples/app-android/), not where the READMEs and .gitignore say (OrcaCounter/, app/); copied
+  here into the ignored paths, nothing committed. Both match com.orcagateway.examples.counter.
+- iOS 18.5 simulator: an unsigned build (CI's form) has no aps-environment entitlement and APNs refuses it; built
+  signed ad hoc as Xcode's run is: APNs token (80 bytes), "Permission: granted" and the FCM token (142 characters) in
+  app state, Get token again, Subscribe and Unsubscribe to news with no error, the banner, its tap to /map. Swift ✅.
+- API 34 emulator: "Permission: granted", then FIS_AUTH_ERROR: Firebase Installations answered 403
+  PERMISSION_DENIED (ACCESS_DENIED) to the Android key in google-services.json, the same key as the Maps key in
+  local.properties (the iOS key differs and works). The user's to fix in Google Cloud; Kotlin stays ☐.
+- The map Swift job failed again on 9574333, in the tap-off map test (the pin not shown within the 3 s wait), as the
+  map PR's own run did; the failed job was re-run. The emulator crashed once (its GPU layer) and was booted again.
+
 ### What reviewers will find in the body
 - Why: push existed only for Flutter.
 - What changes: the two packages in the map's shape (firebase-ios-sdk from 12.17.0 on iOS, firebase-messaging 25.0.2
