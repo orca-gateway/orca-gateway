@@ -15,7 +15,6 @@ import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.ComponentNode
-import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.WidgetBuilders
@@ -56,13 +55,12 @@ class SizingTest {
 
     /**
      * A page drawn from its root inside a box of the given size, loose or
-     * (with [tight]) forcing that size on the root. The six types are not
-     * advertised yet, so the core gets a registry that knows them; they and
-     * the SizedBoxes are tagged with their ids.
+     * (with [tight]) forcing that size on the root. The six types are
+     * advertised, so the core's standard registry lets them through; they
+     * and the SizedBoxes are tagged with their ids.
      */
     private fun sizingPage(width: Dp, height: Dp, vararg nodes: ComponentNode, tight: Boolean = false) {
-        val registry = WidgetRegistry(types = WidgetRegistry.shared.types + SIZING)
-        val model = OrcaPageModel(page(*nodes), registry = registry).apply {
+        val model = OrcaPageModel(page(*nodes)).apply {
             builders = WidgetBuilders.standard().apply {
                 register("Align") { node, model, modifier -> AlignWidget(node, model, modifier.testTag(node.id)) }
                 register("AspectRatio") { node, model, modifier ->
@@ -382,9 +380,5 @@ class SizingTest {
         sizingPage(200.dp, 200.dp, single("fb", "FittedBox", "b"), sizedBox("b", 400, 100))
         assertRect(0, 0, 200, 50, bounds("fb"))
         assertRect(0, 0, 200, 50, drawnBounds("b"))
-    }
-
-    private companion object {
-        val SIZING = setOf("Align", "AspectRatio", "ConstrainedBox", "FittedBox", "FractionallySizedBox", "LimitedBox")
     }
 }

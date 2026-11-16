@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.ComponentNode
-import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.WidgetBuilders
@@ -64,13 +63,12 @@ class FlexibleIntrinsicTest {
 
     /**
      * A page drawn from its root inside a box of the given size, loose or
-     * (with [tight]) forcing that size on the root. The four types are not
-     * advertised yet, so the core gets a registry that knows them; every
+     * (with [tight]) forcing that size on the root. The four types are
+     * advertised, so the core's standard registry lets them through; every
      * node is tagged with its id.
      */
     private fun flexPage(width: Dp, height: Dp, vararg nodes: ComponentNode, tight: Boolean = false) {
-        val registry = WidgetRegistry(types = WidgetRegistry.shared.types + WRAPPERS)
-        val model = OrcaPageModel(page(*nodes), registry = registry).apply {
+        val model = OrcaPageModel(page(*nodes)).apply {
             builders = WidgetBuilders.standard().apply {
                 register("Flexible") { node, model, modifier -> FlexibleWidget(node, model, modifier.testTag(node.id)) }
                 register("Expanded") { node, model, modifier -> ExpandedWidget(node, model, modifier.testTag(node.id)) }
@@ -387,9 +385,5 @@ class FlexibleIntrinsicTest {
         assertRect(0, 0, 100, 10, bounds("r"))
         assertRect(0, 0, 50, 10, bounds("a"))
         assertRect(50, 0, 100, 10, bounds("b"))
-    }
-
-    private companion object {
-        val WRAPPERS = setOf("Flexible", "Expanded", "IntrinsicHeight", "IntrinsicWidth", "Baseline")
     }
 }

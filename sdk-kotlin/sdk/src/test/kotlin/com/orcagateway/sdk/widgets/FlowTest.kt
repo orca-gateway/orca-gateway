@@ -34,7 +34,6 @@ import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
 import com.orcagateway.core.models.StateDefinition
 import com.orcagateway.core.models.StateScope
-import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.WidgetBuilders
@@ -73,10 +72,10 @@ class FlowTest {
     /**
      * A page drawn from its root inside a box of the given size, loose or
      * (with [tight]) forcing that size on the root, in [direction]. The
-     * three types and group 3's IntrinsicHeight and IntrinsicWidth are not
-     * advertised yet, so the core gets a registry that knows them; they, the
-     * Rows, Columns, GestureDetectors and SizedBoxes are tagged with their
-     * ids.
+     * three types and group 3's IntrinsicHeight and IntrinsicWidth are
+     * advertised, so the core's standard registry lets them through; they,
+     * the Rows, Columns, GestureDetectors and SizedBoxes are tagged with
+     * their ids.
      */
     private fun flowPage(
         width: Dp,
@@ -86,8 +85,7 @@ class FlowTest {
         state: List<StateDefinition> = emptyList(),
         direction: LayoutDirection = LayoutDirection.Ltr,
     ): OrcaPageModel {
-        val registry = WidgetRegistry(types = WidgetRegistry.shared.types + FLOW)
-        val model = OrcaPageModel(page(*nodes, state = state), registry = registry).apply {
+        val model = OrcaPageModel(page(*nodes, state = state)).apply {
             builders = WidgetBuilders.standard().apply {
                 register("Wrap") { node, model, modifier -> WrapWidget(node, model, modifier.testTag(node.id)) }
                 register("Offstage") { node, model, modifier -> OffstageWidget(node, model, modifier.testTag(node.id)) }
@@ -453,9 +451,5 @@ class FlowTest {
         )
         systemBars(left = 10, top = 24, right = 16, bottom = 48)
         assertRect(10, 24, 284, 352, bounds("col"))
-    }
-
-    private companion object {
-        val FLOW = setOf("Wrap", "Offstage", "SafeArea", "IntrinsicHeight", "IntrinsicWidth")
     }
 }
