@@ -55,6 +55,7 @@ scheme, or pass them to `simctl launch`:
 | Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
 | Todo | `todo` | `home` | add, tick, delete |
 | Custom extensions | `custom` | `home` | a plugin widget and plugin actions (see "Plugins" below) |
+| Saved state | `saved-state` | `home` | a count saved on the device or for the session (see "Saved state" below) |
 
 ```bash
 SIMCTL_CHILD_ORCA_APP_ID=server-actions SIMCTL_CHILD_ORCA_PATH=shop xcrun simctl launch booted com.orcagateway.examples.counter
@@ -208,8 +209,8 @@ Each start asks `/version` and compares the flow versions with the saved ones:
   pages and the versions, in the app's Application Support/com.orcagateway.examples.counter/OrcaGateway.
 - Every version matches: the saved config is used and `/config` is not asked for.
 - `/version` fails (no network, the server down, an error answer): the app boots from the saved
-  config. With nothing saved it shows "Could not start the app" and "No network and no cached
-  config available", with "Try again".
+  config. With nothing saved it shows Flutter's screen for it, "Something Went Wrong" and "An
+  unexpected error occurred. Please try again.", with "Try again".
 
 `home` and `about` then open from the saved pages with no request, visited or not. `profile` and
 every other page go to the network. The saved config is the installed app's, not one per
@@ -219,8 +220,9 @@ every other page go to the network. The saved config is the installed app's, not
 server's console prints a `request_start` line per request, with its `"path"`.
 
 1. Nothing saved: remove the app (`xcrun simctl uninstall booted com.orcagateway.examples.counter`)
-   and install it again (Run in Xcode). With the server stopped, launch: "Could not start the app"
-   and "No network and no cached config available".
+   and install it again (Run in Xcode). With the server stopped, launch: an exclamation mark in a
+   circle, "Something Went Wrong" and "An unexpected error occurred. Please try again.", with "Try
+   again".
 2. Start the server and launch: "Home (Static)" shows. The server got `/version` and `/config`,
    and no `/page/home`.
 3. Launch again: only `/version` this time.
@@ -246,6 +248,64 @@ SIMCTL_CHILD_ORCA_BOOT=config SIMCTL_CHILD_ORCA_APP_ID=static-flows SIMCTL_CHILD
 ```
 
 The host's code is `HostPreload` in `OrcaCounter/OrcaCounterApp.swift`.
+
+## Saved state
+
+The `saved-state` demo app (`examples/server/saved-state.ts`) tries `persistState` and
+`clearState` ("Saved state" in [`sdk-swift/README.md`](../../sdk-swift/README.md)). Its page shows
+a page-state count with the buttons "+1", "Save on device", "Save for this session" and "Forget",
+an app-state visits count with "+1 and save", and "Leave this page", which opens another page whose
+"Back home" opens this page again. A grey line under each button says what it does. The host
+passes no `savedState:`, so `OrcaApp` saves in its own file store. Start the server (step 1 above;
+from source if your demo server does not have this app yet), then launch:
+
+```bash
+SIMCTL_CHILD_ORCA_APP_ID=saved-state SIMCTL_CHILD_ORCA_PATH=home \
+  xcrun simctl launch --terminate-running-process booted com.orcagateway.examples.counter
+```
+
+Booted from its config, the steps below give the same results:
+
+```bash
+SIMCTL_CHILD_ORCA_APP_ID=saved-state SIMCTL_CHILD_ORCA_BOOT=config \
+  xcrun simctl launch --terminate-running-process booted com.orcagateway.examples.counter
+```
+
+The device copies are files in the app's Application
+Support/com.orcagateway.examples.counter/OrcaGateway: `orca_saved_page_home` holds the count and
+`orca_saved_app` the visits. To read one:
+
+```bash
+dir="$(xcrun simctl get_app_container booted com.orcagateway.examples.counter data)/Library/Application Support/com.orcagateway.examples.counter/OrcaGateway"
+cat "$dir/orca_saved_page_home"
+```
+
+It prints the saved JSON, such as `{"count":3}`, or "No such file or directory" when nothing is
+saved.
+
+**Check it by hand.** Each launch is one of the two commands above, the same each time. It quits a
+running copy first, so a launch is also a kill and relaunch. Start with nothing saved: a fresh
+install, or `rm -f "$dir"/orca_saved_*` before a launch. Open the page again with "Leave this page"
+and "Back home", not by going back: going back shows the page as you left it, unsaved count
+included, because it was never set up again.
+
+1. Launch: "Count: 0" and "Visits: 0".
+2. Count up: tap "+1" three times: "Count: 3". Launch again: "Count: 0", as nothing was saved.
+3. Save on device: tap "+1" three times, then "Save on device". `orca_saved_page_home` holds
+   `{"count":3}`. Tap "+1" twice: "Count: 5", and the file still holds 3, as a save is a snapshot.
+   Launch again: "Count: 3".
+4. Session: tap "+1" ("Count: 4"), then "Save for this session". `orca_saved_page_home` is gone: a
+   key keeps one saved copy, now the session's. Tap "+1": "Count: 5". Tap "Leave this page", then
+   "Back home": "Count: 4", the session copy. Launch again: "Count: 0", as the session ended with
+   the process.
+5. Forget: tap "+1" twice, then "Save on device": "Count: 2", and the file holds `{"count":2}`. Tap
+   "Forget": "Count:" with no number, and the file is gone. Tap "+1": "Count: 1" (an empty count
+   adds from 0). Launch again: "Count: 0". "Forget" deletes a session copy too: tap "+1", "Save for
+   this session" and "Forget", then "Leave this page" and "Back home": "Count: 0".
+6. Visits: tap "+1 and save" twice: "Visits: 2", and `orca_saved_app` holds `{"visits":2}`. Tap
+   "Leave this page", then "Back home": still "Visits: 2", as app state is shared and the page's
+   initial 0 only fills an empty key. Launch again: "Visits: 2", restored at boot before the first
+   page.
 
 ## Error screens, dark mode, locale and splash
 

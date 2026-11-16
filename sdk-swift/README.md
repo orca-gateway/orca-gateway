@@ -1,8 +1,8 @@
 # Orca Gateway iOS SDK
 
 > [!WARNING]
-> **Alpha (`0.1.0-alpha.1`).** The native iOS client for Orca Gateway works for the pages its 56
-> widgets and 20 action kinds cover, but its API may still change between alphas. For production
+> **Alpha (`0.1.0-alpha.1`).** The native iOS client for Orca Gateway works for the pages its 63
+> widgets and 25 action kinds cover, but its API may still change between alphas. For production
 > apps use the Flutter SDK ([`orca_gateway`](https://github.com/orca-gateway/orca-gateway/tree/main/sdk)).
 
 The SDK renders the same server-driven pages as the Flutter SDK, from the same Bun engine and the
@@ -483,8 +483,9 @@ Flutter SDK's rules:
   used and `/config` is not asked for. When one moved (or is new), the whole `/config` is fetched
   and saved again, and the saved pages of a versioned flow that is gone from it are deleted.
 - Offline is any `/version` failure: no network, the server down, an error answer. The app then
-  boots from the saved config. With none saved (no online start yet), it shows "Could not start
-  the app" and "No network and no cached config available", with a retry.
+  boots from the saved config. With none saved (no online start yet), it shows Flutter's screen
+  for it, "Something Went Wrong" and "An unexpected error occurred. Please try again.", with "Try
+  again", which runs the boot again. An `errorView` gets the error itself, an `OfflineBootError`.
 - Dynamic routes (`isDynamic`) and pages outside static flows are never cached: they always go to
   the network, so offline they show the page's error. A page from the network is never saved.
 - A flow with no version (0 on the server) gets no saved version, so `/version` finds it moved on
@@ -492,9 +493,9 @@ Flutter SDK's rules:
 
 The boot can run in your own splash instead (Dart `OrcaApp.preload`). `preload(client:cache:)`
 does the steps above and returns `.success(config)` or `.forceUpdate`; offline with nothing saved
-it throws `OfflineBootError`. Give `OrcaApp` that config and the same cache: it asks for nothing
-and its first frame is the first page. Over `FileKeyValueStore.applicationSupport()` the cache is
-the one `enableOffline` uses.
+it throws `OfflineBootError`, whose text is "No network and no cached config available". Give
+`OrcaApp` that config and the same cache: it asks for nothing and its first frame is the first
+page. Over `FileKeyValueStore.applicationSupport()` the cache is the one `enableOffline` uses.
 
 ```swift
 let cache = StaticFlowManager(store: FileKeyValueStore.applicationSupport())
@@ -507,6 +508,61 @@ if case .success(let config) = result {
 
 The [iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios) does
 this behind `ORCA_PRELOAD` (`HostPreload` in `OrcaCounterApp.swift`).
+
+## Saved state
+
+Two actions keep a state key when its page or the app goes away, as in the Flutter SDK:
+`persistState` saves the key's value and `clearState` forgets it. The engine builds them with
+`PersistState(key, scope = "page", storage = "local")` and `ClearState(key, scope = "page")`;
+`scope` is `page` or `app`.
+
+- **A snapshot.** `persistState` saves the key's value at that moment, null included, from the
+  page the action runs in (or from app state). A later `setState` does not change the saved copy;
+  run `persistState` again to save the new value. A key the scope does not hold saves nothing.
+- **Local or session.** `local` survives a restart. `session` stays in memory while the app's
+  process runs: it outlives leaving a page and opening it again, not a relaunch. A key has one
+  saved copy: saving it in one storage deletes the copy in the other.
+- **Forget.** `clearState` empties the live key (it reads as null) and deletes both saved copies.
+- **Where.** `local` is one small JSON file per scope, `orca_saved_app` for app state and
+  `orca_saved_page_<pageId>` for a page, in Application Support/<bundle id>/OrcaGateway
+  (`FileKeyValueStore.applicationSupport()`), beside the offline cache's files. A file left with
+  no key is deleted. A file that cannot be read or written is ignored, and the action still
+  completes.
+- **When it comes back.** A saved key replaces the declared initial value, or is added when the
+  page does not declare it. App state: at boot, laid over the config's `initialAppState` (over an
+  empty app state with a `path`) before the first route is resolved, so redirect rules and the
+  first page request see the saved values. A page: each time its state is set up, right after the
+  seed from its state definitions, so on every open (from the network or the offline cache) and
+  when it is fetched again and seeded anew. The page never shows its initials first. A page's
+  app-scoped definitions only fill an empty key, so a restored app key stays.
+- **Sub-pages.** A sub-page has no saved entry of its own: its state lives in the host page's
+  state, under its prefix (see "Sub-pages" above).
+- **Flutter.** The rules and the entry names are Flutter's, pinned by the monorepo's action
+  fixtures 48 to 50 in
+  [`schema/fixtures/actions`](https://github.com/orca-gateway/orca-gateway/tree/main/schema/fixtures/actions).
+  Flutter keeps `local` in SharedPreferences instead of files.
+
+`OrcaApp` keeps one `SavedState` for its whole life. Pass your own as `savedState:`; nil, the
+default, is one over the file store the offline cache uses. A router you make for
+`OrcaApp(router:)` takes `savedState:` too, but there nil saves and restores nothing: pass one to
+save as `OrcaApp` does.
+
+```swift
+// What OrcaApp makes when given nil.
+let router = OrcaRouter(client: client, config: config,
+                        savedState: SavedState(local: FileKeyValueStore.applicationSupport()))
+
+// Local entries in memory only: nothing is written, nothing outlives the process.
+OrcaApp(client: client, path: "home", savedState: SavedState(local: nil))
+```
+
+Session entries are shared by the whole process. `SavedState.resetSession()` empties them, for
+example when a user signs out; `SavedState.sessionEntries` reads them.
+
+To see it, run the `saved-state` app of the example server in the
+[iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios)
+(`ORCA_APP_ID=saved-state ORCA_PATH=home`, or `ORCA_BOOT=config`): a count to save on the device or
+for the session and to forget, and a visits count in app state.
 
 ## Plugins
 
