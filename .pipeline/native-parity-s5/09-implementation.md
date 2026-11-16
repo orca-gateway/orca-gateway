@@ -3,20 +3,21 @@
 ## Front page
 
 ### In one breath
-group 2 of 8 · tasks: 4 green, 0 blocked · A5.6 ui green on both SDKs (in-place reload)
-S-refetch: the model's built-in refetchPage awaits the loader's hook; a host's handler wins.
-K-refetch: the same model swaps its tree (renderer as Compose state); the awaiting Job survives.
-Ahead of their groups: G3 (S-act, K-act) and G4 (S-page, K-page) running, files disjoint.
+group 3 of 8 · tasks: 6 green, 0 blocked · A5.6 fx green on both SDKs; both advertise 21 kinds
+S-act, K-act: refetchPage is a known kind (no handler: nothing, no effect, as Flutter); one hash.
+Fixture 48 now runs on Swift and Kotlin; the G1 reds are gone. A baseline Swift test that used
+refetchPage as its "not implemented" example now uses animateForward, as its Kotlin twin.
+Ahead of their groups: G4 (S-page, K-page) and K-list (G5) running.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-none new (group 1's two documented differences stand: `once` keys kept, new page's title).
+none
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 3 (executors run and advertise refetchPage), already running. (default: go)
+2. Next: group 4 (PageView), already running. (default: go)
 
 ## Appendix
 
@@ -79,6 +80,31 @@ app state, `replacePage`); `replacePage` swaps renderer, page id, seeds, bumps s
 Decisions: the hook lives on the model because the plugin host makes the model and adds handlers in one call; a model
 without a loader runs refetchPage as a no-op (Flutter with a null onRefetchPage).
 Review: self, fit rework (a host's `refetchPage` was overridden by the loader's; now it wins, test added) · pass
+
+### Group 3
+Commits: K-act 4c60939, S-act adab6f9 (staged by path; the generator rerun after both leaves no diff, both vectors
+hash d10bad06…). Nothing pushed. Gate 09 group 2 approved under the standing rule.
+
+#### Task K-act · Kotlin executor runs, advertises refetchPage
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/state/ActionExecutor.kt` · `.../ActionHandlerTest.kt` ·
+`sdk-kotlin/capabilities.json` · `.../capabilities/Generated.kt` (regenerated) · `.../CapabilitiesTest.kt`
+Cases: A5.6 fx kt + caps unit kt → green: `a5_6_refetchPageEmitsNothing`, `allTwentyFiveActionFixturesPass`, new
+`a5_6_refetchPageIsAdvertisedAndRunByTheExecutor`, `actionKindsMatchTheImplementedList` (21),
+`c16_2_kindsStayTheBuiltInList`; `./gradlew build` core 399/0, sdk 438/0, lint clean. Red first (5 for the right reasons).
+Changed: "refetchPage" in `kinds` (falls through `else -> return`: nothing, no effect), in actionKinds (sorted).
+Review: self (diff read; mechanical) · pass
+
+#### Task S-act · Swift executor runs, advertises refetchPage
+Files: `sdk-swift/Sources/OrcaGatewayCore/State/ActionExecutor.swift` · `.../ActionHandlerTests.swift` ·
+`sdk-swift/capabilities.json` · `.../Capabilities/Generated.swift` (regenerated) · `.../CapabilitiesTests.swift`;
+approved outside the row: `.../ActionFixtureTests.swift` (one baseline assertion, below)
+Cases: A5.6 fx sw + caps unit sw → green: `testA5_6_RefetchPageEmitsNothing_fixture48`,
+`testAllTwentyFiveActionFixturesPass`, new `testA5_6_RefetchPageIsAdvertisedAndKnownToTheExecutor`,
+`testActionKindsMatchTheImplementedList`, `testC16_2_KindsStayTheBuiltInList`; `swift test` core 398/398, UI 292/292;
+iOS scheme UI 353/353, goldens unchanged (run before the one-line edit). Engine caps-reading tests 31/31.
+Changed: "refetchPage" in `kinds` and actionKinds; `testImplementsLooksInsideOnceAndAlways` used refetchPage as its
+example of a kind not run, now `.animateForward("fade")` (not in kinds, no handler; Kotlin's twin uses the same).
+Review: self, rework (the baseline assertion above) · pass
 
 ### Test run
 engine `bun test` 755/0 · `flutter test` 352 pass · Swift core 397, 2 expected reds · Kotlin core 398, 2 expected reds
