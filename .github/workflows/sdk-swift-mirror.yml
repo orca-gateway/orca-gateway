@@ -38,22 +38,19 @@ on:
 permissions:
   contents: read
 
-# One release at a time: a mirror's main only moves forward, and a plugin
-# released with sdk-swift waits for the SDK version its split resolves.
-concurrency:
-  group: sdk-swift-mirror
-  cancel-in-progress: false
-
 jobs:
-  publish:
-    name: Split and push to the mirror
-    # A plugin's split builds on macOS, sdk-swift's in the Linux container.
-    runs-on: ${{ startsWith(github.event.inputs.tag || github.ref_name, 'sdk-swift-v') && 'ubuntu-latest' || 'macos-15' }}
-    timeout-minutes: 20
+  # The tag's package, known before anything is pushed: the publish job's
+  # concurrency group is its mirror.
+  resolve:
+    name: Resolve the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       version: ${{ steps.tag.outputs.version }}
       mirror: ${{ steps.tag.outputs.mirror }}
+      secret: ${{ steps.tag.outputs.secret }}
       plugin: ${{ steps.tag.outputs.plugin }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Check the tag
         env:
@@ -64,13 +61,10 @@ jobs:
             exit 1
           fi
 
-      # The split walks the whole history, so the checkout needs all of it,
-      # tags included. The script reads the release through its tag, so the
-      # working tree is the workflow's own ref: a manual run from main uses
-      # main's script, fixes included, on an older tag.
+      # Only the script is needed: `info` reads its PACKAGES table.
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          sparse-checkout: scripts
 
       # The tag's version, mirror and deploy key secret, from the script's
       # PACKAGES table (a tag it does not know stops here).
@@ -82,11 +76,42 @@ jobs:
           info=$(bash scripts/swift-mirror.sh info "$TAG")
           printf '%s\ntag=%s\n' "$info" "$TAG" | tee -a "$GITHUB_OUTPUT"
 
+  publish:
+    name: Split and push to the mirror
+    needs: resolve
+    # One release of a mirror at a time, as its main only moves forward. The
+    # group is the mirror, not the tag, so two releases of one mirror queue.
+    # Mirrors publish side by side: GitHub keeps one pending run per group and
+    # cancels the older one, so a single group for every mirror would drop a
+    # publish when a release pushes three or more mirror tags at once.
+    # A plugin therefore no longer waits for sdk-swift: when its split needs
+    # an sdk-swift version released with it, its build can run before that
+    # version is on orca-gateway-swift, and then stops before pushing
+    # anything; run it again (workflow_dispatch, its tag) after sdk-swift's.
+    concurrency:
+      group: swift-mirror-${{ needs.resolve.outputs.mirror }}
+      cancel-in-progress: false
+    # A plugin's split builds on macOS, sdk-swift's in the Linux container.
+    runs-on: ${{ startsWith(github.event.inputs.tag || github.ref_name, 'sdk-swift-v') && 'ubuntu-latest' || 'macos-15' }}
+    timeout-minutes: 20
+    outputs:
+      version: ${{ needs.resolve.outputs.version }}
+      mirror: ${{ needs.resolve.outputs.mirror }}
+      plugin: ${{ needs.resolve.outputs.plugin }}
+    steps:
+      # The split walks the whole history, so the checkout needs all of it,
+      # tags included. The script reads the release through its tag, so the
+      # working tree is the workflow's own ref: a manual run from main uses
+      # main's script, fixes included, on an older tag.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Deploy key
         env:
-          SECRET: ${{ steps.tag.outputs.secret }}
-          MIRROR: ${{ steps.tag.outputs.mirror }}
-          KEY: ${{ secrets[steps.tag.outputs.secret] }}
+          SECRET: ${{ needs.resolve.outputs.secret }}
+          MIRROR: ${{ needs.resolve.outputs.mirror }}
+          KEY: ${{ secrets[needs.resolve.outputs.secret] }}
         run: |
           if [ -z "$KEY" ]; then
             echo "::error::The secret $SECRET is not set: the deploy key of $MIRROR (docs/User_Actions.md)."
@@ -101,16 +126,16 @@ jobs:
 
       # The Xcode the other macOS jobs pin, for a plugin's split.
       - name: Xcode
-        if: steps.tag.outputs.plugin == 'true'
+        if: needs.resolve.outputs.plugin == 'true'
         run: echo "DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer" >> "$GITHUB_ENV"
 
       - name: Split, build, push and tag
         env:
           GIT_SSH_COMMAND: ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes
           # Empty for a plugin: the script then builds with the runner's swift.
-          SWIFT_DOCKER_IMAGE: ${{ steps.tag.outputs.plugin == 'false' && 'swift:6.2-noble' || '' }}
-          TAG: ${{ steps.tag.outputs.tag }}
-          MIRROR: ${{ steps.tag.outputs.mirror }}
+          SWIFT_DOCKER_IMAGE: ${{ needs.resolve.outputs.plugin == 'false' && 'swift:6.2-noble' || '' }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          MIRROR: ${{ needs.resolve.outputs.mirror }}
         run: bash scripts/swift-mirror.sh publish "$TAG" "git@github.com:$MIRROR.git"
 
   verify-linux:
