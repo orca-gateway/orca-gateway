@@ -87,7 +87,7 @@ final class PushNotificationParamsTests: XCTestCase {
         let bare = ShowLocalNotificationParams(["type": "showLocalNotification"])
         XCTAssertNil(bare.title, "the plugin defaults it to \"\"")
         XCTAssertNil(bare.body, "the plugin defaults it to \"\"")
-        XCTAssertNil(bare.payload, "a tap hands nil")
+        XCTAssertNil(bare.payload, "the plugin shows it with \"\" as its payload")
 
         // Flutter resolves each as a value (`executor.resolveString`): one sent
         // as a Value, or as a non-string, reads nil here and stays in the raw

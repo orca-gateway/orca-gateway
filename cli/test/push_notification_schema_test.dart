@@ -320,4 +320,18 @@ void main() {
       expect(_description(notes[type]), contains('FCM topic'), reason: type);
     }
   });
+
+  test('C17.5/yaml absent, showLocalNotification\'s payload is tapped as "", '
+      'not null', () {
+    // Flutter shows the notification with the payload it read, null when
+    // absent, and flutter_local_notifications 18.0.1 sends
+    // `'payload': payload ?? ''` in each show call, so the tap hands "".
+    final show = _function(_registered('actions')['showLocalNotification']!);
+    expect(show, contains('payload: payload,'));
+    final notes = _raw()['actions'] as YamlMap;
+    final params = (notes['showLocalNotification'] as YamlMap)['params'];
+    final payload = _description((params as YamlMap)['payload']);
+    expect(payload, contains('Absent, the tap hands "" (an empty string).'));
+    expect(payload, isNot(contains('null')));
+  });
 }

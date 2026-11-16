@@ -50,7 +50,7 @@ schema:
       params:
         title: { type: string, default: "", description: "The notification's title, resolved as a value; a non-string is used as its text." }
         body: { type: string, default: "", description: "The notification's text, resolved as a value; a non-string is used as its text." }
-        payload: { type: string, description: "What a tap hands to onNotificationTap, resolved as a value; a non-string is used as its text. Absent, the tap hands null." }
+        payload: { type: string, description: "What a tap hands to onNotificationTap, resolved as a value; a non-string is used as its text. Absent, the tap hands \"\" (an empty string)." }
     subscribeToTopic:
       description: "Subscribes the app to the FCM topic. Writes no state."
       params:
