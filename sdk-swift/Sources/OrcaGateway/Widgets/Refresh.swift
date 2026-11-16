@@ -37,7 +37,10 @@ extension EnvironmentValues {
 /// refresh_indicator.dart:634-639); with no onRefresh it stops at once. A
 /// horizontal scroll view never refreshes, nor does one nested inside the
 /// first (SwiftUI's refresh action stops at the first scroll view, checked
-/// on iOS 18.5), as Flutter hears depth 0 only.
+/// on iOS 18.5), as Flutter hears depth 0 only. Inside another scroll view
+/// (a page's body) a pull at its top stays its own, so it refreshes and the
+/// page stands still, as Flutter's inner Scrollable wins the drag (KeepPull,
+/// iOS 17.4 on; before, UIKit may hand the pull to the outer one).
 ///
 /// Known differences: a drag begun lower down that carries the view on past
 /// its top also refreshes (UIRefreshControl's own rule, checked by a drag
@@ -65,9 +68,9 @@ struct PullToRefreshView: View {
 }
 
 /// The pull of a scroll kind (SingleChildScrollView, ListView, GridView,
-/// PageView), applied where WidgetView builds it: `refreshable` when it is
-/// a vertical scroll view directly inside a PullToRefresh. The scroll views
-/// inside it are not directly inside one.
+/// PageView), applied where WidgetView builds it: `refreshable` (and, on
+/// iOS, KeepPull) when it is a vertical scroll view directly inside a
+/// PullToRefresh. The scroll views inside it are not directly inside one.
 struct RefreshOnPull: ViewModifier {
     let node: ResolvedNode
     @Environment(\.orcaRefresh) private var refresh
@@ -76,7 +79,12 @@ struct RefreshOnPull: ViewModifier {
     func body(content: Content) -> some View {
         let inner = content.environment(\.orcaRefresh, nil)
         if let refresh, Self.pulled(node, unbounded: unbounded) {
+            #if canImport(UIKit)
             inner.refreshable { await refresh() }
+                .background(alignment: .topLeading) { KeepPull().frame(width: 0, height: 0) }
+            #else
+            inner.refreshable { await refresh() }
+            #endif
         } else {
             inner
         }
@@ -97,4 +105,70 @@ struct RefreshOnPull: ViewModifier {
         }
     }
 }
+
+#if canImport(UIKit)
+/// Keeps a pull at the top of the refreshed scroll view its own when it is
+/// nested in another: UIKit hands a drag past a nested scroll view's edge to
+/// the one around it (`transfersVerticalScrollingToParent`, on by default),
+/// so the page would move and the pull never start (a real pull on the iOS
+/// 18.5 simulator), where Flutter's inner Scrollable wins the drag,
+/// overscrolls and its RefreshIndicator refreshes. A 0-size view at the
+/// scroll view's top leading corner (ImageRenderer would draw a placeholder
+/// for a bigger one) that turns the transfer off on it, iOS 17.4 on (no
+/// switch before).
+private struct KeepPull: UIViewRepresentable {
+    func makeUIView(context: Context) -> KeepPullAnchor { KeepPullAnchor() }
+
+    func updateUIView(_ anchor: KeepPullAnchor, context: Context) {
+        anchor.keep()
+    }
+}
+
+/// The refreshed scroll view's corner in UIKit, which takes no touch.
+private final class KeepPullAnchor: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        keep()
+    }
+
+    /// Turns the transfer off on the refreshed scroll view, looking again
+    /// on the next turns of the run loop until SwiftUI has drawn it.
+    func keep(tries: Int = 5) {
+        guard #available(iOS 17.4, *), window != nil else { return }
+        if let scroll = refreshed {
+            scroll.transfersVerticalScrollingToParent = false
+        } else if tries > 0 {
+            DispatchQueue.main.async { [weak self] in self?.keep(tries: tries - 1) }
+        }
+    }
+
+    /// The scroll view with a refresh control whose top leading corner is
+    /// this view's, the nearest: SwiftUI draws it beside this view, not
+    /// around it, so each view around this one is searched in turn.
+    private var refreshed: UIScrollView? {
+        guard let window else { return nil }
+        let corner = convert(CGPoint.zero, to: window)
+        func find(in view: UIView, skipping searched: UIView?) -> UIScrollView? {
+            for sub in view.subviews where sub !== searched {
+                if let scroll = sub as? UIScrollView, scroll.refreshControl != nil {
+                    let origin = scroll.convert(scroll.bounds.origin, to: window)
+                    if abs(origin.x - corner.x) < 0.5, abs(origin.y - corner.y) < 0.5 { return scroll }
+                }
+                if let found = find(in: sub, skipping: nil) { return found }
+            }
+            return nil
+        }
+        var searched: UIView = self
+        var around = superview
+        while let view = around {
+            if let found = find(in: view, skipping: searched) { return found }
+            searched = view
+            around = view.superview
+        }
+        return nil
+    }
+}
+#endif
 #endif

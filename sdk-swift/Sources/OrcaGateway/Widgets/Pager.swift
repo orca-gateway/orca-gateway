@@ -13,11 +13,14 @@ import SwiftUI
 /// only the pages in sight are built (Flutter's cache of 0 viewports), a
 /// drag (PagerFeed) follows the finger and, let go, settles on the core's
 /// PageSnap page with Flutter's scroll spring. It is no scroll view, so it
-/// has no scroll indicator and no pull to refresh. Known differences: a
-/// drag stops at the first and last pages (iOS Flutter's bounces past
-/// them), and a scroll view inside a page moving along the pager's axis
-/// moves with it (Flutter's gesture arena gives the drag to one of them).
-/// With `pageSnapping` false the pages are a free scroll view (FreePager).
+/// has no scroll indicator and no pull to refresh. Inside a scroll view, a
+/// drag along the pager's axis is the pager's alone and one across it the
+/// scroll view's (PagerHold, iOS), as Flutter's arena decides. Known
+/// differences: a drag stops at the first and last pages (iOS Flutter's
+/// bounces past them), and a scroll view inside a page moving along the
+/// pager's axis moves with it (Flutter's gesture arena gives the drag to
+/// one of them). With `pageSnapping` false the pages are a free scroll view
+/// (FreePager).
 @MainActor
 struct PagerView: View {
     let node: ResolvedNode
@@ -54,6 +57,9 @@ struct PagerView: View {
             let extent = vertical ? size.height : size.width
             let _ = feed.update(extent: extent, count: ids.count, vertical: vertical, backwards: backwards, fire: fire)
             ZStack(alignment: .topLeading) {
+                #if canImport(UIKit)
+                PagerHoldPlace(vertical: vertical, size: size).frame(width: 0, height: 0)
+                #endif
                 ForEach(PagerFeed.built(page: feed.page, count: ids.count).map { ids[$0] }, id: \.self) { id in
                     let index = Double(ids.firstIndex(of: id) ?? 0)
                     let shift = (index - feed.page) * extent * (backwards ? -1 : 1)
@@ -210,6 +216,13 @@ final class PagerFeed: ObservableObject {
         self.page = page
     }
 
+    /// Whether a drag the finger has moved `along` and `across` the axis
+    /// since touch-down is the pager's: nil within the slop, then whether
+    /// it went further along than across.
+    static func claims(along: Double, across: Double) -> Bool? {
+        max(abs(along), abs(across)) > slop ? abs(along) >= abs(across) : nil
+    }
+
     /// The pages built at `page`: the one in sight, two between pages.
     static func built(page: Double, count: Int) -> [Int] {
         guard count > 0 else { return [] }
@@ -236,8 +249,8 @@ final class PagerFeed: ObservableObject {
         let along = Double(vertical ? translation.height : translation.width)
         let across = Double(vertical ? translation.width : translation.height)
         touch.tracker.add(time: time.timeIntervalSinceReferenceDate, position: along)
-        if touch.ours == nil, max(abs(along), abs(across)) > Self.slop {
-            touch.ours = abs(along) >= abs(across)
+        if touch.ours == nil, let ours = Self.claims(along: along, across: across) {
+            touch.ours = ours
             touch.startPage = page
             touch.startFinger = along
             if touch.ours == true { fire(observer.observe(metrics, inProgress: true)) }
@@ -340,6 +353,136 @@ final class PagerFeed: ObservableObject {
         }
     }
 }
+
+#if canImport(UIKit)
+/// Where a snapping pager is in UIKit: a 0-size view at its top leading
+/// corner (ImageRenderer would draw a placeholder for a bigger one) that
+/// holds the pager's PagerHold.
+private struct PagerHoldPlace: UIViewRepresentable {
+    let vertical: Bool
+    let size: CGSize
+
+    func makeUIView(context: Context) -> PagerHoldAnchor { PagerHoldAnchor() }
+
+    func updateUIView(_ anchor: PagerHoldAnchor, context: Context) {
+        anchor.vertical = vertical
+        anchor.size = size
+    }
+}
+
+/// A snapping pager's corner in UIKit, which takes no touch: while in a
+/// window it puts the pager's PagerHold on the nearest UIScrollView around
+/// it (the touches on the pager go through that one) and takes it off
+/// when it leaves.
+private final class PagerHoldAnchor: UIView {
+    var vertical = false
+    var size: CGSize = .zero
+    private var hold: PagerHold?
+
+    /// The pager, in this view's space.
+    var pager: CGRect { CGRect(origin: .zero, size: size) }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        place()
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        place()
+    }
+
+    private func place() {
+        var around = window == nil ? nil : superview
+        while let view = around, !(view is UIScrollView) { around = view.superview }
+        let scroll = around as? UIScrollView
+        guard hold?.view !== scroll else { return }
+        if let hold { hold.view?.removeGestureRecognizer(hold) }
+        hold = scroll.map { scroll in
+            let hold = PagerHold(anchor: self)
+            scroll.addGestureRecognizer(hold)
+            return hold
+        }
+    }
+}
+
+/// Keeps a drag along a snapping pager's axis from the scroll views around
+/// it, as Flutter's gesture arena gives it to the deepest drag recognizer,
+/// the pager's. The pager's DragGesture is simultaneous, so that a drag
+/// across the axis reaches a scroll view around it or inside a page; a
+/// UIScrollView around it would scroll with a drag along it too. The pan
+/// of every scroll view around the pager waits on the hold, which fails at
+/// once for a touch that starts off the pager; for one on it, once the
+/// finger passes the slop, it begins when along the axis (PagerFeed.claims,
+/// the feed's own rule), so those pans fail, and fails when across. It
+/// cancels and delays no touch and recognises alongside every gesture, so
+/// the pager's DragGesture follows the whole drag.
+private final class PagerHold: UIGestureRecognizer, UIGestureRecognizerDelegate {
+    private weak var anchor: PagerHoldAnchor?
+    private var touch: UITouch?
+    private var start: CGPoint = .zero
+
+    init(anchor: PagerHoldAnchor) {
+        self.anchor = anchor
+        super.init(target: nil, action: nil)
+        cancelsTouchesInView = false
+        delaysTouchesBegan = false
+        delaysTouchesEnded = false
+        delegate = self
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard touch == nil else { return }
+        guard let anchor, let first = touches.first, anchor.pager.contains(first.location(in: anchor)) else {
+            state = .failed
+            return
+        }
+        touch = first
+        start = first.location(in: anchor)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let touch, touches.contains(touch), let anchor else { return }
+        if state == .possible {
+            let point = touch.location(in: anchor)
+            let along = anchor.vertical ? point.y - start.y : point.x - start.x
+            let across = anchor.vertical ? point.x - start.x : point.y - start.y
+            if let ours = PagerFeed.claims(along: along, across: across) { state = ours ? .began : .failed }
+        } else if state == .began || state == .changed {
+            state = .changed
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let touch, touches.contains(touch) else { return }
+        state = state == .began || state == .changed ? .ended : .failed
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let touch, touches.contains(touch) else { return }
+        state = state == .began || state == .changed ? .cancelled : .failed
+    }
+
+    override func reset() {
+        super.reset()
+        touch = nil
+    }
+
+    func gestureRecognizer(_ hold: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        true
+    }
+
+    /// The pan of a scroll view around the pager waits on the hold.
+    func gestureRecognizer(_ hold: UIGestureRecognizer,
+                           shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+        guard let anchor, let scroll = other.view as? UIScrollView else { return false }
+        return other === scroll.panGestureRecognizer && anchor.isDescendant(of: scroll)
+    }
+}
+#endif
 
 /// Flutter's ScrollSpringSimulation (physics/spring_simulation.dart) with
 /// ScrollPhysics' default spring, mass 0.5, stiffness 100, damping ratio

@@ -167,6 +167,37 @@ final class RefreshTests: XCTestCase {
         }
     }
 
+    /// A5.5: a refreshed scroll view inside the page's scroll view keeps a
+    /// pull at its top: Flutter's inner Scrollable wins the drag, overscrolls
+    /// and refreshes, where UIKit hands a drag past a nested scroll view's
+    /// edge to the one around it (`transfersVerticalScrollingToParent`, on by
+    /// default; a real pull on the iOS 18.5 simulator moved the outer page
+    /// and never refreshed). Turned off for the refreshed one, of each kind;
+    /// the page's scroll view and a plain nested list keep UIKit's default.
+    func testA5_5ARefreshedScrollViewInsideAnotherKeepsThePullAtItsTop() throws {
+        guard #available(iOS 17.4, *) else { throw XCTSkip("transfersVerticalScrollingToParent is iOS 17.4") }
+        for type in Self.kinds {
+            let hosted = try HostedPull([
+                node("outer", "SingleChildScrollView", [:], ["col"]),
+                node("col", "Column", [:], ["box", "plain", "rest"]),
+                node("box", "SizedBox", ["width": 100, "height": 80], ["pull"]),
+                pull(["s"]),
+                node("plain", "SizedBox", ["width": 100, "height": 80], ["n"]),
+                node("rest", "SizedBox", ["width": 100, "height": 400]),
+            ] + scrolling(type, "s", horizontal: false) + scrolling("ListView", "n", horizontal: false))
+            defer { hosted.close() }
+            let views = hosted.scrollViews
+            XCTAssertEqual(views.count, 3, "\(type): the page's, the refreshed and the plain one")
+            guard views.count == 3 else { continue }
+            XCTAssertNil(views[0].refreshControl, type)
+            let refreshed = try XCTUnwrap(views.first { $0.refreshControl != nil }, "no refresh control: \(type)")
+            XCTAssertFalse(refreshed.transfersVerticalScrollingToParent, "\(type): the refreshed one")
+            for scroll in views where scroll !== refreshed {
+                XCTAssertTrue(scroll.transfersVerticalScrollingToParent, "\(type): one not refreshed")
+            }
+        }
+    }
+
     #elseif canImport(AppKit)
     /// A5.5 on macOS: a PullToRefresh draws the scroll view inside it (the
     /// system has no pull to refresh on a scroll view).

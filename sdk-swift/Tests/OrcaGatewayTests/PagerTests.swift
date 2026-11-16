@@ -411,6 +411,41 @@ final class PagerTests: XCTestCase {
         XCTAssertEqual(hosted.value("innerEnds"), 1)
         XCTAssertEqual(inner.contentOffset.y, 150, accuracy: Self.accuracy)
     }
+
+    /// A5.4: a drag along a pager inside a scroll view is the pager's alone
+    /// (Flutter's arena gives it to the deepest drag recognizer; a real swipe
+    /// up on a vertical pager in a vertical page on the iOS 18.5 simulator
+    /// also scrolled the page). The pager puts a hold on the scroll view
+    /// around it, which the scroll view's pan waits on and which keeps every
+    /// touch going; it lets go of a drag across the axis (a vertical drag on
+    /// a horizontal pager still scrolls the page, the slop rule the feed's
+    /// tests pin). The hold goes when the pager leaves the window.
+    func testA5_4ADragAlongAPagerIsNotAlsoTheScrollViewsAroundIt() throws {
+        for direction in ["vertical", "horizontal"] {
+            let hosted = try HostedPage([
+                node("outer", "SingleChildScrollView", [:], ["pbox"]),
+                node("pbox", "SizedBox", ["width": 200, "height": 400], ["pv"]),
+            ] + pages(3, ["scrollDirection": .string(direction)]), root: "outer")
+            defer { hosted.close() }
+            XCTAssertEqual(hosted.scrollViews.count, 1, "\(direction): only the page's scroll view")
+            let outer = try XCTUnwrap(hosted.scrollViews.first, "no scroll view")
+            let holds = (outer.gestureRecognizers ?? []).filter { hold in
+                hold.delegate?.gestureRecognizer?(hold, shouldBeRequiredToFailBy: outer.panGestureRecognizer) == true
+            }
+            XCTAssertEqual(holds.count, 1, "\(direction): no hold the page's pan waits on")
+            for hold in holds {
+                XCTAssertFalse(hold.cancelsTouchesInView, direction)
+                XCTAssertFalse(hold.delaysTouchesBegan, direction)
+                XCTAssertEqual(hold.delegate?.gestureRecognizer?(hold, shouldRecognizeSimultaneouslyWith:
+                    outer.panGestureRecognizer), true, direction)
+            }
+
+            hosted.remove()
+            XCTAssertTrue((outer.gestureRecognizers ?? []).allSatisfy { recognizer in
+                !holds.contains { $0 === recognizer }
+            }, "\(direction): the hold stayed on the scroll view")
+        }
+    }
     #endif
 
     // MARK: pages
@@ -641,6 +676,49 @@ private final class HostedPager {
             window.layer.render(in: context.cgContext)
         }
         return try Pixels(XCTUnwrap(image.cgImage))
+    }
+
+    func pump(_ seconds: Double) {
+        RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+    }
+
+    func close() {
+        window.isHidden = true
+    }
+}
+
+/// The node `root` of `nodes` in a UIKit window `width` by `height`, kept
+/// on screen until `close`.
+@MainActor
+private final class HostedPage {
+    private let window: UIWindow
+
+    init(_ nodes: [JSONValue], root: String, width: CGFloat = 200, height: CGFloat = 200) throws {
+        let model = try PagerTests().model(nodes)
+        let frame = CGRect(x: 0, y: 0, width: width, height: height)
+        let host = UIHostingController(rootView: NodeView(id: root, model: model)
+            .frame(width: width, height: height, alignment: .topLeading)
+            .ignoresSafeArea())
+        window = UIWindow(frame: frame)
+        window.rootViewController = host
+        window.isHidden = false
+        host.view.frame = frame
+        host.view.layoutIfNeeded()
+        pump(0.3)
+    }
+
+    /// Every UIScrollView in the window.
+    var scrollViews: [UIScrollView] {
+        func find(_ view: UIView) -> [UIScrollView] {
+            ((view as? UIScrollView).map { [$0] } ?? []) + view.subviews.flatMap(find)
+        }
+        return find(window)
+    }
+
+    /// Takes the page out of the window.
+    func remove() {
+        window.rootViewController = nil
+        pump(0.3)
     }
 
     func pump(_ seconds: Double) {
