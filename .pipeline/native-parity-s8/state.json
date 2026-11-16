@@ -4,7 +4,7 @@
   "idea": "Native parity step 8 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): dialogs, bottom sheets, tooltips and snackbars on both native SDKs: Dialog, BottomSheet, Tooltip and SnackBar, the openDialog, closeDialog and showSnackbar actions, the Scaffold bottomSheet slot and a snackbar queue, drawn and run as Flutter's builders and action executor do, and advertised in both capability lists. Test cases A8.1-A8.5 in phase-a-tests.md. In sdk-swift and sdk-kotlin, with fixtures where the rows need them",
   "kind": "feature",
   "created_at": "2026-11-16T19:36:31Z",
-  "updated_at": "2026-11-16T20:14:49Z",
+  "updated_at": "2026-11-16T20:15:41Z",
   "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
   "current": "09",
   "stages": {
@@ -44,7 +44,8 @@
       "approved_with": "standing rule (2026-11-11): gate 08's four questions are minor (commands as found; one commit per task, one gate per group; hand checks after G7 with VoiceOver and TalkBack; Q4 is the user's own call of 2026-11-16, relayed: \"go with your recommendation\"), defaults"
     },
     "09": {
-      "status": "pending"
+      "status": "draft",
+      "rounds": 1
     },
     "10": {
       "status": "pending"
