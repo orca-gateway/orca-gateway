@@ -48,8 +48,16 @@ final class AudioFileRecorder: Recorder {
             try FileManager.default.removeItem(atPath: path)
         }
         #if os(iOS)
+        // Bluetooth HFP input (0x4): `.allowBluetoothHFP` from the Xcode 26
+        // SDKs (Swift 6.2), which deprecate it under its old name
+        // `.allowBluetooth`, the only name in the SDKs before them.
+        #if compiler(>=6.2)
+        let bluetoothHFP: AVAudioSession.CategoryOptions = .allowBluetoothHFP
+        #else
+        let bluetoothHFP: AVAudioSession.CategoryOptions = .allowBluetooth
+        #endif
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
+        try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, bluetoothHFP, .allowBluetoothA2DP])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         #endif
         let recorder = try AVAudioRecorder(url: URL(fileURLWithPath: path), settings: [
