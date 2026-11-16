@@ -3,21 +3,20 @@
 ## Front page
 
 ### In one breath
-group 5 of 7 · tasks: 6 green, 0 blocked · cases: C14.1-C14.5 green, C14.6's parts in
-T8-T11: persistState/clearState in Flutter, the engine, Swift and Kotlin, alike (decision 3 A).
-Rebased on main with #38: one boot screen over preload; T17/T18 moved 7 tests, no bug.
-Row C14.2 fixed to Flutter: nothing saved shows "Something Went Wrong"; redo by hand later.
-Planned red until group 6: "every advertised kind has a fixture" in Swift and Kotlin.
+group 6 of 7 · tasks: 3 green, 0 blocked · cases: C14.1-C14.5 green, C14.6's fixture parts green
+T12: fixtures 48-50 (persist, clear, restore) and their format; Flutter runs them.
+T13, T14: Swift and Kotlin run them through their own SavedState: same answers, no parity finding.
+The planned red is gone: every advertised action kind has a fixture in Swift and Kotlin.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-4 auto-decided: clear nulls the key · public session hooks · push home · tests cache in memory
+none
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 6, fixtures 48-50 on all three SDKs (they end the planned red). (default: go)
+2. Next: group 7, saved state in the SwiftUI and Compose apps, and the docs. (default: go)
 
 ## Appendix
 
@@ -186,6 +185,44 @@ offline tests read Flutter's texts ("Connection Failed", "Something Went Wrong")
 Decisions: one test renamed, its name no longer true
 Review fit: pass · Review quality: pass
 
+### Group 6
+Action fixtures 48-50 pin the saved-state contract S1-S8 on all three SDKs; Flutter is the reference. Every runner
+now runs each fixture with a SavedState and a pageId; the 24 older fixtures pass unchanged.
+
+#### T12 · Fixtures 48-50 and the format, Flutter runner (621d7e8)
+Files: schema/action-fixture.schema.json · schema/fixtures/actions/48_persist_state.json · 49_clear_state.json ·
+50_restore_saved_state.json · sdk/test/conformance/action_fixtures_test.dart
+Cases: C14.6/F → `flutter test` 388 (385 + 3, red first), `flutter analyze` clean
+Changed: the fixture format gains optional `saved` {local, session}, `expected.saved` (compared exactly: an entry it
+does not list must not exist) and `load` {state} (entry names `^orca_saved_(app|page_.+)$`) · 48 persist: page and
+app keys, local and session, a key moved between storages, an absent key saves nothing, a later setState keeps the
+copy · 49 clear: live key null (also one never held), removed from both storages, an emptied entry deleted · 50
+restore: the app entry over the config's app state, then the page's entries over its initials after the seed
+Decisions: none
+Review fit: pass · Review quality: pass
+
+#### T13 · Swift action runner: saved, restore (965c876)
+Files: sdk-swift/Tests/OrcaGatewayCoreTests/ActionFixtureTests.swift · ModelRoundTripTests.swift
+Cases: C14.6/S → `swift test` core 486 (483 + 3, red first: 48/49 on saved, 50 on state and saved), SwiftUI 347,
+0 warnings
+Changed: per fixture a SavedState over a MemoryKeyValueStore from `saved.local`, `resetSession(saved.session)`
+(cleared when the fixture ends), `store.pageId`, `executor.savedState`; with `load`: `restore(into:)`, then `seed`
+and `restorePage`; `expected.saved` exact against the store and `sessionEntries` · pins 24 → 27 ("…, 45-50") · the
+planned red (testAllActionFixturesRoundTrip) green, its assertion unchanged
+Decisions: none
+Review fit: pass · Review quality: pass
+
+#### T14 · Kotlin action runner: saved, restore (e1b8177)
+Files: sdk-kotlin/core/src/test/kotlin/com/orcagateway/core/state/ActionFixtureTest.kt · models/ModelRoundTripTest.kt ·
+FixturePathsTest.kt
+Cases: C14.6/K → `./gradlew :core:test` 480 (477 + 3, red first: 48/49 saved nothing, 50 restored nothing);
+`./gradlew build --continue` green, sdk 489
+Changed: the same set-up as T13, through Kotlin's own SavedState and executor; an @AfterTest clears the session;
+three `c14_6_K_*` tests · pins 24 → 27 in three files, one test renamed to its new count · the planned red
+(allActionFixturesRoundTrip) green, its assertion unchanged
+Decisions: none
+Review fit: pass · Review quality: pass
+
 ### Test run
 Group 1 (..6835ab0): sdk `flutter test` 364, `flutter analyze` clean · engine `bun test` 751 · Swift and Kotlin
 unchanged (no file of theirs touched). Files changed: the task's only.
@@ -200,6 +237,8 @@ Kotlin core 453, sdk 461 · red only the planned "every advertised kind has an a
 After the rebase and T17/T18 (..d493a95): engine 775 · Flutter 385 · Swift core 483, SwiftUI 347 (409 on the iOS 18.5
 simulator), 0 warnings · Kotlin core 477, sdk 489 · the same planned red, which group 6's fixtures 48-50 turn green ·
 generators: no drift · no stray file.
+Group 6 (..965c876): engine 775 · Flutter 388, analyze clean · Swift core 486, SwiftUI 347, 0 warnings, iOS 18.5 simulator SwiftUI 409 TEST SUCCEEDED ·
+Kotlin core 480, sdk 489, BUILD SUCCESSFUL · the planned red is gone · generators: no drift · no stray file.
 
 ### Hand check (both devices, 2026-11-16; server :8094, static-flows at version 4)
 1 nothing saved, server down: the boot error with "No network and no cached config available" (iOS "Could not
