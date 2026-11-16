@@ -1,3 +1,4 @@
 {"ts":"2026-11-16T15:46:20Z","stage":"09","round":1,"template":null,"text":"standing rule (minor and patch auto-approved): group 1 approved with the default; next: group 2 of 4 (go)"}
 {"ts":"2026-11-16T15:57:43Z","stage":"09","round":2,"template":null,"text":"standing rule (minor and patch auto-approved): group 2 approved with the default; next: group 3 of 4 (go)"}
 {"ts":"2026-11-16T16:51:30Z","stage":"09","round":3,"template":null,"text":"standing rule (minor and patch auto-approved): group 3 approved with the default; next: group 4 of 4 (go)"}
+{"ts":"2026-11-16T17:29:36Z","stage":"09","round":4,"template":null,"text":"agent correction: the trade-offs line counts 9 group 4 decisions, not 8 (map-plan-gains-marker-tap-counter was logged earlier in the group)"}

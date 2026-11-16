@@ -3,21 +3,23 @@
 ## Front page
 
 ### In one breath
-group 3 of 4 · tasks: 11 green, 0 blocked · cases: 12 of 17 green · engine bun test: 828 pass
-T7 Swift: MapKit draws the map with Flutter's props, triggers and moveCamera; terrain is standard.
-T8 Kotlin: Maps Compose draws it the same, with the two location permissions in its manifest.
-T9 release.sh: rows 15 and 16, tested in a scratch repo against a local mirror.
-T10 Mirror: the map's line and LICENSE, rehearsed against local mirrors; nothing pushed.
-T11 CI: both matrices build and test the map; each run queues one more macOS job.
+group 4 of 4 · tasks: 5 green, 0 blocked · cases: 16 of 17 green · engine bun test: 828 pass
+T12 iOS demo: registers the map; /map seen by hand, the pin fix (white on black) found and made.
+T13 Android demo: registers the map, takes your Maps key from local.properties; none here.
+T14 READMEs: iOS, Android and pub; Android's no-key text now says only what was seen.
+T15 your walkthroughs: the Swift mirror and a Maps key. T16 /map counts marker taps.
+Partly seen: C17.1/hand-K, Android; without a key Google draws no pins and moves nothing.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-8 auto-decided (minor, your standing rule): the appendix's decisions under each digest.
+9 auto-decided (minor, your standing rule): the appendix's decisions under each digest.
 
 ### Questions for you
-1. Next: group 4 of 4, both demo apps, the READMEs and docs, then hand checks? (default: go)
+1. Blocked tasks: none (T14 was retried once, on the default, and passed). (default: none)
+2. C17.1 on Kotlin stays open until your Maps key; the PR says so. (default: ok)
+3. `A` approves the stage; then the map PR opens on main 3880607. (default: approve, standing rule)
 
 ## Appendix
 
@@ -167,6 +169,88 @@ Decisions: release-row order · the header kept · built locally with Swift 6.4.
 6.2-only constructs, the first CI run proves 16.4 (all minor, auto-decided)
 Review fit: pass · Review quality: pass
 
+### Group 4
+#### T7 · Swift map, group 4 addition: the pin white on red (4bacde41)
+Files: SW/MapKitView.swift · SWT/MapKitViewTests.swift
+Cases: C17.1/S → green (found at the iOS hand check: the pin drew white on a black disc; one new test, red first on iOS:
+rendering mode `.automatic`, the disc pixel 0,0,0; swift test 28, 0 warnings; xcodebuild test on the iOS 18.5 simulator 27;
+seen red on the simulator, its tap still fires onMarkerTap)
+Changed: on UIKit the palette symbol is drawn once into a bitmap (UIGraphicsImageRenderer), `.alwaysOriginal`; AppKit
+unchanged (it already drew red); the test checks the image is not a template and a rendered disc pixel is red
+Decisions: `.withRenderingMode(.alwaysOriginal)` alone left it black (the annotation view draws the symbol's CGImage,
+which has no palette) · systemRed fixed when first drawn (both minor, auto-decided)
+Review fit: pass · Review quality: pass
+#### T12 · iOS demo links and registers map (3d0fc497)
+Files: examples/app-ios/{OrcaCounter.xcodeproj/project.pbxproj, OrcaCounter/OrcaCounterApp.swift, Info.plist, README.md} ·
+examples/app-ios/OrcaGoogleMap (new, a git symlink to ../../plugins/orca_google_map/ios)
+Cases: C17.1/hand-S → green to build (`xcodebuild clean build` BUILD SUCCEEDED, 0 Swift warnings; red first: "Unable to
+resolve module dependency: 'OrcaGoogleMap'"; launch-readmes 6 pass); on the iOS 18.5 simulator /map opened with the map,
+a pin, the blue dot, every Text and the NYC button (no taps: the hand check is the main session's)
+Changed: the local package ./OrcaGoogleMap and its product wired in the video's four places (new ids) · the app imports
+OrcaGoogleMap and registers `GoogleMapPlugin()` after the video's · Info.plist's NSLocationWhenInUseUsageDescription with
+the yaml's text · README "### Google map": simctl location grant and position, the walk with "Marker taps", no key
+Decisions: the README's simulated location 37.76,-122.45 so the dot does not hide under marker1 (minor)
+Review fit: pass · Review quality: pass
+#### T13 · Android demo includes map, reads key (3ddf9e2d, ff452a83 rework)
+Files: examples/app-android/{settings.gradle.kts, app/build.gradle.kts, app/src/main/AndroidManifest.xml,
+app/src/main/kotlin/com/orcagateway/examples/counter/MainActivity.kt, README.md}
+Cases: P-key, C17.1/hand-K → green to build (`./gradlew :app:assembleDebug` BUILD SUCCESSFUL, warnings as errors; red
+first: "Unresolved reference 'GoogleMapPlugin'"; the merged manifest has both location permissions and API_KEY "", a fake
+key reached it; launch-readmes 6 pass); with no key on emulator-5584 /map opens without a crash ("Authorization failure"):
+a grey box with the logo and zoom buttons, taps and long presses give coordinates; no pins, and nothing moves the camera
+Changed: the map's build included as `orca-google-map-android`; the app depends on com.orcagateway:orca-google-map at its
+VERSION and puts local.properties' GOOGLE_MAPS_ANDROID_API_KEY ("" when absent) into the manifest's
+com.google.android.geo.API_KEY; `GoogleMapPlugin()` registered; README "### The Google map" (the key, with and without;
+the keyed walk said to be expected, untried for want of a key; Oakland's pin a drag of most of the map's width away)
+Decisions: the yaml's env name for the placeholder · an empty value when absent (no crash) · Google's key page linked (minor)
+Review fit: the keyed walk written as seen, Oakland "just past" the edge (about 245 dp past), fixed · Review quality: pass
+#### T14 · Native READMEs: install, register, location (6710c59e; 052bf170 rework; 880c5dcc retry)
+Files: GM/ios/README.md (new) · GM/android/README.md (new) · GM/README.md
+Cases: P-readme → green (SC/s17m/t14/check-readmes.ts 260 of 260 against the yaml, the Swift, Kotlin and Dart sources,
+release.sh, swift-mirror.sh, the workflows, custom.ts and every link; red first: 123 README checks fail; `flutter pub
+publish --dry-run` the same 1 warning and 1 hint, no ios/ or android/ file in the archive)
+Changed: ios/README.md, the mirror's front page (install, `GoogleMapPlugin()`, MapKit with no key, location the app's to
+ask, the tables, the differences) · android/README.md (Maven Central, Play services, the app's key: a missing meta-data
+throws "API key not found"; an empty or refused key as seen on an API 34 Google Play emulator) · the pub README's
+"Native apps" section with absolute links
+Decisions: five wrong Flutter facts fixed in the pub README · the no-key paragraph only what was seen, or what Google's
+code backs (both minor, auto-decided)
+Review fit: `orca plugin add` credited with GMSServices, fixed; then (blocked, retried once on the card's default) the
+Android no-key sentence claimed more than was seen, fixed · Review quality: pass
+#### T15 · Outside repo: walkthroughs, release table (not in git, not in the PR)
+Files: /Users/amrebada/workspace/orca-gateway/docs/User_Actions.md · /Users/amrebada/workspace/orca-gateway/CLAUDE.md
+Cases: P-docs → green (SC/s17m/t15/check.py 156 of 156, red first 87 of 152, all doc checks; the code checks run
+release.sh's own functions, swift-mirror.sh `info`, the workflows' tag patterns, launch-release.test.ts's pinned words,
+the builds, VERSION files, the yaml, the demo's key wiring and that no real key, fingerprint or account is in the docs)
+Changed: User_Actions.md: "## Native parity step 17: the orca_google_map Swift mirror (GitHub repository + deploy key)"
+after the video's (its 7 steps with the map's names, rows 9 and 10 first, then 15,16) and "## Native parity step 17: a
+Google Maps API key for Android apps (Google Cloud Console)" (project, Maps SDK for Android, package and SHA-1s, a key
+restricted to them, where the app puts it, iOS needs none) · CLAUDE.md: rows 15-16, "1-16", steps 2, 6, 9, the pre-req
+and the native order bullet. Copies and diffs in SC/s17m/t15/
+Decisions: a full key walkthrough (none existed for Flutter) · the no-key view from T13's README (all minor)
+Review fit: pass · Review quality: pass
+#### T16 · /map counts marker taps, added at 09 (a6c9fcbc)
+Files: examples/server/custom.ts · engine/test/map-demo.test.ts
+Cases: C17.1/page → green (map-demo 5 pass, red first in 3 of 5: the state list, onMarkerTap, the Texts; engine 828,
+0 fail: T6's exact checks edited, none added; examples/server tsc 36 errors before and after, none new)
+Changed: /map gains `markerTapCount` (0); onMarkerTap is `Parallel(SetState("markerTapId", V.event("markerId")),
+SetState("markerTapCount", V.transform(V.pageState("markerTapCount"), [TV.add(V.static(1))])))`; a Text "Marker taps:
+{{value}}" after "Marker tapped"; a comment says why; the test pins the key, the add-1 SetState as sent, the Text's watch
+Decisions: T6's three exact checks edited, each stricter, none looser · Parallel and `TV.add(V.static(1))` as the page's
+other triggers and parity-a's counters · the page about 560 of 720+ high, no scroll (all minor, auto-decided)
+Review fit: pass · Review quality: pass
+#### Hand checks (2026-11-16)
+- iOS 18.5 simulator, the demo's /map, location granted and set to 37.76,-122.45: the map around San Francisco with both
+  pins and the blue dot; a pin tap opens its callout, "Marker tapped: marker1", "Marker taps: 1"; a second tap on the
+  same pin counts 2; a tap off the pins and a long press show their coordinates; a drag moves the "Camera moved to"
+  lines; "Move Camera to NYC" animates to New York at zoom 14. Found: the pin drew white on a black disc; fixed in
+  4bacde41 and seen red, its tap still firing. Screenshots SC/s17m/hand/i-0 … i-7.
+- API 34 emulator (Google Play image), no Maps key (none here): /map opens, no crash, "Authorization failure"; a grey
+  box with Google's logo and the zoom buttons; no pins; a tap and a long press show their coordinates; the zoom
+  buttons, a drag and "Move Camera to NYC" leave "Camera moved to" at 0. The plan expected pins and camera moves
+  without a key (08, T13's seam note); Google draws neither. The keyed walk (tiles, pins, info windows, marker taps,
+  camera moves) is unseen: it waits for your key. Notes SC/s17m/hand/android-nokey.md.
+
 ### Test run
 Group 1: the full run on T1-T3 (before T1's two reworks), every Done-when command that applies so far:
 - cli `dart test` 49 pass (45 + 4), `dart analyze` no issues · engine `bun test` 822 pass, 0 fail
@@ -197,6 +281,14 @@ map android BUILD SUCCESSFUL (T11 reran its unit tests with --rerun: 16 + 7) · 
 parse, shellcheck clean · workflows parse · pub dry run as at baseline. After T7's rework 555b0a06: map ios `swift test`
 27, 0 warnings; `xcodebuild test` on the iOS 18.5 simulator 26, TEST SUCCEEDED. Failures: none.
 
+Group 4, after T7's addition, T12-T16 and the T13 and T14 reworks (SC/s17m/g4run), on 880c5dcc: cli 51 pass, analyze
+clean · engine 828 pass, 0 fail · Flutter 543 pass, analyze clean · sdk-swift 604 pass · sdk-kotlin BUILD SUCCESSFUL ·
+voice: ios 24, android green · video: ios 26, android green · map ios `swift test` 28, 0 warnings, `xcodebuild test`
+on the iOS 18.5 simulator 27, TEST SUCCEEDED · map android BUILD SUCCESSFUL · app-android `:app:assembleDebug` BUILD
+SUCCESSFUL · app-ios `xcodebuild build` BUILD SUCCEEDED · the generators leave no diff · scripts parse, shellcheck
+clean · workflows parse · pub dry run as at baseline (1 warning, 1 hint). After the README reworks: launch-readmes and
+map-demo 11 pass, check-readmes 260 of 260, the docs check 156 of 156. Failures: none.
+
 ### Blocked
 none
 
@@ -210,7 +302,8 @@ none
   and longitude and a marker's id are optional in TypeScript, as Flutter defaults them.
 - native-plugins.yml now queues three macOS jobs per matching run (one per plugin). GitHub's hosted macOS arm64
   runners were short of capacity on PR #49: two jobs were cancelled unstarted ("not acquired") and passed on re-run.
-- Hand checks to come in group 4: on iOS, a second tap on a selected pin fires onMarkerTap again (XCTest cannot make
-  real touches); on Android, tiles need the user's Maps API key, markers and taps do not.
-- The differences from Flutter for T14's READMEs: SC/s17m/t7-differences.md (terrain, zoom buttons, marker-tap camera,
-  bearing, wrong-typed props, a Column's unbounded height).
+- Hand checks done (group 4): iOS all seen. Android without a key: no tiles, no pins, no camera moves; taps and long
+  presses fire. C17.1 on Kotlin needs the user's Maps key for its keyed walk (docs/User_Actions.md has the steps).
+- The differences from Flutter are in the iOS and Android READMEs (terrain, zoom buttons, marker-tap camera, bearing,
+  wrong-typed props, a Column's unbounded height).
+- PR #49 merged (3880607): the branch is rebased onto main before its PR; the video slice is closed (stage 12).
