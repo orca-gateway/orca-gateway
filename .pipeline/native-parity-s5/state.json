@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "slug": "native-parity-s5",
+  "idea": "Native parity step 5 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): lists, grids, pages and pull to refresh on both native SDKs: ListView, GridView, PageView, Scrollbar, PullToRefresh and the action refetchPage, laid out, scrolled and refreshed as Flutter does and advertised in both capability lists. Test cases A5.1-A5.7 in phase-a-tests.md. In sdk-swift and sdk-kotlin, with render and action fixtures",
+  "kind": "feature",
+  "created_at": "2026-11-16T05:54:22Z",
+  "updated_at": "2026-11-16T06:14:18Z",
+  "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
+  "current": "09",
+  "stages": {
+    "01": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 5, cases: phase-a-tests.md rows A5.1-A5.7"
+    },
+    "02": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 5, cases: phase-a-tests.md rows A5.1-A5.7"
+    },
+    "03": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 5, cases: phase-a-tests.md rows A5.1-A5.7"
+    },
+    "04": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 5, cases: phase-a-tests.md rows A5.1-A5.7"
+    },
+    "05": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 5, cases: phase-a-tests.md rows A5.1-A5.7"
+    },
+    "06": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 5, cases: phase-a-tests.md rows A5.1-A5.7"
+    },
+    "07": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 5, cases: phase-a-tests.md rows A5.1-A5.7"
+    },
+    "08": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-16T06:14:18Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 08's eleven questions are minor (process q1-q4, q6, q10, q11; q5, q7-q9 implementation choices inside plan step 5's stated approach and Flutter's behaviour), all defaults"
+    },
+    "09": {
+      "status": "pending"
+    },
+    "10": {
+      "status": "pending"
+    },
+    "11": {
+      "status": "pending"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": true
+  }
+}
