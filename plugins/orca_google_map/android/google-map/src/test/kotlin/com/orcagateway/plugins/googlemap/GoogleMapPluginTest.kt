@@ -39,6 +39,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.w3c.dom.Element
+import java.io.File
+import java.util.Properties
+import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -51,6 +55,9 @@ private const val MAP_TAG = "googleMap.fake"
 
 /** The node id /map gives its map, moveCamera's targetId. */
 private const val ID = "main-map"
+
+/** The android: attributes' namespace in a manifest. */
+private const val ANDROID = "http://schemas.android.com/apk/res/android"
 
 private val TRIGGERS = listOf("onTap", "onLongPress", "onCameraMove", "onMarkerTap")
 
@@ -247,6 +254,29 @@ class GoogleMapPluginTest {
         val requested = info.requestedPermissions.orEmpty().toSet()
         assertTrue(Manifest.permission.ACCESS_FINE_LOCATION in requested)
         assertTrue(Manifest.permission.ACCESS_COARSE_LOCATION in requested)
+    }
+
+    /**
+     * Apache's HTTP client, gone from apps targeting API 28+ unless their manifest asks for it: the
+     * Maps renderer in Google Play services can need it, so the library declares it, not required, as
+     * google_maps_flutter_android 2.19.5 does, and the merger hands it to the app. Robolectric's
+     * PackageInfo carries no uses-library: this reads the merged manifest Robolectric itself reads,
+     * the one AGP names in test_config.properties.
+     */
+    @Test
+    fun c17_1_theModuleManifestDeclaresApacheHttpLegacyNotRequired() {
+        val config = Properties()
+        assertNotNull(javaClass.classLoader?.getResourceAsStream("com/android/tools/test_config.properties")).use { config.load(it) }
+        val merged = File(assertNotNull(config.getProperty("android_merged_manifest")))
+        val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
+        val libraries = factory.newDocumentBuilder().parse(merged).getElementsByTagName("uses-library")
+        val legacy = assertNotNull(
+            (0 until libraries.length).map { libraries.item(it) as Element }
+                .singleOrNull { it.getAttributeNS(ANDROID, "name") == "org.apache.http.legacy" },
+            "the merged manifest declares org.apache.http.legacy",
+        )
+        assertEquals("application", legacy.parentNode.nodeName)
+        assertEquals("false", legacy.getAttributeNS(ANDROID, "required"))
     }
 
     /** Flutter's defaults: 0, 0, zoom 14, normal, no my-location, zoom controls, no markers. */

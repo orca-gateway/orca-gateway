@@ -6,4 +6,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Apache's HTTP client, gone from apps that target API 28+ unless their
+         manifest asks for it: the Maps renderer in Google Play services can
+         need it (without it the first map throws NoClassDefFoundError on
+         org.apache.http.ProtocolVersion). Flutter's google_maps_flutter_android
+         declares it the same way; not required, so the app still installs
+         where the library is absent. -->
+    <application>
+        <uses-library android:name="org.apache.http.legacy" android:required="false" />
+    </application>
 </manifest>

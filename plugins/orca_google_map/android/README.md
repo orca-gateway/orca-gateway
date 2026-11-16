@@ -130,6 +130,11 @@ askForLocation.launch(
 An app that never sets `myLocationEnabled` can drop both from its merged manifest with
 `tools:node="remove"`.
 
+The library's manifest also brings `<uses-library android:name="org.apache.http.legacy"
+android:required="false" />` into your app's `<application>`, as Flutter's
+google_maps_flutter_android does: the Maps renderer in Google Play services can need Apache's HTTP
+client, which apps targeting API 28+ lose unless their manifest asks for it.
+
 ## The widget
 
 | Prop | Type | Default | What it does |
