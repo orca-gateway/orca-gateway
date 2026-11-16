@@ -101,9 +101,13 @@ android {
 }
 ```
 
-Without the `meta-data` the Maps SDK throws when the first map is made. With a key Google refuses
-(the Maps SDK for Android not enabled, or the key restricted to another app) the map is drawn
-without its tiles, and Google says why in logcat.
+Without the `meta-data` the Maps SDK throws "API key not found" when the first map is made. With an
+empty key, or one Google refuses (an empty and a made-up key were tried), the page opens with no
+crash and Google logs "Authorization failure" (`adb logcat -s "Google Maps Android API"`). On an
+API 34 emulator with the Google Play image (Google's legacy map renderer) the map then stays a grey
+box with the Google logo and the zoom buttons. It draws no markers, and its camera does not move:
+the zoom buttons, a drag and `moveCamera` leave it where it was made, and `onCameraMove` never
+fires. Taps and long presses still fire `onTap` and `onLongPress` with their coordinates.
 
 ## Location
 
