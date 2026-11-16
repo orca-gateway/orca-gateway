@@ -1,6 +1,6 @@
 {
   "name": "merge-slots",
-  "description": "S2b. A structure widget names its slot nodes in props (`appBar`, `body`, `title`, `action_0`): a top-level string prop whose value is one of that node's own `children` ids is a slot reference and gets the prefix. A string prop that only looks like an id (the Text nodes whose `data` is \"title\" and \"2\", ids of other nodes) is not one of the node's own children and is left alone. A ListView `separator` is not a slot: the encoder writes that widget inline in props, and it is copied.",
+  "description": "S2b. A structure widget names its slot nodes in props (`appBar`, `body`, `title`, `action_0`): a top-level string prop whose value is one of that node's own `children` ids is a slot reference and gets the prefix. A string prop that only looks like an id (the Text nodes whose `data` is \"title\" and \"2\", ids of other nodes) is not one of the node's own children and is left alone. The rule cannot tell a slot from an ordinary string prop that happens to equal one of the node's own child ids: that string is prefixed too (the Hero whose `tag` is the key of its child), a known cost of S2b. A ListView `separator` is not a slot and not a node: the encoder leaves an object without id, children or watches in props, the Flutter SDK reads `separator` as an id and does not draw it, and it is walked like any other prop value.",
   "kind": "merge",
   "cases": [
     {
@@ -219,6 +219,142 @@
             "childMode": "none",
             "props": {
               "data": "Inbox"
+            },
+            "children": [],
+            "watches": []
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "a plain string prop equal to a child id is taken for a slot",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "photo",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "1",
+              "2"
+            ],
+            "watches": []
+          },
+          {
+            "id": "2",
+            "type": "Hero",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "tag": "photo"
+            },
+            "children": [
+              "3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "other"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "Hero",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "tag": "photo"
+            },
+            "children": [
+              "photo"
+            ],
+            "watches": []
+          },
+          {
+            "id": "photo",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "photo"
+            },
+            "children": [],
+            "watches": []
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail:1",
+              "detail:2"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:2",
+            "type": "Hero",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "tag": "photo"
+            },
+            "children": [
+              "detail:3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "other"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:1",
+            "type": "Hero",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "tag": "detail:photo"
+            },
+            "children": [
+              "detail:photo"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:photo",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "photo"
             },
             "children": [],
             "watches": []

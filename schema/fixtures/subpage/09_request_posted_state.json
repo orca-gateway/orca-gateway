@@ -1,6 +1,6 @@
 {
   "name": "request-posted-state",
-  "description": "S6. A serverAction fired from a node inside a sub-page posts, as `pageState`, only the keys under that sub-page's prefix, with the prefix removed. The sub-page is the mounted prefix the source node id starts with; the longest one wins, so a node of a nested sub-page belongs to the nested one. A source in the host page, or no source at all, matches nothing: the prefix is null and the whole page state is posted. A page sees the keys of the sub-pages nested in it under their own prefix, as a host does.",
+  "description": "S6. A serverAction fired from a node inside a sub-page posts, as `pageState`, only the keys under that sub-page's prefix, with the prefix removed. The sub-page is the mounted prefix the source node id starts with; the longest one wins, so a node of a nested sub-page belongs to the nested one. A source id that is exactly a prefix starts with it and belongs to it. A source in the host page, an empty source id, or no source at all, matches nothing: the prefix is null and the whole page state is posted. A page sees the keys of the sub-pages nested in it under their own prefix, as a host does.",
   "kind": "request",
   "cases": [
     {
@@ -406,6 +406,116 @@
           "detail:inner:tab": "posts",
           "detail:inner#1:tab": "likes",
           "detailed:count": 5
+        }
+      }
+    },
+    {
+      "name": "an empty source id is a host node",
+      "action": {
+        "prefixes": [
+          "detail:",
+          "detail#1:",
+          "detail#10:",
+          "detail:inner:",
+          "detail:inner#1:"
+        ],
+        "sourceId": "",
+        "pageState": {
+          "hostCount": 1,
+          "detail": "a host key named like the sub-page",
+          "detail:count": 3,
+          "detail:user": {
+            "name": "Ann"
+          },
+          "detail#1:count": 9,
+          "detail#10:count": 10,
+          "detail:inner:tab": "posts",
+          "detail:inner#1:tab": "likes",
+          "detailed:count": 5
+        }
+      },
+      "expected": {
+        "prefix": null,
+        "pageState": {
+          "hostCount": 1,
+          "detail": "a host key named like the sub-page",
+          "detail:count": 3,
+          "detail:user": {
+            "name": "Ann"
+          },
+          "detail#1:count": 9,
+          "detail#10:count": 10,
+          "detail:inner:tab": "posts",
+          "detail:inner#1:tab": "likes",
+          "detailed:count": 5
+        }
+      }
+    },
+    {
+      "name": "an empty source id, no sub-page mounted",
+      "action": {
+        "prefixes": [],
+        "sourceId": "",
+        "pageState": {
+          "hostCount": 1,
+          "detail": "a host key named like the sub-page",
+          "detail:count": 3,
+          "detail:user": {
+            "name": "Ann"
+          },
+          "detail#1:count": 9,
+          "detail#10:count": 10,
+          "detail:inner:tab": "posts",
+          "detail:inner#1:tab": "likes",
+          "detailed:count": 5
+        }
+      },
+      "expected": {
+        "prefix": null,
+        "pageState": {
+          "hostCount": 1,
+          "detail": "a host key named like the sub-page",
+          "detail:count": 3,
+          "detail:user": {
+            "name": "Ann"
+          },
+          "detail#1:count": 9,
+          "detail#10:count": 10,
+          "detail:inner:tab": "posts",
+          "detail:inner#1:tab": "likes",
+          "detailed:count": 5
+        }
+      }
+    },
+    {
+      "name": "a source id equal to a prefix belongs to it",
+      "action": {
+        "prefixes": [
+          "detail:",
+          "detail#1:",
+          "detail#10:",
+          "detail:inner:",
+          "detail:inner#1:"
+        ],
+        "sourceId": "detail#1:",
+        "pageState": {
+          "hostCount": 1,
+          "detail": "a host key named like the sub-page",
+          "detail:count": 3,
+          "detail:user": {
+            "name": "Ann"
+          },
+          "detail#1:count": 9,
+          "detail#10:count": 10,
+          "detail:inner:tab": "posts",
+          "detail:inner#1:tab": "likes",
+          "detailed:count": 5
+        }
+      },
+      "expected": {
+        "prefix": "detail#1:",
+        "pageState": {
+          "count": 9
         }
       }
     },

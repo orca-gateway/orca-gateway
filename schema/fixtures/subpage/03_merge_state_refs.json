@@ -1,6 +1,6 @@
 {
   "name": "merge-state-refs",
-  "description": "S2c and S2d. A state Value with page scope gets the prefix on its key wherever it sits in props: alone, as a transform input, in a transform's `by` and template `params`, in a conditional's `when`, `then` and `else`, inside a map or a list, in a nested SubPage's `pageId` and `params`. A dotted key is prefixed as a whole. App-scoped references are left alone. The payload of a static Value is data and is never rewritten. `watches` carries bare keys with no scope, so an entry is prefixed when the node's props hold a page-scoped reference with that key; a key read in both scopes is listed twice, prefixed then bare.",
+  "description": "S2c and S2d. A state Value with page scope gets the prefix on its key wherever it sits in props: alone, as a transform input, in a transform's `by` and template `params`, in a conditional's `when`, `then` and `else`, inside a map or a list, in a nested SubPage's `pageId` and `params`. A dotted key is prefixed as a whole. App-scoped references are left alone. The same holds in the `map`, `filter` and `contains` transforms and the `contains`, `startsWith`, `matches` and `or` conditions. A reference with no `scope` is page-scoped. A static Value is data and is never rewritten, with or without a `value`, and gives no watch. `watches` carries bare keys with no scope, so an entry is prefixed when the node's props hold a page-scoped reference with that key; a key read in both scopes is listed twice, prefixed then bare.",
   "kind": "merge",
   "cases": [
     {
@@ -558,6 +558,372 @@
             "children": [],
             "watches": [
               "detail:count"
+            ]
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "references inside map, filter and contains transforms and inside contains, startsWith, matches and or",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "list",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "transform",
+                "input": {
+                  "type": "state",
+                  "key": "items",
+                  "scope": "page"
+                },
+                "by": [
+                  {
+                    "type": "map",
+                    "transform": {
+                      "type": "add",
+                      "by": {
+                        "type": "state",
+                        "key": "step",
+                        "scope": "page"
+                      }
+                    }
+                  },
+                  {
+                    "type": "filter",
+                    "expr": {
+                      "op": "or",
+                      "exprs": [
+                        {
+                          "op": "contains",
+                          "haystack": {
+                            "type": "state",
+                            "key": "tags",
+                            "scope": "page"
+                          },
+                          "needle": {
+                            "type": "state",
+                            "key": "tag",
+                            "scope": "page"
+                          }
+                        },
+                        {
+                          "op": "startsWith",
+                          "str": {
+                            "type": "state",
+                            "key": "name",
+                            "scope": "page"
+                          },
+                          "prefix": {
+                            "type": "state",
+                            "key": "initial",
+                            "scope": "app"
+                          }
+                        },
+                        {
+                          "op": "matches",
+                          "str": {
+                            "type": "state",
+                            "key": "code",
+                            "scope": "page"
+                          },
+                          "regex": "^code$"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "type": "contains",
+                    "value": {
+                      "type": "state",
+                      "key": "wanted",
+                      "scope": "page"
+                    }
+                  }
+                ]
+              }
+            },
+            "children": [],
+            "watches": [
+              "items",
+              "tags",
+              "tag",
+              "name",
+              "initial",
+              "code",
+              "wanted"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail:1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:1",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "transform",
+                "input": {
+                  "type": "state",
+                  "key": "detail:items",
+                  "scope": "page"
+                },
+                "by": [
+                  {
+                    "type": "map",
+                    "transform": {
+                      "type": "add",
+                      "by": {
+                        "type": "state",
+                        "key": "detail:step",
+                        "scope": "page"
+                      }
+                    }
+                  },
+                  {
+                    "type": "filter",
+                    "expr": {
+                      "op": "or",
+                      "exprs": [
+                        {
+                          "op": "contains",
+                          "haystack": {
+                            "type": "state",
+                            "key": "detail:tags",
+                            "scope": "page"
+                          },
+                          "needle": {
+                            "type": "state",
+                            "key": "detail:tag",
+                            "scope": "page"
+                          }
+                        },
+                        {
+                          "op": "startsWith",
+                          "str": {
+                            "type": "state",
+                            "key": "detail:name",
+                            "scope": "page"
+                          },
+                          "prefix": {
+                            "type": "state",
+                            "key": "initial",
+                            "scope": "app"
+                          }
+                        },
+                        {
+                          "op": "matches",
+                          "str": {
+                            "type": "state",
+                            "key": "detail:code",
+                            "scope": "page"
+                          },
+                          "regex": "^code$"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "type": "contains",
+                    "value": {
+                      "type": "state",
+                      "key": "detail:wanted",
+                      "scope": "page"
+                    }
+                  }
+                ]
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:items",
+              "detail:tags",
+              "detail:tag",
+              "detail:name",
+              "initial",
+              "detail:code",
+              "detail:wanted"
+            ]
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "a reference with no scope is page-scoped",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "legacy",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "legacy"
+              },
+              "semanticsLabel": {
+                "type": "transform",
+                "input": {
+                  "type": "state",
+                  "key": "first"
+                },
+                "transforms": [
+                  {
+                    "type": "add",
+                    "by": {
+                      "type": "state",
+                      "scope": "app",
+                      "key": "last"
+                    }
+                  }
+                ]
+              }
+            },
+            "children": [],
+            "watches": [
+              "legacy",
+              "first",
+              "last"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail:legacy"
+              },
+              "semanticsLabel": {
+                "type": "transform",
+                "input": {
+                  "type": "state",
+                  "key": "detail:first"
+                },
+                "transforms": [
+                  {
+                    "type": "add",
+                    "by": {
+                      "type": "state",
+                      "scope": "app",
+                      "key": "last"
+                    }
+                  }
+                ]
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:legacy",
+              "detail:first",
+              "last"
+            ]
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "a static Value without a value is data too",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "odd",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "static"
+              },
+              "semanticsLabel": {
+                "type": "static",
+                "meta": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "count"
+                }
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "static"
+              },
+              "semanticsLabel": {
+                "type": "static",
+                "meta": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "count"
+                }
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
             ]
           }
         ],

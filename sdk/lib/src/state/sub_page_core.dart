@@ -1,6 +1,6 @@
 /// The pure core of the SubPage widget and the updateSubPage action.
 ///
-/// No Flutter, no I/O: JSON maps in, JSON maps out. The contract (S1 to S7)
+/// No Flutter, no I/O: JSON maps in, JSON maps out. The contract (S1 to S8)
 /// and the normative table of rewritten fields are in
 /// `schema/fixtures/subpage/README.md`; every function here is pinned by the
 /// fixtures of that folder, and the Swift and Kotlin SDKs carry the same
@@ -30,14 +30,18 @@ class SubPageMerge {
 /// [prefix]: ids, children, slot props, page-state references and keys,
 /// watches and node-addressing ids get the prefix; each page-scoped state
 /// definition gives one seed. The response is not changed.
+///
+/// The response is a page response as `page-response.schema.json` has it:
+/// `components` and `state` are there, and every node carries `props`,
+/// `children` and `watches`.
 SubPageMerge mergeSubPage(String prefix, Map<String, dynamic> response) {
   final nodes = <Map<String, dynamic>>[
-    for (final node in (response['components'] as List?) ?? const [])
+    for (final node in response['components'] as List)
       _node(prefix, node as Map),
   ];
   final state = <String, dynamic>{};
-  for (final def in (response['state'] as List?) ?? const []) {
-    if (def is Map && _isPage(def['scope']) && def['key'] is String) {
+  for (final def in response['state'] as List) {
+    if (_isPage((def as Map)['scope'])) {
       state['$prefix${def['key']}'] = def['initial'];
     }
   }
@@ -62,8 +66,10 @@ class SubPageRequest {
   String get location => query.isEmpty ? path : '$path?$query';
 }
 
-/// The fetch of [pageId] with the resolved [params]: keys sorted by code
-/// point, keys and values percent-encoded, null params left out.
+/// The fetch of [pageId] with the resolved [params]. The path is the page id
+/// without its leading slashes, each segment between slashes percent-encoded
+/// (so a `?` or a `#` in it stays in the path). The query: keys sorted by
+/// code point, keys and values percent-encoded, null params left out.
 SubPageRequest subPageRequest(String pageId, [Map<String, dynamic>? params]) {
   final keys = [
     for (final entry in (params ?? const <String, dynamic>{}).entries)
@@ -72,11 +78,17 @@ SubPageRequest subPageRequest(String pageId, [Map<String, dynamic>? params]) {
   final query = [
     for (final key in keys) '${_percent(key)}=${_percent(_text(params![key]))}',
   ].join('&');
-  return SubPageRequest(pageId, query);
+  var start = 0;
+  while (start < pageId.length && pageId[start] == '/') {
+    start++;
+  }
+  final path = pageId.substring(start).split('/').map(_percent).join('/');
+  return SubPageRequest(path, query);
 }
 
 /// The mounted page a node belongs to: the longest of [prefixes] that
-/// [sourceId] starts with, or null (a host node, or no source).
+/// [sourceId] starts with (an id equal to a prefix starts with it), or null
+/// (a host node, an empty id, or no source).
 String? subPagePrefixOf(Iterable<String> prefixes, String? sourceId) {
   if (sourceId == null) return null;
   String? best;
@@ -228,8 +240,8 @@ const _idFields = <String, String>{
 
 Map<String, dynamic> _node(String prefix, Map<dynamic, dynamic> node) {
   final out = Map<String, dynamic>.from(node);
-  final children = List<String>.from((node['children'] as List?) ?? const []);
-  final props = (node['props'] as Map?) ?? const {};
+  final children = List<String>.from(node['children'] as List);
+  final props = node['props'] as Map;
   out['id'] = '$prefix${node['id']}';
   out['children'] = [for (final child in children) '$prefix$child'];
   out['props'] = _props(prefix, props, children);
@@ -238,7 +250,7 @@ Map<String, dynamic> _node(String prefix, Map<dynamic, dynamic> node) {
   final appKeys = <String>{};
   _refs(props, pageKeys, appKeys);
   out['watches'] = [
-    for (final watch in (node['watches'] as List?) ?? const [])
+    for (final watch in node['watches'] as List)
       if (pageKeys.contains(watch)) ...[
         '$prefix$watch',
         if (appKeys.contains(watch)) watch,
@@ -267,15 +279,14 @@ Map<String, dynamic> _props(
     },
 };
 
-bool _isStatic(Map<dynamic, dynamic> map) =>
-    map['type'] == 'static' && map.containsKey('value');
+/// A static Value is data, whatever it holds and with or without a `value`.
+bool _isStatic(Map<dynamic, dynamic> map) => map['type'] == 'static';
 
 /// Deep copy of [value] with every page-state reference and every targeted
 /// tween rewritten; with [actions], the action fields too.
 dynamic _walk(String prefix, dynamic value, bool actions) {
   if (value is List) return [for (final v in value) _walk(prefix, v, actions)];
   if (value is! Map) return value;
-  // The payload of a static Value is data, whatever it looks like.
   if (_isStatic(value)) return value;
 
   final type = value['type'];
@@ -290,8 +301,6 @@ dynamic _walk(String prefix, dynamic value, bool actions) {
         key == 'components' &&
         v is List) {
       out[key] = [for (final n in v) n is Map ? _node(prefix, n) : n];
-    } else if (actions && type == 'addComponent' && key == 'node' && v is Map) {
-      out[key] = _node(prefix, v);
     } else {
       out[key] = _walk(prefix, v, actions);
     }
@@ -364,24 +373,29 @@ String _percent(String text) {
 /// A resolved param as text: a string as it is, a list or a map as JSON.
 String _text(Object? value) => value is String ? value : _json(value);
 
+/// 2^53: up to it, either way, every whole number is exact in a double.
+const _maxWhole = 9007199254740992.0;
+
+/// A whole number up to 2^53 as its digits, however it was spelt (`3.0`,
+/// `1e3`, `-0.0`); any other number as Dart prints it, which is the shortest
+/// plain decimal that reads back the same from 0.0001 up to 2^53. Outside
+/// that the forms differ between platforms and the contract pins none.
 String _number(num n) =>
-    n is double && n.isFinite && n == n.truncateToDouble() && n.abs() < 9e15
+    n is double && n == n.truncateToDouble() && n.abs() <= _maxWhole
     ? n.toInt().toString()
     : n.toString();
 
-/// Compact JSON with sorted keys, the same on every platform.
+/// Compact JSON with sorted keys, the same on every platform. [value] is a
+/// decoded JSON value: null, a boolean, a number, a string, a list or a map.
 String _json(Object? value) {
   if (value == null) return 'null';
   if (value is bool) return value ? 'true' : 'false';
   if (value is num) return _number(value);
   if (value is String) return _quoted(value);
   if (value is List) return '[${value.map(_json).join(',')}]';
-  if (value is Map) {
-    final keys = [for (final key in value.keys) key as String]
-      ..sort(_byCodePoint);
-    return '{${keys.map((k) => '${_quoted(k)}:${_json(value[k])}').join(',')}}';
-  }
-  return _quoted(value.toString());
+  final map = value as Map;
+  final keys = [for (final key in map.keys) key as String]..sort(_byCodePoint);
+  return '{${keys.map((k) => '${_quoted(k)}:${_json(map[k])}').join(',')}}';
 }
 
 const _escapes = <int, String>{

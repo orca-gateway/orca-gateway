@@ -1,6 +1,6 @@
 {
   "name": "merge-seeds",
-  "description": "S2 seeds. Each page-scoped state definition gives `prefix + key = initial`, whatever JSON type the initial value has, null included. App-scoped definitions are ignored. A key defined twice keeps the last initial. A response without definitions or without components merges to empty results.",
+  "description": "S2 seeds. Each page-scoped state definition gives `prefix + key = initial`, whatever JSON type the initial value has, null included. App-scoped definitions are ignored. A key that itself contains `:` or `#` is prefixed like any other. A key defined twice keeps the last initial. A response without definitions or without components merges to empty results.",
   "kind": "merge",
   "cases": [
     {
@@ -176,6 +176,88 @@
         ],
         "state": {
           "detail#2:count": 7
+        }
+      }
+    },
+    {
+      "name": "keys that contain a colon or a hash are prefixed like any other",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "counter",
+        "title": "",
+        "state": [
+          {
+            "key": "a:b",
+            "scope": "page",
+            "initial": 1
+          },
+          {
+            "key": "x#1:y",
+            "scope": "page",
+            "initial": 2
+          },
+          {
+            "key": "detail:count",
+            "scope": "page",
+            "initial": 3
+          },
+          {
+            "key": "#",
+            "scope": "page",
+            "initial": 4
+          },
+          {
+            "key": ":",
+            "scope": "page",
+            "initial": 5
+          }
+        ],
+        "components": [
+          {
+            "id": "0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail:count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:count"
+            ]
+          }
+        ],
+        "state": {
+          "detail:a:b": 1,
+          "detail:x#1:y": 2,
+          "detail:detail:count": 3,
+          "detail:#": 4,
+          "detail::": 5
         }
       }
     },

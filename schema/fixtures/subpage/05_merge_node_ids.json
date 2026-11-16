@@ -1,6 +1,6 @@
 {
   "name": "merge-node-ids",
-  "description": "S2f. Literal ids that address the sub-page's own nodes get the prefix: the `animationId` prop, `animationId` of a tween or tweenSequence Value and of animateForward and animateReverse, `dialogId`, `id` of updateComponent and deleteComponent, `subPageId` of updateSubPage. A Value in one of those fields is not an id: only the page-state key inside it is rewritten. A nested SubPage node is a node like any other: its id gets the prefix, which is how its own prefix composes later. The Hero `tag`, a navigate route, a tab id, `pageId` and `mode` are left alone.",
+  "description": "S2f. Literal ids that address the sub-page's own nodes get the prefix: the `animationId` prop, `animationId` of a tween or tweenSequence Value and of animateForward and animateReverse, `dialogId`, `id` of updateComponent and deleteComponent, `subPageId` of updateSubPage. A Value in one of those fields is not an id: only the page-state key inside it is rewritten. A nested SubPage node is a node like any other: its id gets the prefix, which is how its own prefix composes later. The Hero `tag`, a navigate route, a tab id, `pageId` and `mode` are left alone. A node id and a state key may be the same string: the id is rewritten where an id goes and the key where a key goes, and a plain string (a Text's `data`, an updateComponent's `data`) stays.",
   "kind": "merge",
   "cases": [
     {
@@ -563,6 +563,211 @@
           }
         ],
         "state": {}
+      }
+    },
+    {
+      "name": "a node id equal to a state key: each by its own rule",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "counter",
+        "title": "",
+        "state": [
+          {
+            "key": "count",
+            "scope": "page",
+            "initial": 0
+          },
+          {
+            "key": "count",
+            "scope": "app",
+            "initial": 5
+          }
+        ],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "count",
+              "1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "ElevatedButton",
+            "kind": "button",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "2"
+            ],
+            "watches": [],
+            "actions": {
+              "onTap": {
+                "type": "actionGroup",
+                "mode": "sequential",
+                "actions": [
+                  {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "count",
+                    "value": {
+                      "type": "static",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "type": "setState",
+                    "scope": "app",
+                    "key": "count",
+                    "value": {
+                      "type": "static",
+                      "value": 2
+                    }
+                  },
+                  {
+                    "type": "updateComponent",
+                    "id": "count",
+                    "props": {
+                      "data": "count"
+                    }
+                  },
+                  {
+                    "type": "deleteComponent",
+                    "id": "count"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "count"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "count",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail:count",
+              "detail:1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:1",
+            "type": "ElevatedButton",
+            "kind": "button",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "detail:2"
+            ],
+            "watches": [],
+            "actions": {
+              "onTap": {
+                "type": "actionGroup",
+                "mode": "sequential",
+                "actions": [
+                  {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "detail:count",
+                    "value": {
+                      "type": "static",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "type": "setState",
+                    "scope": "app",
+                    "key": "count",
+                    "value": {
+                      "type": "static",
+                      "value": 2
+                    }
+                  },
+                  {
+                    "type": "updateComponent",
+                    "id": "detail:count",
+                    "props": {
+                      "data": "count"
+                    }
+                  },
+                  {
+                    "type": "deleteComponent",
+                    "id": "detail:count"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "detail:2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "count"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:count",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail:count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:count"
+            ]
+          }
+        ],
+        "state": {
+          "detail:count": 0
+        }
       }
     }
   ]

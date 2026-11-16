@@ -1,8 +1,155 @@
 {
   "name": "sequence-edges",
-  "description": "S7 edges. Any mode that is not `join` is a replace. A join with nothing mounted mounts page 0. A page without components is mounted without a root. A replace only removes keys under `K:` or `K#<digits>:`: a host key that merely starts with the sub-page key, or with `K#` and no number before the colon, stays.",
+  "description": "S7 edges. Any mode that is not `join` is a replace. A join with nothing mounted mounts page 0. A page without components is mounted without a root. A replace only removes keys under `K:` or `K#<digits>:`: a sub-page key that itself contains `:` or `#` is under the prefix and goes; a host key that merely starts with the sub-page key, or with `K#` and no number before the colon, stays.",
   "kind": "sequence",
   "cases": [
+    {
+      "name": "sub-page keys that contain a colon or a hash are removed like any other",
+      "subPageKey": "detail",
+      "pageState": {
+        "a:b": "host",
+        "detail:x#1:y": "stale"
+      },
+      "steps": [
+        {
+          "op": "mount",
+          "response": {
+            "pageId": "odd",
+            "title": "",
+            "state": [
+              {
+                "key": "a:b",
+                "scope": "page",
+                "initial": 1
+              },
+              {
+                "key": "x#1:y",
+                "scope": "page",
+                "initial": 2
+              },
+              {
+                "key": "#2:z",
+                "scope": "page",
+                "initial": 3
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "a:b",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "a:b"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "a:b": "host",
+              "detail:a:b": 1,
+              "detail:x#1:y": 2,
+              "detail:#2:z": 3
+            }
+          }
+        },
+        {
+          "op": "set",
+          "key": "detail:late#3:one",
+          "value": true,
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "a:b": "host",
+              "detail:a:b": 1,
+              "detail:x#1:y": 2,
+              "detail:#2:z": 3,
+              "detail:late#3:one": true
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "replace",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0"
+            ],
+            "removedNodeIds": [
+              "detail:0"
+            ],
+            "state": {
+              "a:b": "host",
+              "detail:count": 4
+            }
+          }
+        }
+      ]
+    },
     {
       "name": "an unknown mode replaces",
       "subPageKey": "detail",

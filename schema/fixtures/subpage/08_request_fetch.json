@@ -1,6 +1,6 @@
 {
   "name": "request-fetch",
-  "description": "S4. A sub-page is fetched on the normal page route: `path` is the resolved pageId as it is, `query` is built from the resolved params. Keys are sorted by code point (UTF-8 byte order). Both keys and values are percent-encoded: every UTF-8 byte except A-Z a-z 0-9 - . _ ~ becomes %XX in upper case, so a space is %20 and never a plus. A string is sent as it is, true and false as words, a whole number without a fraction, any other number in its shortest decimal form, a list or a map as compact JSON with map keys sorted the same way. A null param is not sent. No params, or none left, gives an empty query and no question mark.",
+  "description": "S4. A sub-page is fetched on the normal page route: `path` is the resolved pageId without its leading slashes, each segment between slashes percent-encoded, `query` is built from the resolved params. Keys are sorted by code point (UTF-8 byte order). Both keys and values are percent-encoded: every UTF-8 byte except A-Z a-z 0-9 - . _ ~ becomes %XX in upper case, so a space is %20 and never a plus. A string is sent as it is, true and false as words, a whole number up to 2^53 either way as its digits (no fraction, no exponent, however the JSON spelt it), any other number from 0.0001 up to 2^53 in magnitude as the shortest plain decimal that reads back the same, a list or a map as compact JSON with map keys sorted the same way. A null param is not sent. No params, or none left, gives an empty query and no question mark.",
   "kind": "request",
   "cases": [
     {
@@ -205,6 +205,103 @@
       "expected": {
         "path": "search",
         "query": "empty=%7B%7D&filter=%7B%22a%22%3A%7B%22c%22%3A%5B%5D%2C%22d%22%3A%22q%5C%22r%22%7D%2C%22b%22%3A1%7D&ids=%5B1%2C2.5%2C%22x%22%2Ctrue%2Cnull%5D&none=%5B%5D"
+      }
+    },
+    {
+      "name": "a leading slash is removed",
+      "fetch": {
+        "pageId": "/profile",
+        "params": {
+          "userId": "u-42"
+        }
+      },
+      "expected": {
+        "path": "profile",
+        "query": "userId=u-42"
+      }
+    },
+    {
+      "name": "every leading slash is removed; inner and trailing ones are kept",
+      "fetch": {
+        "pageId": "//user//42/"
+      },
+      "expected": {
+        "path": "user//42/",
+        "query": ""
+      }
+    },
+    {
+      "name": "each path segment is percent-encoded",
+      "fetch": {
+        "pageId": "search/a b?x=1&y#top/café/100%/it's:@+$,;",
+        "params": {
+          "q": "1"
+        }
+      },
+      "expected": {
+        "path": "search/a%20b%3Fx%3D1%26y%23top/caf%C3%A9/100%25/it%27s%3A%40%2B%24%2C%3B",
+        "query": "q=1"
+      }
+    },
+    {
+      "name": "integers up to 2^53",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "max": 9007199254740992,
+          "min": -9007199254740992,
+          "big": 1000000000000000,
+          "in": [
+            9007199254740992,
+            -1
+          ]
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": "big=1000000000000000&in=%5B9007199254740992%2C-1%5D&max=9007199254740992&min=-9007199254740992"
+      }
+    },
+    {
+      "name": "a whole number, however the JSON spells it",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "fraction": 3.0,
+          "exponent": 1e3,
+          "negZero": -0.0,
+          "bigExponent": 9.007199254740992E15,
+          "in": [
+            2.0,
+            -4.0e0
+          ]
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": "bigExponent=9007199254740992&exponent=1000&fraction=3&in=%5B2%2C-4%5D&negZero=0"
+      }
+    },
+    {
+      "name": "other numbers in plain decimal form",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "tiny": 0.0001,
+          "long": 0.30000000000000004,
+          "mixed": 1234567.125,
+          "large": 4503599627370495.5,
+          "neg": -123456789.5,
+          "spelt": 1.5e-3,
+          "in": [
+            0.0001,
+            -123456789.5
+          ]
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": "in=%5B0.0001%2C-123456789.5%5D&large=4503599627370495.5&long=0.30000000000000004&mixed=1234567.125&neg=-123456789.5&spelt=0.0015&tiny=0.0001"
       }
     },
     {

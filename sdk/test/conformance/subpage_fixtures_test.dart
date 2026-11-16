@@ -2,7 +2,7 @@
 // step 13, cases B13.4-F and B13.5-F).
 //
 // The contract is the oracle of this family, not the Flutter widget: every
-// file is a list of inputs and the outputs the SubPage contract (S1 to S7 in
+// file is a list of inputs and the outputs the SubPage contract (S1 to S8 in
 // the fixture README) gives for them. The runner drives the pure core in
 // `lib/src/state/sub_page_core.dart` and nothing else: no widget, no client.
 // The Swift and Kotlin cores load the same files and must give the same
@@ -166,6 +166,48 @@ void main() {
     expect(subPagePrefix('detail', 0), 'detail:');
     expect(subPagePrefix('detail', 1), 'detail#1:');
     expect(subPagePrefix('outer:inner', 12), 'outer:inner#12:');
+  });
+
+  test('B13.4-F the schema holds a prefix to its two forms', () {
+    final prefix = _map((schema['definitions'] as Map)['Prefix']);
+    final key = _map(
+      (_map((schema['definitions'] as Map)['SequenceCase'])['properties']
+          as Map)['subPageKey'],
+    );
+    List<String> check(Map<String, dynamic> s, String v) =>
+        _validate(s, v, schema, r'$');
+    for (final good in [
+      'detail:',
+      'detail#1:',
+      'detail#10:',
+      'outer:inner:',
+      'outer#2:inner#1:',
+    ]) {
+      expect(check(prefix, good), isEmpty, reason: good);
+      expect(
+        check(key, good.substring(0, good.length - 1)),
+        good.contains('#1:') || good.contains('#10:') ? isNotEmpty : isEmpty,
+        reason: 'as a key: $good',
+      );
+    }
+    for (final bad in [
+      '',
+      ':',
+      'detail',
+      'detail#:',
+      'detail#0:',
+      'detail#01:',
+      'detail#x:',
+      'detail#1',
+      'detail::',
+      '#1:',
+      'a#1#2:',
+    ]) {
+      expect(check(prefix, bad), isNotEmpty, reason: bad);
+    }
+    for (final bad in ['', 'a:', 'a#1', ':a', 'a::b', 'a#b']) {
+      expect(check(key, bad), isNotEmpty, reason: 'as a key: $bad');
+    }
   });
 
   test('B13.4-F the schema check catches a malformed fixture', () {

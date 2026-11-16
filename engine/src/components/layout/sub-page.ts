@@ -4,7 +4,10 @@ import type { Valueable } from "../../types/value";
 import type { Value } from "../../types/value";
 
 export interface SubPageProps {
-  /** Stable key (REQUIRED). Used as the component ID and as the namespace prefix for all embedded sub-page component IDs. */
+  /**
+   * Stable key (REQUIRED). Used as the component ID and as the namespace prefix for all embedded sub-page
+   * component IDs. Must not contain `:` or `#`: the prefixes are `key:` and `key#<n>:`.
+   */
   key: string;
   /** The page ID to fetch and embed. */
   pageId: Valueable<string>;
@@ -35,7 +38,7 @@ export class SubPage extends SingleChildLayout {
     if (!opts.key) {
       throw new Error("SubPage requires a `key` — it is used as the ID namespace prefix for embedded components.");
     }
-    this.key = opts.key;
+    this.key = checkedKey(opts.key);
     this.child = opts.child;
     this.actions = opts.actions;
     const { key: _, child: _c, actions: _a, ...rest } = opts;
@@ -46,7 +49,23 @@ export class SubPage extends SingleChildLayout {
     return new SubPage(opts);
   }
 
+  withKey(key: string): this {
+    return super.withKey(checkedKey(key));
+  }
+
   getProps(): Record<string, unknown> {
     return { ...this.props };
   }
+}
+
+/**
+ * The SDK mounts the embedded page under `key:` and each joined page under
+ * `key#<n>:`. A key with one of those two characters would own another
+ * SubPage's ids and state (`feed#1` gives `feed#1:`, join 1 of `feed`).
+ */
+function checkedKey(key: string): string {
+  if (/[:#]/.test(key)) {
+    throw new Error(`SubPage key "${key}" must not contain ":" or "#" — they separate the sub-page prefix from the ids and state keys under it.`);
+  }
+  return key;
 }

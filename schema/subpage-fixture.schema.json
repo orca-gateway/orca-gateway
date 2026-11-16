@@ -50,8 +50,8 @@
   "definitions": {
     "Prefix": {
       "type": "string",
-      "pattern": "^.+:$",
-      "description": "`K:` for page 0 of the SubPage with id K, `K#j:` for its j-th joined page (j from 1)."
+      "pattern": "^([^:#]+(#[1-9][0-9]*)?:)+$",
+      "description": "`K:` for page 0 of the SubPage with id K, `K#j:` for its j-th joined page (j from 1, no leading zero). A SubPage key holds no `:` and no `#`; K is a bare key in a host page, or the prefix of the page the SubPage sits in followed by its key (`outer:inner:`, `outer#2:inner#1:`)."
     },
     "Node": {
       "type": "object",
@@ -210,7 +210,11 @@
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string" },
-        "subPageKey": { "type": "string", "description": "Id of the SubPage node in the host page's node store." },
+        "subPageKey": {
+          "type": "string",
+          "pattern": "^([^:#]+(#[1-9][0-9]*)?:)*[^:#]+$",
+          "description": "Id of the SubPage node in the host page's node store: its key, after the prefix of the page it sits in when it is nested."
+        },
         "pageState": { "type": "object", "description": "The host page's page state before the first step." },
         "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/Step" } }
       }
