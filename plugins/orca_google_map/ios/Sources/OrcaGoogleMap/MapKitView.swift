@@ -12,8 +12,9 @@ import AppKit
 /// as Flutter's platform view does. Made at the props' camera and registered
 /// under the node id; the props after that move all but the camera; removed
 /// from the registry when it leaves. A tap off any marker fires onTap, a long
-/// press onLongPress (once, as it begins), a marker selected onMarkerTap, the
-/// visible region changing onCameraMove.
+/// press onLongPress (once, as it begins), a tap on a marker onMarkerTap (as
+/// MapKit selects it, or on the one already selected), the visible region
+/// changing onCameraMove.
 @MainActor
 struct MapKitView {
     let id: String
@@ -56,10 +57,28 @@ struct MapKitView {
             maps.leave(map, id: id)
         }
 
+        /// The markers selected as the touch that is now a tap began. MapKit
+        /// selects a marker once (didSelect); Google fires onMarkerTap on
+        /// every tap, so a tap on one of these is the tap's to fire.
+        private var selectedAsTouchBegan: [MarkerAnnotation] = []
+
+        func touchBegan(on map: MKMapView) {
+            selectedAsTouchBegan = map.selectedAnnotations.compactMap { $0 as? MarkerAnnotation }
+        }
+
+        /// Off any annotation view, onTap; on the pin of a marker selected
+        /// before this tap, onMarkerTap; on its callout (Google's info window)
+        /// nothing.
         func tapped(at point: CGPoint, on map: MapKitSurface) {
-            guard !map.hasMarker(at: point) else { return }
-            let tapped = map.convert(point, toCoordinateFrom: map)
-            _ = fire(.tap(latitude: tapped.latitude, longitude: tapped.longitude))
+            guard let view = map.annotationView(at: point) else {
+                let tapped = map.convert(point, toCoordinateFrom: map)
+                _ = fire(.tap(latitude: tapped.latitude, longitude: tapped.longitude))
+                return
+            }
+            guard let marker = view.annotation as? MarkerAnnotation,
+                  selectedAsTouchBegan.contains(where: { $0 === marker }),
+                  view.bounds.contains(view.convert(point, from: map)) else { return }
+            _ = fire(.markerTap(id: marker.marker.id))
         }
 
         func longPressed(at point: CGPoint, on map: MapKitSurface) {
@@ -163,6 +182,12 @@ extension MapKitView: UIViewRepresentable {
 }
 
 extension MapKitView.Coordinator: UIGestureRecognizerDelegate {
+    /// A touch begins: before MapKit selects anything with it.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        if let map = gestureRecognizer.view as? MKMapView { touchBegan(on: map) }
+        return true
+    }
+
     func gestureRecognizer(
         _ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
     ) -> Bool {
@@ -187,6 +212,14 @@ extension MapKitView: NSViewRepresentable {
 }
 
 extension MapKitView.Coordinator: NSGestureRecognizerDelegate {
+    /// A click begins (its mouse down): before MapKit selects anything with it.
+    func gestureRecognizer(
+        _ gestureRecognizer: NSGestureRecognizer, shouldAttemptToRecognizeWith event: NSEvent
+    ) -> Bool {
+        if event.type == .leftMouseDown, let map = gestureRecognizer.view as? MKMapView { touchBegan(on: map) }
+        return true
+    }
+
     func gestureRecognizer(
         _ gestureRecognizer: NSGestureRecognizer, shouldRecognizeSimultaneouslyWith other: NSGestureRecognizer
     ) -> Bool {
@@ -269,18 +302,19 @@ final class MapKitSurface: MKMapView, MapSurface {
             zoom: GoogleZoom.zoom(longitudeDelta: region.span.longitudeDelta, width: Double(bounds.width)))
     }
 
-    /// Whether `point` is on a marker's pin.
-    func hasMarker(at point: CGPoint) -> Bool {
+    /// The annotation view at `point`, if any: its pin, or the callout MapKit
+    /// puts in it.
+    func annotationView(at point: CGPoint) -> MKAnnotationView? {
         #if canImport(UIKit)
         var view = hitTest(point, with: nil)
         #elseif canImport(AppKit)
         var view = superview.flatMap { hitTest(convert(point, to: $0)) }
         #endif
         while let current = view {
-            if current is MKAnnotationView { return true }
+            if let pin = current as? MKAnnotationView { return pin }
             view = current.superview
         }
-        return false
+        return nil
     }
 
     #if canImport(UIKit)

@@ -75,6 +75,7 @@ final class MapKitViewTests: XCTestCase {
         var initial: [JSONValue] = [
             ["key": "kind", "scope": "page", "initial": "satellite"], ["key": "pins", "scope": "page", "initial": pins],
             ["key": "lat", "scope": "page", "initial": 37.7749], ["key": "markerId", "scope": "page", "initial": ""],
+            ["key": "markerTaps", "scope": "page", "initial": 0],
         ]
         for key in ["tapLat", "tapLng", "pressLat", "pressLng", "camLat", "camLng", "camZoom"] {
             initial.append(["key": .string(key), "scope": "page", "initial": -1])
@@ -89,7 +90,7 @@ final class MapKitViewTests: XCTestCase {
                 "onTap": store([("tapLat", "latitude"), ("tapLng", "longitude")]),
                 "onLongPress": store([("pressLat", "latitude"), ("pressLng", "longitude")]),
                 "onCameraMove": store([("camLat", "latitude"), ("camLng", "longitude"), ("camZoom", "zoom")]),
-                "onMarkerTap": store([("markerId", "markerId")]),
+                "onMarkerTap": store([("markerId", "markerId")], counting: "markerTaps"),
             ]),
             ["id": "below", "type": "Text", "kind": "primitive", "childMode": "none", "props": ["data": "Below the map"],
              "children": [], "watches": []],
@@ -110,11 +111,19 @@ final class MapKitViewTests: XCTestCase {
         ]
     }
 
-    /// Each event field into its page state key.
-    func store(_ pairs: [(String, String)]) -> JSONValue {
-        .object(["type": "actionGroup", "actions": .array(pairs.map { key, field in
+    /// Each event field into its page state key, and one more in `counting`
+    /// (how many times the trigger fired).
+    func store(_ pairs: [(String, String)], counting: String? = nil) -> JSONValue {
+        var actions: [JSONValue] = pairs.map { key, field in
             ["type": "setState", "scope": "page", "key": .string(key), "value": ["type": "event", "key": .string(field)]]
-        })])
+        }
+        if let counting {
+            actions.append(["type": "setState", "scope": "page", "key": .string(counting), "value": [
+                "type": "transform", "input": ["type": "state", "scope": "page", "key": .string(counting)],
+                "by": [["type": "add", "by": 1]],
+            ]])
+        }
+        return .object(["type": "actionGroup", "actions": .array(actions)])
     }
 
     /// Google's zoom of what the map shows now (its width, its longitude span).
@@ -215,6 +224,51 @@ final class MapKitViewTests: XCTestCase {
         XCTAssertTrue(map.selectedAnnotations.contains { $0 === marker })
     }
 
+    /// Google fires onMarkerTap on every tap on a marker; MapKit selects a
+    /// marker once, so a tap on the one already selected is the tap's. A tap
+    /// on its callout is not a tap on the marker.
+    func testC17_1_S_ATapOnTheSelectedMarkerFiresOnMarkerTapAgainAndAFirstTapFiresItOnce() throws {
+        let screen = Screen(try page())
+        defer { screen.hosted.close() }
+        let map = try screen.map(self)
+        let coordinator = try XCTUnwrap(map.delegate as? MapKitView.Coordinator)
+        let marker = try annotation(map, "marker1")
+
+        // A first tap: it begins with nothing selected, MapKit selects the
+        // marker (didSelect), then the tap ends on its pin.
+        var pin = try middle(of: "marker1", on: map)
+        try touchBegins(on: map, coordinator)
+        map.selectAnnotation(marker, animated: false)
+        coordinator.tapped(at: pin, on: map)
+        pump(until: { screen.page("markerTaps") == 2 }, timeout: 0.5)
+        XCTAssertEqual(screen.page("markerTaps"), 1, "a first tap fires onMarkerTap once")
+        XCTAssertEqual(screen.page("markerId"), "marker1")
+
+        // Again, on the pin still selected: MapKit selects nothing.
+        screen.set("markerId", "")
+        pump(until: { screen.page("markerId") == "" })
+        pin = try middle(of: "marker1", on: map)
+        try touchBegins(on: map, coordinator)
+        coordinator.tapped(at: pin, on: map)
+        pump(until: { screen.page("markerId") == "marker1" })
+        XCTAssertEqual(screen.page("markerId"), "marker1", "a tap on the selected marker fired nothing")
+        XCTAssertEqual(screen.page("markerTaps"), 2)
+        XCTAssertTrue(map.selectedAnnotations.contains { $0 === marker })
+        XCTAssertEqual(screen.page("tapLat"), -1, "a tap on a marker fired onTap")
+
+        // On its callout (MapKit puts it in the pin's view): Google's info
+        // window, whose tap is neither onMarkerTap nor onTap.
+        let view = try XCTUnwrap(map.view(for: marker))
+        let callout = try XCTUnwrap(view.subviews.first { !$0.isHidden }, "no callout on the selected marker")
+        let onCallout = callout.convert(CGPoint(x: callout.bounds.midX, y: callout.bounds.midY), to: map)
+        XCTAssertTrue(map.annotationView(at: onCallout) === view, "the callout is not in the pin's view")
+        try touchBegins(on: map, coordinator)
+        coordinator.tapped(at: onCallout, on: map)
+        pump(until: { false }, timeout: 0.3)
+        XCTAssertEqual(screen.page("markerTaps"), 2, "a tap on the callout fired onMarkerTap")
+        XCTAssertEqual(screen.page("tapLat"), -1, "a tap on the callout fired onTap")
+    }
+
     func testC17_1_S_ATapOffAnyMarkerFiresOnTapAndALongPressFiresOnLongPressWithTheirCoordinates() throws {
         let screen = Screen(try page())
         defer { screen.hosted.close() }
@@ -233,16 +287,8 @@ final class MapKitViewTests: XCTestCase {
         XCTAssertEqual(mine.filter { $0 is NSPressGestureRecognizer }.count, 1)
         #endif
 
-        // On the marker (the middle of its pin, once MapKit has put it there
-        // and shown it): no onTap.
-        let pin = try XCTUnwrap(map.view(for: try annotation(map, "marker1")))
-        let marker = map.convert(Self.sf, toPointTo: map)
-        func middle() -> CGPoint { pin.convert(CGPoint(x: pin.bounds.midX, y: pin.bounds.midY), to: map) }
-        pump(until: { !pin.isHidden && hypot(middle().x - marker.x, middle().y - marker.y) < 1 })
-        XCTAssertFalse(pin.isHidden, "the pin is not shown")
-        XCTAssertEqual(middle().x, marker.x, accuracy: 1, "the pin is not over its marker")
-        XCTAssertEqual(middle().y, marker.y, accuracy: 1)
-        coordinator.tapped(at: middle(), on: map)
+        // On the marker: no onTap.
+        coordinator.tapped(at: try middle(of: "marker1", on: map), on: map)
         pump(until: { false }, timeout: 0.3)
         XCTAssertEqual(screen.page("tapLat"), -1, "a tap on a marker fired onTap")
 
@@ -362,6 +408,42 @@ final class MapKitViewTests: XCTestCase {
     }
 
     // MARK: Helpers
+
+    /// The middle of the marker `id`'s pin, once MapKit has put it there and
+    /// shown it.
+    func middle(of id: String, on map: MapKitSurface) throws -> CGPoint {
+        let marker = try annotation(map, id)
+        let pin = try XCTUnwrap(map.view(for: marker), "\(id) is not on screen")
+        let place = map.convert(marker.coordinate, toPointTo: map)
+        func middle() -> CGPoint { pin.convert(CGPoint(x: pin.bounds.midX, y: pin.bounds.midY), to: map) }
+        pump(until: { !pin.isHidden && hypot(middle().x - place.x, middle().y - place.y) < 1 })
+        XCTAssertFalse(pin.isHidden, "the pin is not shown")
+        XCTAssertEqual(middle().x, place.x, accuracy: 1, "the pin is not over its marker")
+        XCTAssertEqual(middle().y, place.y, accuracy: 1)
+        return middle()
+    }
+
+    /// What UIKit (AppKit) asks the map's tap as a touch (a click) begins;
+    /// the tap still takes it.
+    func touchBegins(on map: MapKitSurface, _ coordinator: MapKitView.Coordinator) throws {
+        #if canImport(UIKit)
+        let tap = try XCTUnwrap((map.gestureRecognizers ?? []).first {
+            $0.delegate === coordinator && ($0 as? UITapGestureRecognizer)?.numberOfTapsRequired == 1
+        })
+        XCTAssertEqual((coordinator as UIGestureRecognizerDelegate).gestureRecognizer?(tap, shouldReceive: UITouch()),
+                       true)
+        #elseif canImport(AppKit)
+        let click = try XCTUnwrap(map.gestureRecognizers.first {
+            $0.delegate === coordinator && ($0 as? NSClickGestureRecognizer)?.numberOfClicksRequired == 1
+        })
+        let down = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+            eventNumber: 0, clickCount: 1, pressure: 1))
+        XCTAssertEqual(
+            (coordinator as NSGestureRecognizerDelegate).gestureRecognizer?(click, shouldAttemptToRecognizeWith: down),
+            true)
+        #endif
+    }
 
     /// Runs the main run loop until `done`, 3 s at most, so SwiftUI draws,
     /// MapKit lays out and the fired actions run.
