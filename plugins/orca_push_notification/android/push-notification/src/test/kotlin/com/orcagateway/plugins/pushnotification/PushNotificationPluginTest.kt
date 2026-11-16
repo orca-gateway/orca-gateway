@@ -236,6 +236,25 @@ class PushNotificationPluginTest {
         assertEquals(StoreState(), second.store.state)
     }
 
+    /** A launch that throws (an unregistered launcher, any reason) asked nothing: the next request is free to ask. */
+    @Test
+    fun c17_4_aRequestWhoseLaunchFailsLeavesTheNextRequestFreeToAsk() {
+        plugin.askPermission = {
+            asks++
+            error("Attempting to launch an unregistered ActivityResultLauncher")
+        }
+        val failed = executor()
+        val failure = assertFailsWith<IllegalStateException> { run(failed, "requestNotificationPermission", "statusKey" to "pushStatus") }
+        assertTrue("unregistered" in failure.message.orEmpty(), failure.message)
+        assertEquals(StoreState(), failed.store.state)
+
+        initialized()
+        val next = executor()
+        run(next, "requestNotificationPermission", "statusKey" to "pushStatus")
+        assertEquals(2, asks)
+        assertEquals(StoreState(app = mapOf("pushStatus" to string("granted"))), next.store.state)
+    }
+
     /** firebase_messaging_android below 33: granted is the notification switch, nothing asked. */
     @Test
     fun c17_4_belowApi33TheSwitchDecidesAndNothingIsAsked() {
@@ -508,6 +527,60 @@ class PushNotificationPluginTest {
             run(held, "requestNotificationPermission", "statusKey" to "pushStatus", on = device)
             assertTrue(shadowOf(activity).lastRequestedPermission === second)
             assertEquals(StoreState(app = mapOf("pushStatus" to string("granted"))), held.store.state)
+        }
+    }
+
+    /** The destroyed activity's launcher is let go: a request in the gap fails naming initialize, and the next initialize asks. */
+    @Test
+    fun c17_4_onceTheActivityIsDestroyedARequestFailsNamingInitializeUntilTheNextInitialize() {
+        val device = PushNotificationPlugin(DeviceNotifications(app), messaging)
+        Robolectric.buildActivity(ComponentActivity::class.java).use { controller ->
+            val destroyed = controller.create().get()
+            device.initialize(destroyed) {}
+            controller.start().resume().pause().stop().destroy()
+
+            val gap = executor()
+            val failure = assertFailsWith<IllegalStateException> {
+                run(gap, "requestNotificationPermission", "statusKey" to "pushStatus", on = device)
+            }
+            assertTrue("initialize" in failure.message.orEmpty(), failure.message)
+            assertNull(shadowOf(destroyed).lastRequestedPermission)
+            assertEquals(StoreState(), gap.store.state)
+        }
+
+        Robolectric.buildActivity(ComponentActivity::class.java).use { controller ->
+            val activity = controller.create().get()
+            device.initialize(activity) {}
+            controller.start().resume()
+            val next = executor()
+            val asking = start(next, "requestNotificationPermission", "statusKey" to "pushStatus", on = device)
+            val request = assertNotNull(shadowOf(activity).lastRequestedPermission)
+            answerPermission(activity, request.requestCode, PackageManager.PERMISSION_GRANTED)
+            assertTrue(asking.isCompleted)
+            assertEquals(StoreState(app = mapOf("pushStatus" to string("granted"))), next.store.state)
+        }
+    }
+
+    /** An older activity destroyed after the next initialize leaves the newer one's launcher in place. */
+    @Test
+    fun c17_4_anOlderActivityDestroyedAfterTheNextInitializeLeavesTheNewerOneAsking() {
+        val device = PushNotificationPlugin(DeviceNotifications(app), messaging)
+        Robolectric.buildActivity(ComponentActivity::class.java).use { older ->
+            device.initialize(older.create().get()) {}
+            older.start().resume()
+            Robolectric.buildActivity(ComponentActivity::class.java).use { newer ->
+                val activity = newer.create().get()
+                device.initialize(activity) {}
+                newer.start().resume()
+                older.pause().stop().destroy()
+
+                val executor = executor()
+                val asking = start(executor, "requestNotificationPermission", "statusKey" to "pushStatus", on = device)
+                val request = assertNotNull(shadowOf(activity).lastRequestedPermission)
+                answerPermission(activity, request.requestCode, PackageManager.PERMISSION_DENIED)
+                assertTrue(asking.isCompleted)
+                assertEquals(StoreState(app = mapOf("pushStatus" to string("denied"))), executor.store.state)
+            }
         }
     }
 

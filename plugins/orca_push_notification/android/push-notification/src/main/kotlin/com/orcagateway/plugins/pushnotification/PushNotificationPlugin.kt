@@ -3,6 +3,8 @@ package com.orcagateway.plugins.pushnotification
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import com.orcagateway.core.json.DartFormat
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
@@ -61,7 +63,10 @@ public class PushNotificationPlugin internal constructor(
      * activity back (singleTop) with it. The
      * intent the activity was launched with is not read: a tap that starts
      * the app reaches nothing, as in Flutter. Call it again on a new
-     * activity: the last one asks and hears the taps.
+     * activity: the last one asks and hears the taps. The plugin lets go of
+     * the activity's launcher when the activity is destroyed; until the next
+     * initialize a request fails naming it, and an answer pending over a
+     * configuration change reaches the new activity's launcher.
      */
     public fun initialize(activity: ComponentActivity, onNotificationTap: (String?) -> Unit) {
         notifications.createChannel()
@@ -70,7 +75,15 @@ public class PushNotificationPlugin internal constructor(
             activity,
             ActivityResultContracts.RequestPermission(),
         ) { granted -> permissionAnswered(granted) }
-        askPermission = { launcher.launch(POST_NOTIFICATIONS) }
+        val ask: () -> Unit = { launcher.launch(POST_NOTIFICATIONS) }
+        askPermission = ask
+        activity.lifecycle.addObserver(
+            object : DefaultLifecycleObserver {
+                override fun onDestroy(owner: LifecycleOwner) {
+                    if (askPermission === ask) askPermission = null
+                }
+            },
+        )
         activity.addOnNewIntentListener { intent ->
             if (intent.action == ACTION_SELECT_NOTIFICATION) onNotificationTap(intent.getStringExtra(EXTRA_PAYLOAD))
         }
@@ -109,7 +122,13 @@ public class PushNotificationPlugin internal constructor(
         }
         val answer = CompletableDeferred<Boolean>()
         permissionAnswer = answer
-        ask()
+        try {
+            ask()
+        } catch (failure: Throwable) {
+            // Nothing was asked, so no answer comes: the next request may ask.
+            permissionAnswer = null
+            throw failure
+        }
         return answer.await()
     }
 
