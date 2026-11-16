@@ -125,6 +125,8 @@ struct WidgetView: View {
         case "Text": TextNodeView(node: node)
         case "Divider": DividerView(node: node)
         case "ElevatedButton", "OutlinedButton", "TextButton": ButtonNodeView(node: node, model: model)
+        case "IconButton": IconButtonNodeView(node: node, model: model)
+        case "FloatingActionButton": FloatingActionButtonNodeView(node: node, model: model)
         case "FallbackPrompt": FallbackPromptView(node: node, model: model)
         case "UnsupportedWidgetPlaceholder": UnsupportedWidgetPlaceholderView(node: node, model: model)
         case "Icon": IconNodeView(node: node)
@@ -133,11 +135,19 @@ struct WidgetView: View {
         case "Expanded": ExpandedView(node: node, model: model)
         case "Flexible": FlexibleView(node: node, model: model)
         case "Spacer": SpacerNodeView()
-        case "TextField": TextFieldNodeView(node: node, model: model)
+        // Flutter's TextFormField builder is a copy of TextField's.
+        case "TextField", "TextFormField": TextFieldNodeView(node: node, model: model)
+        case "Checkbox": CheckboxNodeView(node: node, model: model)
+        case "Radio": RadioNodeView(node: node, model: model)
+        case "Switch": SwitchNodeView(node: node, model: model)
+        case "Slider": SliderNodeView(node: node, model: model)
+        // Flutter `_buildForm`: its child, no validation or save.
+        case "Form": ChildView(node: node, model: model)
         case "Stack": StackNodeView(node: node, model: model)
         case "Positioned": PositionedView(node: node, model: model)
         case "ClipRRect": ClipRRectView(node: node, model: model)
         case "GestureDetector": GestureNodeView(node: node, model: model)
+        case "InkWell": InkWellNodeView(node: node, model: model)
         case "AnimatedBuilder":
             // In a frozen copy (an AnimatedSwitcher's outgoing child) the
             // builder is its child as it last resolved: no controller, no

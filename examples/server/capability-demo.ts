@@ -1,4 +1,5 @@
 import { App, Flow, PageDefinition } from "../../engine/src/core";
+import { PrimitiveWidget } from "../../engine/src/types";
 import {
   Scaffold,
   AppBar,
@@ -10,7 +11,6 @@ import {
   Padding,
   EdgeInsets,
   Divider,
-  Checkbox,
 } from "../../engine/src/components";
 // Not re-exported by components/index.ts; the primitive barrel has it.
 import { UnsupportedWidgetPlaceholder } from "../../engine/src/components/primitive";
@@ -197,14 +197,35 @@ const negotiationPage = PageDefinition.create({
     }),
 });
 
-// ── /degrade: a widget one SDK lacks ─────────────────────────
+// ── /degrade: a widget no SDK has ────────────────────────────
 //
-// Checkbox has no iOS counterpart (its `targets` leave ios out), so the iOS
-// SDK does not advertise it. Flutter draws the checkbox; for iOS the engine
-// applies the fallback policy: `graceful` strips it, `warn` prepends a banner,
-// `require` replaces the page. examples/server/index.ts reads the policy
-// from ORCA_FALLBACK_POLICY, and record-page.ts records each one for the
-// Swift tests (`t sdk-swift:record`).
+// UnregisteredPluginWidget is a plugin widget no app registers, so no SDK
+// (Flutter included) advertises it and every client gets the fallback
+// policy: `graceful` leaves it out, `warn` prepends a banner naming it
+// (widget.UnregisteredPluginWidget), `require` replaces the page.
+// examples/server/index.ts reads the policy from ORCA_FALLBACK_POLICY, and
+// record-page.ts records each one for the Swift and Kotlin tests
+// (`t sdk-swift:record`, `t sdk-kotlin:record`).
+
+/** Stands in for a plugin widget no app registers: no SDK, Flutter included,
+ *  has a builder for it or advertises `widget.UnregisteredPluginWidget`, so
+ *  the engine applies the fallback policy to it on every client. Unlike a
+ *  built-in widget a native SDK has yet to draw, it never gains one. */
+class UnregisteredPluginWidget extends PrimitiveWidget {
+  readonly type = "UnregisteredPluginWidget";
+
+  private constructor() {
+    super();
+  }
+
+  static new(): UnregisteredPluginWidget {
+    return new UnregisteredPluginWidget();
+  }
+
+  getProps(): Record<string, unknown> {
+    return {};
+  }
+}
 
 const degradePage = PageDefinition.create({
   id: "degrade",
@@ -221,9 +242,9 @@ const degradePage = PageDefinition.create({
         child: Column.new({
           crossAxisAlignment: "stretch",
           children: [
-            Text.new({ data: "Above the checkbox." }),
-            Checkbox.new({ value: true, label: "Only some SDKs draw this" }),
-            Text.new({ data: "Below the checkbox." }),
+            Text.new({ data: "Above the plugin widget." }),
+            UnregisteredPluginWidget.new(),
+            Text.new({ data: "Below the plugin widget." }),
           ],
         }),
       }),

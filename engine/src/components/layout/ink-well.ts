@@ -12,8 +12,8 @@ export interface InkWellProps {
 
 export class InkWell extends SingleChildLayout {
   readonly type = "InkWell";
-  /** No native iOS counterpart (Epic 23b); SwiftUI degrades it via the caps vector. */
-  static readonly targets = ["flutter", "web", "android"] as const;
+  /** All four platforms: the iOS SDK draws a tappable area tinted with the highlight colour while pressed, no ripple. */
+  static readonly targets = ["flutter", "web", "android", "ios"] as const;
   static readonly triggers = ["onTap", "onLongPress", "onDoubleTap"] as const;
   private props: Omit<InkWellProps, "child" | "actions">;
 

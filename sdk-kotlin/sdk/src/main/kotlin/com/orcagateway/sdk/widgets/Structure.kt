@@ -41,7 +41,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.contentColorFor
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -157,7 +156,7 @@ internal fun ScaffoldWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
         }
     }
 
-    WithColorScheme(flutterLight) {
+    WithColorScheme(FlutterLightScheme) {
         CompositionLocalProvider(LocalOrcaSnackbars provides null) {
             PageDrawer(start, startState, end = false, gestures = true, model, modifier.boundedBy(window)) { inner ->
                 PageDrawer(end, endState, end = true, gestures = start == null || endState.isOpen, model, inner) { innermost ->
@@ -264,9 +263,6 @@ private fun ScaffoldFrame(
         }
     }
 }
-
-/** Flutter's `ThemeData()` colours, as Material 3's default light scheme. */
-private val flutterLight = lightColorScheme()
 
 /**
  * A Material 3 Scaffold needs a finite size. Where its parent leaves an axis

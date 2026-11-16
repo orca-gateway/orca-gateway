@@ -10,6 +10,7 @@ import {
   Once,
   Always,
   RefetchPage,
+  Expr,
   type Action,
   type ActionMap,
   type Widget,
@@ -66,14 +67,23 @@ import {
   PageView,
   PullToRefresh,
   Scrollbar,
+  Checkbox,
+  Radio,
+  Switch,
+  Slider,
+  Form,
+  TextFormField,
+  IconButton,
+  FloatingActionButton,
+  InkWell,
 } from "../../engine/src/components";
 
 // Native parity, Phase A (pipeline native-parity). One app, one page per plan
 // step, each the "torture" page for the props that step brings to Swift and
 // Kotlin, so the same page can be compared on Flutter, iOS and Android.
 // Pages: polish (step 1), lifecycle (step 2), layout and layout-safe (step 3),
-// effects (step 4), lists (step 5). Later steps add forms, rich and overlays:
-// one page constant each, one entry in `routes`. Images come from
+// effects (step 4), lists (step 5), forms (step 6). Later steps add rich and
+// overlays: one page constant each, one entry in `routes`. Images come from
 // picsum.photos; offline they draw "!" in their box. Only widgets all three
 // SDKs draw.
 
@@ -1357,6 +1367,212 @@ const listsPage = PageDefinition.create({
     }),
 });
 
+// ── Step 6 · forms: Checkbox, Radio, Switch, Slider, Form, TextFormField,
+//    IconButton, FloatingActionButton and InkWell (A6.1-A6.7); every control
+//    bound by value: V.pageState(key) plus onChange SetState(key, event value),
+//    with a Text watching each key ──────────────────────────────────────────────
+
+/** onChange writes the control's new value (the event's `value`) to page state `key`. */
+function writes(key: string): ActionMap {
+  return { onChange: SetState(key, V.event("value")) };
+}
+
+/** A Text "label: <page state value>", "null" when it is null (a tristate Checkbox's third state). */
+function showsValue(label: string, key: string): Widget {
+  return Text.new({
+    data: V.when(
+      [{ when: Expr.isNull(V.pageState(key)), then: V.static(`${label}: null`) }],
+      V.transform(V.pageState(key), [TV.template(`${label}: {{value}}`)]),
+    ),
+  });
+}
+
+/** A Radio of the `pick` group, its value beside it. */
+function pickRadio(value: string): Widget {
+  return Row.new({
+    mainAxisSize: "min",
+    gap: 4,
+    children: [
+      Radio.new({ value, groupValue: V.pageState("pick"), actions: writes("pick") }),
+      Text.new({ data: value }),
+    ],
+  });
+}
+
+/** A grey-bordered InkWell (radius 8) around a padded Text, with `actions` on the InkWell. */
+function inkArea(label: string, actions?: ActionMap): Widget {
+  return Container.new({
+    decoration: { border: { width: 1, color: grey }, borderRadius: 8 },
+    child: InkWell.new({
+      borderRadius: 8,
+      child: Padding.new({ padding: EdgeInsets.all(16), child: Text.new({ data: label }) }),
+      ...(actions ? { actions } : {}),
+    }),
+  });
+}
+
+/** The A6.7 controls, disabled (`enabled` false, each bumping `disabledFired` if it fired) or enabled with no handler. */
+function inertControls(disabled: boolean): Widget[] {
+  const off = disabled ? { enabled: false } : {};
+  const change = disabled ? { actions: { onChange: bump("disabledFired") } } : {};
+  const tap = disabled ? { actions: { onTap: bump("disabledFired") } } : {};
+  return [
+    Row.new({
+      gap: 8,
+      children: [
+        Checkbox.new({ value: true, ...off, ...change }),
+        Radio.new({ value: "x", groupValue: "x", ...off, ...change }),
+        Radio.new({ value: "y", groupValue: "x", ...off, ...change }),
+        Switch.new({ value: true, ...off, ...change }),
+        IconButton.new({ child: Icon.new({ name: "add" }), ...off, ...tap }),
+      ],
+    }),
+    fullWidth(
+      Slider.new({ value: 50, min: 0, max: 100, divisions: 4, ...off, ...change }),
+      TextFormField.new({ value: disabled ? "disabled" : "no handler", ...off, ...change }),
+    ),
+  ];
+}
+
+const formsPage = PageDefinition.create({
+  id: "forms",
+  title: "Forms",
+  state: [
+    { key: "checkPlain", scope: "page", initial: false },
+    { key: "checkTri", scope: "page", initial: false },
+    { key: "checkLabel", scope: "page", initial: true },
+    { key: "pick", scope: "page", initial: "a" },
+    { key: "switchOn", scope: "page", initial: false },
+    { key: "level", scope: "page", initial: 50 },
+    { key: "formText", scope: "page", initial: "" },
+    { key: "iconTaps", scope: "page", initial: 0 },
+    { key: "fabTaps", scope: "page", initial: 0 },
+    { key: "fabLongPresses", scope: "page", initial: 0 },
+    { key: "inkTaps", scope: "page", initial: 0 },
+    { key: "inkLongPresses", scope: "page", initial: 0 },
+    { key: "inkDoubleTaps", scope: "page", initial: 0 },
+    { key: "disabledFired", scope: "page", initial: 0 },
+  ],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({ title: Text.new({ data: "Forms (step 6)" }) }),
+      floatingActionButton: FloatingActionButton.new({
+        child: Icon.new({ name: "add" }),
+        actions: { onTap: bump("fabTaps"), onLongPress: bump("fabLongPresses") },
+      }),
+      body: SingleChildScrollView.new({
+        child: Padding.new({
+          padding: EdgeInsets.all(16),
+          child: Column.new({
+            crossAxisAlignment: "start",
+            children: [
+              section(
+                "A6.1 Checkbox bound to page state: a tap toggles it and the Text below follows",
+                caption("Left plain (false, true), right tristate (false, true, null, then false again; null draws a dash). Below, one with a label: a tap on the label toggles it too"),
+                SizedBox.new({ height: 4 }),
+                Row.new({
+                  gap: 16,
+                  children: [
+                    Checkbox.new({ value: V.pageState("checkPlain"), actions: writes("checkPlain") }),
+                    Checkbox.new({ value: V.pageState("checkTri"), tristate: true, actions: writes("checkTri") }),
+                  ],
+                }),
+                fullWidth(Checkbox.new({ value: V.pageState("checkLabel"), label: "I agree", actions: writes("checkLabel") })),
+                showsValue("plain", "checkPlain"),
+                showsValue("tristate", "checkTri"),
+                showsValue("labelled", "checkLabel"),
+              ),
+              section(
+                "A6.2 Three Radios on one key: exactly one is selected",
+                caption("A tap on an unselected one selects it and the others clear; a tap on the selected one changes nothing"),
+                SizedBox.new({ height: 4 }),
+                Row.new({ gap: 16, children: ["a", "b", "c"].map(pickRadio) }),
+                shows("selected", "pick"),
+              ),
+              section(
+                "A6.3 Switch and Slider (0 to 100, divisions 4) write page state",
+                caption("Toggle the Switch: the Text below follows"),
+                Switch.new({ value: V.pageState("switchOn"), actions: writes("switchOn") }),
+                shows("switch", "switchOn"),
+                SizedBox.new({ height: 12 }),
+                caption("Drag the Slider: it snaps to 0, 25, 50, 75 and 100 and the Text follows every step. Flutter and Android show the label Level above the thumb while dragging; iOS has no label"),
+                fullWidth(
+                  Slider.new({
+                    value: V.pageState("level"),
+                    min: 0,
+                    max: 100,
+                    divisions: 4,
+                    label: "Level",
+                    actions: writes("level"),
+                  }),
+                ),
+                shows("slider", "level", 0),
+              ),
+              section(
+                "A6.4 A Form around a TextFormField bound like a TextField",
+                caption("Type: the Text below repeats every keystroke"),
+                fullWidth(
+                  Form.new({
+                    child: TextFormField.new({
+                      value: V.pageState("formText"),
+                      placeholder: "Type here",
+                      actions: writes("formText"),
+                    }),
+                  }),
+                ),
+                shows("text", "formText"),
+              ),
+              section(
+                "A6.5 IconButton onTap; the floating action button onTap and onLongPress",
+                caption("Tap the + IconButton: its count goes up by one per tap"),
+                Row.new({
+                  gap: 8,
+                  children: [
+                    IconButton.new({ child: Icon.new({ name: "add" }), actions: { onTap: bump("iconTaps") } }),
+                    shows("icon button taps", "iconTaps"),
+                  ],
+                }),
+                SizedBox.new({ height: 8 }),
+                caption("The floating action button sits 16 in from the bottom-right corner of the screen: a tap and a long press each count"),
+                shows("FAB taps", "fabTaps"),
+                shows("FAB long presses", "fabLongPresses"),
+              ),
+              section(
+                "A6.6 InkWell: tap, long-press and double-tap",
+                caption("The area tints while pressed. A single tap counts after the double-tap wait (300 ms); a long press is a 0.5 s hold; a double tap counts once and adds no tap"),
+                SizedBox.new({ height: 4 }),
+                inkArea("Tap, double-tap or hold here", {
+                  onTap: bump("inkTaps"),
+                  onLongPress: bump("inkLongPresses"),
+                  onDoubleTap: bump("inkDoubleTaps"),
+                }),
+                SizedBox.new({ height: 4 }),
+                shows("taps", "inkTaps"),
+                shows("long presses", "inkLongPresses"),
+                shows("double taps", "inkDoubleTaps"),
+              ),
+              section(
+                "A6.7 Disabled controls, and controls with no handler",
+                caption("enabled false: a tap changes nothing and fired stays 0. Checkbox, Switch and Slider are greyed, the unselected Radio greyed (the selected one not), the IconButton faded to 0.38; the field takes no edits and looks unchanged (a bare field, no decoration)"),
+                SizedBox.new({ height: 4 }),
+                ...inertControls(true),
+                shows("fired", "disabledFired"),
+                SizedBox.new({ height: 12 }),
+                caption("No handler, enabled: drawn as usual. Checkbox, Switch, Slider and the unselected Radio take the touch and stay as they are; the IconButton takes no touch; the field edits but writes nothing"),
+                SizedBox.new({ height: 4 }),
+                ...inertControls(false),
+                SizedBox.new({ height: 8 }),
+                inkArea("InkWell with no actions: it still takes the press, nothing fires"),
+              ),
+              // Room under the last section for the FAB (56 + 16 from the bottom), so it clears when fully scrolled.
+              SizedBox.new({ height: 88 }),
+            ],
+          }),
+        }),
+      }),
+    }),
+});
+
 const parityFlow = Flow.create({
   name: "parity",
   routes: [
@@ -1368,6 +1584,7 @@ const parityFlow = Flow.create({
     { path: "layout-safe", page: layoutSafePage },
     { path: "effects", page: effectsPage },
     { path: "lists", page: listsPage },
+    { path: "forms", page: formsPage },
   ],
 });
 

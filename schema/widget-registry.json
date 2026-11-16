@@ -850,7 +850,8 @@
       "targets": [
         "flutter",
         "web",
-        "android"
+        "android",
+        "ios"
       ],
       "triggers": [
         "onChange"
@@ -1708,7 +1709,8 @@
       "targets": [
         "flutter",
         "web",
-        "android"
+        "android",
+        "ios"
       ],
       "triggers": [
         "onTap",
@@ -2186,7 +2188,8 @@
       "targets": [
         "flutter",
         "web",
-        "android"
+        "android",
+        "ios"
       ],
       "triggers": [
         "onTap",
@@ -2764,7 +2767,8 @@
       "targets": [
         "flutter",
         "web",
-        "android"
+        "android",
+        "ios"
       ],
       "triggers": [
         "onChange"

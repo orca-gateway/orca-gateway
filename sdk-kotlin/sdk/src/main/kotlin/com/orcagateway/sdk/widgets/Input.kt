@@ -52,13 +52,27 @@ import com.orcagateway.sdk.style.TextStyleProps
  * when it changes from elsewhere (a reset, another action) the field takes
  * it without firing and keeps the cursor if it still fits
  * (`didUpdateWidget`). A disabled or read-only field takes no edits; a
- * read-only one still takes focus and lets its text be selected. `maxLines`
- * N > 1 is a field N lines tall even when empty (Flutter sets no
- * `minLines`, and its EditableText is then `maxLines` lines tall).
+ * read-only one still takes focus and lets its text be selected. A bare
+ * field (no decoration) that is not enabled is Flutter's EditableText with
+ * `readOnly: !enabled || readOnly`: enabled and read-only, so a tap still
+ * focuses it; a decorated one is Material's disabled field (`TextField
+ * (enabled:)`): it takes no focus and its decoration is greyed as
+ * Flutter's (see [Decorated]). `maxLines` N > 1 is a field N lines tall
+ * even when empty (Flutter sets no `minLines`, and its EditableText is
+ * then `maxLines` lines tall).
+ *
+ * The text style is the builder's `style ?? TextStyle(16, black)`: with no
+ * `style` sent, 16 sp black, decorated or not, enabled or not. A `style`
+ * sent is merged over what Flutter puts under it: on a decorated field
+ * Material's input style (bodyLarge's 16 sp in onSurface, onSurface at
+ * 0.38 when disabled: `_m3StateInputStyle`; bodyLarge's line height and
+ * letter spacing are not taken); on a bare one nothing, EditableText draws
+ * it over the engine's text defaults (`txt::TextStyle`: 14, white), so a
+ * style with no colour is white there, as on Flutter.
  *
  * Without `decoration` the field is bare, Flutter's EditableText path
- * (16 sp black text, grey placeholder). With one it is Material 3's text
- * field decoration (the outlined one for `border: outline`, no line for
+ * (grey placeholder). With one it is Material 3's text field decoration
+ * (the outlined one for `border: outline`, no line for
  * `none`): label, hint, prefix and suffix, helper or error text, fill,
  * content padding, and the `n/max` counter when `maxLength` is set. The
  * field fills the width it is given, as Flutter's does. The field's own
@@ -69,8 +83,8 @@ import com.orcagateway.sdk.style.TextStyleProps
  */
 @Composable
 internal fun TextFieldWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
-    val field = remember { FieldText(pageText(node, model)) }
-    field.follow(pageText(node, model))
+    val field = remember { FieldText(Props.text(pageValue(node, model))) }
+    field.follow(Props.text(pageValue(node, model)))
 
     val enabled = node["enabled"]?.boolValue ?: true
     val readOnly = node["readOnly"]?.boolValue ?: false
@@ -79,7 +93,13 @@ internal fun TextFieldWidget(node: ResolvedNode, model: OrcaPageModel, modifier:
     val maxLength = count(node["maxLength"])
     val decoration = node["decoration"]?.objectValue
     val placeholder = decoration?.get("hintText")?.stringValue ?: node["placeholder"]?.stringValue ?: ""
-    val style = TextStyle(fontSize = 16.sp, color = Props.hex("#000000")).merge(TextStyleProps(node["style"]).textStyle())
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val base = when {
+        node["style"]?.objectValue == null -> TextStyle(fontSize = 16.sp, color = Props.hex("#000000"))
+        decoration != null -> TextStyle(fontSize = 16.sp, color = if (enabled) onSurface else onSurface.copy(alpha = 0.38f))
+        else -> TextStyle(fontSize = 14.sp, color = Color.White)
+    }
+    val style = base.merge(TextStyleProps(node["style"]).textStyle())
     val visual = if (obscure) PasswordVisualTransformation() else VisualTransformation.None
     val interaction = remember { MutableInteractionSource() }
     val focus = remember { FocusRequester() }
@@ -91,11 +111,11 @@ internal fun TextFieldWidget(node: ResolvedNode, model: OrcaPageModel, modifier:
             val limited = limit(next, maxLength)
             val edited = limited.text != field.value.text
             field.value = limited
-            if (edited) edit(node, model, limited.text)
+            if (edited) edit(node, model, JsonValue.String(limited.text))
         },
         modifier = modifier.fillMaxWidth().focusRequester(focus),
-        enabled = enabled,
-        readOnly = readOnly,
+        enabled = enabled || decoration == null,
+        readOnly = readOnly || (!enabled && decoration == null),
         textStyle = style,
         keyboardOptions = KeyboardOptions(
             autoCorrectEnabled = node["autocorrect"]?.boolValue ?: true,
@@ -128,19 +148,25 @@ internal fun TextFieldWidget(node: ResolvedNode, model: OrcaPageModel, modifier:
 }
 
 /**
- * One edit, Flutter's `onChanged`: the page-state key `stateKey` first,
- * then `onChange` with `{value}`. A field with neither fires nothing.
+ * One change by the user to a bound control, Flutter's builders'
+ * `onChanged` (TextField, Checkbox, Radio, ...): [value] written to the
+ * page-state key `stateKey` first (page scope: their `setState` sends no
+ * scope), then `onChange` fired with `{value}`. A control with neither
+ * does nothing.
  */
-private fun edit(node: ResolvedNode, model: OrcaPageModel, text: String) {
-    val value = JsonValue.String(text)
+internal fun edit(node: ResolvedNode, model: OrcaPageModel, value: JsonValue) {
     node["stateKey"]?.stringValue?.let { key -> model.store.dispatch(mapOf(key to value)) }
     model.fire("onChange", on = node, eventData = mapOf("value" to value))
 }
 
-/** The page's value: the store at `stateKey`, else the resolved `value` (Flutter `_buildTextField`). */
-private fun pageText(node: ResolvedNode, model: OrcaPageModel): String {
-    val key = node["stateKey"]?.stringValue ?: return Props.text(node["value"])
-    return Props.text(model.store.value(key))
+/**
+ * The page's value of a bound control: the store at `stateKey` (app and
+ * page merged, page on top: Flutter's `stateGet`), else the resolved
+ * `value` prop, null when there is none.
+ */
+internal fun pageValue(node: ResolvedNode, model: OrcaPageModel): JsonValue? {
+    val key = node["stateKey"]?.stringValue ?: return node["value"]
+    return model.store.value(key)
 }
 
 /** A positive count (`maxLines`, `maxLength`); anything else null. */
@@ -215,6 +241,12 @@ private class FieldState(
  * takes 4 off the default content padding's top and bottom, as Flutter's
  * InputDecorator does for every border (M3: outlined 20/12 to 16/8, filled
  * and underlined 8/8 to 4/4); a `contentPadding` sent wins over both.
+ * Disabled, it takes Flutter's `_InputDecoratorDefaultsM3` disabled state
+ * (the builder sets no `disabledBorder`): label, hint, helper, counter,
+ * prefix and suffix onSurface at 0.38; the error text stays the error
+ * colour; the line (underline or outline) onSurface at 0.12 when not
+ * filled (`outlineBorder`), at 0.38 when filled (`activeIndicatorBorder`);
+ * a fill with no `fillColor` onSurface at 0.04.
  */
 @Composable
 private fun Decorated(decoration: Map<String, JsonValue>, field: FieldState, inner: @Composable () -> Unit) {
@@ -226,11 +258,19 @@ private fun Decorated(decoration: Map<String, JsonValue>, field: FieldState, inn
     val supportingStyle = TextStyleProps(decoration[if (error != null) "errorStyle" else "helperStyle"]).textStyle()
     val dense = decoration["isDense"]?.boolValue == true
     val border = decoration["border"]?.stringValue
-    val fill = if (decoration["filled"]?.boolValue == true) {
-        Props.color(decoration["fillColor"]) ?: Props.hex("#F5F5F5")
-    } else {
-        Color.Transparent
+    val scheme = MaterialTheme.colorScheme
+    val filled = decoration["filled"]?.boolValue == true
+    val fillColor = Props.color(decoration["fillColor"])
+    val fill = if (filled) fillColor ?: Props.hex("#F5F5F5") else Color.Transparent
+    val disabledFill = if (filled) fillColor ?: scheme.onSurface.copy(alpha = 0.04f) else Color.Transparent
+    val disabledInk = scheme.onSurface.copy(alpha = 0.38f)
+    val disabledLine = when {
+        border == "none" -> Color.Transparent
+        filled -> disabledInk
+        else -> scheme.onSurface.copy(alpha = 0.12f)
     }
+    // Flutter's errorStyle has no disabled state: the error text keeps the error colour.
+    val supportingColour = if (error != null) TextStyle(color = scheme.error) else TextStyle()
     val padding: PaddingValues? = Props.insets(decoration["contentPadding"])?.paddingValues()
 
     val label: (@Composable () -> Unit)? = labelText?.let { { Text(it, style = LocalTextStyle.current.merge(labelStyle)) } }
@@ -241,7 +281,11 @@ private fun Decorated(decoration: Map<String, JsonValue>, field: FieldState, inn
     val supporting: (@Composable () -> Unit)? = if (error != null || helper != null || field.maxLength != null) {
         {
             Row {
-                Text(error ?: helper ?: "", Modifier.weight(1f), style = LocalTextStyle.current.merge(supportingStyle))
+                Text(
+                    error ?: helper ?: "",
+                    Modifier.weight(1f),
+                    style = LocalTextStyle.current.merge(supportingColour).merge(supportingStyle),
+                )
                 if (field.maxLength != null) Text("${field.text.length}/${field.maxLength}")
             }
         }
@@ -266,8 +310,11 @@ private fun Decorated(decoration: Map<String, JsonValue>, field: FieldState, inn
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = fill,
                 unfocusedContainerColor = fill,
-                disabledContainerColor = fill,
+                disabledContainerColor = disabledFill,
                 errorContainerColor = fill,
+                disabledBorderColor = disabledLine,
+                disabledPrefixColor = disabledInk,
+                disabledSuffixColor = disabledInk,
             ),
             contentPadding = padding ?: OutlinedTextFieldDefaults.contentPadding().dense(dense),
         )
@@ -289,12 +336,14 @@ private fun Decorated(decoration: Map<String, JsonValue>, field: FieldState, inn
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = fill,
                 unfocusedContainerColor = fill,
-                disabledContainerColor = fill,
+                disabledContainerColor = disabledFill,
                 errorContainerColor = fill,
                 focusedIndicatorColor = line,
                 unfocusedIndicatorColor = line,
-                disabledIndicatorColor = line,
+                disabledIndicatorColor = disabledLine,
                 errorIndicatorColor = line,
+                disabledPrefixColor = disabledInk,
+                disabledSuffixColor = disabledInk,
             ),
             contentPadding = padding ?: if (label == null) {
                 TextFieldDefaults.contentPaddingWithoutLabel().dense(dense)

@@ -34,6 +34,7 @@ public enum GeneratedCapabilities {
         "BottomNavigationBar",
         "Card",
         "Center",
+        "Checkbox",
         "ClipOval",
         "ClipRRect",
         "ClipRect",
@@ -50,13 +51,17 @@ public enum GeneratedCapabilities {
         "FallbackPrompt",
         "FittedBox",
         "Flexible",
+        "FloatingActionButton",
+        "Form",
         "FractionallySizedBox",
         "GestureDetector",
         "GridView",
         "Hero",
         "Icon",
+        "IconButton",
         "IgnorePointer",
         "Image",
+        "InkWell",
         "InteractiveViewer",
         "IntrinsicHeight",
         "IntrinsicWidth",
@@ -69,6 +74,7 @@ public enum GeneratedCapabilities {
         "PageView",
         "Positioned",
         "PullToRefresh",
+        "Radio",
         "ReorderableListView",
         "RotatedBox",
         "Row",
@@ -77,6 +83,7 @@ public enum GeneratedCapabilities {
         "Scrollbar",
         "SingleChildScrollView",
         "SizedBox",
+        "Slider",
         "SliverAppBar",
         "SliverGrid",
         "SliverList",
@@ -84,9 +91,11 @@ public enum GeneratedCapabilities {
         "Spacer",
         "Stack",
         "SubPage",
+        "Switch",
         "Text",
         "TextButton",
         "TextField",
+        "TextFormField",
         "Transform",
         "UnsupportedWidgetPlaceholder",
         "Video",
@@ -185,5 +194,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "95244b6b9210dbf1d7a8edf36ee3acab03f4b7281e7224f24cb2dee2f7da28b8"
+    public static let capsHash = "00a7fbbd3ed5d6eda4be64af8ddc85b2d2c287d1826065f968b8be51104273ad"
 }

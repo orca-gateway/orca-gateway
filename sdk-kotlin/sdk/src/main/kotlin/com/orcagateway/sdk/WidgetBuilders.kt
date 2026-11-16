@@ -21,6 +21,7 @@ import com.orcagateway.sdk.widgets.BottomNavigationBarWidget
 import com.orcagateway.sdk.widgets.ButtonWidget
 import com.orcagateway.sdk.widgets.CardWidget
 import com.orcagateway.sdk.widgets.CenterWidget
+import com.orcagateway.sdk.widgets.CheckboxWidget
 import com.orcagateway.sdk.widgets.ClipOvalWidget
 import com.orcagateway.sdk.widgets.ClipRRectWidget
 import com.orcagateway.sdk.widgets.ClipRectWidget
@@ -36,13 +37,17 @@ import com.orcagateway.sdk.widgets.FallbackPromptWidget
 import com.orcagateway.sdk.widgets.FittedBoxWidget
 import com.orcagateway.sdk.widgets.FlexWidget
 import com.orcagateway.sdk.widgets.FlexibleWidget
+import com.orcagateway.sdk.widgets.FloatingActionButtonWidget
+import com.orcagateway.sdk.widgets.FormWidget
 import com.orcagateway.sdk.widgets.FractionallySizedBoxWidget
 import com.orcagateway.sdk.widgets.GestureDetectorWidget
 import com.orcagateway.sdk.widgets.GridViewWidget
 import com.orcagateway.sdk.widgets.HeroWidget
+import com.orcagateway.sdk.widgets.IconButtonWidget
 import com.orcagateway.sdk.widgets.IconWidget
 import com.orcagateway.sdk.widgets.IgnorePointerWidget
 import com.orcagateway.sdk.widgets.ImageWidget
+import com.orcagateway.sdk.widgets.InkWellWidget
 import com.orcagateway.sdk.widgets.InteractiveViewerWidget
 import com.orcagateway.sdk.widgets.IntrinsicHeightWidget
 import com.orcagateway.sdk.widgets.IntrinsicWidthWidget
@@ -54,6 +59,7 @@ import com.orcagateway.sdk.widgets.PaddingWidget
 import com.orcagateway.sdk.widgets.PageViewWidget
 import com.orcagateway.sdk.widgets.PositionedWidget
 import com.orcagateway.sdk.widgets.PullToRefreshWidget
+import com.orcagateway.sdk.widgets.RadioWidget
 import com.orcagateway.sdk.widgets.ReorderableListWidget
 import com.orcagateway.sdk.widgets.RotatedBoxWidget
 import com.orcagateway.sdk.widgets.SafeAreaWidget
@@ -61,6 +67,7 @@ import com.orcagateway.sdk.widgets.ScaffoldWidget
 import com.orcagateway.sdk.widgets.ScrollWidget
 import com.orcagateway.sdk.widgets.ScrollbarWidget
 import com.orcagateway.sdk.widgets.SizedBoxWidget
+import com.orcagateway.sdk.widgets.SliderWidget
 import com.orcagateway.sdk.widgets.SliverAppBarWidget
 import com.orcagateway.sdk.widgets.SliverGridWidget
 import com.orcagateway.sdk.widgets.SliverListWidget
@@ -68,6 +75,7 @@ import com.orcagateway.sdk.widgets.SliverToBoxAdapterWidget
 import com.orcagateway.sdk.widgets.SpacerWidget
 import com.orcagateway.sdk.widgets.StackWidget
 import com.orcagateway.sdk.widgets.SubPageWidget
+import com.orcagateway.sdk.widgets.SwitchWidget
 import com.orcagateway.sdk.widgets.TextFieldWidget
 import com.orcagateway.sdk.widgets.TextWidget
 import com.orcagateway.sdk.widgets.TransformWidget
@@ -129,7 +137,7 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 73 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 82 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
@@ -140,9 +148,12 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
          * (A4.x), S13's ReorderableListView and SubPage, S18's
          * UnsupportedWidgetPlaceholder, the five scroll widgets of native
          * parity step 5 (A5.x: ListView, GridView, PageView, Scrollbar,
-         * PullToRefresh), and step 13's CustomScrollView, SliverAppBar,
-         * SliverList, SliverGrid and SliverToBoxAdapter (B13.1, B13.2).
-         * Keep the two lists in step: the caps
+         * PullToRefresh), step 13's CustomScrollView, SliverAppBar,
+         * SliverList, SliverGrid and SliverToBoxAdapter (B13.1, B13.2), and
+         * the nine form controls of native parity step 6 (A6.x: Checkbox,
+         * Radio, Switch, Slider, TextFormField, Form, IconButton,
+         * FloatingActionButton, InkWell; TextFormField draws with
+         * TextField's builder, as Flutter's). Keep the two lists in step: the caps
          * vector advertises what this draws (WidgetBuildersTest checks it).
          */
         public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
@@ -221,6 +232,17 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("SliverGrid") { node, model, modifier -> SliverGridWidget(node, model, modifier) }
             register("SliverList") { node, model, modifier -> SliverListWidget(node, model, modifier) }
             register("SliverToBoxAdapter") { node, model, modifier -> SliverToBoxAdapterWidget(node, model, modifier) }
+            register("Checkbox") { node, model, modifier -> CheckboxWidget(node, model, modifier) }
+            register("Radio") { node, model, modifier -> RadioWidget(node, model, modifier) }
+            register("Switch") { node, model, modifier -> SwitchWidget(node, model, modifier) }
+            register("Slider") { node, model, modifier -> SliderWidget(node, model, modifier) }
+            register("TextFormField") { node, model, modifier -> TextFieldWidget(node, model, modifier) }
+            register("Form") { node, model, modifier -> FormWidget(node, model, modifier) }
+            register("IconButton") { node, model, modifier -> IconButtonWidget(node, model, modifier) }
+            register("FloatingActionButton") { node, model, modifier ->
+                FloatingActionButtonWidget(node, model, modifier)
+            }
+            register("InkWell") { node, model, modifier -> InkWellWidget(node, model, modifier) }
         }
     }
 }

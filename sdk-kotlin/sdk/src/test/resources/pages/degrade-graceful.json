@@ -56,7 +56,7 @@
       "kind": "primitive",
       "childMode": "none",
       "props": {
-        "data": "Below the checkbox."
+        "data": "Below the plugin widget."
       },
       "children": [],
       "watches": []
@@ -67,7 +67,7 @@
       "kind": "primitive",
       "childMode": "none",
       "props": {
-        "data": "Above the checkbox."
+        "data": "Above the plugin widget."
       },
       "children": [],
       "watches": []

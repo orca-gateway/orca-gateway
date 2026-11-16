@@ -329,33 +329,43 @@ public final class OrcaPageModel: ObservableObject {
         first?()
     }
 
-    /// The last text edit's run; each edit waits for the one before.
-    private var textEdits: Task<Void, Never>?
+    /// The last change's run; each change waits for the one before.
+    private var edits: Task<Void, Never>?
 
-    /// The user edited a TextField (Flutter `_buildTextField`'s onChanged):
-    /// `setState` on the node's `stateKey` when it has one, then its
-    /// `onChange` with `eventData: {value}`. Edits run one after another in
-    /// typing order: Flutter runs each one synchronously, and two runs that
-    /// overlapped could leave the page with an older value. The returned
-    /// task finishes when this edit has run.
+    /// The user changed a control's value (the onChanged of Flutter's
+    /// TextField, Checkbox, Radio, Switch and Slider builders, design D4):
+    /// `setState` of `value` on the node's `stateKey` in page scope when it
+    /// has one, then its `onChange` with `eventData: {value}`, so onChange
+    /// sees the write. Nil when the node has neither, or the page is inert.
+    /// Changes run one after another in the order made: Flutter runs each
+    /// one synchronously, and two runs that overlapped could leave the page
+    /// with an older value. The returned task finishes when this change has
+    /// run.
     @discardableResult
-    func textChanged(_ value: String, on node: ResolvedNode) -> Task<Void, Never>? {
+    func valueChanged(_ value: JSONValue, on node: ResolvedNode) -> Task<Void, Never>? {
         let stateKey = node["stateKey"]?.stringValue
         let onChange = node.actions["onChange"]
         guard !isInert, stateKey != nil || onChange != nil else { return nil }
-        let previous = textEdits
+        let previous = edits
         let edit = Task {
             await previous?.value
             if let stateKey {
-                await run(.setState(Action.SetState(key: stateKey, value: .string(value))))
+                await run(.setState(Action.SetState(key: stateKey, value: value)))
             }
             if let onChange {
-                await run(onChange, eventData: ["value": .string(value)],
+                await run(onChange, eventData: ["value": value],
                           source: ActionSource(widgetId: node.id, trigger: "onChange"))
             }
         }
-        textEdits = edit
+        edits = edit
         return edit
+    }
+
+    /// The user edited a TextField (Flutter `_buildTextField`'s onChanged):
+    /// `valueChanged` with the text, so edits run in typing order.
+    @discardableResult
+    func textChanged(_ value: String, on node: ResolvedNode) -> Task<Void, Never>? {
+        valueChanged(.string(value), on: node)
     }
 
     /// A link the page itself draws, such as a FallbackPrompt's call to

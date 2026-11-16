@@ -25,7 +25,7 @@
       "childMode": "none",
       "props": {
         "title": "Some content needs an update",
-        "body": "Parts of this screen use features that your current app version can't fully render (widget.Checkbox). Please update when convenient for the full experience.",
+        "body": "Parts of this screen use features that your current app version can't fully render (widget.UnregisteredPluginWidget). Please update when convenient for the full experience.",
         "severity": "warn"
       },
       "children": [],
@@ -85,20 +85,17 @@
       "kind": "primitive",
       "childMode": "none",
       "props": {
-        "data": "Below the checkbox."
+        "data": "Below the plugin widget."
       },
       "children": [],
       "watches": []
     },
     {
       "id": "6",
-      "type": "Checkbox",
-      "kind": "input",
+      "type": "UnregisteredPluginWidget",
+      "kind": "primitive",
       "childMode": "none",
-      "props": {
-        "value": true,
-        "label": "Only some SDKs draw this"
-      },
+      "props": {},
       "children": [],
       "watches": []
     },
@@ -108,7 +105,7 @@
       "kind": "primitive",
       "childMode": "none",
       "props": {
-        "data": "Above the checkbox."
+        "data": "Above the plugin widget."
       },
       "children": [],
       "watches": []

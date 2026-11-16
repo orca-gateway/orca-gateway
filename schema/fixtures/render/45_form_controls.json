@@ -1,0 +1,908 @@
+{
+  "name": "form-controls",
+  "description": "Column holding the nine form controls and extra buttons with every prop each can carry on the wire, each bound as the demo binds it (value a pageState Value, onChange a SetState of the same key to the event's `value`): a tristate Checkbox on `agree` (true) with a label and all four colours, and a second Checkbox, true, labelled and enabled false; two Radios on one group `pick` (\"a\") with values \"a\" and \"b\", colours, the second enabled; a Switch on `notify` (true) with all four colours; a Slider on `level` (50) with min 0, max 100, divisions 4, trackHeight 6, a label and three colours; a Form around a TextFormField on `name` (\"Ada\") with placeholder, inputType, obscureText false, maxLines 1, maxLength 40, a style and a validator; an IconButton around an Icon with colour, size 32, tooltip, splash and highlight colours, padding 4, alignment topLeft and constraints; a mini FloatingActionButton around an Icon with background, elevation 6, tooltip, three colours, heroTag and isExtended false; and an InkWell around a Text with borderRadius 12 and splash and highlight colours (#RRGGBBAA). The buttons and the InkWell store which trigger fired in `lastTap` (onTap and onLongPress; the InkWell also onDoubleTap). Every static prop reaches the wire unchanged, every binding stays a state Value with its key in the node's watches, every action rides on its node, and every client resolver resolves each prop to the listed value. No node sends `stateKey`: no engine class declares it.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "props": {},
+    "children": [
+      {
+        "type": "Checkbox",
+        "key": "checkbox",
+        "props": {
+          "value": {
+            "type": "state",
+            "key": "agree",
+            "scope": "page"
+          },
+          "label": "I agree",
+          "tristate": true,
+          "activeColor": "#6750A4",
+          "inactiveColor": "#79747E",
+          "focusColor": "#6750A41F",
+          "hoverColor": "#6750A414"
+        },
+        "actions": {
+          "onChange": {
+            "type": "setState",
+            "scope": "page",
+            "key": "agree",
+            "value": {
+              "type": "event",
+              "key": "value"
+            }
+          }
+        }
+      },
+      {
+        "type": "Checkbox",
+        "key": "checkboxOff",
+        "props": {
+          "value": true,
+          "label": "Locked",
+          "enabled": false
+        },
+        "actions": {
+          "onChange": {
+            "type": "setState",
+            "scope": "page",
+            "key": "agree",
+            "value": {
+              "type": "event",
+              "key": "value"
+            }
+          }
+        }
+      },
+      {
+        "type": "Radio",
+        "key": "radioA",
+        "props": {
+          "value": "a",
+          "groupValue": {
+            "type": "state",
+            "key": "pick",
+            "scope": "page"
+          },
+          "activeColor": "#2196F3",
+          "inactiveColor": "#757575",
+          "focusColor": "#2196F31F",
+          "hoverColor": "#2196F314"
+        },
+        "actions": {
+          "onChange": {
+            "type": "setState",
+            "scope": "page",
+            "key": "pick",
+            "value": {
+              "type": "event",
+              "key": "value"
+            }
+          }
+        }
+      },
+      {
+        "type": "Radio",
+        "key": "radioB",
+        "props": {
+          "value": "b",
+          "groupValue": {
+            "type": "state",
+            "key": "pick",
+            "scope": "page"
+          },
+          "activeColor": "#2196F3",
+          "inactiveColor": "#757575",
+          "enabled": true
+        },
+        "actions": {
+          "onChange": {
+            "type": "setState",
+            "scope": "page",
+            "key": "pick",
+            "value": {
+              "type": "event",
+              "key": "value"
+            }
+          }
+        }
+      },
+      {
+        "type": "Switch",
+        "key": "switch",
+        "props": {
+          "value": {
+            "type": "state",
+            "key": "notify",
+            "scope": "page"
+          },
+          "activeColor": "#FFFFFF",
+          "inactiveColor": "#E6E0E9",
+          "focusColor": "#6750A41F",
+          "hoverColor": "#6750A414",
+          "enabled": true
+        },
+        "actions": {
+          "onChange": {
+            "type": "setState",
+            "scope": "page",
+            "key": "notify",
+            "value": {
+              "type": "event",
+              "key": "value"
+            }
+          }
+        }
+      },
+      {
+        "type": "Slider",
+        "key": "slider",
+        "props": {
+          "value": {
+            "type": "state",
+            "key": "level",
+            "scope": "page"
+          },
+          "min": 0,
+          "max": 100,
+          "divisions": 4,
+          "activeColor": "#6750A4",
+          "inactiveColor": "#E6E0E9",
+          "thumbColor": "#4F378B",
+          "trackHeight": 6,
+          "label": "Level",
+          "enabled": true
+        },
+        "actions": {
+          "onChange": {
+            "type": "setState",
+            "scope": "page",
+            "key": "level",
+            "value": {
+              "type": "event",
+              "key": "value"
+            }
+          }
+        }
+      },
+      {
+        "type": "Form",
+        "key": "form",
+        "props": {},
+        "children": [
+          {
+            "type": "TextFormField",
+            "key": "nameField",
+            "props": {
+              "value": {
+                "type": "state",
+                "key": "name",
+                "scope": "page"
+              },
+              "placeholder": "Your name",
+              "inputType": "text",
+              "obscureText": false,
+              "maxLines": 1,
+              "maxLength": 40,
+              "enabled": true,
+              "style": {
+                "fontSize": 16,
+                "color": "#1D1B20"
+              },
+              "validator": "required"
+            },
+            "actions": {
+              "onChange": {
+                "type": "setState",
+                "scope": "page",
+                "key": "name",
+                "value": {
+                  "type": "event",
+                  "key": "value"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "IconButton",
+        "key": "iconButton",
+        "props": {
+          "enabled": true,
+          "color": "#6750A4",
+          "size": 32,
+          "tooltip": "Add",
+          "splashColor": "#6750A41F",
+          "highlightColor": "#6750A414",
+          "padding": {
+            "top": 4,
+            "right": 4,
+            "bottom": 4,
+            "left": 4
+          },
+          "alignment": "topLeft",
+          "constraints": {
+            "minWidth": 48,
+            "maxWidth": 64,
+            "minHeight": 48,
+            "maxHeight": 64
+          }
+        },
+        "actions": {
+          "onTap": {
+            "type": "setState",
+            "scope": "page",
+            "key": "lastTap",
+            "value": {
+              "type": "static",
+              "value": "iconButton.onTap"
+            }
+          },
+          "onLongPress": {
+            "type": "setState",
+            "scope": "page",
+            "key": "lastTap",
+            "value": {
+              "type": "static",
+              "value": "iconButton.onLongPress"
+            }
+          }
+        },
+        "children": [
+          {
+            "type": "Icon",
+            "key": "iconButtonIcon",
+            "props": {
+              "name": "add"
+            }
+          }
+        ]
+      },
+      {
+        "type": "FloatingActionButton",
+        "key": "fab",
+        "props": {
+          "enabled": true,
+          "backgroundColor": "#EADDFF",
+          "elevation": 6,
+          "mini": true,
+          "tooltip": "Edit",
+          "splashColor": "#4F378B1A",
+          "focusColor": "#4F378B1F",
+          "hoverColor": "#4F378B14",
+          "heroTag": "fab",
+          "isExtended": false
+        },
+        "actions": {
+          "onTap": {
+            "type": "setState",
+            "scope": "page",
+            "key": "lastTap",
+            "value": {
+              "type": "static",
+              "value": "fab.onTap"
+            }
+          },
+          "onLongPress": {
+            "type": "setState",
+            "scope": "page",
+            "key": "lastTap",
+            "value": {
+              "type": "static",
+              "value": "fab.onLongPress"
+            }
+          }
+        },
+        "children": [
+          {
+            "type": "Icon",
+            "key": "fabIcon",
+            "props": {
+              "name": "edit"
+            }
+          }
+        ]
+      },
+      {
+        "type": "InkWell",
+        "key": "inkWell",
+        "props": {
+          "borderRadius": 12,
+          "splashColor": "#C8C8C866",
+          "highlightColor": "#BCBCBC66"
+        },
+        "actions": {
+          "onTap": {
+            "type": "setState",
+            "scope": "page",
+            "key": "lastTap",
+            "value": {
+              "type": "static",
+              "value": "inkWell.onTap"
+            }
+          },
+          "onLongPress": {
+            "type": "setState",
+            "scope": "page",
+            "key": "lastTap",
+            "value": {
+              "type": "static",
+              "value": "inkWell.onLongPress"
+            }
+          },
+          "onDoubleTap": {
+            "type": "setState",
+            "scope": "page",
+            "key": "lastTap",
+            "value": {
+              "type": "static",
+              "value": "inkWell.onDoubleTap"
+            }
+          }
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "inkWellText",
+            "props": {
+              "data": "InkWell"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "agree": true,
+      "pick": "a",
+      "notify": true,
+      "level": 50,
+      "name": "Ada"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "checkbox",
+        "checkboxOff",
+        "radioA",
+        "radioB",
+        "switch",
+        "slider",
+        "form",
+        "iconButton",
+        "fab",
+        "inkWell"
+      ],
+      "watches": []
+    },
+    {
+      "id": "inkWell",
+      "type": "InkWell",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "borderRadius": 12,
+        "splashColor": "#C8C8C866",
+        "highlightColor": "#BCBCBC66"
+      },
+      "children": [
+        "inkWellText"
+      ],
+      "watches": [],
+      "actions": {
+        "onTap": {
+          "type": "setState",
+          "scope": "page",
+          "key": "lastTap",
+          "value": {
+            "type": "static",
+            "value": "inkWell.onTap"
+          }
+        },
+        "onLongPress": {
+          "type": "setState",
+          "scope": "page",
+          "key": "lastTap",
+          "value": {
+            "type": "static",
+            "value": "inkWell.onLongPress"
+          }
+        },
+        "onDoubleTap": {
+          "type": "setState",
+          "scope": "page",
+          "key": "lastTap",
+          "value": {
+            "type": "static",
+            "value": "inkWell.onDoubleTap"
+          }
+        }
+      }
+    },
+    {
+      "id": "inkWellText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "InkWell"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "fab",
+      "type": "FloatingActionButton",
+      "kind": "button",
+      "childMode": "single",
+      "props": {
+        "enabled": true,
+        "backgroundColor": "#EADDFF",
+        "elevation": 6,
+        "mini": true,
+        "tooltip": "Edit",
+        "splashColor": "#4F378B1A",
+        "focusColor": "#4F378B1F",
+        "hoverColor": "#4F378B14",
+        "heroTag": "fab",
+        "isExtended": false
+      },
+      "children": [
+        "fabIcon"
+      ],
+      "watches": [],
+      "actions": {
+        "onTap": {
+          "type": "setState",
+          "scope": "page",
+          "key": "lastTap",
+          "value": {
+            "type": "static",
+            "value": "fab.onTap"
+          }
+        },
+        "onLongPress": {
+          "type": "setState",
+          "scope": "page",
+          "key": "lastTap",
+          "value": {
+            "type": "static",
+            "value": "fab.onLongPress"
+          }
+        }
+      }
+    },
+    {
+      "id": "fabIcon",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "edit"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "iconButton",
+      "type": "IconButton",
+      "kind": "button",
+      "childMode": "single",
+      "props": {
+        "enabled": true,
+        "color": "#6750A4",
+        "size": 32,
+        "tooltip": "Add",
+        "splashColor": "#6750A41F",
+        "highlightColor": "#6750A414",
+        "padding": {
+          "top": 4,
+          "right": 4,
+          "bottom": 4,
+          "left": 4
+        },
+        "alignment": "topLeft",
+        "constraints": {
+          "minWidth": 48,
+          "maxWidth": 64,
+          "minHeight": 48,
+          "maxHeight": 64
+        }
+      },
+      "children": [
+        "iconButtonIcon"
+      ],
+      "watches": [],
+      "actions": {
+        "onTap": {
+          "type": "setState",
+          "scope": "page",
+          "key": "lastTap",
+          "value": {
+            "type": "static",
+            "value": "iconButton.onTap"
+          }
+        },
+        "onLongPress": {
+          "type": "setState",
+          "scope": "page",
+          "key": "lastTap",
+          "value": {
+            "type": "static",
+            "value": "iconButton.onLongPress"
+          }
+        }
+      }
+    },
+    {
+      "id": "iconButtonIcon",
+      "type": "Icon",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "name": "add"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "form",
+      "type": "Form",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "nameField"
+      ],
+      "watches": []
+    },
+    {
+      "id": "nameField",
+      "type": "TextFormField",
+      "kind": "input",
+      "childMode": "none",
+      "props": {
+        "value": {
+          "type": "state",
+          "key": "name",
+          "scope": "page"
+        },
+        "placeholder": "Your name",
+        "inputType": "text",
+        "obscureText": false,
+        "maxLines": 1,
+        "maxLength": 40,
+        "enabled": true,
+        "style": {
+          "fontSize": 16,
+          "color": "#1D1B20"
+        },
+        "validator": "required"
+      },
+      "children": [],
+      "watches": [
+        "name"
+      ],
+      "actions": {
+        "onChange": {
+          "type": "setState",
+          "scope": "page",
+          "key": "name",
+          "value": {
+            "type": "event",
+            "key": "value"
+          }
+        }
+      }
+    },
+    {
+      "id": "slider",
+      "type": "Slider",
+      "kind": "input",
+      "childMode": "none",
+      "props": {
+        "value": {
+          "type": "state",
+          "key": "level",
+          "scope": "page"
+        },
+        "min": 0,
+        "max": 100,
+        "divisions": 4,
+        "activeColor": "#6750A4",
+        "inactiveColor": "#E6E0E9",
+        "thumbColor": "#4F378B",
+        "trackHeight": 6,
+        "label": "Level",
+        "enabled": true
+      },
+      "children": [],
+      "watches": [
+        "level"
+      ],
+      "actions": {
+        "onChange": {
+          "type": "setState",
+          "scope": "page",
+          "key": "level",
+          "value": {
+            "type": "event",
+            "key": "value"
+          }
+        }
+      }
+    },
+    {
+      "id": "switch",
+      "type": "Switch",
+      "kind": "input",
+      "childMode": "none",
+      "props": {
+        "value": {
+          "type": "state",
+          "key": "notify",
+          "scope": "page"
+        },
+        "activeColor": "#FFFFFF",
+        "inactiveColor": "#E6E0E9",
+        "focusColor": "#6750A41F",
+        "hoverColor": "#6750A414",
+        "enabled": true
+      },
+      "children": [],
+      "watches": [
+        "notify"
+      ],
+      "actions": {
+        "onChange": {
+          "type": "setState",
+          "scope": "page",
+          "key": "notify",
+          "value": {
+            "type": "event",
+            "key": "value"
+          }
+        }
+      }
+    },
+    {
+      "id": "radioB",
+      "type": "Radio",
+      "kind": "input",
+      "childMode": "none",
+      "props": {
+        "value": "b",
+        "groupValue": {
+          "type": "state",
+          "key": "pick",
+          "scope": "page"
+        },
+        "activeColor": "#2196F3",
+        "inactiveColor": "#757575",
+        "enabled": true
+      },
+      "children": [],
+      "watches": [
+        "pick"
+      ],
+      "actions": {
+        "onChange": {
+          "type": "setState",
+          "scope": "page",
+          "key": "pick",
+          "value": {
+            "type": "event",
+            "key": "value"
+          }
+        }
+      }
+    },
+    {
+      "id": "radioA",
+      "type": "Radio",
+      "kind": "input",
+      "childMode": "none",
+      "props": {
+        "value": "a",
+        "groupValue": {
+          "type": "state",
+          "key": "pick",
+          "scope": "page"
+        },
+        "activeColor": "#2196F3",
+        "inactiveColor": "#757575",
+        "focusColor": "#2196F31F",
+        "hoverColor": "#2196F314"
+      },
+      "children": [],
+      "watches": [
+        "pick"
+      ],
+      "actions": {
+        "onChange": {
+          "type": "setState",
+          "scope": "page",
+          "key": "pick",
+          "value": {
+            "type": "event",
+            "key": "value"
+          }
+        }
+      }
+    },
+    {
+      "id": "checkboxOff",
+      "type": "Checkbox",
+      "kind": "input",
+      "childMode": "none",
+      "props": {
+        "value": true,
+        "label": "Locked",
+        "enabled": false
+      },
+      "children": [],
+      "watches": [],
+      "actions": {
+        "onChange": {
+          "type": "setState",
+          "scope": "page",
+          "key": "agree",
+          "value": {
+            "type": "event",
+            "key": "value"
+          }
+        }
+      }
+    },
+    {
+      "id": "checkbox",
+      "type": "Checkbox",
+      "kind": "input",
+      "childMode": "none",
+      "props": {
+        "value": {
+          "type": "state",
+          "key": "agree",
+          "scope": "page"
+        },
+        "label": "I agree",
+        "tristate": true,
+        "activeColor": "#6750A4",
+        "inactiveColor": "#79747E",
+        "focusColor": "#6750A41F",
+        "hoverColor": "#6750A414"
+      },
+      "children": [],
+      "watches": [
+        "agree"
+      ],
+      "actions": {
+        "onChange": {
+          "type": "setState",
+          "scope": "page",
+          "key": "agree",
+          "value": {
+            "type": "event",
+            "key": "value"
+          }
+        }
+      }
+    }
+  ],
+  "resolved": {
+    "checkbox": {
+      "value": true,
+      "label": "I agree",
+      "tristate": true,
+      "activeColor": "#6750A4",
+      "inactiveColor": "#79747E",
+      "focusColor": "#6750A41F",
+      "hoverColor": "#6750A414"
+    },
+    "checkboxOff": {
+      "value": true,
+      "label": "Locked",
+      "enabled": false
+    },
+    "radioA": {
+      "value": "a",
+      "groupValue": "a",
+      "activeColor": "#2196F3",
+      "inactiveColor": "#757575",
+      "focusColor": "#2196F31F",
+      "hoverColor": "#2196F314"
+    },
+    "radioB": {
+      "value": "b",
+      "groupValue": "a",
+      "activeColor": "#2196F3",
+      "inactiveColor": "#757575",
+      "enabled": true
+    },
+    "switch": {
+      "value": true,
+      "activeColor": "#FFFFFF",
+      "inactiveColor": "#E6E0E9",
+      "focusColor": "#6750A41F",
+      "hoverColor": "#6750A414",
+      "enabled": true
+    },
+    "slider": {
+      "value": 50,
+      "min": 0,
+      "max": 100,
+      "divisions": 4,
+      "activeColor": "#6750A4",
+      "inactiveColor": "#E6E0E9",
+      "thumbColor": "#4F378B",
+      "trackHeight": 6,
+      "label": "Level",
+      "enabled": true
+    },
+    "form": {},
+    "nameField": {
+      "value": "Ada",
+      "placeholder": "Your name",
+      "inputType": "text",
+      "obscureText": false,
+      "maxLines": 1,
+      "maxLength": 40,
+      "enabled": true,
+      "style": {
+        "fontSize": 16,
+        "color": "#1D1B20"
+      },
+      "validator": "required"
+    },
+    "iconButton": {
+      "enabled": true,
+      "color": "#6750A4",
+      "size": 32,
+      "tooltip": "Add",
+      "splashColor": "#6750A41F",
+      "highlightColor": "#6750A414",
+      "padding": {
+        "top": 4,
+        "right": 4,
+        "bottom": 4,
+        "left": 4
+      },
+      "alignment": "topLeft",
+      "constraints": {
+        "minWidth": 48,
+        "maxWidth": 64,
+        "minHeight": 48,
+        "maxHeight": 64
+      }
+    },
+    "fab": {
+      "enabled": true,
+      "backgroundColor": "#EADDFF",
+      "elevation": 6,
+      "mini": true,
+      "tooltip": "Edit",
+      "splashColor": "#4F378B1A",
+      "focusColor": "#4F378B1F",
+      "hoverColor": "#4F378B14",
+      "heroTag": "fab",
+      "isExtended": false
+    },
+    "inkWell": {
+      "borderRadius": 12,
+      "splashColor": "#C8C8C866",
+      "highlightColor": "#BCBCBC66"
+    }
+  }
+}

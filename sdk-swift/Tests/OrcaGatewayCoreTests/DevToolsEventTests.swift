@@ -234,6 +234,8 @@ final class DevToolsEventTests: XCTestCase {
         XCTAssertEqual(recorder.of("state_change").count, 1)
     }
 
+    /// On the made-up UnregisteredPluginWidget (a plugin widget no app
+    /// registers, as the degrade page's), so the default registry never draws it.
     func testAFallbackPromptIsReportedOncePerType() throws {
         OrcaDebug.reporter = recorder
         let json: JSONValue = [
@@ -241,9 +243,9 @@ final class DevToolsEventTests: XCTestCase {
             "components": [
                 ["id": "0", "type": "Column", "kind": "layout", "childMode": "multi",
                  "props": [:], "children": ["1", "2"], "watches": []],
-                ["id": "1", "type": "Checkbox", "kind": "input", "childMode": "none",
+                ["id": "1", "type": "UnregisteredPluginWidget", "kind": "primitive", "childMode": "none",
                  "props": [:], "children": [], "watches": []],
-                ["id": "2", "type": "Checkbox", "kind": "input", "childMode": "none",
+                ["id": "2", "type": "UnregisteredPluginWidget", "kind": "primitive", "childMode": "none",
                  "props": [:], "children": [], "watches": []],
             ],
         ]
@@ -251,7 +253,7 @@ final class DevToolsEventTests: XCTestCase {
         let renderer = PageRenderer(page: page, registry: WidgetRegistry())
         XCTAssertEqual(renderer.resolve("1", state: StoreState())?.type, "FallbackPrompt")
         XCTAssertEqual(renderer.resolve("2", state: StoreState())?.type, "FallbackPrompt")
-        XCTAssertEqual(recorder.events, [.fallbackPrompt("Checkbox")])
+        XCTAssertEqual(recorder.events, [.fallbackPrompt("UnregisteredPluginWidget")])
     }
 
     func testTheClientReportsRequestsAndFailures() async throws {

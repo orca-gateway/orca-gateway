@@ -79,12 +79,15 @@ class CapabilitiesTest {
      * B13.1-K, B13.2-K: native parity step 13 adds CustomScrollView and the
      * four slivers ([SLIVERS]), so the pin moves from 68 to 73; Swift lands
      * the same five in the same step.
+     *
+     * A6.x: native parity step 6 adds its nine form controls ([A6]), so the
+     * pin moves from 73 to 82; Swift lands the same nine in the same step.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame73WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame82WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(73, kotlin.size)
+        assertEquals(82, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -108,6 +111,7 @@ class CapabilitiesTest {
         assertTrue("UnsupportedWidgetPlaceholder" in GeneratedCapabilities.widgets, "S18's UnsupportedWidgetPlaceholder is not advertised")
         assertTrue(kotlin.containsAll(A5), "missing: ${A5 - kotlin.toSet()}")
         assertTrue(kotlin.containsAll(SLIVERS), "missing: ${SLIVERS - kotlin.toSet()}")
+        assertTrue(kotlin.containsAll(A6), "missing: ${A6 - kotlin.toSet()}")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
@@ -116,18 +120,19 @@ class CapabilitiesTest {
      * A3.1: Compose draws the 13 layout wrappers, so the generated vector
      * advertises them and the core registry lets them through instead of
      * degrading them; WidgetBuildersTest pins standard() to the same set.
-     * The pin is 73: with S12's 5 animated ones (49), then native parity
+     * The pin is 82: with S12's 5 animated ones (49), then native parity
      * step 4's 11 effect and touch wrappers (A4.x, 60), then S13's
      * ReorderableListView and SubPage, then S18's
      * UnsupportedWidgetPlaceholder (63), then native parity step 5's five
      * scroll widgets (A5.x, 68), then step 13's CustomScrollView and four
-     * slivers (B13.1-K, B13.2-K).
+     * slivers (B13.1-K, B13.2-K, 73), then native parity step 6's nine form
+     * controls (A6.x).
      */
     @Test
     fun a3_1_theThirteenLayoutWrappersAreAdvertisedAndLetThrough() {
         val advertised = GeneratedCapabilities.widgets.toSet()
         assertEquals(emptySet(), A3_1 - advertised, "not advertised")
-        assertEquals(73, GeneratedCapabilities.widgets.size)
+        assertEquals(82, GeneratedCapabilities.widgets.size)
         assertEquals(emptySet(), A3_1 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
@@ -171,6 +176,27 @@ class CapabilitiesTest {
         }
         assertEquals(emptySet(), A5 - manifestAndroidWidgets(), "a widget lacks the android target")
         assertEquals(emptySet(), A5 - WidgetRegistry.shared.types, "degraded by the core registry")
+    }
+
+    /**
+     * A6.x: Compose draws native parity step 6's nine form controls (A6.1-A6.7),
+     * so capabilities.json lists each of them, the generated vector
+     * advertises each once, every one carries the manifest's android target,
+     * and the core registry lets them through; WidgetBuildersTest pins
+     * standard() to the same set.
+     */
+    @Test
+    fun a6_x_kt_advertisesTheNineFormControls() {
+        val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["widgets"])
+        assertEquals(emptySet(), A6 - listed, "not in capabilities.json")
+        for (widget in A6.sorted()) {
+            assertEquals(
+                1, GeneratedCapabilities.widgets.count { it == widget },
+                "$widget is not advertised exactly once",
+            )
+        }
+        assertEquals(emptySet(), A6 - manifestAndroidWidgets(), "a widget lacks the android target")
+        assertEquals(emptySet(), A6 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
     /**
@@ -289,5 +315,10 @@ class CapabilitiesTest {
 
         /** Native parity step 13: CustomScrollView and the four slivers. */
         val SLIVERS = setOf("CustomScrollView", "SliverAppBar", "SliverGrid", "SliverList", "SliverToBoxAdapter")
+        /** Native parity step 6's form controls (A6.1-A6.7), sorted. */
+        val A6 = setOf(
+            "Checkbox", "FloatingActionButton", "Form", "IconButton", "InkWell", "Radio", "Slider",
+            "Switch", "TextFormField",
+        )
     }
 }
