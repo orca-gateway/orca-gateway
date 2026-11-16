@@ -3,19 +3,21 @@
 ## Front page
 
 ### In one breath
-group 2 of 4 · tasks: 6 green, 0 blocked · cases: 7 of 17 green · engine bun test: 827 pass
-T4 Swift package: OrcaGoogleMap builds the CLI's generated types, pinned to Flutter.
-T5 Kotlin types: the generated props and params compile under explicitApi, pinned to Flutter.
-T6 /map page: it keeps a tapped marker's id and a long press's spot, each shown in a Text.
+group 3 of 4 · tasks: 11 green, 0 blocked · cases: 12 of 17 green · engine bun test: 828 pass
+T7 Swift: MapKit draws the map with Flutter's props, triggers and moveCamera; terrain is standard.
+T8 Kotlin: Maps Compose draws it the same, with the two location permissions in its manifest.
+T9 release.sh: rows 15 and 16, tested in a scratch repo against a local mirror.
+T10 Mirror: the map's line and LICENSE, rehearsed against local mirrors; nothing pushed.
+T11 CI: both matrices build and test the map; each run queues one more macOS job.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided (minor, your standing rule): the appendix's decisions under each digest.
+8 auto-decided (minor, your standing rule): the appendix's decisions under each digest.
 
 ### Questions for you
-1. Next: group 3 of 4, the MapKit and Maps Compose plugins, release and CI? (default: go)
+1. Next: group 4 of 4, both demo apps, the READMEs and docs, then hand checks? (default: go)
 
 ## Appendix
 
@@ -100,6 +102,71 @@ page's own naming for the new keys (both minor, auto-decided)
 Review fit: pass · Review quality: pass
 
 
+### Group 3
+#### T7 · Swift MapKit plugin, view, moveCamera (64755921, 555b0a06 rework)
+Files: SW/{GoogleMapPlugin,MapSurface,MapKitView}.swift · SWT/{GoogleMapPluginTests (fakes),MapKitViewTests (a window)}.swift
+Cases: C17.1/S → green (swift test 27 = 5 + 22, 0 warnings; xcodebuild test on the iOS 18.5 simulator 26; red first:
+"cannot find 'GoogleMapPlugin' in scope"; each view-path line removed in turn turned a test red)
+Changed: `GoogleMapPlugin: OrcaPlugin` with Flutter's name, widget, moveCamera, four triggers; a registry by node id,
+registered when made, removed when it leaves; moveCamera from the raw action (a non-number fails it; empty or unknown
+target, missing coordinate: nothing; zoom 14) · MapSurface: Flutter's defaults, terrain → .standard, Flutter's marker
+loop, the four payloads, Google zoom to a span (360·w/(256·2^z), Mercator) and back with log2 · MKMapView representable:
+the camera set once, mapType, showsUserLocation and markers diffed on update, a pin with a callout, onMarkerTap on
+selection and on a selected pin's tap, onTap off pins (after a double tap's wait), onLongPress once, onCameraMove from the visible region
+Decisions: the span from the safe area · an SF Symbol pin (MKMarkerAnnotationView shows no callout) · fills its box (minor)
+Review fit: a tap on a selected pin fired nothing, Flutter fires each tap; it does now (555b0a06), fixed · Review quality: pass
+
+#### T8 · Kotlin Maps Compose plugin, location permissions (16d00160)
+Files: GM/android/google-map/src/main/AndroidManifest.xml · KT/{GoogleMapPlugin,MapSurface,GoogleMapView}.kt · KTT/GoogleMapPluginTest.kt (all new)
+Cases: C17.1/K → green (GoogleMapPluginTest 16/16, props 7/7, -Werror clean, lint 0 errors; red first: "Unresolved
+reference 'MapCamera'"; 14 hand mutations each turned a test red)
+Changed: the two location permissions in the manifest (tested merged) · `GoogleMapPlugin()` with Flutter's name, widget,
+moveCamera and four triggers; a map per node id once it exists (Maps Compose's getMapAsync = Flutter's onMapCreated),
+removed when its view leaves; moveCamera resolves targetId and numbers from the raw action, a non-number fails it before
+the lookup, a missing coordinate or unknown id does nothing, zoom 14 · Flutter's defaults and marker loop; my-location
+only with FINE or COARSE held · GoogleMap with the camera made once, a keyed Marker per marker (onClick fires
+onMarkerTap, returns false: the info window opens), onMapClick, onMapLongClick, onCameraMove while it moves; fills its box
+Decisions: a wrong-typed prop takes its default, as the video's (Flutter fails the build) · buildings on, min zoom 0 (minor)
+Review fit: pass · Review quality: pass
+
+#### T9 · release.sh rows 15-16, scratch-repo test (4468f9e0)
+Files: scripts/release.sh · engine/test/launch-release.test.ts
+Cases: P-release → green (`bun test test/launch-release.test.ts` 6 pass, also under /bin/bash 3.2; red first: "index out
+of range: 15"; engine 828 = 827 + 1; `bash -n` clean; shellcheck's 4 SC2005 notes on untouched lines as before)
+Changed: two rows appended and nothing else: 15 `orca_google_map-ios` (mirror, `orca_google_map-ios-v`, ios/VERSION),
+16 `orca_google_map-android` (maven, `orca_google_map-android-v`); the script derives orca-gateway/orca-google-map-swift,
+ORCA_GOOGLE_MAP_SWIFT_MIRROR_URL, com.orcagateway:orca-google-map, swift build + test and "the orca_google_map Swift
+mirror"; the scratch repo gains both VERSION files; the test runs once with the map's mirror missing (stops, naming
+the walkthrough, nothing changed), then a full stubbed release of 15 (next) and 16 (kept) against a local bare mirror
+Decisions: the voice's and the video's list-end checks move from row 15 to row 17, still as strict (both baseline
+tests; the video's failed once row 15 existed) · the missing-mirror run pins T15's title (all minor, auto-decided)
+Review fit: pass · Review quality: pass
+
+#### T10 · Mirror PACKAGES line, LICENSE, rehearsal (4f5941e4, c2513dd5 rework)
+Files: scripts/swift-mirror.sh · .github/workflows/sdk-swift-mirror.yml (its header's secrets paragraph only) · GM/ios/LICENSE (new)
+Cases: P-mirror → green (rehearsal SC/s17m/t10/rehearse.sh 12 of 12; red first: "tag must start with one of sdk-swift-v
+orca_voice_recorder-ios-v orca_video_player-ios-v", then "the split has no LICENSE"; part B, against a local bare mirror,
+stops at the split's own build: "no versions of 'orca-gateway-swift' match … 0.1.0-alpha.2", nothing pushed; part C, on
+a stand-in sdk-swift 0.1.0-alpha.2 under a scratch HOME, publishes and verifies (macOS and the iOS simulator import
+OrcaGoogleMap); sdk-swift's split, the voice's and the video's `info`, SwiftPM's real fingerprint store unchanged)
+Changed: the PACKAGES line orca_google_map-ios-v → orca-gateway/orca-google-map-swift, ORCA_GOOGLE_MAP_SWIFT_DEPLOY_KEY,
+OrcaGoogleMap (the mirror release.sh derives) · the workflow's secrets paragraph names the map's · LICENSE is the BSL text
+Decisions: the job needs no new wiring (`secrets[needs.resolve.outputs.secret]`; the tag glob and regex already match)
+· the workflow edit reaches its verify-linux comment too (rework, comments only) (both minor)
+Review fit: three comments said every plugin needs AVFoundation; they name MapKit too (c2513dd5), fixed · Review quality: pass
+
+#### T11 · CI matrices gain the map (2e654d10)
+Files: .github/workflows/native-plugins.yml
+Cases: P-ci → green (the YAML parses; a scratch check of both matrices 20 of 20, red first 2 of 16: both listed only the
+voice and the video; the map's CI steps locally: swift build + swift test --skip-build 26, 0 warnings; xcodebuild test 25
+on the iOS 18.5 simulator, TEST SUCCEEDED; Gradle BUILD SUCCESSFUL, testDebugUnitTest rerun 16 + 7; actionlint not installed)
+Changed: the ios matrix gains `plugin: orca_google_map, module: OrcaGoogleMap` after the video's; the android matrix is
+[orca_voice_recorder, orca_video_player, orca_google_map]; nothing else (path filters, directories, scheme, job and
+artifact names and report globs come from the matrix); each matching run now queues 3 macOS and 3 Linux jobs, not 2
+Decisions: release-row order · the header kept · built locally with Swift 6.4.2, not CI's Xcode 16.4: the map has no
+6.2-only constructs, the first CI run proves 16.4 (all minor, auto-decided)
+Review fit: pass · Review quality: pass
+
 ### Test run
 Group 1: the full run on T1-T3 (before T1's two reworks), every Done-when command that applies so far:
 - cli `dart test` 49 pass (45 + 4), `dart analyze` no issues · engine `bun test` 822 pass, 0 fail
@@ -123,6 +190,13 @@ map android BUILD SUCCESSFUL (up to date: T5's run had built it and passed Googl
 leave no diff · scripts and workflows parse · pub dry run as at baseline (1 warning, 1 hint) · examples/server tsc 36
 errors before and after T6, the same kinds. Failures: none.
 
+Group 3, after T7-T11 (SC/s17m/g3run), on T11's commit 2e654d10: cli 51 pass, analyze clean · engine 828 pass, 0 fail
+(827 + T9's 1) · Flutter 543 pass, analyze clean · sdk-swift 604 pass · sdk-kotlin BUILD SUCCESSFUL · voice: ios 24,
+android green · video: ios 26, android green · map ios `swift test` 26, 0 warnings, `xcodebuild test` TEST SUCCEEDED ·
+map android BUILD SUCCESSFUL (T11 reran its unit tests with --rerun: 16 + 7) · the generators leave no diff · scripts
+parse, shellcheck clean · workflows parse · pub dry run as at baseline. After T7's rework 555b0a06: map ios `swift test`
+27, 0 warnings; `xcodebuild test` on the iOS 18.5 simulator 26, TEST SUCCEEDED. Failures: none.
+
 ### Blocked
 none
 
@@ -134,3 +208,9 @@ none
   google(). 8.3.1 and later need compileSdk 37: raise it when the SDK moves to 37.
 - examples/server/orca_google_map.ts is now the generator's output for the new schema (T6): the widget's latitude
   and longitude and a marker's id are optional in TypeScript, as Flutter defaults them.
+- native-plugins.yml now queues three macOS jobs per matching run (one per plugin). GitHub's hosted macOS arm64
+  runners were short of capacity on PR #49: two jobs were cancelled unstarted ("not acquired") and passed on re-run.
+- Hand checks to come in group 4: on iOS, a second tap on a selected pin fires onMarkerTap again (XCTest cannot make
+  real touches); on Android, tiles need the user's Maps API key, markers and taps do not.
+- The differences from Flutter for T14's READMEs: SC/s17m/t7-differences.md (terrain, zoom buttons, marker-tap camera,
+  bearing, wrong-typed props, a Column's unbounded height).
