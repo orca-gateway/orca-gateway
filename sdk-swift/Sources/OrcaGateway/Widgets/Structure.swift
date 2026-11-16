@@ -386,6 +386,27 @@ struct AppBarView: View {
     let model: OrcaPageModel
 
     var body: some View {
+        AppBarToolbar(node: node, model: model)
+            .background(Props.color(node["backgroundColor"]))
+            .overlay(alignment: .bottom) {
+                AppBarShadow(appBar: node).alignmentGuide(.bottom) { $0[.top] }
+            }
+    }
+}
+
+/// The toolbar row of an AppBar drawn by the SDK (AppBarView), with no
+/// background: also a SliverAppBar's (Slivers.swift), whose node has the
+/// same `title`, `leading` and `action_N` slots and `centerTitle`. The row
+/// is `toolbarHeight` high (56) and the leading box `leadingWidth` wide
+/// (56): an AppBar's props, which a SliverAppBar never carries, so its row
+/// is always 56 with a 56 leading box, the 56 its geometry
+/// (SliverAppBarGeometry.toolbarHeight) counts.
+@MainActor
+struct AppBarToolbar: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+
+    var body: some View {
         let centred = Props.bool(node["centerTitle"]) != false
         ZStack {
             if centred, let title = node.slots["title"] {
@@ -409,10 +430,6 @@ struct AppBarView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: Props.number(node["toolbarHeight"]) ?? 56)
-        .background(Props.color(node["backgroundColor"]))
-        .overlay(alignment: .bottom) {
-            AppBarShadow(appBar: node).alignmentGuide(.bottom) { $0[.top] }
-        }
     }
 }
 
@@ -421,7 +438,7 @@ struct AppBarView: View {
 /// spot-shadow alpha, which Flutter's Material shadow uses) to clear.
 /// Flutter's M3 AppBar has elevation 0 and a transparent shadowColor by
 /// default, so nothing is drawn unless both are sent. It never takes taps.
-private struct AppBarShadow: View {
+struct AppBarShadow: View {
     let appBar: ResolvedNode
 
     var body: some View {

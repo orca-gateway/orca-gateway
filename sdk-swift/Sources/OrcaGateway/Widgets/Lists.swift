@@ -56,27 +56,41 @@ struct ListNodeView: View {
     private func rows(_ horizontal: Bool, lazy: Bool) -> some View {
         let ids = reverse ? Array(node.childIds.reversed()) : node.childIds
         let extent = Props.number(node["itemExtent"])
-        let items = ForEach(ids, id: \.self) { id in row(id, horizontal: horizontal, extent: extent) }
-        Group {
-            switch (horizontal, lazy) {
-            case (false, true): LazyVStack(alignment: .leading, spacing: 0) { items }
-            case (true, true): LazyHStack(alignment: .top, spacing: 0) { items }
-            case (false, false): VStack(alignment: .leading, spacing: 0) { items }
-            case (true, false): HStack(alignment: .top, spacing: 0) { items }
-            }
+        let items = ForEach(ids, id: \.self) { id in
+            Self.row(id, model: model, horizontal: horizontal, extent: extent)
         }
-        .orcaPadding(node["padding"])
+        AxisStack(horizontal: horizontal, lazy: lazy) { items }
+            .orcaPadding(node["padding"])
     }
 
     /// A child forced to the cross extent (SliverList's cross-axis tight
-    /// constraints) and, with `extent`, to it on the main axis.
-    private func row(_ id: String, horizontal: Bool, extent: CGFloat?) -> some View {
+    /// constraints) and, with `extent`, to it on the main axis. Also a
+    /// CustomScrollView's box items (Slivers.swift).
+    static func row(_ id: String, model: OrcaPageModel, horizontal: Bool, extent: CGFloat?) -> some View {
         let cross = TightAxes(horizontal ? .vertical : .horizontal)
         return NodeView(id: id, model: model)
             .modifier(AddTight(axes: extent == nil ? cross : [.horizontal, .vertical]))
             .frame(width: horizontal ? extent : nil, height: horizontal ? nil : extent, alignment: .topLeading)
             .frame(maxWidth: horizontal ? nil : .infinity, maxHeight: horizontal ? .infinity : nil,
                    alignment: .topLeading)
+    }
+}
+
+/// A list's rows one after the other along its axis from the start, with
+/// no space between: a lazy stack in a scroll view, a plain one where
+/// nothing scrolls. ListView's and CustomScrollView's.
+struct AxisStack<Content: View>: View {
+    let horizontal: Bool
+    let lazy: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        switch (horizontal, lazy) {
+        case (false, true): LazyVStack(alignment: .leading, spacing: 0, content: content)
+        case (true, true): LazyHStack(alignment: .top, spacing: 0, content: content)
+        case (false, false): VStack(alignment: .leading, spacing: 0, content: content)
+        case (true, false): HStack(alignment: .top, spacing: 0, content: content)
+        }
     }
 }
 
@@ -104,20 +118,11 @@ struct GridNodeView: View {
     var body: some View {
         let horizontal = node["scrollDirection"]?.stringValue == "horizontal"
         let insets = Props.insets(node["padding"]) ?? EdgeInsets()
-        let cells = GridCells(
-            crossAxisCount: node["crossAxisCount"]?.dartInt ?? 2,
-            mainAxisSpacing: Double(Props.number(node["mainAxisSpacing"]) ?? 0),
-            crossAxisSpacing: Double(Props.number(node["crossAxisSpacing"]) ?? 0),
-            childAspectRatio: Double(Props.number(node["childAspectRatio"]) ?? 1),
-            horizontal: horizontal,
-            padding: GridPadding(top: insets.top, left: insets.leading, bottom: insets.bottom,
-                                 right: insets.trailing))
+        let cells = GridCells(node, horizontal: horizontal,
+                              padding: GridPadding(top: insets.top, left: insets.leading, bottom: insets.bottom,
+                                                   right: insets.trailing))
         if unbounded.contains(TightAxes(horizontal ? .horizontal : .vertical)) {
-            EagerGridLayout(cells: cells) {
-                ForEach(node.childIds, id: \.self) { id in
-                    NodeView(id: id, model: model).modifier(AddTight(axes: [.horizontal, .vertical]))
-                }
-            }
+            EagerGrid(ids: node.childIds, cells: cells, model: model)
         } else {
             GridBox(cells: cells, count: node.childIds.count, shrinkWrap: Props.bool(node["shrinkWrap"]) == true) {
                 GeometryReader { geometry in
@@ -156,19 +161,21 @@ struct GridNodeView: View {
 /// A lazy list's or grid's ScrollView along its axis, reversed as
 /// SingleChildScrollView's (anchored at the far end; before iOS 17 /
 /// macOS 14 a scroll to the end on appear), with ScrollTriggers when the
-/// node sets a scroll trigger.
+/// node sets a scroll trigger or a `watch` follows the scroll (a
+/// CustomScrollView's collapsing bar). Also CustomScrollView's.
 @MainActor
-private struct LazyScroll<Content: View>: View {
+struct LazyScroll<Content: View>: View {
     let node: ResolvedNode
     let model: OrcaPageModel
     let horizontal: Bool
     let reverse: Bool
+    var watch: ScrollWatch?
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        if node.actions.keys.contains(where: ScrollEvent.triggers.contains) {
+        if watch != nil || node.actions.keys.contains(where: ScrollEvent.triggers.contains) {
             let triggers = ScrollTriggers(node: node, model: model, horizontal: horizontal, reverse: reverse,
-                                          phased: Self.phased)
+                                          phased: Self.phased, watch: watch)
             if triggers.phased {
                 scrollView(content()).modifier(triggers)
             } else {
@@ -224,6 +231,37 @@ struct GridBox: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+    }
+}
+
+extension GridCells {
+    /// The cells of a GridView or SliverGrid node (structure_builders.dart
+    /// `_buildGridView`, `_buildSliverGrid`): `crossAxisCount` 2, the
+    /// spacings 0, `childAspectRatio` 1.
+    init(_ node: ResolvedNode, horizontal: Bool, padding: GridPadding = GridPadding()) {
+        self.init(crossAxisCount: node["crossAxisCount"]?.dartInt ?? 2,
+                  mainAxisSpacing: Double(Props.number(node["mainAxisSpacing"]) ?? 0),
+                  crossAxisSpacing: Double(Props.number(node["crossAxisSpacing"]) ?? 0),
+                  childAspectRatio: Double(Props.number(node["childAspectRatio"]) ?? 1),
+                  horizontal: horizontal, padding: padding)
+    }
+}
+
+/// The nodes `ids` as cells laid out at once, each forced to the box
+/// `cells` gives it (EagerGridLayout): a GridView with no limit on its
+/// scroll axis, one line of a SliverGrid, a SliverGrid on its own.
+@MainActor
+struct EagerGrid: View {
+    let ids: [String]
+    let cells: GridCells
+    let model: OrcaPageModel
+
+    var body: some View {
+        EagerGridLayout(cells: cells) {
+            ForEach(ids, id: \.self) { id in
+                NodeView(id: id, model: model).modifier(AddTight(axes: [.horizontal, .vertical]))
+            }
+        }
     }
 }
 

@@ -42,7 +42,7 @@ private struct WatchedNode: View {
         if let node = model.resolve(id, animationProgress: animationProgress) {
             // What is on screen from now on. A frozen copy is a record
             // already.
-            let _ = record(node)
+            let _ = recorder?.record(node, drawnFrom: model)
             // Only a node with a lifecycle trigger is wrapped (Flutter
             // component_renderer.dart:230-255); the others keep their tree.
             if let triggers = LifecycleTriggers(node.actions) {
@@ -55,10 +55,14 @@ private struct WatchedNode: View {
     }
 }
 
-extension WatchedNode {
-    private func record(_ node: ResolvedNode) {
-        guard let recorder, !model.isInert, let source = model.renderer.node(id) else { return }
-        recorder.record(node, source: source)
+extension NodeRecorder {
+    /// `node` was resolved for drawing from `model`: recorded with the node
+    /// as the page holds it. Nothing from a frozen copy, a record already.
+    /// For the view that draws a node: NodeView, and a CustomScrollView for
+    /// the slivers it flattens, which have no NodeView there.
+    func record(_ node: ResolvedNode, drawnFrom model: OrcaPageModel) {
+        guard !model.isInert, let source = model.renderer.node(node.id) else { return }
+        record(node, source: source)
     }
 }
 
@@ -110,6 +114,11 @@ struct WidgetView: View {
         case "PageView": scrolling(PagerView(node: node, model: model))
         case "ListView": scrolling(ListNodeView(node: node, model: model))
         case "GridView": scrolling(GridNodeView(node: node, model: model))
+        case "CustomScrollView": scrolling(CustomScrollNodeView(node: node, model: model))
+        case "SliverAppBar": SliverAppBarView(node: node, model: model)
+        case "SliverList": SliverListView(node: node, model: model)
+        case "SliverGrid": SliverGridView(node: node, model: model)
+        case "SliverToBoxAdapter": ChildView(node: node, model: model)
         case "Scrollbar": ScrollbarView(node: node, model: model)
         case "PullToRefresh": PullToRefreshView(node: node, model: model)
         case "Card": CardView(node: node, model: model)

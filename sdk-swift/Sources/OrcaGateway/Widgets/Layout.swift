@@ -349,6 +349,10 @@ struct ScrollNodeView: View {
 ///   (begin as the finger starts dragging) and until the offset has held
 ///   still for ScrollTracker.settleDelay (the end of a fling, or of any
 ///   other move).
+///
+/// `watch`, when set, hears the same samples: each offset, and the end of
+/// a scroll (what fires onScrollEnd). A CustomScrollView's collapsing
+/// SliverAppBar follows the scroll through it.
 struct ScrollTriggers: ViewModifier {
     static let space = "orca-scroll"
 
@@ -357,6 +361,7 @@ struct ScrollTriggers: ViewModifier {
     let horizontal: Bool
     let reverse: Bool
     let phased: Bool
+    var watch: ScrollWatch?
     @State private var tracker = ScrollTracker()
     @GestureState private var dragging = false
 
@@ -366,6 +371,7 @@ struct ScrollTriggers: ViewModifier {
                 .onScrollGeometryChange(for: ScrollMetrics.self) { [horizontal, reverse] geometry in
                     Self.metrics(geometry, horizontal: horizontal, reverse: reverse)
                 } action: { old, new in
+                    watch?.offset(new.offset)
                     fire(tracker.see(new, after: old))
                 }
                 .onScrollPhaseChange { _, phase in
@@ -383,6 +389,7 @@ struct ScrollTriggers: ViewModifier {
                                                 contentExtent: horizontal ? frame.width : frame.height,
                                                 viewportExtent: horizontal ? viewport.width : viewport.height,
                                                 reverse: reverse)
+                    watch?.offset(metrics.offset)
                     fire(tracker.probe(metrics, then: fire))
                 }
                 // An outer watched scroll view reads its own content, not this one's.
@@ -419,7 +426,17 @@ struct ScrollTriggers: ViewModifier {
 
     private func fire(_ events: [ScrollEvent]) {
         for event in events { model.fire(event.trigger, on: node, eventData: event.eventData) }
+        if events.contains(where: { $0.trigger == "onScrollEnd" }) { watch?.ended() }
     }
+}
+
+/// What else follows a scroll view through its ScrollTriggers: `offset`
+/// gets each sample's offset along the axis, in points from the content's
+/// start (from its far end when reversed); `ended` is called when a scroll
+/// in progress has ended, where onScrollEnd fires.
+struct ScrollWatch {
+    var offset: @MainActor (Double) -> Void
+    var ended: @MainActor () -> Void
 }
 
 /// iOS 16-17: the scroll content's frame in its view's space and the

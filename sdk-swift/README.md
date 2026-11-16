@@ -289,6 +289,42 @@ To see it, run the `subpage` app of the example server in the
 config (`ORCA_APP_ID=subpage ORCA_BOOT=config`): a host count beside a sub-page's own count, a param
 sent to the sub-page, and two buttons, Replace with B and Join C.
 
+## Sliver scrolling
+
+A CustomScrollView is one lazy scroll view. Its slivers are laid one after the other in it: a
+SliverList's children and a SliverToBoxAdapter's child as rows as wide as the view, a SliverGrid as
+rows of cells with GridView's sizes and spacings, and a SliverAppBar. Only the rows near the screen
+are built. `scrollDirection`, `reverse`, `shrinkWrap` and the triggers `onScrollBegin`,
+`onScrolling` and `onScrollEnd` work as on a ListView.
+
+- **The bar is drawn by the SDK**, not by the navigation bar: `backgroundColor`, `flexibleSpace`
+  as wide as the bar, up to its height, behind a toolbar row 56 high with `leading`, `title`
+  (`centerTitle`) and `action_0` to `action_9`. It follows the scroll with Flutter's numbers: it shrinks from
+  `expandedHeight` and scrolls away, stops at `collapsedHeight` (else 56) when `pinned`, and
+  comes back on any scroll toward the start when `floating`. The toolbar row fades as it leaves.
+  Under the status bar the bar reaches the top of the screen and is taller by that inset.
+- **Where the bar collapses.** Only as the first sliver of a vertical view that is not reversed.
+  Anywhere else (not first, a horizontal or reversed view, outside a CustomScrollView) it is a box
+  as tall as `expandedHeight` that scrolls with the content, whatever `pinned`, `floating` and
+  `snap` say. With `shrinkWrap` it collapses but stays below the status bar.
+- **Snap.** With `floating` and `snap` the bar opens or closes fully when a scroll ends, over
+  300 ms. On iOS 18 and later that is the moment the scroll stops; on iOS 16 and 17 it is 0.15 s
+  after the view last moved.
+- **Scrolling by code.** A floating bar also comes back when the view is scrolled toward its start
+  by code; Flutter brings it back on a drag only.
+- **Elevation.** `elevation` draws no shadow: a SliverAppBar carries no `shadowColor`, as Flutter's
+  Material 3 bar draws none.
+- **Scroll metrics.** `maxExtent` in the scroll triggers is exact when every row has one length and
+  an estimate otherwise: SwiftUI learns a lazy stack's length from the rows it has built.
+- **Outside a CustomScrollView** (Flutter throws) a SliverList draws its children one below the
+  other, a SliverGrid all its cells, a SliverToBoxAdapter its child. A widget that is no sliver,
+  directly in a CustomScrollView, is drawn as a row.
+
+To see it, run the `slivers` app of the example server in the
+[iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios), booted from its
+config (`ORCA_APP_ID=slivers ORCA_BOOT=config`): three tabs, a pinned bar over a coloured
+`flexibleSpace`, a floating bar and a plain one.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An iOS host does it with

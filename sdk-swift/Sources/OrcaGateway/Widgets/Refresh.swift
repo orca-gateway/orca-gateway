@@ -51,9 +51,9 @@ extension EnvironmentValues {
 /// it, so they are not read; the pull needed is the system's own (Flutter's
 /// is a sixth of the view's height). A snapping PageView is drawn without a
 /// scroll view, so it is not pulled (Flutter refreshes a vertical one at its
-/// first page). Nor is a ListView or GridView with no limit on its scroll
-/// axis (a shrinkWrap one in a Column), drawn as a stack that does not
-/// scroll, as Flutter's, which fits its content and takes no drag
+/// first page). Nor is a ListView, GridView or CustomScrollView with no
+/// limit on its scroll axis (a shrinkWrap one in a Column), drawn as a
+/// stack that does not scroll, as Flutter's, which fits its content and takes no drag
 /// (widgets/scroll_physics.dart:241-250). macOS has no pull to refresh on a
 /// scroll view: the child is drawn as is.
 @MainActor
@@ -68,9 +68,10 @@ struct PullToRefreshView: View {
 }
 
 /// The pull of a scroll kind (SingleChildScrollView, ListView, GridView,
-/// PageView), applied where WidgetView builds it: `refreshable` (and, on
-/// iOS, KeepPull) when it is a vertical scroll view directly inside a
-/// PullToRefresh. The scroll views inside it are not directly inside one.
+/// CustomScrollView, PageView), applied where WidgetView builds it:
+/// `refreshable` (and, on iOS, KeepPull) when it is a vertical scroll view
+/// directly inside a PullToRefresh. The scroll views inside it are not
+/// directly inside one.
 struct RefreshOnPull: ViewModifier {
     let node: ResolvedNode
     @Environment(\.orcaRefresh) private var refresh
@@ -92,7 +93,7 @@ struct RefreshOnPull: ViewModifier {
 
     /// Whether the scroll kind `node`, offered no limit on the `unbounded`
     /// axes, is pulled: a SingleChildScrollView unless horizontal; a
-    /// ListView or GridView unless horizontal or unbounded vertically
+    /// ListView, GridView or CustomScrollView unless horizontal or unbounded vertically
     /// (then drawn as a stack that does not scroll); a PageView only when
     /// vertical and not snapping. `refreshable` on a view with no scroll
     /// view of its own would pass on to the first vertical one inside it.
@@ -100,7 +101,7 @@ struct RefreshOnPull: ViewModifier {
         let direction = node["scrollDirection"]?.stringValue
         switch node.type {
         case "PageView": return direction == "vertical" && Props.bool(node["pageSnapping"]) == false
-        case "ListView", "GridView": return direction != "horizontal" && !unbounded.contains(.vertical)
+        case "ListView", "GridView", "CustomScrollView": return direction != "horizontal" && !unbounded.contains(.vertical)
         default: return direction != "horizontal"
         }
     }
