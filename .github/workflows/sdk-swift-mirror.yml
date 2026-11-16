@@ -92,7 +92,7 @@ jobs:
       group: swift-mirror-${{ needs.resolve.outputs.mirror }}
       cancel-in-progress: false
     # A plugin's split builds on macOS, sdk-swift's in the Linux container.
-    runs-on: ${{ startsWith(github.event.inputs.tag || github.ref_name, 'sdk-swift-v') && 'ubuntu-latest' || 'macos-15' }}
+    runs-on: ${{ needs.resolve.outputs.plugin == 'true' && 'macos-15' || 'ubuntu-latest' }}
     timeout-minutes: 20
     outputs:
       version: ${{ needs.resolve.outputs.version }}
