@@ -68,16 +68,16 @@ final class ActionFixtureTests: XCTestCase {
         try await run(fixture: "48_refetchPage.json")
     }
 
-    @MainActor func testC14_6_PersistStateSavesASnapshotAndMovesAKeyBetweenStorages_fixture48() async throws {
-        try await run(fixture: "48_persist_state.json")
+    @MainActor func testC14_6_PersistStateSavesASnapshotAndMovesAKeyBetweenStorages_fixture49() async throws {
+        try await run(fixture: "49_persist_state.json")
     }
 
-    @MainActor func testC14_6_ClearStateNullsTheKeyAndRemovesItFromBothStorages_fixture49() async throws {
-        try await run(fixture: "49_clear_state.json")
+    @MainActor func testC14_6_ClearStateNullsTheKeyAndRemovesItFromBothStorages_fixture50() async throws {
+        try await run(fixture: "50_clear_state.json")
     }
 
-    @MainActor func testC14_6_SavedEntriesAreRestoredWhenStateIsSetUp_fixture50() async throws {
-        try await run(fixture: "50_restore_saved_state.json")
+    @MainActor func testC14_6_SavedEntriesAreRestoredWhenStateIsSetUp_fixture51() async throws {
+        try await run(fixture: "51_restore_saved_state.json")
     }
 
     // MARK: the source (D1) and once (D2) beyond the fixtures

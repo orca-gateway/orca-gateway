@@ -36,7 +36,7 @@ import kotlin.test.assertTrue
  * (`source`, so once can dedupe) and its own `event` in place of the
  * fixture's; `actions` run as steps with the fixture's event and no source.
  *
- * Saved state (fixtures 48-50, native parity step 14, C14.6): the executor
+ * Saved state (fixtures 49-51, native parity step 14, C14.6): the executor
  * saves through a [SavedState] over an in-memory store, its page the
  * fixture's `pageId`. `saved` seeds that store and the session map; `load`
  * sets state up as a boot and a page load do, through the store's seed and
@@ -171,13 +171,13 @@ class ActionFixtureTest {
     fun a5_6_refetchPageEmitsNothing() = runSuspend { runFixture("48_refetchPage.json") }
 
     @Test
-    fun c14_6_K_persistStateSavesASnapshotInOneStorage() = runSuspend { runFixture("48_persist_state.json") }
+    fun c14_6_K_persistStateSavesASnapshotInOneStorage() = runSuspend { runFixture("49_persist_state.json") }
 
     @Test
-    fun c14_6_K_clearStateNullsTheKeyAndRemovesItsSavedCopies() = runSuspend { runFixture("49_clear_state.json") }
+    fun c14_6_K_clearStateNullsTheKeyAndRemovesItsSavedCopies() = runSuspend { runFixture("50_clear_state.json") }
 
     @Test
-    fun c14_6_K_savedEntriesAreRestoredWhenStateIsSetUp() = runSuspend { runFixture("50_restore_saved_state.json") }
+    fun c14_6_K_savedEntriesAreRestoredWhenStateIsSetUp() = runSuspend { runFixture("51_restore_saved_state.json") }
 
     // MARK: source and once
 

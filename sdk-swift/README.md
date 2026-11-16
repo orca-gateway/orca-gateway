@@ -1,8 +1,8 @@
 # Orca Gateway iOS SDK
 
 > [!WARNING]
-> **Alpha (`0.1.0-alpha.1`).** The native iOS client for Orca Gateway works for the pages its 63
-> widgets and 25 action kinds cover, but its API may still change between alphas. For production
+> **Alpha (`0.1.0-alpha.1`).** The native iOS client for Orca Gateway works for the pages its 68
+> widgets and 26 action kinds cover, but its API may still change between alphas. For production
 > apps use the Flutter SDK ([`orca_gateway`](https://github.com/orca-gateway/orca-gateway/tree/main/sdk)).
 
 The SDK renders the same server-driven pages as the Flutter SDK, from the same Bun engine and the
