@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "slug": "native-parity-s13-slivers",
+  "idea": "Native parity step 13, second part (Phase B): CustomScrollView, SliverAppBar, SliverList, SliverGrid and SliverToBoxAdapter on sdk-swift and sdk-kotlin, on top of Phase A step 5 (ListView, GridView). Rows B13.1 and B13.2.",
+  "kind": "feature",
+  "created_at": "2026-11-16T11:36:00Z",
+  "updated_at": "2026-11-16T11:37:26Z",
+  "active_session": "fe23fb0a-f62c-4a83-a51f-655a2e0bf8ff",
+  "current": "09",
+  "stages": {
+    "01": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file (native-parity/plan.md)"
+    },
+    "02": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file (native-parity/plan.md)"
+    },
+    "03": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file (native-parity/plan.md)"
+    },
+    "04": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file (native-parity/plan.md)"
+    },
+    "05": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file (native-parity/plan.md)"
+    },
+    "06": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file (native-parity/plan.md)"
+    },
+    "07": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file (native-parity/plan.md)"
+    },
+    "08": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-16T11:37:26Z",
+      "approved_with": "auto-approved under the standing gate rule (minor: the plan's step, no new dependency or public API; the bar drawn by the SDK is said in the PR for the user to overturn)"
+    },
+    "09": {
+      "status": "pending"
+    },
+    "10": {
+      "status": "pending"
+    },
+    "11": {
+      "status": "pending"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": true
+  }
+}
