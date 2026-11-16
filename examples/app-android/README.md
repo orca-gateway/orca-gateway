@@ -283,6 +283,10 @@ Google's legacy map renderer) it then draws no pins and its camera does not move
 buttons and "Move Camera to NYC" leave it on San Francisco, and the "Camera moved to" lines stay 0. Taps
 and long presses still report their coordinates.
 
+With a key, the map on that image crashed on opening with `NoClassDefFoundError` for
+`org.apache.http.ProtocolVersion` until the library declared `org.apache.http.legacy`, which it now
+does, so a host app needs nothing for it.
+
 The page sets `myLocationEnabled`, so the map shows the device's position once the app holds a location
 permission. Grant it and give the emulator a position before you open the page (`geo fix` takes the
 longitude first; the emulator's Extended controls › Location does the same):
@@ -299,22 +303,23 @@ bottom right. Under it are the lines "Map tapped on lat", "Map tapped on lng", "
 "Long press at lng", "Camera moved to lat", "Camera moved to lng", "Camera moved to zoom", "Marker
 tapped:" and "Marker taps: 0", then the button "Move Camera to NYC".
 
-With a key, expect the walk below. It has not been tried here: no key was available. The steps follow
-the Flutter plugin and Maps Compose, and the iOS demo's walk, on Apple's map, was seen.
+With a key, the walk below was seen on the API 34 Google Play image (Google Play services 23.18),
+every step as written.
 
 1. **The pins.** A red pin on San Francisco at the centre. Oakland's is off the map's right edge,
    across the bay: drag the map most of its width to the left to see it.
 2. **Tap a pin.** Its info window opens over it ("San Francisco" and "This is SF!"), Google centres the
    map on it, and the lines read "Marker tapped: marker1" and "Marker taps: 1". Tap the same pin again:
    "Marker taps:" counts 2. Google fires `onMarkerTap` on every tap, as the Flutter plugin does.
+   Oakland's pin, tapped, reads "Marker tapped: marker2", and Google centres the map on it.
 3. **Tap off the pins.** The info window closes and "Map tapped on lat" and "lng" show the point.
 4. **Long press.** "Long press at lat" and "lng" show the point.
 5. **Pan or zoom.** Drag the map or use + and -: the three "Camera moved to" lines follow the camera
    while it moves.
 6. **Move Camera to NYC.** The map animates to New York at zoom 14, and the "Camera moved to" lines end
    on about 40.7128, -74.006 and 14.
-7. **Your location.** With the permission granted, a blue dot marks the emulator's position and Google's
-   my-location button sits at the top right; it moves the camera there.
+7. **Your location.** With the permission granted, a blue dot marks the device's position and Google's
+   my-location button sits at the top right; it moves the camera to wherever the device is.
 
 One difference from the Flutter plugin does not show on this page: a prop of the wrong type takes its
 default, where Flutter fails the map's build.
