@@ -87,9 +87,9 @@ class ActionFixtureTest {
     private suspend fun runFixture(file: String) = runFixture(file, Fixtures.json("schema/fixtures/actions/$file"))
 
     @Test
-    fun allTwentySevenActionFixturesPass() = runSuspend {
+    fun allTwentyEightActionFixturesPass() = runSuspend {
         val files = Fixtures.files("actions")
-        assertEquals(27, files.size)
+        assertEquals(28, files.size)
         for ((name, fx) in files) runFixture(name, fx)
     }
 

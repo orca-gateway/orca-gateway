@@ -76,7 +76,7 @@ class ModelRoundTripTest {
     @Test
     fun allActionFixturesRoundTrip() {
         val files = Fixtures.files("actions")
-        assertEquals(27, files.size, "action fixtures 01-19, 30-34 and 45-47")
+        assertEquals(28, files.size, "action fixtures 01-19, 30-35 and 45-47")
         val kinds = HashSet<String>()
         for ((name, fixture) in files) {
             // Plugin action names a fixture registers handlers for (45-47).
@@ -115,10 +115,9 @@ class ModelRoundTripTest {
         // Every advertised kind appears in the fixtures, except the three
         // component kinds: a fixture compares state and effects, not the node
         // tree, so ComponentMutationTest pins them against Dart's
-        // ComponentStore instead. updateSubPage (B13.5-K) changes the node
-        // tree too, after a page fetch: its fixtures are the `sequence` cases
-        // of schema/fixtures/subpage (SubPageFixtureTest).
-        val structural = setOf("addComponent", "updateComponent", "deleteComponent", "updateSubPage")
+        // ComponentStore instead. updateSubPage is held to the bar: action
+        // fixture 35 carries it (an id no mounted SubPage has).
+        val structural = setOf("addComponent", "updateComponent", "deleteComponent")
         assertTrue(kinds.containsAll(GeneratedCapabilities.actionKinds.toSet() - structural), "$kinds")
     }
 
