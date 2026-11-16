@@ -49,8 +49,9 @@ VR/android/voice-recorder/src/main/kotlin/com/orcagateway/plugins/voicerecorder/
 | 3 | T10 | release.sh rows 11-12, scratch-repo test | scripts/release.sh · engine/test/launch-release.test.ts | P-release | S | T4, T5 |
 | 3 | T11 | Swift mirror split per plugin tag | scripts/swift-mirror.sh · .github/workflows/sdk-swift-mirror.yml · VR/ios/LICENSE (new) | P-mirror | M | T5 |
 | 3 | T12 | Maven plugin tags, package CI workflow | .github/workflows/sdk-kotlin-publish.yml · .github/workflows/native-plugins.yml (new) | P-maven, P-ci | S | T4, T5 |
-| 4 | T13 | iOS demo links, registers, mic plist | examples/app-ios/OrcaCounter.xcodeproj/project.pbxproj · examples/app-ios/OrcaCounter/OrcaCounterApp.swift · examples/app-ios/Info.plist | C17.3/hand-S | M | T7, T8 |
-| 4 | T14 | Android demo includes and registers plugin | examples/app-android/settings.gradle.kts · examples/app-android/app/build.gradle.kts · examples/app-android/app/src/main/kotlin/com/orcagateway/examples/counter/MainActivity.kt | C17.3/hand-K | M | T7, T9 |
+| 4 | T13 | iOS demo links, registers, mic plist | examples/app-ios/OrcaCounter.xcodeproj/project.pbxproj · examples/app-ios/OrcaCounter/OrcaCounterApp.swift · examples/app-ios/Info.plist · examples/app-ios/README.md (the hand check) | C17.3/hand-S | M | T7, T8 |
+| 4 | T14 | Android demo includes and registers plugin | examples/app-android/settings.gradle.kts · examples/app-android/app/build.gradle.kts · examples/app-android/app/src/main/kotlin/com/orcagateway/examples/counter/MainActivity.kt · examples/app-android/README.md (the hand check) | C17.3/hand-K | M | T7, T9 |
+| 4 | T17 | Native package READMEs: install, register, mic (added at 09) | VR/ios/README.md (new) · VR/android/README.md (new) · VR/README.md (a native apps section) | P-readme | S | T8, T9 |
 | 4 | T15 | Outside repo: walkthrough, release table | /Users/amrebada/workspace/orca-gateway/docs/User_Actions.md · /Users/amrebada/workspace/orca-gateway/CLAUDE.md (both outside the git repo, not in the PR) | P-docs | S | T10, T11 |
 
 ### Order, and why each boundary
