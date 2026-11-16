@@ -124,6 +124,10 @@ private val LocalDrawerChildDirection = compositionLocalOf<LayoutDirection?> { n
  * Flutter's Scaffold lays out its slots with fresh, loose constraints, so a
  * size forced on the Scaffold reaches neither the AppBar title nor the body.
  *
+ * A DefaultTextStyle above it stops here: all its slots lie on one
+ * Material (scaffold.dart:3415), which puts them under the theme's text
+ * style (material.dart:470-474).
+ *
  * The Scaffold and all it holds are light whatever the app's colour scheme:
  * Flutter's `_buildScaffold` (sdk/lib/src/builders/structure_builders.dart)
  * wraps it in `Theme(data: ThemeData())`, the default light theme, so a dark
@@ -157,7 +161,9 @@ internal fun ScaffoldWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
     }
 
     WithColorScheme(FlutterLightScheme) {
-        CompositionLocalProvider(LocalOrcaSnackbars provides null) {
+        // Its slots lie on its Material, which resets a DefaultTextStyle above
+        // it (scaffold.dart:3415, material.dart:470-474).
+        CompositionLocalProvider(LocalOrcaSnackbars provides null, LocalOrcaDefaultTextStyle provides null) {
             PageDrawer(start, startState, end = false, gestures = true, model, modifier.boundedBy(window)) { inner ->
                 PageDrawer(end, endState, end = true, gestures = start == null || endState.isOpen, model, inner) { innermost ->
                     ScaffoldFrame(node, model, innermost, snackbars, drawers)
@@ -300,6 +306,11 @@ private fun Modifier.boundedBy(window: IntSize): Modifier = layout { measurable,
  *
  * As the `appBar` of a Scaffold with an `endDrawer` it shows a trailing
  * menu button for it when it has no action, as Flutter's AppBar does.
+ *
+ * A DefaultTextStyle above it stops here: the whole toolbar (leading,
+ * title, actions) lies on the AppBar's Material (app_bar.dart:1233) and the
+ * title draws in the bar's own style (:1162). SliverAppBar draws its own
+ * row (Slivers.kt) and is not reset.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -351,24 +362,26 @@ internal fun AppBarWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
     } else {
         modifier
     }
-    if (node["centerTitle"]?.boolValue == true) {
-        CenterAlignedTopAppBar(
-            title = title,
-            modifier = bar,
-            navigationIcon = leading,
-            actions = actions,
-            expandedHeight = height,
-            colors = colors,
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            modifier = bar,
-            navigationIcon = leading,
-            actions = actions,
-            expandedHeight = height,
-            colors = colors,
-        )
+    CompositionLocalProvider(LocalOrcaDefaultTextStyle provides null) {
+        if (node["centerTitle"]?.boolValue == true) {
+            CenterAlignedTopAppBar(
+                title = title,
+                modifier = bar,
+                navigationIcon = leading,
+                actions = actions,
+                expandedHeight = height,
+                colors = colors,
+            )
+        } else {
+            TopAppBar(
+                title = title,
+                modifier = bar,
+                navigationIcon = leading,
+                actions = actions,
+                expandedHeight = height,
+                colors = colors,
+            )
+        }
     }
 }
 
@@ -388,7 +401,8 @@ private fun DrawerMenuButton(tag: String, open: () -> Unit) {
  * outer `margin` (default 4 on every side, the Material default). The child
  * is clipped to the card's shape only when `clipBehavior` asks for it
  * (Flutter's Card: `Clip.none` by default). A size forced on the Card
- * reaches its child.
+ * reaches its child. A DefaultTextStyle above it stops here: its Material
+ * resets it (card.dart:279, material.dart:470-474).
  */
 @Composable
 internal fun CardWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -402,7 +416,7 @@ internal fun CardWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modi
     val fill = tint?.copy(alpha = surfaceTintOpacity(elevation))?.compositeOver(color) ?: color
     // Drawn as M3 Surface draws (content colour, a semantics container that
     // takes the touches on it) but without its clip.
-    CompositionLocalProvider(LocalContentColor provides contentColorFor(color)) {
+    CompositionLocalProvider(LocalContentColor provides contentColorFor(color), LocalOrcaDefaultTextStyle provides null) {
         Box(
             modifier.padding(margin.paddingValues())
                 .shadow(elevation, shape, clip = false, ambientColor = shadowColor, spotColor = shadowColor)

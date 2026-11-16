@@ -95,6 +95,9 @@ import com.orcagateway.sdk.style.Props
  * Under [LocalPointerBlocked] (an ignoring IgnorePointer, an absorbing
  * AbsorbPointer) it is an [InertButton]: the same look, no touches, no
  * click or long-click action.
+ *
+ * A DefaultTextStyle above it stops here: the label lies on the button's
+ * Material (button_style_button.dart:628, material.dart:470-474).
  */
 @Composable
 internal fun ButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -155,7 +158,10 @@ internal fun ButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
         )
     }
 
-    CompositionLocalProvider(LocalRippleConfiguration provides (overlay(node, interactions) ?: LocalRippleConfiguration.current)) {
+    CompositionLocalProvider(
+        LocalRippleConfiguration provides (overlay(node, interactions) ?: LocalRippleConfiguration.current),
+        LocalOrcaDefaultTextStyle provides null,
+    ) {
         if (blocked) {
             InertButton(outer, enabled, look, label)
         } else {
@@ -313,7 +319,8 @@ internal fun Modifier.longPress(key: Any, action: State<() -> Unit>): Modifier =
  * `constraints` bound the box from outside. `tooltip` is its accessibility
  * label: no tooltip is drawn yet.
  * No ripple or press feedback, as Flutter draws none (`splashColor` and
- * `highlightColor` are never read).
+ * `highlightColor` are never read). No Material either, so unlike the
+ * other buttons it leaves a DefaultTextStyle above it in force.
  */
 @Composable
 internal fun IconButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -374,7 +381,8 @@ internal fun IconButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier
  * ([fabOverlay]). Disabled it is drawn unchanged (Flutter's disabled elevation
  * falls back to `elevation`) and is an [InertFab]. `tooltip` is its
  * accessibility label. The Scaffold's `floatingActionButton` slot places
- * it at the bottom end, 16 in, as Flutter's endFloat.
+ * it at the bottom end, 16 in, as Flutter's endFloat. A DefaultTextStyle
+ * above it stops here: its RawMaterialButton's Material resets it.
  */
 @Composable
 internal fun FloatingActionButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -394,7 +402,7 @@ internal fun FloatingActionButtonWidget(node: ResolvedNode, model: OrcaPageModel
             val onTap: () -> Unit = { model.fire("onTap", on = node) }
             val raised = FloatingActionButtonDefaults.elevation(defaultElevation = elevation)
             val ripple = fabOverlay(node, ink, interactions) ?: LocalRippleConfiguration.current
-            CompositionLocalProvider(LocalRippleConfiguration provides ripple) {
+            CompositionLocalProvider(LocalRippleConfiguration provides ripple, LocalOrcaDefaultTextStyle provides null) {
                 when {
                     !enabled -> InertFab(labelled, mini, shape, fill, ink, elevation, content)
                     mini -> SmallFloatingActionButton(onTap, pressable, shape, fill, ink, raised, interactions, content)

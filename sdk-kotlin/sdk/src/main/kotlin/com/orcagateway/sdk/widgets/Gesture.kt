@@ -96,6 +96,9 @@ internal fun GestureDetectorWidget(node: ResolvedNode, model: OrcaPageModel, mod
  * Compose's ripple, not Flutter's InkSparkle, and it starts at the touch
  * down, where Flutter's ink starts at its tap down: 100 ms into a press, or
  * for a quick tap once the double-tap wait is over.
+ *
+ * A DefaultTextStyle above it stops here: the builder's transparent
+ * Material resets it (layout_builders.dart:620, material.dart:470-474).
  */
 @Composable
 internal fun InkWellWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -124,7 +127,7 @@ internal fun InkWellWidget(node: ResolvedNode, model: OrcaPageModel, modifier: M
                         .indication(interactions, ripple()),
                 )
             }
-            ChildView(node, model)
+            CompositionLocalProvider(LocalOrcaDefaultTextStyle provides null) { ChildView(node, model) }
         }
     }
 }
