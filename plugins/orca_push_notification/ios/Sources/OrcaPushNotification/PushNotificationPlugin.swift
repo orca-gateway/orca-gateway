@@ -207,11 +207,12 @@ final class PushNotifications {
 
     // MARK: Helpers
 
-    /// A notification the plugin shows, marked as its own, with the payload.
+    /// A notification the plugin shows, marked as its own, with the payload,
+    /// "" for none (flutter_local_notifications' `payload ?? ''`, so a tap
+    /// hands "" over).
     private static func notification(id: Int, title: String, body: String, payload: String?) -> LocalNotification {
-        var userInfo: [String: JSONValue] = [idKey: .int(id)]
-        userInfo[payloadKey] = payload.map(JSONValue.string)
-        return LocalNotification(id: id, title: title, body: body, userInfo: userInfo)
+        LocalNotification(
+            id: id, title: title, body: body, userInfo: [idKey: .int(id), payloadKey: .string(payload ?? "")])
     }
 
     /// The userInfo keys firebase_messaging does not count as the message's

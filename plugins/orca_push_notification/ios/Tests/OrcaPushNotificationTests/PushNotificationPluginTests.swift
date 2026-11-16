@@ -326,7 +326,8 @@ final class PushNotificationPluginTests: XCTestCase {
         let bare = try XCTUnwrap(h.notifications.added.last)
         XCTAssertEqual(bare.title, "", "Flutter's default")
         XCTAssertEqual(bare.body, "", "Flutter's default")
-        XCTAssertEqual(bare.userInfo, ["orcaNotificationId": .int(bare.id)], "no payload")
+        XCTAssertEqual(bare.userInfo, ["orcaNotificationId": .int(bare.id), "payload": ""],
+                       "no payload is \"\", as flutter_local_notifications stores it")
     }
 
     func testC17_4_S_TitleBodyPayloadAndTopicAreResolvedAsValues() async throws {
@@ -341,13 +342,14 @@ final class PushNotificationPluginTests: XCTestCase {
         XCTAssertEqual(shown.userInfo["payload"], "orcacounter://open/map")
 
         // A payload sent that resolves to null is "", as resolveString; a
-        // null payload is none.
+        // null payload is "" too, as flutter_local_notifications sends
+        // `payload ?? ''`.
         try await h.run([
             "type": "showLocalNotification", "payload": ["type": "state", "scope": "page", "key": "missing"],
         ])
         XCTAssertEqual(h.notifications.added.last?.userInfo["payload"], "")
         try await h.run(["type": "showLocalNotification", "payload": .null])
-        XCTAssertEqual(h.notifications.added.last?.userInfo["payload"], nil)
+        XCTAssertEqual(h.notifications.added.last?.userInfo["payload"], "")
 
         let topic: JSONValue = ["type": "state", "scope": "page", "key": "topic"]
         try await h.run(["type": "subscribeToTopic", "topic": topic])
@@ -457,7 +459,7 @@ final class PushNotificationPluginTests: XCTestCase {
 
         try h.tap(delivered(h.notifications.added[0]))
         try h.tap(delivered(h.notifications.added[1]))
-        XCTAssertEqual(h.taps, ["orcacounter://open/map", nil])
+        XCTAssertEqual(h.taps, ["orcacounter://open/map", ""], "no payload taps as \"\", as on Flutter's iOS")
     }
 
     func testC17_4_S_ATapOnANotificationThePluginDidNotShowReachesNothing() async throws {
