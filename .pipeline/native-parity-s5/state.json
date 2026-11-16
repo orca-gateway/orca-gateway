@@ -4,7 +4,7 @@
   "idea": "Native parity step 5 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): lists, grids, pages and pull to refresh on both native SDKs: ListView, GridView, PageView, Scrollbar, PullToRefresh and the action refetchPage, laid out, scrolled and refreshed as Flutter does and advertised in both capability lists. Test cases A5.1-A5.7 in phase-a-tests.md. In sdk-swift and sdk-kotlin, with render and action fixtures",
   "kind": "feature",
   "created_at": "2026-11-16T05:54:22Z",
-  "updated_at": "2026-11-16T07:29:13Z",
+  "updated_at": "2026-11-16T08:11:16Z",
   "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "draft",
-      "rounds": 6,
-      "card": "cards/09-r5.md"
+      "rounds": 7,
+      "card": "cards/09-r6.md"
     },
     "10": {
       "status": "pending"

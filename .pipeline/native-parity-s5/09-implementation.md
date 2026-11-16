@@ -3,11 +3,11 @@
 ## Front page
 
 ### In one breath
-group 5 of 8 · tasks: 10 green, 0 blocked · A5.1-A5.3 green on both SDKs (core and UI)
-K-list, S-list: ListView and GridView lay out lazily, as Flutter's; a pure GridCells core sizes
-the cells with the same 8 cases on both SDKs. shrinkWrap stays lazy and hugs its content, as
-Flutter's ShrinkWrappingViewport; only an unbounded scroll axis lays out eagerly.
-Ahead: K-bar, K-pull committed; S-bar and K-caps running.
+group 6 of 8 · tasks: 12 green, 0 blocked · A5.7 green on both SDKs (core and UI)
+K-bar, S-bar: Kotlin draws Flutter's Android thumb (48 min, 4 thick, 600 + 300 ms fade) from a pure
+ScrollbarThumb core; iOS shows its own indicator only under a Scrollbar and hides it elsewhere, as
+Flutter on mobile. thumbVisibility keeps the Kotlin thumb shown; iOS can only flash its indicator.
+Ahead: K-pull, S-pull (G7) and both caps tasks (G8) committed; one S-pull fix running.
 
 ### New for you
 nothing new
@@ -17,7 +17,7 @@ none
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 6 (Scrollbar), Kotlin committed, Swift running. (default: go)
+2. Next: group 7 (PullToRefresh), one Swift fix in progress. (default: go)
 
 ## Appendix
 
@@ -176,6 +176,35 @@ Not done: SwiftUI builds only rows on screen (10 rows, 6 cells where Flutter bui
 checked: the iOS 16 reverse fallback, a list inside a same-axis SingleChildScrollView (hand check).
 Review nits kept as follow-ups: LazyScroll is a third copy of the reversible ScrollView (Layout.swift, Pager.swift);
 an eager grid in right-to-left puts left padding on the right on both SDKs (Flutter's EdgeInsets are absolute).
+
+### Group 6
+Commits: K-bar 3119760 then its rework ab82739, S-bar b12b4b8 then a test control 63cefcb (staged by path). Nothing
+pushed. Both reviewed (fit and quality); K-bar went back once, S-bar passed with nits. Group 6 approved under the
+standing rule.
+
+#### Task K-bar · Kotlin Scrollbar thumb and ScrollbarThumb
+Files: `sdk-kotlin/core/.../render/ScrollbarThumb.kt` (new) · `.../render/ScrollbarThumbTest.kt` (new) ·
+`sdk-kotlin/sdk/.../widgets/Scrollbar.kt` (new) · `.../widgets/Layout.kt` · `.../widgets/ScrollbarTest.kt` (new)
+Cases: A5.7 kt → green; after the rework `./gradlew build` core 431 / sdk 490, lint clean. Red first each pass.
+Changed: ScrollbarThumb.span gives Flutter's ScrollbarPainter numbers on Android (minLength 48, margins 0,
+thickness 4, opaque #BCBCBC); ScrollbarFade 600 ms wait, 300 ms fastOutSlowIn fade, thumbVisibility keeps it
+shown. ScrollbarWidget provides LocalScrollbarHost; the scroll view directly inside reports (ScrollWidget here, the
+lazy views in K-pull) and clears the local for its content; right-to-left puts the thumb on the left.
+Rework (review, checked against Flutter, widgets/scrollbar.dart:2027-2036): the thumb showed only when the offset
+moved; Flutter also shows it on OverscrollNotification, so a drag against an edge now shows it. Turning
+thumbVisibility off now fades the thumb out (didUpdateWidget); the 600 ms wait delays instead of asking for frames.
+Decided: no shrink on overscroll; no system-bar margin (documented).
+
+#### Task S-bar · Swift Scrollbar, indicators hidden otherwise
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Scrollbar.swift` (new) · `NodeView.swift` · `.../ScrollbarTests.swift` (new)
+Cases: A5.7 sw → green: 7 iOS-hosted `testA5_7…` plus 1 macOS; `swift test` UI 307 / core 419; iOS scheme UI 393 /
+core 419, goldens unchanged. Red first (no Scrollbar drawn; iOS showed its default indicator; no flash).
+Changed: ScrollbarView passes thumbVisibility in `orcaScrollbar`; ScrollIndicators on the four scroll kinds shows the
+iOS indicator under a Scrollbar and hides it otherwise on iOS (Flutter on mobile draws none; macOS keeps its
+default), clearing the value for nested scroll views; thumbVisibility flashes the indicator on appear (iOS 17+) and at
+each scroll end (iOS 18). The scroll-end test gained a thumbVisibility-false control (review nit).
+Decided (main session): iOS cannot keep its system indicator shown, so thumbVisibility flashes it (no timer per view);
+thickness is not settable on iOS (documented). The flash tests read UIKit's private indicator view (CI pins iOS 18.5).
 
 ### Test run
 engine `bun test` 755/0 · `flutter test` 352 pass · Swift core 397, 2 expected reds · Kotlin core 398, 2 expected reds
