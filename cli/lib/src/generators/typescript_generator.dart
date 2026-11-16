@@ -275,13 +275,15 @@ class TypeScriptGenerator {
     return 'Valueable<$inner>';
   }
 
-  /// Resolve a prop type for action params (uses Value | T for non-strings).
+  /// Resolve a prop type for action params: Value | T for strings, numbers
+  /// and booleans (the SDKs resolve them as values); an enum string stays its
+  /// literal union.
   static String _resolveActionParamType(PropSchema prop) {
     if (prop.type == 'string') {
       if (prop.enumValues != null && prop.enumValues!.isNotEmpty) {
         return prop.enumValues!.map((v) => '"$v"').join(' | ');
       }
-      return 'string';
+      return 'Value | string';
     }
     if (prop.type == 'number') return 'Value | number';
     if (prop.type == 'boolean') return 'Value | boolean';
