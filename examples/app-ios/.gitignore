@@ -2,3 +2,7 @@ xcuserdata/
 *.xcuserstate
 build/
 DerivedData/
+# The user's Firebase file (the push demo's token and topics); never committed.
+OrcaCounter/GoogleService-Info.plist
+# Resolved like the Swift packages' (theirs are ignored too): firebase-ios-sdk from 12.17.0, the newest 12.x.
+OrcaCounter.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved

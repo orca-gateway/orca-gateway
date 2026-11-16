@@ -2,5 +2,7 @@
 .kotlin/
 build/
 local.properties
+# The user's Firebase file (README, "Push notifications"); the build applies google-services only with it.
+app/google-services.json
 *.iml
 .idea/

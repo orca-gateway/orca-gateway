@@ -54,7 +54,7 @@ scheme, or pass them to `simctl launch`:
 | Basic actions | `basic-actions` | `home` | navigation, back, URL, clipboard, share, toasts |
 | Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
 | Todo | `todo` | `home` | add, tick, delete |
-| Custom extensions | `custom` | `home` | a plugin widget, plugin actions, the voice recorder, the video player and the Google map (see "Plugins" below) |
+| Custom extensions | `custom` | `home` | a plugin widget, plugin actions, the voice recorder, the video player, the Google map and push notifications (see "Plugins" below) |
 | Saved state | `saved-state` | `home` | a count saved on the device or for the session (see "Saved state" below) |
 
 ```bash
@@ -133,7 +133,7 @@ the login page while logged out (`wasRedirected=true`).
 
 ## Plugins
 
-The app registers five plugins. Two are the Swift twins of the Flutter example's: `BadgePlugin`
+The app registers six plugins. Two are the Swift twins of the Flutter example's: `BadgePlugin`
 draws the server's `ColoredBadge` widget in SwiftUI, and `DeviceActionsPlugin` runs the custom
 actions `hapticFeedback`, `showConfetti`, `rateApp` and `processPayment`. Both are in
 `OrcaCounter/OrcaCounterApp.swift`. The third, `VoiceRecorderPlugin`, is the voice recorder package
@@ -144,8 +144,11 @@ SDK is, so a change to it shows up on the next build; see "Voice recorder" below
 SwiftPM names a local package after its directory and the voice recorder's is also `ios`; see
 "Video player" below. The fifth, `GoogleMapPlugin`, is the Google map package
 (`plugins/orca_google_map/ios`, product `OrcaGoogleMap`), drawn with Apple's MapKit and linked as
-the video player is, through the symlink `./OrcaGoogleMap`; see "Google map" below. All five are
-passed as `OrcaApp(..., plugins: [...])`. To see them, start the server (step 1 above) and launch
+the video player is, through the symlink `./OrcaGoogleMap`; see "Google map" below. The sixth,
+`PushNotificationPlugin`, is the push notification package (`plugins/orca_push_notification/ios`,
+product `OrcaPushNotification`), on Firebase Messaging, linked through the symlink
+`./OrcaPushNotification`; see "Push notifications" below. All six are passed as
+`OrcaApp(..., plugins: [...])`. To see them, start the server (step 1 above) and launch
 the `custom` app:
 
 ```bash
@@ -260,6 +263,97 @@ iOS gives an app location only when its Info.plist has `NSLocationWhenInUseUsage
 demo's carries the plugin's sentence. An app of your own that sets `myLocationEnabled` needs the
 key and asks for location itself (`CLLocationManager`'s `requestWhenInUseAuthorization`), since the
 plugin never asks.
+
+### Push notifications
+
+`PushNotificationPlugin` gets the FCM token and topics from Firebase Messaging (firebase-ios-sdk,
+from 12.17.0, so the newest 12.x when the packages resolve). The app calls Firebase itself to
+configure it (`import FirebaseCore`), so the project also links the FirebaseCore product of
+firebase-ios-sdk, the same package with the same requirement: one Firebase in the app.
+
+The app keeps one plugin, `OrcaCounterApp.push`: OrcaApp registers it, and the app delegate
+(`AppDelegate` in `OrcaCounterApp.swift`, through `@UIApplicationDelegateAdaptor`) uses the same
+one. At launch the delegate calls `FirebaseApp.configure()` when the app carries a
+`GoogleService-Info.plist` (without one that call raises, so it is skipped), then
+`push.initialize(onNotificationTap:)`: the plugin becomes the notification center's delegate,
+registers for remote notifications and asks for alert, badge and sound permission at once, as the
+Flutter plugin does. The delegate then hands the plugin the APNs token, or why there is none, and
+logs a line for each:
+
+```bash
+xcrun simctl spawn <device id> log stream --predicate 'eventMessage CONTAINS "OrcaCounter"'
+```
+
+```
+OrcaCounter push: APNs token registered (80 bytes)
+```
+
+`Info.plist` sets `FirebaseAppDelegateProxyEnabled` to NO, so Firebase swizzles nothing and gets
+the APNs token only from the plugin. `OrcaCounter.entitlements` holds `aps-environment`
+`development` (`CODE_SIGN_ENTITLEMENTS` in both configurations). A simulator build needs no team:
+it is signed to run locally and still carries the entitlement. On the iOS 18.5 simulator on an
+Apple silicon Mac the app registers with an 80-byte token, the line above; built without the
+entitlement, it logs
+`OrcaCounter push: APNs registration failed: no valid “aps-environment” entitlement string found for application`.
+A device build needs your team: in Xcode, the OrcaCounter target › Signing & Capabilities › Team.
+The entitlement is the Push Notifications capability, which automatic signing adds to the app's
+identifier; Xcode's free Personal Team does not support it.
+
+A tap on one of the plugin's notifications calls `openNotification` with its payload. A payload
+that is an `orcacounter://` link is opened with `UIApplication.shared.open`, which hands it back to
+this app: OrcaApp's own `.onOpenURL` receives it as it receives a link from the system (see
+[Deep links](#deep-links)), goes to its path and logs the `OrcaCounter deeplink:` line. Any other
+payload, and the "" of a notification shown without one, opens nothing, and never another app.
+
+Without Firebase, as the app comes, this works:
+
+- **The permission.** iOS asks whether "Orca Counter" may send you notifications as the app first
+  starts, over whatever page it opens: `initialize` asks. **Request permission** asks again, which
+  iOS answers at once from your first answer, and the line reads "Permission: granted" or
+  "Permission: denied".
+- **Show notification.** A banner "Orca push" with "Tap to open the map", shown while the app is
+  in front too. Its payload is `orcacounter://open/map`, so a tap opens `/map`.
+
+This needs your Firebase project and your APNs key: **Get token** ("Token:" shows the FCM
+registration token), **Subscribe to news** and **Unsubscribe from news** (the topic `news`).
+Without Firebase, when the APNs token comes in at launch, Firebase logs `[FirebaseCore][I-COR000003]
+The default Firebase app has not yet been configured.` and the app runs on. The three buttons then
+change nothing on the page ("Token:" stays empty), and each fails with the plugin's message, which
+DevTools (see "DevTools" below) shows as an error: `Firebase is not configured: the app calls
+FirebaseApp.configure() at launch, with its GoogleService-Info.plist, before the push token or
+topics are used`. A granted Request permission asks Firebase for the token too: the status is
+written first, then that part fails the same way.
+
+To use your project, add an Apple app with the bundle ID `com.orcagateway.examples.counter` to it,
+download its `GoogleService-Info.plist` (Firebase's
+[Add Firebase to your Apple project](https://firebase.google.com/docs/ios/setup) shows where), and
+put it at `examples/app-ios/OrcaCounter/GoogleService-Info.plist`; then build and run again. The
+`OrcaCounter` folder is synchronized with the project, so Xcode bundles the file with no project
+change. The file is git-ignored, so it is never committed. FCM reaches iOS through APNs, so upload
+your APNs authentication key to the project too (Project settings › Cloud Messaging; see
+[Firebase Cloud Messaging on Apple platforms](https://firebase.google.com/docs/cloud-messaging/ios/client)),
+and run on a device with your team as above.
+
+On the `custom` home page, tap "Go to Push Page" (or launch straight to it: add
+`SIMCTL_CHILD_ORCA_PATH=push` to the command under "Plugins" above). The "Push Notifications" page
+shows the buttons Request permission, Get token, Show notification, Subscribe to news and
+Unsubscribe from news, and the lines "Permission:" and "Token:" under them.
+
+On the iOS 18.5 simulator, without Firebase, the walk goes like this:
+
+1. On the first launch, iOS asks whether "Orca Counter" may send you notifications: tap Allow.
+2. **Request permission.** No dialog this time; the line reads "Permission: granted", then DevTools
+   shows the "Firebase is not configured" error for the token part.
+3. **Show notification.** The banner "Orca push" with "Tap to open the map" drops in at the top,
+   though the app is in front.
+4. **Tap the banner.** The app opens the "Map Integration" page, and the log above shows
+   `OrcaCounter deeplink: incoming=orcacounter://open/map resolvedLocation=/map wasRedirected=false isColdStart=false`.
+5. Go back and tap **Get token**: nothing changes on the page, and DevTools shows the "Firebase is
+   not configured" error above.
+
+After "Don't Allow", the line reads "Permission: denied" and the banner does not show. To allow it
+later, turn on Allow Notifications in the simulator's Settings › Notifications › Orca Counter. This
+part follows the plugin's code.
 
 ## Version check and sessions
 

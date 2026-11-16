@@ -51,6 +51,7 @@ PACKAGES=(
   "orca_voice_recorder-ios-v|plugins/orca_voice_recorder/ios|orca-gateway/orca-voice-recorder-swift|ORCA_VOICE_RECORDER_SWIFT_DEPLOY_KEY|OrcaVoiceRecorder"
   "orca_video_player-ios-v|plugins/orca_video_player/ios|orca-gateway/orca-video-player-swift|ORCA_VIDEO_PLAYER_SWIFT_DEPLOY_KEY|OrcaVideoPlayer"
   "orca_google_map-ios-v|plugins/orca_google_map/ios|orca-gateway/orca-google-map-swift|ORCA_GOOGLE_MAP_SWIFT_DEPLOY_KEY|OrcaGoogleMap"
+  "orca_push_notification-ios-v|plugins/orca_push_notification/ios|orca-gateway/orca-push-notification-swift|ORCA_PUSH_NOTIFICATION_SWIFT_DEPLOY_KEY|OrcaPushNotification"
 )
 TAG_PREFIX="" PREFIX="" MIRROR="" SECRET="" LIBRARY=""
 
@@ -221,7 +222,8 @@ SWIFT
 
 # A plugin's check: a scratch library that imports it, built for macOS (run)
 # or the iOS simulator (ios). The plugin has no version to print, and needs
-# Apple-only frameworks (AVFoundation, MapKit), so it has no Linux run.
+# Apple-only frameworks (SwiftUI, through OrcaPlugin; AVFoundation, MapKit,
+# UserNotifications), so it has no Linux run.
 verify_plugin() {
   local url=$1 version=$2 mode=$3 identity=$4
   WORK=$(mktemp -d)

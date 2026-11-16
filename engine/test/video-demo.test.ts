@@ -105,6 +105,6 @@ describe("video demo", () => {
       .filter((a) => a?.type === "navigate")
       .map((a) => a!.path as string);
     // The flat node list is not in screen order.
-    expect(targets.sort()).toEqual(["/map", "/video", "/voice"]);
+    expect(targets.sort()).toEqual(["/map", "/push", "/video", "/voice"]);
   });
 });

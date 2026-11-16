@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merged into the host app. POST_NOTIFICATIONS: the local notifications,
+     asked for at run time from API 33 by requestNotificationPermission
+     (firebase-messaging merges it too). The service shows a message with a
+     notification that arrives while the app is in the foreground; its
+     MESSAGING_EVENT filter outranks the one on Firebase's own service
+     (priority -500), so FCM starts this one. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application>
+        <service
+            android:name="com.orcagateway.plugins.pushnotification.PushMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

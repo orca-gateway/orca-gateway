@@ -1,5 +1,7 @@
+import FirebaseCore
 import OrcaGateway
 import OrcaGoogleMap
+import OrcaPushNotification
 import OrcaVideoPlayer
 import OrcaVoiceRecorder
 import SwiftUI
@@ -38,9 +40,15 @@ import UIKit
 /// ORCA_APP_ID=custom shows the two plugins below at work, the voice
 /// recorder (`VoiceRecorderPlugin`, from plugins/orca_voice_recorder/ios) behind
 /// its home page's "Go to Voice Page", the video player (`VideoPlayerPlugin`,
-/// from plugins/orca_video_player/ios) behind its "Go to Video Page", and the
+/// from plugins/orca_video_player/ios) behind its "Go to Video Page", the
 /// Google map (`GoogleMapPlugin`, from plugins/orca_google_map/ios, drawn with
-/// MapKit) behind its "Go to Map Page".
+/// MapKit) behind its "Go to Map Page", and push notifications
+/// (`PushNotificationPlugin`, from plugins/orca_push_notification/ios) behind
+/// its "Go to Push Page": a tap on the plugin's notification opens its
+/// `orcacounter://` payload as a deep link (`openNotification`). The app
+/// delegate (`AppDelegate` below) configures Firebase when the app carries a
+/// GoogleService-Info.plist, initializes the plugin and hands it the APNs
+/// token.
 ///
 /// Five more switches try the screens OrcaApp draws around the pages; unset,
 /// each leaves the app as it was. ORCA_API_KEY (default `demo-key`): any other
@@ -53,6 +61,13 @@ import UIKit
 /// SDK's 30.
 @main
 struct OrcaCounterApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    /// The push plugin, one for the app: OrcaApp registers it, and the app
+    /// delegate initializes it and hands it the APNs token, so all three must
+    /// reach the same instance (`app` makes a new OrcaApp each time it runs).
+    static let push = PushNotificationPlugin()
+
     init() {
         #if DEBUG
         // Debug builds show up in Orca DevTools (`t devtools:dev`, port 6363).
@@ -93,7 +108,7 @@ struct OrcaCounterApp: App {
             enableSessionTracking: isOn("ORCA_SESSIONS"),
             onDeeplink: logDeeplink,
             plugins: [BadgePlugin(), DeviceActionsPlugin(), VoiceRecorderPlugin(), VideoPlayerPlugin(),
-                      GoogleMapPlugin()],
+                      GoogleMapPlugin(), push],
             splashView: isOn("ORCA_SPLASH") ? { AnyView(HostSplash()) } : nil,
             colorScheme: colorScheme, locale: locale)
     }
@@ -141,6 +156,18 @@ struct OrcaCounterApp: App {
         NSLog("%@", line)
     }
 
+    /// A tap on a notification the push plugin showed: a payload that is an
+    /// `orcacounter://` link (the Push Page's is `orcacounter://open/map`) is
+    /// opened as the app's own link, so OrcaApp's `.onOpenURL` takes it down
+    /// the deep-link path an OS link takes and `logDeeplink` prints its line.
+    /// Any other payload, and the "" of a notification shown without one,
+    /// opens nothing.
+    @MainActor
+    static func openNotification(_ payload: String?) {
+        guard let payload, let url = URL(string: payload), url.scheme == "orcacounter" else { return }
+        UIApplication.shared.open(url)
+    }
+
     static func setting(_ key: String, _ fallback: String) -> String {
         let value = ProcessInfo.processInfo.environment[key] ?? ""
         return value.isEmpty ? fallback : value
@@ -149,6 +176,41 @@ struct OrcaCounterApp: App {
     /// A switch: on when the setting is "1" or "true".
     static func isOn(_ key: String) -> Bool {
         ["1", "true"].contains(setting(key, ""))
+    }
+}
+
+// MARK: - App delegate
+
+/// What only an app delegate hears, for the push plugin. At launch: Firebase
+/// is configured when the app carries GoogleService-Info.plist (put yours in
+/// OrcaCounter/; `FirebaseApp.configure()` raises without one, so without it
+/// the token and topic actions fail and local notifications work), then the
+/// plugin is initialized, before launch ends, as the notification center asks
+/// of its delegate. Then the APNs registration, handed to the plugin:
+/// Info.plist sets FirebaseAppDelegateProxyEnabled to NO, as the plugin's
+/// yaml asks, so Firebase takes nothing from this delegate itself. Each registration prints
+/// an `OrcaCounter push:` line to the system log.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil)
+        -> Bool {
+        if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+            FirebaseApp.configure()
+        }
+        OrcaCounterApp.push.initialize(onNotificationTap: OrcaCounterApp.openNotification)
+        return true
+    }
+
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NSLog("%@", "OrcaCounter push: APNs token registered (\(deviceToken.count) bytes)")
+        OrcaCounterApp.push.didRegisterForRemoteNotifications(withDeviceToken: deviceToken)
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NSLog("%@", "OrcaCounter push: APNs registration failed: \(error.localizedDescription)")
+        OrcaCounterApp.push.didFailToRegisterForRemoteNotifications(withError: error)
     }
 }
 

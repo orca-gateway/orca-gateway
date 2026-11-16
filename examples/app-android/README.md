@@ -6,9 +6,10 @@ same Bun server as the Flutter and iOS examples. The SDK's alpha is on Maven Cen
 `../../sdk-kotlin` (`includeBuild` in `settings.gradle.kts`), so it builds the SDK from source and an
 SDK change shows up on the next build. Your own app installs the published artifact instead; see
 "Install" in [`sdk-kotlin/README.md`](../../sdk-kotlin/README.md#install). The voice recorder,
-video player and Google map plugins come from source the same way: the build also includes
-`../../plugins/orca_voice_recorder/android`, `../../plugins/orca_video_player/android` and
-`../../plugins/orca_google_map/android` (see [Plugins](#plugins)).
+video player, Google map and push notification plugins come from source the same way: the build also
+includes `../../plugins/orca_voice_recorder/android`, `../../plugins/orca_video_player/android`,
+`../../plugins/orca_google_map/android` and `../../plugins/orca_push_notification/android` (see
+[Plugins](#plugins)).
 
 ## Run it
 
@@ -156,7 +157,7 @@ the login page while logged out (`wasRedirected=true`).
 
 ## Plugins
 
-The app registers five plugins. Two are its own ([`DemoPlugins.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/DemoPlugins.kt)),
+The app registers six plugins. Two are its own ([`DemoPlugins.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/DemoPlugins.kt)),
 as the Flutter example has them: `BadgePlugin` draws the `ColoredBadge` widget of the example server's
 `custom` app, and `DeviceActionsPlugin` runs its actions `hapticFeedback`, `showConfetti`, `rateApp`
 and `processPayment`. The third is the voice recorder package's `VoiceRecorderPlugin`
@@ -168,7 +169,11 @@ which plays the `VideoPlayer` of the app's Video Page and runs its playback acti
 [The video player](#the-video-player) below). The fifth is the Google map package's `GoogleMapPlugin`
 ([`plugins/orca_google_map/android`](../../plugins/orca_google_map/android)), which draws the
 `GoogleMap` of the app's Map Page and runs its `moveCamera` action (see [The Google map](#the-google-map)
-below). Start the server (step 1 above), then the app on `custom`:
+below). The sixth is the push notification package's `PushNotificationPlugin`
+([`plugins/orca_push_notification/android`](../../plugins/orca_push_notification/android)), which runs
+the buttons of the app's Push Page, and whose notification opens the Map Page when tapped (see
+[Push notifications](#push-notifications) below). Start the server (step 1 above), then the app on
+`custom`:
 
 ```bash
 task example:android:run APP=custom PAGE=home
@@ -321,6 +326,66 @@ With a key, the steps below were seen on the same API 34 image:
 
 One difference from the Flutter plugin does not show on this page: a prop of the wrong type takes its
 default, where Flutter fails the map's build.
+
+### Push notifications
+
+`settings.gradle.kts` includes `../../plugins/orca_push_notification/android` as well, so the build
+substitutes `com.orcagateway:orca-push-notification` from source on the same `sdk-kotlin` build, under
+its root project's name, `orca-push-notification-android`, as the video player's and the map's do.
+`MainActivity` makes one `PushNotificationPlugin(applicationContext)` for the process, adds it to its
+plugins, and calls its `initialize(this) { payload -> ... }` in every `onCreate` (a rotation makes a
+new activity, and the plugin asks for the permission and hears taps on the last one). The permission
+`POST_NOTIFICATIONS` and the plugin's Firebase messaging service come from the library's manifest
+through the manifest merger.
+
+A tap on the plugin's notification brings the running activity back with the notification's payload,
+and `MainActivity` hands that payload to itself as the new Intent an `orcacounter://` link is (see
+[Deep links](#deep-links)): `OrcaApp` takes it down its own deep-link path, so the tap lands where the
+same link from `adb shell am start` would, and the `deeplink:` line is logged. A notification shown
+without a payload opens nothing. A tap after the app has gone (its process stopped) starts it afresh,
+without the link and without the extras it was started with (so on the `counter` app): the plugin
+reads no launch Intent, and the Flutter plugin reaches nothing then either.
+
+Without Firebase, as the app comes, this works:
+
+- **Request permission.** On API 33 and later Android asks whether Orca Counter may send you
+  notifications; below 33 nothing is asked and the app's notification setting decides. The answer
+  shows as "Permission: granted" or "Permission: denied".
+- **Show notification.** "Orca push", "Tap to open the map", on the channel "Notifications". Its
+  payload is `orcacounter://open/map`, so a tap opens `/map`.
+
+This needs your Firebase project: **Get token** ("Token:" shows the FCM registration token),
+**Subscribe to news** and **Unsubscribe from news** (the topic `news`). Without it, at launch Firebase
+logs `FirebaseApp initialization unsuccessful` (`adb logcat -s FirebaseInitProvider`) and the app runs
+on; these three buttons then change nothing on the page ("Token:" stays empty), and each sends
+DevTools an error event, `java.lang.IllegalStateException: Default FirebaseApp is not initialized in
+this process com.orcagateway.examples.counter. Make sure to call FirebaseApp.initializeApp(Context)
+first.` (seen for Get token and Subscribe to news). A granted Request permission asks Firebase for the
+token too: the status is written first, then that part fails the same way.
+
+To use your project, add an Android app with the package `com.orcagateway.examples.counter` to it,
+download its `google-services.json` (Firebase's
+[Add Firebase to your Android project](https://firebase.google.com/docs/android/setup) shows where),
+and put it at `examples/app-android/app/google-services.json`; then build and install again.
+`app/build.gradle.kts` applies Google's google-services Gradle plugin only when that file is there; the
+plugin turns it into the string resources Firebase starts from (`google_app_id`,
+`gcm_defaultSenderId`, `google_api_key`, `project_id` and the like). The file is git-ignored, so it is
+never committed.
+
+On the `custom` home page, tap "Go to Push Page" (or start the app on it directly:
+`adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --es ORCA_APP_ID custom --es ORCA_PATH push`).
+The "Push Notifications" page shows the buttons Request permission, Get token, Show notification,
+Subscribe to news and Unsubscribe from news, and the lines "Permission:" and "Token:" under them.
+
+On the API 34 Google Play emulator, without Firebase, the walk goes like this:
+
+1. **Request permission.** On the API 34 emulator Android asks whether to allow Orca Counter to send
+   you notifications: allow it. The line reads "Permission: granted".
+2. **Show notification.** "Orca push" with "Tap to open the map" drops in at the top of the screen
+   (the channel's importance is high), then stays in the notification shade: pull the shade down.
+3. **Tap "Orca push".** The shade closes, the notification is gone from it, and the app opens the
+   "Map Integration" page; `adb logcat -s OrcaCounter` shows
+   `deeplink: incoming=orcacounter://open/map resolvedLocation=/map wasRedirected=false isColdStart=false`.
 
 ## Offline, force update and sessions
 

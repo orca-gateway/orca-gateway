@@ -37,6 +37,13 @@ import {
   SetVolume,
   SetPlaybackSpeed,
 } from "./orca_video_player";
+import {
+  RequestNotificationPermission,
+  GetNotificationToken,
+  ShowLocalNotification,
+  SubscribeToTopic,
+  UnsubscribeFromTopic,
+} from "./orca_push_notification";
 
 // ── Custom Widget: ColoredBadge ─────────────────────────
 // Defined server-side, rendered by a custom builder on the Flutter side.
@@ -129,6 +136,19 @@ const homePage = PageDefinition.create({
                 }),
                 actions: {
                   onTap: Custom("navigate", { path: "/video" }),
+                },
+              }),
+              TextButton.new({
+                child: Row.new({
+                  mainAxisSize: "min",
+                  children: [
+                    Icon.new({ name: "notifications", size: 20 }),
+                    SizedBox.new({ width: 8 }),
+                    Text.new({ data: "Go to Push Page" }),
+                  ],
+                }),
+                actions: {
+                  onTap: Custom("navigate", { path: "/push" }),
                 },
               }),
               // ── Section 1: Custom Actions ──────────────
@@ -613,6 +633,74 @@ const videoPage = PageDefinition.create({
     }),
 });
 
+// ── Push Page ────────────────────────────────────────────
+// The push notification plugin through the builders `orca plugin generate`
+// writes from plugins/orca_push_notification/orca_plugin.yaml
+// (./orca_push_notification). Request permission and Get token write the
+// status and the token into app state; Show notification's payload is a deep
+// link the demo apps hand to their router on a tap (both native routers drop
+// the scheme and the host, so it opens /map). The column fits a phone without
+// scrolling, as the voice and video pages do.
+
+const PUSH_TOPIC = "news";
+
+const pushPage = PageDefinition.create({
+  id: "push",
+  title: "Push Notifications",
+  state: [
+    { key: "pushStatus", scope: "app", initial: "" },
+    { key: "pushToken", scope: "app", initial: "" },
+  ],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({
+        title: Text.new({ data: "Push Notifications" }),
+        centerTitle: true,
+      }),
+      body: Padding.new({
+        padding: EdgeInsets.all(16),
+        child: Column.new({
+          crossAxisAlignment: "center",
+          children: [
+            ElevatedButton.new({
+              child: Text.new({ data: "Request permission" }),
+              actions: { onTap: RequestNotificationPermission("pushStatus", "pushToken", "app") },
+            }).withKey("request-permission"),
+            SizedBox.new({ height: 8 }),
+            ElevatedButton.new({
+              child: Text.new({ data: "Get token" }),
+              actions: { onTap: GetNotificationToken("pushToken", "app") },
+            }).withKey("get-token"),
+            SizedBox.new({ height: 8 }),
+            ElevatedButton.new({
+              child: Text.new({ data: "Show notification" }),
+              actions: {
+                onTap: ShowLocalNotification("Orca push", "Tap to open the map", "orcacounter://open/map"),
+              },
+            }).withKey("show-notification"),
+            SizedBox.new({ height: 8 }),
+            ElevatedButton.new({
+              child: Text.new({ data: "Subscribe to news" }),
+              actions: { onTap: SubscribeToTopic(PUSH_TOPIC) },
+            }).withKey("subscribe"),
+            SizedBox.new({ height: 8 }),
+            ElevatedButton.new({
+              child: Text.new({ data: "Unsubscribe from news" }),
+              actions: { onTap: UnsubscribeFromTopic(PUSH_TOPIC) },
+            }).withKey("unsubscribe"),
+            SizedBox.new({ height: 16 }),
+            Text.new({
+              data: V.transform(V.appState("pushStatus"), [TV.template("Permission: {{value}}")]),
+            }).withKey("push-status"),
+            Text.new({
+              data: V.transform(V.appState("pushToken"), [TV.template("Token: {{value}}")]),
+            }).withKey("push-token"),
+          ],
+        }),
+      }),
+    }),
+});
+
 // ── App ──────────────────────────────────────────────────
 
 const customFlow = Flow.create({
@@ -622,6 +710,7 @@ const customFlow = Flow.create({
     { path: "map", page: mapPage },
     { path: "voice", page: voicePage },
     { path: "video", page: videoPage },
+    { path: "push", page: pushPage },
   ],
 });
 

@@ -25,3 +25,37 @@ setup_steps:
   - "For Android: Add the Google Services Gradle plugin — see https://firebase.google.com/docs/android/setup"
   - "For iOS: Enable Push Notifications capability in Xcode"
   - "Call PushNotificationPlugin.initialize() in your main() before runApp()"
+
+# What the Flutter plugin implements (lib/src/push_notification_plugin.dart), for
+# `orca plugin generate` (TypeScript, Swift, Kotlin).
+# cli/test/push_notification_schema_test.dart pins it against that source.
+# The CLI reads the names, `type`, `required` and `enum`; `default` and
+# `description` are notes for the native ports. The plugin has no widget, and so
+# no trigger: actions only.
+schema:
+  actions:
+    requestNotificationPermission:
+      description: "Asks the OS for notification permission, then writes granted or denied to statusKey and, when granted, the FCM token to tokenKey (no token writes nothing), both in scope."
+      params:
+        statusKey: { type: string, description: "The state key that gets granted or denied; absent, no status is written. Read raw, not resolved as a value: a non-string fails the action." }
+        tokenKey: { type: string, description: "The state key that gets the FCM token once permission is granted; absent, no token is fetched. Read raw, not resolved as a value: a non-string fails the action." }
+        scope: { type: string, enum: [page, app], default: app, description: "The scope of both writes: app, or page for any other string (setState's). Read raw, not resolved as a value: a non-string fails the action." }
+    getNotificationToken:
+      description: "Writes the FCM token to tokenKey in scope, null when there is none."
+      params:
+        tokenKey: { type: string, default: fcmToken, description: "The state key that gets the token. Read raw, not resolved as a value: a non-string fails the action." }
+        scope: { type: string, enum: [page, app], default: app, description: "The scope of the write: app, or page for any other string (setState's). Read raw, not resolved as a value: a non-string fails the action." }
+    showLocalNotification:
+      description: "Shows a local notification with title and body on the channel orca_default_channel; a tap on it hands payload to the onNotificationTap the host gave initialize. Writes no state."
+      params:
+        title: { type: string, default: "", description: "The notification's title, resolved as a value; a non-string is used as its text." }
+        body: { type: string, default: "", description: "The notification's text, resolved as a value; a non-string is used as its text." }
+        payload: { type: string, description: "What a tap hands to onNotificationTap, resolved as a value; a non-string is used as its text. Absent, the tap hands \"\" (an empty string)." }
+    subscribeToTopic:
+      description: "Subscribes the app to the FCM topic. Writes no state."
+      params:
+        topic: { type: string, required: true, description: "The FCM topic, resolved as a value; a non-string is used as its text, and empty does nothing." }
+    unsubscribeFromTopic:
+      description: "Unsubscribes the app from the FCM topic. Writes no state."
+      params:
+        topic: { type: string, required: true, description: "The FCM topic, resolved as a value; a non-string is used as its text, and empty does nothing." }
