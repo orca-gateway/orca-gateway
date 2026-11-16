@@ -622,10 +622,10 @@ final class SliverTests: XCTestCase {
         ], width: 300, height: 100)
         defer { across.close() }
         let row = try across.pixels()
-        let box = try XCTUnwrap(row.bounds(of: Self.magenta), "the bar is not drawn")
-        XCTAssertEqual(box.minX, 0, accuracy: Self.accuracy)
-        XCTAssertEqual(box.height, 80, accuracy: Self.accuracy)
-        XCTAssertEqual(try XCTUnwrap(row.bounds(of: Self.green)).minX, box.maxX, accuracy: Self.accuracy)
+        let drawn = try XCTUnwrap(row.bounds(of: Self.magenta), "the bar is not drawn")
+        XCTAssertEqual(drawn.minX, 0, accuracy: Self.accuracy)
+        XCTAssertEqual(drawn.height, 80, accuracy: Self.accuracy)
+        XCTAssertEqual(try XCTUnwrap(row.bounds(of: Self.green)).minX, drawn.maxX, accuracy: Self.accuracy)
     }
 
     // MARK: C-fix (hosted)
