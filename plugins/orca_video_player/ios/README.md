@@ -95,16 +95,16 @@ instead.
 
 ## Sound
 
-On iOS the plugin leaves the shared `AVAudioSession` as the app sets it. Under iOS's default
-category the Ring/Silent switch on Silent mutes the video. Flutter's `video_player` sets the
-category to `.playback` when it initializes, so its videos play sound on Silent; for the same
-here, set it once before the first video plays, for example in your `App`'s `init`:
+On iOS the plugin sets the shared `AVAudioSession`'s category to `.playback`, as Flutter's
+`video_player` does when it initializes, so a video is heard with the Ring/Silent switch on
+Silent. It does this once, when its first `VideoPlayer` comes on screen: a `.record` or
+`.playAndRecord` session becomes `.playAndRecord`, so recording goes on, the category's options
+are kept, and a session already `.playback` is left as it is. If iOS refuses the category, the
+failure is logged and the video plays on. macOS has no audio session.
 
-```swift
-import AVFoundation
-
-try? AVAudioSession.sharedInstance().setCategory(.playback)
-```
+An app that wants another category for its videos (`.ambient`, say, so the Silent switch mutes
+them) sets it after that: the plugin does not set it again, and a category set before is upgraded
+as above.
 
 ## The widget
 
