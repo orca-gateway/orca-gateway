@@ -123,6 +123,7 @@ struct WidgetView: View {
         case "PullToRefresh": PullToRefreshView(node: node, model: model)
         case "Card": CardView(node: node, model: model)
         case "Text": TextNodeView(node: node)
+        case "RichText": RichTextView(node: node)
         case "Divider": DividerView(node: node)
         case "ElevatedButton", "OutlinedButton", "TextButton": ButtonNodeView(node: node, model: model)
         case "IconButton": IconButtonNodeView(node: node, model: model)
