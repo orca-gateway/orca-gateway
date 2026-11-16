@@ -65,7 +65,8 @@ public class SharedPreferencesKeyValueStore(context: Context, name: String = "or
  *             OrcaApp(client, preloadedConfig = result.config, staticFlowManager = manager)
  *     }
  *
- * Swift twin: the store in Application Support/OrcaGateway.
+ * Swift twin: `FileKeyValueStore.applicationSupport()`, the store in
+ * Application Support/<bundle id>/OrcaGateway.
  */
 public fun offlineStore(context: Context): FileKeyValueStore = FileKeyValueStore(File(context.filesDir, "orca_gateway"))
 
