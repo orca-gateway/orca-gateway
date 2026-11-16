@@ -37,6 +37,8 @@
     "actionGroup",
     "addComponent",
     "always",
+    "animateForward",
+    "animateReverse",
     "conditionalAction",
     "copyToClipboard",
     "debugLog",

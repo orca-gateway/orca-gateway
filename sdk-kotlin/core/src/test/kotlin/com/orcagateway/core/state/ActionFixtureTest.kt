@@ -87,9 +87,9 @@ class ActionFixtureTest {
     private suspend fun runFixture(file: String) = runFixture(file, Fixtures.json("schema/fixtures/actions/$file"))
 
     @Test
-    fun allTwentyFourActionFixturesPass() = runSuspend {
+    fun allTwentySixActionFixturesPass() = runSuspend {
         val files = Fixtures.files("actions")
-        assertEquals(24, files.size)
+        assertEquals(26, files.size)
         for ((name, fx) in files) runFixture(name, fx)
     }
 
@@ -168,14 +168,14 @@ class ActionFixtureTest {
     fun implementsLooksInsideOnceAndAlways() {
         assertTrue(ActionExecutor.implements(Action.Once(Action.GoBack)))
         assertTrue(ActionExecutor.implements(Action.Always(Action.DebugLog())))
-        assertFalse(ActionExecutor.implements(Action.Once(Action.AnimateForward("fade"))))
-        assertFalse(ActionExecutor.implements(Action.Always(Action.ActionGroup(actions = listOf(Action.AnimateForward("fade"))))))
+        assertFalse(ActionExecutor.implements(Action.Once(Action.RefetchPage)))
+        assertFalse(ActionExecutor.implements(Action.Always(Action.ActionGroup(actions = listOf(Action.RefetchPage)))))
     }
 
     @Test
     fun unimplementedKindsChangeNothing() = runSuspend {
         val state = StoreState(page = props("count" to 1))
-        val (next, effects) = ActionReducer().reduce(state, Action.AnimateForward("fade"))
+        val (next, effects) = ActionReducer().reduce(state, Action.RefetchPage)
         assertEquals(state, next)
         assertEquals(emptyList(), effects)
 
@@ -183,14 +183,49 @@ class ActionFixtureTest {
         val executor = ActionExecutor(store)
         val seen = ArrayList<ActionEffect>()
         executor.onEffect = { seen.add(it) }
-        executor.execute(Action.AnimateForward("fade"))
+        executor.execute(Action.RefetchPage)
         executor.execute(Action.CloseDialog)
         assertEquals(state, store.state)
         assertEquals(emptyList(), seen)
-        assertFalse(ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.AnimateForward("fade")))))
+        assertFalse(ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.RefetchPage))))
         assertTrue(
             ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.SetState("a", value = j(1))))),
         )
+    }
+
+    /** B12.1-K: both kinds emit the animation id, in their place in a sequential group; state stays. */
+    @Test
+    fun b12_1_K_animateForwardAndReverseEmitTheAnimationId() = runSuspend { runFixture("32_animate_forward_reverse.json") }
+
+    /** B12.1-K: an id no builder registered still goes out, and the group runs on. */
+    @Test
+    fun b12_1_K_anUnknownAnimationIdStillEmitsAndTheGroupGoesOn() = runSuspend { runFixture("33_animate_unknown_id.json") }
+
+    /** B12.1-K: one effect each, reported then performed; an empty id emits nothing (Dart returns on a missing id). */
+    @Test
+    fun b12_1_K_animateEffectsArePerformedAndAnEmptyIdEmitsNothing() = runSuspend {
+        val state = StoreState(page = props("count" to 1))
+        val store = ElmStore(state)
+        val executor = ActionExecutor(store)
+        val seen = ArrayList<ActionEffect>()
+        val performed = ArrayList<ActionEffect>()
+        executor.onEffect = { seen.add(it) }
+        executor.perform = { performed.add(it) }
+        executor.execute(Action.AnimateForward("pulse"))
+        executor.execute(Action.AnimateReverse("pulse"))
+        executor.execute(Action.ActionGroup(actions = listOf(Action.AnimateForward(""), Action.AnimateReverse(""), Action.GoBack)))
+        assertEquals(
+            listOf(
+                ActionEffect("animateForward", props("animationId" to "pulse")),
+                ActionEffect("animateReverse", props("animationId" to "pulse")),
+                ActionEffect("goBack"),
+            ),
+            seen,
+        )
+        assertEquals(seen, performed)
+        assertEquals(state, store.state)
+        assertTrue(ActionExecutor.implements(Action.AnimateForward("pulse")))
+        assertTrue(ActionExecutor.implements(Action.AnimateReverse("pulse")))
     }
 
     /** B10.3-A, Kotlin leg: `switchTab` is one effect carrying the tab id; state stays. */
