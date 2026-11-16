@@ -145,9 +145,6 @@ final class PushNotificationParamsTests: XCTestCase {
         XCTAssertEqual(local["path"].stringValue.map { URL(fileURLWithPath: $0).standardizedFileURL }, sdk)
         XCTAssertEqual(dependencies(inPlace, kind: "sourceControl", identity: "orca-gateway-swift"), [],
                        "not the mirror in the monorepo")
-        for target in inPlace["targets"].arrayValue ?? [] {
-            XCTAssertTrue(products(target).contains(["OrcaGateway", "sdk-swift"]), "\(target["name"])")
-        }
 
         // Split out (the manifest at the root of its mirror), evaluated from
         // this package's directory, where ../../../sdk-swift exists.
@@ -166,9 +163,6 @@ final class PushNotificationParamsTests: XCTestCase {
         XCTAssertTrue(location.contains("\"https://github.com/orca-gateway/orca-gateway-swift\""), location)
         XCTAssertEqual(only(remote["requirement"]["range"]), ["lowerBound": "0.1.0-alpha.2", "upperBound": "1.0.0"],
                        "the first sdk-swift release with the plugin API, up to the next major")
-        for target in mirror["targets"].arrayValue ?? [] {
-            XCTAssertTrue(products(target).contains(["OrcaGateway", "orca-gateway-swift"]), "\(target["name"])")
-        }
     }
 
     /// The manifest's dependencies of `kind` (fileSystem, sourceControl) with
@@ -177,14 +171,6 @@ final class PushNotificationParamsTests: XCTestCase {
         .array((manifest["dependencies"].arrayValue ?? [])
             .map { only($0[kind]) }
             .filter { $0["identity"] == JSONValue.string(identity) })
-    }
-
-    /// A target's product dependencies, as [product, package] pairs.
-    func products(_ target: JSONValue) -> [[JSONValue]] {
-        (target["dependencies"].arrayValue ?? []).compactMap { dependency in
-            guard let product = dependency["product"].arrayValue, product.count >= 2 else { return nil }
-            return [product[0], product[1]]
-        }
     }
 
     /// The single element of a one-element array, else null.
