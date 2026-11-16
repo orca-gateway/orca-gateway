@@ -358,8 +358,9 @@ public class OrcaClient private constructor(
         } else {
             HttpRequest("GET", url, base)
         }
-        // DevTools shows a page fetch's app state, not its wire body (Dart).
-        val sentState: () -> JsonValue? = { appState?.let { JsonValue.Object(it) } }
+        // DevTools shows a page fetch's app state, not its wire body, and none
+        // for an empty one: Flutter's page passes null then (Dart).
+        val sentState: () -> JsonValue? = { state?.let { JsonValue.Object(it) } }
         val response = send(first, handshake = true, requestBody = sentState)
         if (response.status != 412 || response.errorField != "caps_vector_unknown") return response
 

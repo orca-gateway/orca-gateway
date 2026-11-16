@@ -107,6 +107,21 @@ class DebugOptionsTest {
     }
 
     @Test
+    fun c19_3_aPageFetchWithAnEmptyAppStateShowsNoRequestBody() = runSuspend {
+        OrcaDebug.reporter = recorder
+        OrcaDebug.options = OrcaDebugOptions(includeBodies = true)
+        for (state in listOf(emptyMap<String, JsonValue>(), null)) {
+            val stub = StubEngine(page)
+            OrcaClient(base, "counter", transport = stub).fetchPage("home", state)
+            assertEquals(listOf("GET", "POST"), stub.requests.map { it.method }, "both handshake sends, state $state")
+            val network = recorder.of("network").takeLast(2).map { it.payload }
+            assertEquals(listOf(j(412), j(200)), network.map { it["statusCode"] })
+            for (event in network) assertFalse("requestBody" in event, "Flutter sends null for appState $state")
+            assertJsonEqual(assertNotNull(network[1]["responseBody"]), fixture["responseBody"])
+        }
+    }
+
+    @Test
     fun c19_3_otherRequestsReportTheirJsonBodyAndRawTextAnswers() = runSuspend {
         OrcaDebug.reporter = recorder
         OrcaDebug.options = OrcaDebugOptions(includeBodies = true)
