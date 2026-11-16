@@ -577,6 +577,93 @@ final class SubPageTests: XCTestCase {
         XCTAssertNil(stage.model.renderer.nodes["detail:7"])
     }
 
+    // MARK: A5.6 refetchPage and the pages mounted in SubPages
+
+    /// The page `host` of `stub` loaded as OrcaApp loads a page (its
+    /// refetchPage fetches `host` again into the same model), and drawn. The
+    /// caller keeps the loader: the model's refetch holds it weakly.
+    private func loaded(_ stub: SubPagePages) throws -> (OrcaPageLoader, Stage) {
+        let loader = OrcaPageLoader(
+            client: OrcaClient(
+                baseURL: URL(string: "http://stub.invalid")!, appId: "fixture-app",
+                device: DeviceInfo(osVersion: "test"), transport: stub),
+            path: "host")
+        Task { await loader.loadIfNeeded() }
+        let deadline = Date().addingTimeInterval(5)
+        func done() -> Bool {
+            if case .loading = loader.phase { return false }
+            return true
+        }
+        while !done(), Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+        guard case .loaded(let model) = loader.phase else {
+            throw NSError(domain: "SubPageTests", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "the host did not load: \(loader.phase)"])
+        }
+        return (loader, Stage(model: model))
+    }
+
+    /// Flutter's "C-flutter: a host refetch keeps the sub-page nodes and its
+    /// state value" (sdk/test/sub_page_widget_test.dart): the host's own keys
+    /// start again; the mounted page keeps its nodes and its value, and is not
+    /// fetched again.
+    func testA5_6_AHostRefetchKeepsTheSubPageNodesAndItsStateValue() throws {
+        let stub = SubPagePages(pages: ["host": Self.refetchHost(), "detail/a": Self.detailA()])
+        let (loader, stage) = try loaded(stub)
+        defer { stage.close() }
+        stage.wait("the sub-page") { stage.drawn.contains("detail:count") }
+        try stage.tap("detail:bump")
+        try stage.tap("hostBump")
+        stage.wait("the writes") { stage.model.store.state.page == ["count": 101, "detail:count": 6] }
+
+        // Only what is drawn from here on counts.
+        stage.recorder.reset()
+        try stage.tap("refetch")
+        stage.wait("the refetch") { stub.pagePaths.count == 3 && stage.model.store.state.page["count"] == 100 }
+
+        XCTAssertEqual(stub.pagePaths, ["host", "detail/a", "host"])
+        XCTAssertEqual(stage.model.store.state.page, ["count": 100, "detail:count": 6])
+        XCTAssertEqual(
+            Set(stage.model.renderer.nodes.keys.filter { $0.hasPrefix("detail:") }),
+            ["detail:0", "detail:label", "detail:count", "detail:bump", "detail:bump_label"])
+        stage.wait("the sub-page drawn again") { stage.drawn.contains("detail:count") }
+        XCTAssertEqual(stage.drawing, .pages(["detail:0"]))
+        let drawn = stage.recorder.snapshot(
+            of: "root", state: stage.model.store.state, subPages: stage.model.subPages)?.nodes ?? [:]
+        XCTAssertEqual(drawn["detail:label"]?["data"], "Page a")
+        XCTAssertEqual(drawn["detail:count"]?["data"], 6)
+        XCTAssertEqual(drawn["hostCount"]?["data"], 100)
+        withExtendedLifetime(loader) {}
+    }
+
+    /// A refetched host page without the SubPage node unmounts it, as
+    /// Flutter's `ComponentStore.init` (`_unmountMissingSubPages`): its nodes
+    /// go, its state keys stay (S8), and the host forgets it, so the node
+    /// coming back with a later refetch mounts it anew.
+    func testA5_6_AHostRefetchWithoutTheSubPageUnmountsIt() throws {
+        let stub = SubPagePages(pages: ["host": Self.refetchHost(), "detail/a": Self.detailA()])
+        let (loader, stage) = try loaded(stub)
+        defer { stage.close() }
+        stage.wait("the sub-page") { stage.drawn.contains("detail:count") }
+
+        stub.serve("host", Self.refetchHost(subPage: false))
+        try stage.tap("refetch")
+        stage.wait("the refetch") { stub.pagePaths.count == 3 && stage.model.renderer.nodes["detail"] == nil }
+
+        XCTAssertEqual(stage.model.renderer.nodes.keys.filter { $0.hasPrefix("detail") }, [])
+        XCTAssertEqual(stage.model.subPages.prefixes, [])
+        XCTAssertNil(stage.model.subPages["detail"])
+        XCTAssertEqual(stage.model.store.state.page, ["count": 100, "detail:count": 5])
+
+        stub.serve("host", Self.refetchHost())
+        try stage.tap("refetch")
+        stage.wait("the new mount") { stage.model.renderer.nodes["detail:label"] != nil }
+
+        XCTAssertEqual(stub.pagePaths, ["host", "detail/a", "host", "host", "detail/a"])
+        XCTAssertEqual(stage.model.subPages.prefixes, ["detail:"])
+        stage.wait("the sub-page drawn") { stage.drawn.contains("detail:label") }
+        withExtendedLifetime(loader) {}
+    }
+
     // MARK: Pages
 
     /// A page-state reference.
@@ -676,6 +763,48 @@ final class SubPageTests: XCTestCase {
         ],
     ]
 
+    /// `setState(key, value)` on the page with a static value, Flutter's `_setPage`.
+    nonisolated static func setPage(_ key: String, _ value: JSONValue) -> JSONValue {
+        ["type": "setState", "scope": "page", "key": .string(key), "value": ["type": "static", "value": value]]
+    }
+
+    /// A button labelled with its id, Flutter's `_button`: an ElevatedButton
+    /// over the Text `<id>_label`.
+    nonisolated static func button(_ id: String, _ action: JSONValue) -> [JSONValue] {
+        [["id": .string(id), "type": "ElevatedButton", "kind": "button", "childMode": "single", "props": [:],
+          "children": [.string("\(id)_label")], "watches": [], "actions": ["onTap": action]],
+         text("\(id)_label", .string(id))]
+    }
+
+    /// Flutter's sub-page `detail/a` (`_detail('a', 5)`) with the `bump`
+    /// button that sets its count to 6.
+    nonisolated static func detailA() -> JSONValue {
+        ["pageId": "detail/a", "title": "", "state": [count(5)],
+         "components": .array([
+            column("0", ["label", "count", "bump"]),
+            text("label", "Page a"),
+            text("count", page("count"), watches: ["count"]),
+         ] + button("bump", setPage("count", 6)))]
+    }
+
+    /// Flutter's refetch host (`_host` with `hostBump` and `refetch`): its own
+    /// `count` (100), the SubPage `detail` showing `detail/a` unless
+    /// `subPage` is false, a button that sets the count to 101 and one that
+    /// runs refetchPage.
+    nonisolated static func refetchHost(subPage: Bool = true) -> JSONValue {
+        var children: [JSONValue] = ["hostCount"]
+        var nodes: [JSONValue] = [text("hostCount", page("count"), watches: ["count"])]
+        if subPage {
+            children.append("detail")
+            nodes.append(["id": "detail", "type": "SubPage", "kind": "layout", "childMode": "single",
+                          "props": ["pageId": "detail/a"], "children": [], "watches": []])
+        }
+        children += ["hostBump", "refetch"]
+        nodes += button("hostBump", setPage("count", 101)) + button("refetch", ["type": "refetchPage"])
+        return ["pageId": "host", "title": "", "state": [count(100)],
+                "components": .array([column("root", children)] + nodes)]
+    }
+
     /// The host page: a count of its own, the SubPage, and the buttons the
     /// tests tap.
     nonisolated static func host(key: String, subPage props: JSONValue, watches: [JSONValue], state: [String: JSONValue],
@@ -746,6 +875,15 @@ private final class Stage {
                 baseURL: URL(string: "http://stub.invalid")!, appId: "fixture-app",
                 device: DeviceInfo(osVersion: "test"), transport: stub),
             widgets: widgets)
+        model.onError = { [weak self] _ in self?.errors += 1 }
+        show()
+    }
+
+    /// `model` drawn from its node `root`; `key` is its SubPage.
+    init(model: OrcaPageModel, root: String = "root", key: String = "detail") {
+        self.key = key
+        self.root = root
+        self.model = model
         model.onError = { [weak self] _ in self?.errors += 1 }
         show()
     }
@@ -894,9 +1032,9 @@ private final class HostWindow {
     }
 }
 
-/// The page route and the `/action` route: `SubPageTests.pages` by page id
-/// (any other id is a 404), every `/action` answered with `actions`. Page
-/// fetches wait while the stub is held.
+/// The page route and the `/action` route: `pages`, then `SubPageTests.pages`,
+/// by page id (any other id is a 404), every `/action` answered with
+/// `actions`. Page fetches wait while the stub is held.
 private final class SubPagePages: HTTPTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var _requests: [HTTPRequest] = []
@@ -905,8 +1043,15 @@ private final class SubPagePages: HTTPTransport, @unchecked Sendable {
     private var heldPages: Set<String> = []
     private var _answered: [String] = []
     private let actions: [JSONValue]
+    private var served: [String: JSONValue]
 
-    init(actions: [JSONValue] = []) { self.actions = actions }
+    init(actions: [JSONValue] = [], pages: [String: JSONValue] = [:]) {
+        self.actions = actions
+        served = pages
+    }
+
+    /// Answer `page` for the page id `name` from now on.
+    func serve(_ name: String, _ page: JSONValue) { locked { served[name] = page } }
 
     private func locked<T>(_ body: () -> T) -> T {
         lock.lock()
@@ -963,7 +1108,9 @@ private final class SubPagePages: HTTPTransport, @unchecked Sendable {
         while locked({ held || heldPages.contains(name) }) { try await Task.sleep(nanoseconds: 10_000_000) }
         locked { _answered.append(name) }
         if locked({ broken }) { return HTTPResponse(status: 500, body: Data("{}".utf8)) }
-        guard let page = SubPageTests.pages[name] else { return HTTPResponse(status: 404, body: Data("{}".utf8)) }
+        guard let page = locked({ served[name] }) ?? SubPageTests.pages[name] else {
+            return HTTPResponse(status: 404, body: Data("{}".utf8))
+        }
         return HTTPResponse(status: 200, body: try page.encoded())
     }
 }

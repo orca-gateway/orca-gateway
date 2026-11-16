@@ -15,6 +15,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** T2.3 and T2.5 on the render tree, the layer the UI draws. */
@@ -185,5 +186,47 @@ class RenderTreeTest {
     @Test
     fun emptyPageHasNoTree() {
         assertNull(PageRenderer(page(emptyList<ComponentNode>())).tree(StoreState()))
+    }
+
+    // MARK: A5.6 refetch
+
+    /**
+     * `replace` is the Flutter `ComponentStore.init` a refetch runs (sdk/lib/src/state/component_store.dart):
+     * the nodes `keep` names stay, every other node goes, the new page's nodes come in and win on a shared id,
+     * its first node is the root, and [PageRenderer.page] is the new page.
+     */
+    @Test
+    fun a5_6_replaceKeepsTheNodesKeepNamesAndTheNewPageWinsOnASharedId() {
+        fun text(id: String, data: String) =
+            ComponentNode(id, "Text", ComponentNode.Kind.Primitive, ComponentNode.ChildMode.None, props = props("data" to data))
+        val kept = text("k:0", "kept")
+        val first = page(
+            listOf(
+                ComponentNode("r", "Column", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Multi, children = listOf("a", "k:0")),
+                text("a", "a"),
+                kept,
+                text("k:1", "old"),
+            ),
+        )
+        val shared = text("k:1", "new")
+        val next = PageResponse(
+            "q", "Q",
+            components = listOf(
+                ComponentNode("n", "Column", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Multi, children = listOf("k:0", "b")),
+                text("b", "b"),
+                shared,
+            ),
+        )
+        val renderer = PageRenderer(first, TestWidgets.registry())
+
+        renderer.replace(next, keep = { it.startsWith("k:") })
+
+        assertEquals(setOf("n", "b", "k:0", "k:1"), renderer.nodes.keys)
+        assertEquals(kept, renderer.nodes["k:0"])
+        assertEquals(shared, renderer.nodes["k:1"])
+        assertEquals("n", renderer.rootId)
+        assertSame(next, renderer.page)
+        val tree = assertNotNull(renderer.tree(StoreState()))
+        assertEquals(listOf("k:0", "b"), tree.children.map { it.id })
     }
 }
