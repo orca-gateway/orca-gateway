@@ -56,14 +56,23 @@ import com.orcagateway.sdk.style.TextStyleProps
  * field (no decoration) that is not enabled is Flutter's EditableText with
  * `readOnly: !enabled || readOnly`: enabled and read-only, so a tap still
  * focuses it; a decorated one is Material's disabled field (`TextField
- * (enabled:)`): it takes no focus, its text keeps the field's style, and
- * its decoration is greyed as Flutter's (see [Decorated]). `maxLines`
- * N > 1 is a field N lines tall even when empty (Flutter sets no
- * `minLines`, and its EditableText is then `maxLines` lines tall).
+ * (enabled:)`): it takes no focus and its decoration is greyed as
+ * Flutter's (see [Decorated]). `maxLines` N > 1 is a field N lines tall
+ * even when empty (Flutter sets no `minLines`, and its EditableText is
+ * then `maxLines` lines tall).
+ *
+ * The text style is the builder's `style ?? TextStyle(16, black)`: with no
+ * `style` sent, 16 sp black, decorated or not, enabled or not. A `style`
+ * sent is merged over what Flutter puts under it: on a decorated field
+ * Material's input style (bodyLarge's 16 sp in onSurface, onSurface at
+ * 0.38 when disabled: `_m3StateInputStyle`; bodyLarge's line height and
+ * letter spacing are not taken); on a bare one nothing, EditableText draws
+ * it over the engine's text defaults (`txt::TextStyle`: 14, white), so a
+ * style with no colour is white there, as on Flutter.
  *
  * Without `decoration` the field is bare, Flutter's EditableText path
- * (16 sp black text, grey placeholder). With one it is Material 3's text
- * field decoration (the outlined one for `border: outline`, no line for
+ * (grey placeholder). With one it is Material 3's text field decoration
+ * (the outlined one for `border: outline`, no line for
  * `none`): label, hint, prefix and suffix, helper or error text, fill,
  * content padding, and the `n/max` counter when `maxLength` is set. The
  * field fills the width it is given, as Flutter's does. The field's own
@@ -84,7 +93,13 @@ internal fun TextFieldWidget(node: ResolvedNode, model: OrcaPageModel, modifier:
     val maxLength = count(node["maxLength"])
     val decoration = node["decoration"]?.objectValue
     val placeholder = decoration?.get("hintText")?.stringValue ?: node["placeholder"]?.stringValue ?: ""
-    val style = TextStyle(fontSize = 16.sp, color = Props.hex("#000000")).merge(TextStyleProps(node["style"]).textStyle())
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val base = when {
+        node["style"]?.objectValue == null -> TextStyle(fontSize = 16.sp, color = Props.hex("#000000"))
+        decoration != null -> TextStyle(fontSize = 16.sp, color = if (enabled) onSurface else onSurface.copy(alpha = 0.38f))
+        else -> TextStyle(fontSize = 14.sp, color = Color.White)
+    }
+    val style = base.merge(TextStyleProps(node["style"]).textStyle())
     val visual = if (obscure) PasswordVisualTransformation() else VisualTransformation.None
     val interaction = remember { MutableInteractionSource() }
     val focus = remember { FocusRequester() }

@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -30,8 +31,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
@@ -311,6 +314,119 @@ class FormFieldTest {
             value.any { p -> listOf(android.graphics.Color.red(p), android.graphics.Color.green(p), android.graphics.Color.blue(p)).all { it < 50 } },
             "no black text in the disabled field",
         )
+    }
+
+    /** A decoration with no line and no fill, so the field's own text is its only ink. */
+    private val lineless = "decoration" to mapOf("border" to "none")
+
+    /** The non-white pixels of the [index]th field on [picture]. */
+    private fun fieldInk(picture: Bitmap, index: Int): List<Int> =
+        inked(picture, compose.onAllNodes(editable)[index].getUnclippedBoundsInRoot())
+
+    /**
+     * A6.4: with no `style` sent, a decorated field's text is the builder's
+     * default 16 black, enabled or disabled: Flutter's TextField merges
+     * bodyLarge, then the state colour (onSurface, at 0.38 disabled), then
+     * the style it is given, and the builder gives it 16 black. The scheme's
+     * onSurface is red, so a field that took it would show.
+     */
+    @Test
+    fun a6_4_kt_aDecoratedFieldWithNoStyleDrawsItsTextBlack() {
+        show(
+            column("root", "on", "off"),
+            field("on", lineless, "value" to "HHH"),
+            field("off", lineless, "value" to "HHH", "enabled" to false),
+            scheme = hues,
+        )
+        val picture = draw(view)
+
+        assertInk(Color.Black, 1f, fieldInk(picture, 0), "enabled")
+        assertInk(Color.Black, 1f, fieldInk(picture, 1), "disabled")
+    }
+
+    /** A6.4: a decorated field's `style` with a colour draws in that colour, enabled or disabled (it is merged last). */
+    @Test
+    fun a6_4_kt_aDecoratedFieldDrawsItsStylesColour() {
+        val blue = "style" to mapOf("fontSize" to 32, "color" to "#0000FF")
+        show(
+            column("root", "on", "off"),
+            field("on", lineless, blue, "value" to "HHH"),
+            field("off", lineless, blue, "value" to "HHH", "enabled" to false),
+            scheme = hues,
+        )
+        val picture = draw(view)
+
+        assertInk(Color.Blue, 1f, fieldInk(picture, 0), "enabled")
+        assertInk(Color.Blue, 1f, fieldInk(picture, 1), "disabled")
+    }
+
+    /**
+     * A6.4: a decorated field's `style` with no colour leaves Material's
+     * state colour in place: an enabled field draws onSurface (#1D1B20 in
+     * the default scheme, red here), not the builder's black.
+     */
+    @Test
+    fun a6_4_kt_aDecoratedFieldWithAColourlessStyleDrawsOnSurface() {
+        show(
+            column("root", "f"),
+            field("f", lineless, "style" to mapOf("fontSize" to 32), "value" to "HHH"),
+            scheme = hues,
+        )
+
+        assertInk(Color.Red, 1f, fieldInk(draw(view), 0), "enabled")
+    }
+
+    /**
+     * A6.7: a disabled decorated field whose `style` has no colour draws its
+     * text in Material's disabled colour, onSurface at 0.38
+     * (`_m3StateInputStyle`).
+     */
+    @Test
+    fun a6_7_kt_aDisabledDecoratedFieldWithAColourlessStyleDrawsOnSurfaceFaded() {
+        show(
+            column("root", "f"),
+            field("f", lineless, "style" to mapOf("fontSize" to 32), "value" to "HHH", "enabled" to false),
+            scheme = hues,
+        )
+
+        assertInk(Color.Red, 0.38f, fieldInk(draw(view), 0), "disabled")
+    }
+
+    /**
+     * A6.4: a bare field (no decoration) is Flutter's EditableText, which
+     * draws the style sent as it is, over the engine's text defaults
+     * (txt::TextStyle: white, 14): a style with no colour draws white (here
+     * on a grey Container, no darker ink anywhere), one with no size lays
+     * out at 14 sp, not the builder's default 16.
+     */
+    @Test
+    fun a6_4_kt_aBareFieldDrawsOnlyItsStyle() {
+        show(
+            column("root", "grey", "small"),
+            ComponentNode(
+                "grey", "Container", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single,
+                mapOf("color" to JsonValue.String("#808080")), children = listOf("white"),
+            ),
+            field("white", "style" to mapOf("fontSize" to 32), "value" to "HHH"),
+            field("small", "style" to mapOf("color" to "#0000FF"), "value" to "HHH"),
+        )
+        val picture = draw(view)
+        val bounds = compose.onAllNodes(editable)[0].getUnclippedBoundsInRoot()
+        var white = 0
+        for (y in bounds.top.value.toInt() until bounds.bottom.value.toInt()) {
+            for (x in bounds.left.value.toInt() until bounds.right.value.toInt()) {
+                val p = picture.getPixel(x, y)
+                val rgb = listOf(android.graphics.Color.red(p), android.graphics.Color.green(p), android.graphics.Color.blue(p))
+                assertTrue(rgb.all { it >= 0x80 - 3 } && rgb.max() - rgb.min() <= 3, "#${Integer.toHexString(p)} at ($x, $y): not white text on grey")
+                if (rgb.all { it >= 250 }) white += 1
+            }
+        }
+        assertTrue(white > 0, "no white text")
+
+        val layouts = ArrayList<TextLayoutResult>()
+        val small = compose.onAllNodes(editable)[1].fetchSemanticsNode()
+        requireNotNull(small.config[SemanticsActions.GetTextLayoutResult].action).invoke(layouts)
+        assertEquals(14.sp, layouts.first().layoutInput.style.fontSize)
     }
 
     /**
