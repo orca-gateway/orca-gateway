@@ -314,9 +314,10 @@ const homePage = PageDefinition.create({
 // The map plugin through the classes `orca plugin generate` writes from
 // plugins/orca_google_map/orca_plugin.yaml (./orca_google_map). Its four
 // triggers keep their event's fields in page state, each shown in a Text; the
-// button's moveCamera addresses the map by its node id. The column fits a
-// phone and does not scroll: in a scroll view, Flutter's map loses its
-// vertical drags to the page.
+// button's moveCamera addresses the map by its node id. A marker tap also adds
+// 1 to markerTapCount, so a second tap on the same pin, which sets the same
+// markerTapId, still shows. The column fits a phone and does not scroll: in a
+// scroll view, Flutter's map loses its vertical drags to the page.
 
 const mapPage = PageDefinition.create({
   id: "map",
@@ -330,6 +331,7 @@ const mapPage = PageDefinition.create({
     { key: "latLongPress", scope: "page", initial: 0 },
     { key: "lngLongPress", scope: "page", initial: 0 },
     { key: "markerTapId", scope: "page", initial: "" },
+    { key: "markerTapCount", scope: "page", initial: 0 },
   ],
   render: (ctx) =>
     Scaffold.new({
@@ -395,7 +397,13 @@ const mapPage = PageDefinition.create({
                   SetState("latLongPress", V.event("latitude")),
                   SetState("lngLongPress", V.event("longitude")),
                 ),
-                onMarkerTap: SetState("markerTapId", V.event("markerId")),
+                onMarkerTap: Parallel(
+                  SetState("markerTapId", V.event("markerId")),
+                  SetState(
+                    "markerTapCount",
+                    V.transform(V.pageState("markerTapCount"), [TV.add(V.static(1))]),
+                  ),
+                ),
               },
             }).withKey("main-map"),
           }),
@@ -438,6 +446,11 @@ const mapPage = PageDefinition.create({
           Text.new({
             data: V.transform(V.pageState("markerTapId"), [
               TV.template("Marker tapped: {{value}}"),
+            ]),
+          }),
+          Text.new({
+            data: V.transform(V.pageState("markerTapCount"), [
+              TV.template("Marker taps: {{value}}"),
             ]),
           }),
 

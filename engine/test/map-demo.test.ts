@@ -4,6 +4,8 @@
 // plugins/orca_google_map/orca_plugin.yaml (examples/server/orca_google_map.ts),
 // whose four triggers keep their event's fields in page state, a Text on each
 // of those keys, and a button whose moveCamera addresses the map by its node id.
+// A marker tap also adds 1 to markerTapCount, so a second tap on the same pin,
+// which sets the same markerTapId, still shows on the page.
 
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { Engine } from "../src/core";
@@ -55,6 +57,7 @@ const TEXTS: [string, string][] = [
   ["lngMoveCamera", "Camera moved to lng {{value}}"],
   ["zoomMoveCamera", "Camera moved to zoom {{value}}"],
   ["markerTapId", "Marker tapped: {{value}}"],
+  ["markerTapCount", "Marker taps: {{value}}"],
 ];
 
 describe("map demo", () => {
@@ -69,6 +72,7 @@ describe("map demo", () => {
       { key: "latLongPress", scope: "page", initial: 0 },
       { key: "lngLongPress", scope: "page", initial: 0 },
       { key: "markerTapId", scope: "page", initial: "" },
+      { key: "markerTapCount", scope: "page", initial: 0 },
     ]);
   });
 
@@ -90,7 +94,7 @@ describe("map demo", () => {
     });
   });
 
-  test("C17.1/page the map's four triggers keep their event's fields in page state", async () => {
+  test("C17.1/page the map's four triggers keep their event's fields in page state, a marker tap also counts", async () => {
     const actions = theMap(await page("map")).actions!;
     expect(Object.keys(actions).sort()).toEqual(["onCameraMove", "onLongPress", "onMarkerTap", "onTap"]);
     expect(actions.onTap).toEqual({
@@ -112,7 +116,23 @@ describe("map demo", () => {
         setState("zoomMoveCamera", "zoom"),
       ],
     });
-    expect(actions.onMarkerTap).toEqual(setState("markerTapId", "markerId"));
+    expect(actions.onMarkerTap).toEqual({
+      type: "actionGroup",
+      mode: "parallel",
+      actions: [
+        setState("markerTapId", "markerId"),
+        {
+          type: "setState",
+          scope: "page",
+          key: "markerTapCount",
+          value: {
+            type: "transform",
+            input: { type: "state", key: "markerTapCount", scope: "page" },
+            by: [{ type: "add", by: { type: "static", value: 1 } }],
+          },
+        },
+      ],
+    });
   });
 
   test("C17.1/page the Move Camera to NYC button moves the map by its node id", async () => {
