@@ -3,7 +3,7 @@
 ## Front page
 
 ### In one breath
-group 4 of 4 · tasks: 15 green, 0 blocked · cases: 22 of 22 green · all suites green (see Test run)
+group 4 of 4 · tasks: 15 green, 0 blocked · cases: 22 of 22 green · all suites green
 G1 cores: 42 curves, a controller run by a clock passed in, implicit mixes; the `motion` demo app.
 G2: fixtures, animateForward and animateReverse in three executors, the controlled AnimatedBuilder.
 G3: AnimatedContainer, Opacity, Align, Switcher, Hero's child; route transitions from the config.
