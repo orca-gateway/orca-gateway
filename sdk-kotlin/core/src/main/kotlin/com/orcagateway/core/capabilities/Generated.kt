@@ -20,33 +20,45 @@ public object GeneratedCapabilities {
     public const val sdkSemver: String = "0.1.0-alpha.1"
 
     public val widgets: List<String> = listOf(
+        "Align",
         "AnimatedAlign",
         "AnimatedBuilder",
         "AnimatedContainer",
         "AnimatedOpacity",
         "AnimatedSwitcher",
         "AppBar",
+        "AspectRatio",
+        "Baseline",
         "BottomNavItem",
         "BottomNavigationBar",
         "Card",
         "Center",
         "ClipRRect",
         "Column",
+        "ConstrainedBox",
         "Container",
         "Divider",
         "Drawer",
         "ElevatedButton",
         "Expanded",
         "FallbackPrompt",
+        "FittedBox",
+        "Flexible",
+        "FractionallySizedBox",
         "GestureDetector",
         "Hero",
         "Icon",
         "Image",
+        "IntrinsicHeight",
+        "IntrinsicWidth",
+        "LimitedBox",
+        "Offstage",
         "OutlinedButton",
         "Padding",
         "Positioned",
         "ReorderableListView",
         "Row",
+        "SafeArea",
         "Scaffold",
         "SingleChildScrollView",
         "SizedBox",
@@ -57,6 +69,7 @@ public object GeneratedCapabilities {
         "TextField",
         "Transform",
         "Video",
+        "Wrap",
     )
 
     public val valueKinds: List<String> = listOf(
@@ -147,5 +160,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "99dd16ff7a82508aba8a981efb5b2f5bcacf4b6a27d0f565e7c15163ed9f6963"
+    public const val capsHash: String = "16ad3d3f7c375c0612821d267794a91a1446ff68d27715b45439c214ff570280"
 }

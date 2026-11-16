@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -134,9 +133,10 @@ private fun ShellScaffold(router: OrcaRouter, modifier: Modifier, drawer: Boolea
         // A page handles the system bars itself, as on the single stack.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
-        // The top bar took the status bar: a page's own bar must not pad for it again.
-        val taken = PaddingValues(top = padding.calculateTopPadding())
-        Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(taken)) { KeptPages(router) }
+        // The top bar took the status bar and the tab bar the navigation bar: a page must
+        // not pad for them again (Flutter's Scaffold removes them from its body's padding).
+        // Over the shell there is no tab bar, so the page pads for the bottom inset itself.
+        Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { KeptPages(router) }
     }
 }
 

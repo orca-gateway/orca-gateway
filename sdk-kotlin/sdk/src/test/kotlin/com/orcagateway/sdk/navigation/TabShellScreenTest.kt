@@ -1,9 +1,11 @@
 package com.orcagateway.sdk.navigation
 
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -11,6 +13,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
@@ -21,11 +24,17 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.unit.DpRect
+import androidx.compose.ui.unit.dp
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.orcagateway.core.client.DeviceInfo
 import com.orcagateway.core.client.HttpRequest
 import com.orcagateway.core.client.HttpResponse
@@ -47,12 +56,16 @@ import com.orcagateway.sdk.OrcaApp
 import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPlugin
 import com.orcagateway.sdk.WidgetBuilder
+import com.orcagateway.sdk.WidgetBuilders
 import com.orcagateway.sdk.support.button
 import com.orcagateway.sdk.support.column
 import com.orcagateway.sdk.support.leaf
 import com.orcagateway.sdk.support.row
+import com.orcagateway.sdk.support.sizedBox
 import com.orcagateway.sdk.support.text
 import com.orcagateway.sdk.widgets.LocalOrcaReduceMotion
+import com.orcagateway.sdk.widgets.SafeAreaWidget
+import com.orcagateway.sdk.widgets.SizedBoxWidget
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import org.junit.Rule
@@ -135,6 +148,25 @@ private class ShellPages(private val appBars: Boolean = false) : HttpTransport {
 }
 
 /**
+ * Pages whose root is a SafeArea `s-name` around the SizedBox `box-name`,
+ * as large as it is let be: the box fills what the SafeArea leaves.
+ */
+private class SafeAreaPages : HttpTransport {
+    override suspend fun send(request: HttpRequest): HttpResponse {
+        val name = request.url.path.substringAfterLast("/page/")
+        val nodes = listOf(
+            ComponentNode("s-$name", "SafeArea", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single, emptyMap(), listOf("box-$name")),
+            sizedBox("box-$name", width = 10_000, height = 10_000),
+        )
+        val page = PageResponse(pageId = name, title = "Title of $name", state = emptyList(), components = nodes)
+        return HttpResponse(200, body = Json.encodeToString(PageResponse.serializer(), page).encodeToByteArray())
+    }
+
+    val client: OrcaClient
+        get() = OrcaClient(URI("http://stub.invalid"), appId = "fixture-app", device = DeviceInfo(osVersion = "test"), transport = this)
+}
+
+/**
  * Three tabs (`/home` with the child `home/product/:id`, `/search`, `/more`)
  * and `settings` outside them; a drawer when [drawerItems] or
  * [drawerComponents] has any.
@@ -175,8 +207,9 @@ private val drawerItems = listOf(
 /**
  * The tab shell on screen (Swift's `TabShellViewTests`): the default bar
  * and the lazy first visit of a tab (B10.1-K), the server tab bar (B10.4-K),
- * the shell drawer (B10.5-K), the system back gesture (B10.7-K), and pages
- * kept across tab switches and drawer cycles (B10.8-K).
+ * the shell drawer (B10.5-K), the system back gesture (B10.7-K), pages
+ * kept across tab switches and drawer cycles (B10.8-K), and the bottom
+ * inset a tab page leaves to the tab bar (A3.6-K).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w393dp-h852dp-xhdpi")
@@ -1019,6 +1052,57 @@ class TabShellScreenTest {
         assertNull(motion())
         assertTrue(shown("settings page"))
         assertFalse(shown("home page"))
+    }
+
+    /**
+     * A3.6-K (never twice): the tab bar already pads for the bottom system
+     * bar, so a SafeArea that is a tab page's root adds nothing at the
+     * bottom: its box ends where the bar begins, as under Flutter's
+     * Scaffold, whose body loses the bottom padding to its
+     * bottomNavigationBar. The top inset, which nothing above took, is
+     * padded once. A route over the shell has no bar: its SafeArea pads for
+     * the bottom inset itself.
+     */
+    @Test
+    fun a3_6_aSafeAreaInATabPageDoesNotPadTheBottomInsetTheTabBarTook() {
+        val router = OrcaRouter(SafeAreaPages().client, tabConfig())
+        // SafeArea is advertised in group 5: the app gets it as a host widget. Both tagged with their ids.
+        val widgets = WidgetBuilders.standard().apply {
+            register("SafeArea") { node, model, modifier -> SafeAreaWidget(node, model, modifier.testTag(node.id)) }
+            register("SizedBox") { node, model, modifier -> SizedBoxWidget(node, model, modifier.testTag(node.id)) }
+        }
+        lateinit var host: View
+        compose.setContent {
+            host = LocalView.current
+            OrcaApp(router, widgets = widgets)
+        }
+        compose.waitUntil(5_000) { placed("box-home") }
+        // In pixels, 2 per dp at xhdpi: 24 dp at the top, 48 dp at the bottom.
+        systemBars(host, top = 48, bottom = 96)
+        val screen = compose.onRoot().getUnclippedBoundsInRoot()
+
+        val box = bounds("box-home")
+        assertEquals(24.dp, box.top)
+        assertEquals(bounds(tabTag(0)).top, box.bottom)
+
+        compose.runOnUiThread { router.navigate("/settings") }
+        compose.waitUntil(5_000) { placed("box-settings") }
+        assertEquals(screen.bottom - 48.dp, bounds("box-settings").bottom)
+    }
+
+    private fun bounds(tag: String): DpRect = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot()
+
+    /** The node tagged [tag] is composed and placed. */
+    private fun placed(tag: String): Boolean =
+        compose.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().any { it.layoutInfo.isPlaced }
+
+    /** The device's system bars, in pixels, delivered to [host] as the platform does (FlowTest's harness). */
+    private fun systemBars(host: View, top: Int, bottom: Int) {
+        val insets = WindowInsetsCompat.Builder()
+            .setInsets(WindowInsetsCompat.Type.systemBars(), Insets.of(0, top, 0, bottom))
+            .build()
+        compose.runOnIdle { ViewCompat.dispatchApplyWindowInsets(host, insets) }
+        compose.waitForIdle()
     }
 }
 

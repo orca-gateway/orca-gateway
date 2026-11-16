@@ -105,3 +105,5 @@ console.log("  - motion:         /api/v1/app/motion/config");
 console.log("  - reorder:        /api/v1/app/reorder/page/home");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/polish");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/lifecycle");
+console.log("  - parity-a:       /api/v1/app/parity-a/page/layout");
+console.log("  - parity-a:       /api/v1/app/parity-a/page/layout-safe");

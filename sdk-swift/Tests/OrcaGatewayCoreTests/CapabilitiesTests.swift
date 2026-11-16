@@ -35,6 +35,25 @@ final class CapabilitiesTests: XCTestCase {
         XCTAssertTrue(ios.contains("Drawer"), "Drawer lacks the ios target")
     }
 
+    /// A3.1: native parity step 3's 13 layout wrappers are drawn by SwiftUI,
+    /// so the generated vector advertises them, 50 widgets in all (with step 12's 5 animated ones and step 13's ReorderableListView), each once
+    /// and sorted like capabilities.json.
+    func testA3_1TheThirteenLayoutWrappersAreAdvertisedFiftyInAll() throws {
+        let advertised = Set(GeneratedCapabilities.widgets)
+        XCTAssertEqual(Self.a3_1.subtracting(advertised), [], "not advertised")
+        XCTAssertTrue(Self.a3_1.isSubset(of: try manifestIOSWidgets()), "a wrapper lacks the ios target")
+        XCTAssertEqual(GeneratedCapabilities.widgets.count, 50)
+        XCTAssertEqual(advertised.count, 50)
+        XCTAssertEqual(GeneratedCapabilities.widgets, GeneratedCapabilities.widgets.sorted())
+    }
+
+    /// Native parity step 3's layout wrappers (A3.1).
+    static let a3_1: Set<String> = [
+        "Align", "AspectRatio", "Baseline", "ConstrainedBox", "FittedBox", "Flexible",
+        "FractionallySizedBox", "IntrinsicHeight", "IntrinsicWidth", "LimitedBox", "Offstage",
+        "SafeArea", "Wrap",
+    ]
+
     func testActionKindsMatchTheImplementedList() throws {
         let implemented = try Fixtures.json("sdk-swift/capabilities.json")
         let listed = Set((implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue))
