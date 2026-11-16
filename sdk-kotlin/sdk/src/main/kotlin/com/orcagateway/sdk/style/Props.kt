@@ -6,6 +6,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAbsoluteAlignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -271,6 +272,20 @@ internal data class CornerRadii(
 }
 
 /**
+ * What a style leaves unset where Flutter draws on no ambient style (a
+ * RichText, a Text under a DefaultTextStyle): the paragraph defaults, 14 px
+ * (painting/text_painter.dart:42), white (engine txt/src/txt/
+ * text_style.h:26, :41), regular and upright. The size is in sp: a caller
+ * that must not scale (RichText) sets the font scale to 1 itself.
+ */
+internal val ENGINE_TEXT_STYLE: TextStyle = TextStyle(
+    color = Color.White,
+    fontSize = 14.sp,
+    fontWeight = FontWeight.Normal,
+    fontStyle = FontStyle.Normal,
+)
+
+/**
  * Flutter `TextStyleData` as a Compose [TextStyle]. Values left out inherit
  * from the surrounding style (the page's body style, an app bar's title
  * style, a button's label style), as Flutter's `DefaultTextStyle` does.
@@ -279,7 +294,8 @@ internal data class CornerRadii(
  * box). Compose draws only a solid underline or line-through in the text
  * colour, so [textStyle] carries those and a Text draws the rest itself
  * ([drawsDecoration]): an overline, `decorationStyle` and `decorationColor`.
- * `wordSpacing` and `overflow` are for the Text too.
+ * `wordSpacing` and `overflow` are for the Text too. A RichText run takes
+ * [spanStyle] instead.
  */
 internal class TextStyleProps(value: JsonValue?) {
     val size: Double?
@@ -300,6 +316,9 @@ internal class TextStyleProps(value: JsonValue?) {
     /** The style's own `overflow`, which a Text without one takes (Flutter). */
     val overflow: JsonValue?
 
+    /** `none` or `overline`: a line set that Compose draws as no line. */
+    private val clearsLine: Boolean
+
     init {
         val s = value?.objectValue.orEmpty()
         // A negative size inherits rather than reach Compose's paint.
@@ -313,6 +332,7 @@ internal class TextStyleProps(value: JsonValue?) {
         underline = s["decoration"]?.stringValue == "underline"
         strikethrough = s["decoration"]?.stringValue == "lineThrough"
         overline = s["decoration"]?.stringValue == "overline"
+        clearsLine = overline || s["decoration"]?.stringValue == "none"
         decorationColor = Props.color(s["decorationColor"])
         decorationStyle = DecorationStyle.entries.firstOrNull { it.wire == s["decorationStyle"]?.stringValue }
             ?: DecorationStyle.Solid
@@ -357,6 +377,27 @@ internal class TextStyleProps(value: JsonValue?) {
         textDecoration = decoration,
         lineHeight = height?.em ?: TextUnit.Unspecified,
         lineHeightStyle = height?.let { LINE_BOX },
+    )
+
+    /**
+     * The style of one RichText run, laid over the paragraph's style. As
+     * Flutter's `parseTextStyle` (builder_helpers.dart:103-105, :141) it
+     * always sets the font style, upright unless `italic`, and `none`
+     * clears a line ([TextDecoration.None]; an overline, which Compose
+     * cannot draw, clears it too). Not here: `height` (Compose sets line
+     * height per paragraph, so a RichText takes its root span's for every
+     * line and draws no span's own) and `wordSpacing`, which a RichText
+     * adds to each space of the run as a letter spacing (as `wordSpaced`).
+     */
+    fun spanStyle(): SpanStyle = SpanStyle(
+        color = color ?: Color.Unspecified,
+        fontSize = size?.sp ?: TextUnit.Unspecified,
+        fontWeight = weight,
+        fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
+        fontFamily = family?.let(::fontFamily),
+        letterSpacing = letterSpacing?.sp ?: TextUnit.Unspecified,
+        background = background ?: Color.Unspecified,
+        textDecoration = decoration ?: if (clearsLine) TextDecoration.None else null,
     )
 
     private companion object {
