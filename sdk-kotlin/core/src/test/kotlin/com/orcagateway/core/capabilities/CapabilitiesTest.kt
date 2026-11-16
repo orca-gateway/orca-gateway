@@ -72,12 +72,15 @@ class CapabilitiesTest {
      * B13.4-K: S13 adds SubPage, 61 to 62.
      *
      * C18.4: S18 adds UnsupportedWidgetPlaceholder: the pin moves to 63.
+     *
+     * A5.x: native parity step 5 adds its five scroll widgets ([A5]), so the
+     * pin moves from 63 to 68; Swift lands the same five in the same step.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame63WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame68WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(63, kotlin.size)
+        assertEquals(68, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -99,6 +102,7 @@ class CapabilitiesTest {
         assertTrue("SubPage" in kotlin, "missing: SubPage")
         assertTrue("SubPage" in GeneratedCapabilities.widgets, "not advertised: SubPage")
         assertTrue("UnsupportedWidgetPlaceholder" in GeneratedCapabilities.widgets, "S18's UnsupportedWidgetPlaceholder is not advertised")
+        assertTrue(kotlin.containsAll(A5), "missing: ${A5 - kotlin.toSet()}")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
@@ -107,16 +111,17 @@ class CapabilitiesTest {
      * A3.1: Compose draws the 13 layout wrappers, so the generated vector
      * advertises them and the core registry lets them through instead of
      * degrading them; WidgetBuildersTest pins standard() to the same set.
-     * The pin is 63: with S12's 5 animated ones (49), then native parity
+     * The pin is 68: with S12's 5 animated ones (49), then native parity
      * step 4's 11 effect and touch wrappers (A4.x, 60), then S13's
      * ReorderableListView and SubPage, then S18's
-     * UnsupportedWidgetPlaceholder.
+     * UnsupportedWidgetPlaceholder (63), then native parity step 5's five
+     * scroll widgets (A5.x).
      */
     @Test
     fun a3_1_theThirteenLayoutWrappersAreAdvertisedAndLetThrough() {
         val advertised = GeneratedCapabilities.widgets.toSet()
         assertEquals(emptySet(), A3_1 - advertised, "not advertised")
-        assertEquals(63, GeneratedCapabilities.widgets.size)
+        assertEquals(68, GeneratedCapabilities.widgets.size)
         assertEquals(emptySet(), A3_1 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
@@ -139,6 +144,27 @@ class CapabilitiesTest {
         }
         assertEquals(emptySet(), A4 - manifestAndroidWidgets(), "a wrapper lacks the android target")
         assertEquals(emptySet(), A4 - WidgetRegistry.shared.types, "degraded by the core registry")
+    }
+
+    /**
+     * A5.x: Compose draws native parity step 5's five scroll widgets (A5.1-A5.5,
+     * A5.7), so capabilities.json lists each of them, the generated vector
+     * advertises each once, every one carries the manifest's android target,
+     * and the core registry lets them through; WidgetBuildersTest pins
+     * standard() to the same set.
+     */
+    @Test
+    fun a5_x_theFiveScrollWidgetsAreAdvertisedAndLetThrough() {
+        val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["widgets"])
+        assertEquals(emptySet(), A5 - listed, "not in capabilities.json")
+        for (widget in A5.sorted()) {
+            assertEquals(
+                1, GeneratedCapabilities.widgets.count { it == widget },
+                "$widget is not advertised exactly once",
+            )
+        }
+        assertEquals(emptySet(), A5 - manifestAndroidWidgets(), "a widget lacks the android target")
+        assertEquals(emptySet(), A5 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
     @Test
@@ -243,5 +269,8 @@ class CapabilitiesTest {
             "AbsorbPointer", "BackdropFilter", "BlurView", "ClipOval", "ClipRect", "ColorFiltered",
             "DecoratedBox", "IgnorePointer", "InteractiveViewer", "Opacity", "RotatedBox",
         )
+
+        /** Native parity step 5's scroll widgets (A5.1-A5.5, A5.7), sorted. */
+        val A5 = setOf("GridView", "ListView", "PageView", "PullToRefresh", "Scrollbar")
     }
 }

@@ -53,6 +53,7 @@ public object GeneratedCapabilities {
         "Flexible",
         "FractionallySizedBox",
         "GestureDetector",
+        "GridView",
         "Hero",
         "Icon",
         "IgnorePointer",
@@ -61,16 +62,20 @@ public object GeneratedCapabilities {
         "IntrinsicHeight",
         "IntrinsicWidth",
         "LimitedBox",
+        "ListView",
         "Offstage",
         "Opacity",
         "OutlinedButton",
         "Padding",
+        "PageView",
         "Positioned",
+        "PullToRefresh",
         "ReorderableListView",
         "RotatedBox",
         "Row",
         "SafeArea",
         "Scaffold",
+        "Scrollbar",
         "SingleChildScrollView",
         "SizedBox",
         "Spacer",
@@ -175,5 +180,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "e4a5f4798d408f65c4102aa3e335fefaf2b29580d2642e2f9032726fabab867f"
+    public const val capsHash: String = "d2da2c213f33a30bc3aaaf2b1d78a1f09bf367a4b8624ceac380e5c72ca2f35c"
 }
