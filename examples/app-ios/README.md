@@ -291,12 +291,13 @@ OrcaCounter push: APNs token registered (80 bytes)
 `Info.plist` sets `FirebaseAppDelegateProxyEnabled` to NO, so Firebase swizzles nothing and gets
 the APNs token only from the plugin. `OrcaCounter.entitlements` holds `aps-environment`
 `development` (`CODE_SIGN_ENTITLEMENTS` in both configurations). A simulator build needs no team:
-it is signed to run locally and still carries the entitlement. On the iOS 18.5 simulator here, on
-an Apple silicon Mac, the app registered with the 80-byte token above; built without the
-entitlement, it got `APNs registration failed: no valid “aps-environment” entitlement string found
-for application`. A device build needs your team: in Xcode, the OrcaCounter target › Signing &
-Capabilities › Team. The entitlement is the Push Notifications capability, which automatic
-signing adds to the app's identifier; Xcode's free Personal Team does not support it.
+it is signed to run locally and still carries the entitlement. On the iOS 18.5 simulator on an
+Apple silicon Mac the app registers with an 80-byte token, the line above; built without the
+entitlement, it logs
+`OrcaCounter push: APNs registration failed: no valid “aps-environment” entitlement string found for application`.
+A device build needs your team: in Xcode, the OrcaCounter target › Signing & Capabilities › Team.
+The entitlement is the Push Notifications capability, which automatic signing adds to the app's
+identifier; Xcode's free Personal Team does not support it.
 
 A tap on one of the plugin's notifications calls `openNotification` with its payload. A payload
 that is an `orcacounter://` link is opened with `UIApplication.shared.open`, which hands it back to
@@ -331,9 +332,7 @@ put it at `examples/app-ios/OrcaCounter/GoogleService-Info.plist`; then build an
 change. The file is git-ignored, so it is never committed. FCM reaches iOS through APNs, so upload
 your APNs authentication key to the project too (Project settings › Cloud Messaging; see
 [Firebase Cloud Messaging on Apple platforms](https://firebase.google.com/docs/cloud-messaging/ios/client)),
-and run on a device with your team as above. A made-up `GoogleService-Info.plist` was tried here:
-the app bundled it, `FirebaseApp.configure()` ran without a crash, and Firebase's registration then
-failed against the made-up project, as it should.
+and run on a device with your team as above.
 
 On the `custom` home page, tap "Go to Push Page" (or launch straight to it: add
 `SIMCTL_CHILD_ORCA_PATH=push` to the command under "Plugins" above). The "Push Notifications" page
