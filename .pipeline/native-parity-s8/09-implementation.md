@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 3 of 7 · tasks: 3 green, 0 blocked · one snackbar queue per app; Tooltip, SnackBar on iOS
-S-queue / K-queue: snackbars, toasts and refused messages wait their turn, kept across a navigate.
-D2: iOS pages may use Tooltip and SnackBar; the registry is regenerated, the checks follow.
+group 4 of 7 · tasks: 4 green, 0 blocked · the M3 snackbar bar, and the tooltip placement cores
+S-bar / K-bar: Flutter's fixed bar in the root Scaffold, above the tab bar, on titled routes.
+S-tipcore / K-tipcore: where a tooltip bubble goes and its timings (moved up from group 5).
 
 ### New for you
 nothing new
 
 ### Trade-offs
-`toast` on both page models is now a read-only view of the queue's head (it was settable).
-Kotlin with no Scaffold: a snackbar is queued and timed but not drawn, as Flutter in release.
+Across a push the bar moves with the page; Flutter's Hero keeps it still (in the PR).
+A fling slides the bar off linearly; Flutter uses a spring (same end: removed at once).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 4, the M3 snackbar bar in the Scaffold and above the tab bar. (default: go)
+2. Next: group 5, the dialog sheet with Back, VoiceOver, TalkBack and the keyboard. (default: go)
 
 ## Appendix
 
@@ -61,6 +61,53 @@ already ran ahead of the kinds check).
 Changed: both kinds join `kinds`; with no handler they fall to the existing default (no state, no effect, reported to
 DevTools as Flutter's built-in handlers are, AE:180-204); a page handler runs and is awaited (OP:323-374, D5).
 Decided: no explicit switch branch (the default covers it). Not done: README's kind count (S-caps, G7).
+
+### Group 4
+Commits: S-tipcore 82ce5acf, K-tipcore 9469a5ed, S-bar 80b2d16e, K-bar 5fdc17b9 (staged by path). Nothing pushed.
+The tooltip cores moved up from G5 (they need nothing from G4; logged). Rows widened during the group (logged): K-bar
+also owns OrcaPageModel.kt (the queue's reveal and swipe) and OrcaApp.kt (the titled-route bar); S-bar also owns
+SnackbarQueueHostTests.swift (its two interim-bar tests).
+Tooltip cores, twin review: pass both lenses; went back twice for tests only (the same inputs per case on both
+SDKs, the wide-bubble doc: Flutter lays the bubble out with constraints.loosen(), so x ≥ 0; two cites).
+Bars, twin review: S fit rework (two interim-bar tests red; routes over the shell), K fit rework (titled routes,
+any root Scaffold, five missing cases, the keyboard floor); both rechecked; K once more (a titled route outside the
+mounted shell drew no bar; now in RouteFrame); final: both pass both lenses.
+
+#### Task S-tipcore / K-tipcore · TooltipPlacement
+Files: Swift `OrcaGatewayCore/Render/TooltipPlacement.swift` + tests; Kotlin `core/.../render/TooltipPlacement.kt` +
+test. Commits 82ce5acf, 9469a5ed.
+Cases (six shared names, the same inputs on both): centred on the child; 24 below its centre; above when below does
+not fit (both or neither: below, its top held at H − 10); clamped 10 from the edges; with ≤ 20 spare, centred in the
+overlay; Flutter's timings. Red first on stubs. Swift core 660 → 666; Kotlin core 677 → 683.
+Changed: a port of positionDependentBox (geometry.dart:51-66) around the child's centre (raw_tooltip.dart:881-884),
+offset 24 (tooltip.dart:413), margin 10; 500 ms press (gestures/constants.dart:29), 1500 ms after release
+(tooltip.dart:416, :570; raw_tooltip.dart:762-767), fade 150 / 75 with fastOutSlowIn both ways (raw_tooltip.dart:27-31).
+For the tooltip UI tasks: measure the bubble with the overlay as its maximum; pass the overlay less the keyboard.
+
+#### Task S-bar / K-bar · the M3 fixed snackbar bar
+Files: Swift `Widgets/SnackbarBar.swift` (new), `Widgets/Structure.swift`, `Navigation/TabShellView.swift`,
+`OrcaApp.swift`, `SnackbarBarTests.swift` (new), `SnackbarQueueHostTests.swift`; Kotlin `widgets/SnackbarBar.kt`
+(new), `widgets/Structure.kt`, `navigation/TabShellScreen.kt`, `OrcaPageView.kt`, `OrcaPageModel.kt`, `OrcaApp.kt`,
+`SnackbarBarTest.kt` (new).
+Cases: A8.4 ui: the look (#322F35, #F5EFF7 bodyMedium 14 / 20 / 0.25, padding 24 and 14, square, full width); a long
+message wraps (Flutter's Text has no maxLines: the design's "one line" was the padding constant); the safe area inside
+only with no bars or footer; above the bottom bars and footer, over the bottom-sheet slot, the FAB 16 over it (the
+higher of the two lifts); revealed by height through fastOutSlowIn, no fade; a swipe past 0.4 of the whole height or a
+fling of 700 removes it, a short release slides back; under tabs only the shell draws it, above the tab bar; a nested
+Scaffold draws none, no Scaffold draws nothing, any Scaffold with none above draws it; a titled route (Flutter's root
+wrapper Scaffold) draws it at its edge, its page nested; the keyboard floor (Kotlin tested; Swift cited, hand check);
+VoiceOver announces each bar once (Swift), a live region (Kotlin). Swift 21 + the two host tests reworked (UI 603 →
+617; iOS 21/21, 9/9 and neighbours green); Kotlin 21 (sdk 830 → 851).
+Red first: Swift's first pass and its five rework cases (proven against mutated sources); one iOS-only tab case passed
+first. Kotlin: the first pass red for the right reasons; in the rework column root, titled route and keyboard ran red;
+wrap, fling, toast, footer and nested Scaffold are pins of behaviour that already worked.
+Also fixed: Swift's FAB read a 0 bottom inset on a device (S-static's reader sat inside ignoresSafeArea); it now
+keeps 16 above the safe area (pinned by testA8_4_TheBottomSafeAreaIsInsideTheBar).
+Known differences (in the PR): across a push the bar moves with the page (Flutter's Hero keeps it still); a fling is a
+linear slide, not a spring; Kotlin drops the 400 cross-axis check; Swift's bottom bars ride up on the keyboard (from
+before this step), so there the bar sits on the bars.
+Hand checks: a real swipe and fling, the reveal's smoothness, VoiceOver / TalkBack reading the bar, the bar on the
+keyboard, landscape edge to edge, real insets.
 
 ### Group 3
 Commits: D2 2acf9405, K-queue ed8ab357, S-queue fd77ece9 (staged by path). Nothing pushed. D2 went back once
@@ -142,6 +189,12 @@ caps are S-caps / K-caps (G7); a snackbar over the slot is S-bar / K-bar (G4).
 Nits left as is: Swift's line keeping a DTS italic has no case of its own (Kotlin pins italic); Kotlin's touch box
 covers the cut corners (16 on the sheet, 4 on the bar) where Flutter's BoxDecoration.hitTest lets them through; a
 label wider than the whole bar is ellipsised on Kotlin, overflows on Swift and Flutter.
+
+### Test run (group 4, all four tasks' final files)
+engine `bun test` 842 pass · Flutter 547 pass, analyze clean · `swift test` UI 617, core 666 · iOS scheme on
+SnackbarBarTests 21/21, SnackbarQueueHostTests 9/9, BottomSheetTests 10/10, IconButtonFabTests 14/14, SafeAreaShell,
+TabShell, AppBoot and Golden 37/37 · Kotlin `./gradlew cleanTest :sdk:cleanTestDebugUnitTest build --no-build-cache`
+core 683, sdk 851, lint clean.
 
 ### Test run (group 3, all three tasks' final files)
 engine `bun test` 842 pass · Flutter 547 pass, analyze clean · `swift test` UI 603, core 660 · iOS scheme on
