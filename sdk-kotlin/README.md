@@ -2,7 +2,7 @@
 
 > [!WARNING]
 > **Alpha (`0.1.0-alpha.1`).** The native Android client for Orca Gateway (Epic 23b) works for the
-> pages its 25 widgets and 15 action kinds cover, but its API may still change between alphas, so
+> pages its 32 widgets and 20 action kinds cover, but its API may still change between alphas, so
 > use it with care. The Flutter SDK
 > ([`orca_gateway`](https://github.com/orca-gateway/orca-gateway/tree/main/sdk)) stays the stable
 > one; use it for production apps.
@@ -88,7 +88,7 @@ It needs JDK 17 or later and brings no HTTP library: `OrcaClient` sends through 
 | Module | What | Platforms |
 |---|---|---|
 | `core` | Wire models (`ComponentNode`, `Value`, `Action`, `PageResponse`), `ValueResolver` (9 Value kinds, 31 transforms, 13 BoolExpr ops), `ElmStore` with page and app scopes, the action executor with effects as data, the render tree, `OrcaClient` with the 412 caps handshake behind an `HttpTransport` interface, the generated capability vector, DevTools events (`DevToolsEvent`, `OrcaDebug`). kotlinx.serialization only. Artifact `com.orcagateway:sdk-core`. | JVM 17+, Android |
-| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with 25 widgets (the 15 core ones plus Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector) and the degrade policies (an unknown widget becomes a FallbackPrompt; the server's `warn` banner, its `require` blocking prompt and the 426 upgrade page are drawn like any page), `OrcaTheme` button styles, `OrcaApp` on `OrcaRouter` (a `NavHost`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
+| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with 32 widgets (those in [`capabilities.json`](capabilities.json)) and the degrade policies (an unknown widget becomes a FallbackPrompt; the server's `warn` banner, its `require` blocking prompt and the 426 upgrade page are drawn like any page), `OrcaTheme` button styles, `OrcaApp` on `OrcaRouter` (a `NavHost`) with its error screen (`OrcaErrorView`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
 
 Build: Gradle 9 through the committed wrapper, Kotlin 2.4, AGP 9, any JDK 17 or later, and an
 Android SDK with platform 36 (`ANDROID_HOME` or `local.properties`).
@@ -332,6 +332,72 @@ OrcaTelemetry.onEvent = { event, data -> Log.w("Orca", "$event $data") }
 
 It reports one event so far, `unknown_widget_type` with `{"type": "<type>"}`, the first time the
 process meets a widget type the SDK does not draw.
+
+## App shell: host views, theme, locale, errors and timeout
+
+Around the pages `OrcaApp` draws a few screens of its own: a spinner while it boots, an error
+screen, and "Update required". Both overloads take four composables that replace them, and the
+colours and locale for them and the pages; the client takes the request timeout:
+
+```kotlin
+import androidx.compose.material3.darkColorScheme
+import java.util.Locale
+
+val client = OrcaClient(
+    baseUrl = URI("https://orca.example.com"),
+    appId = "counter",
+    apiKey = "demo-key",
+    transport = OkHttpTransport(),
+    timeoutMillis = 10_000, // 30_000 by default
+)
+setContent {
+    OrcaApp(
+        client,
+        enableOffline = true,
+        loading = { MyLoading() },
+        splash = { MySplash() },
+        error = { error -> MyError(error) },
+        forceUpdate = { MyUpdatePrompt() },
+        colorScheme = darkColorScheme(),
+        locale = Locale.forLanguageTag("fr-FR"),
+    )
+}
+```
+
+- `splash`, else `loading`, shows while the app boots: the version check (`enableOffline`) and the
+  `/config` fetch (no `path`). A page opened at a path skips both. Pages keep the SDK's spinner.
+- `error` gets what failed the boot: the `/config` fetch's error or a plugin conflict. A page that
+  fails to load always shows the SDK's error screen, with "Try again".
+- `forceUpdate` replaces "Update required. Please update the app.".
+- `colorScheme` is the Material 3 colours of everything `OrcaApp` draws, with your typography and
+  shapes; null keeps your `MaterialTheme`. A Scaffold page stays light, as Flutter draws it in its
+  default light theme, so dark mode shows on the SDK's screens and your own views.
+- `locale` is what `OrcaApp`'s screens and pages read from `LocalConfiguration`. The layout direction
+  stays yours (Flutter's default localizations are left to right), and nothing is sent: the
+  `x-orca-locale` header stays the device's locale.
+
+Each one left out (null) keeps what the SDK does without it.
+
+The error screen is Flutter's (`buildOrcaError`): an icon, a title and a message for what failed.
+`OrcaErrorView(error, modifier, onRetry)` draws it for any error of yours too, and
+`OrcaErrorInfo.from(error)` (in `sdk-core`) gives its kind, title and message for a view of your own:
+
+| What failed | Title |
+|---|---|
+| 401 | Unauthorized |
+| 403 | Forbidden |
+| 404 | Not Found |
+| 429 | Too Many Requests |
+| 500 or more | Server Error |
+| another status | Error, with the message "Failed to fetch page: <status>" |
+| an answer that does not decode, a URL that cannot be built | Configuration Error |
+| a server not reached, or a request past the timeout | Connection Failed |
+| anything else | Something Went Wrong |
+
+`timeoutMillis` is how long one request may take, send to answer, 30 seconds by default.
+`OkHttpTransport` applies it as the call's timeout; a transport of your own must apply
+`HttpRequest.timeoutMillis` itself. Flutter's `OrcaClient` declares the same `timeout` but does not
+apply it, so a slow server there waits as long as the HTTP library does.
 
 ## Plugins
 
