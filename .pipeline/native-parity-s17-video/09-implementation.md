@@ -172,6 +172,90 @@ Decisions: the video entries after the voice's, in release-row order · the head
 plugin adds one entry per matrix (both auto-decided, minor)
 Review fit: pass · Review quality: pass
 
+### Group 4
+#### T7 · Swift player, group 4 additions (63ccee93 audio, 1db399da rework; e969c949 loading)
+Files: VP/ios/Sources/OrcaVideoPlayer/{VideoPlayerPlugin,VideoPlayback,VideoPlayerView}.swift ·
+VP/ios/Tests/OrcaVideoPlayerTests/VideoPlayerPluginTests.swift
+Cases: C17.2/S → green (swift test 26, 0 warnings; xcodebuild test on the iOS 18.5 simulator 27; red first: the
+session test before the port, 566 vs 32 for the loading view in the demo's Column; the hand check after a rebuild)
+Changed: on iOS the first player to initialize upgrades the shared AVAudioSession to .playback as
+video_player_avfoundation 2.9.4 does (record kept as playAndRecord, options kept, nothing set when right, once per
+plugin, a failure logged) · the loading and error views take the full width and their own height, as Flutter's
+Center in a Column (they took the free height of a Column drawn as a VStack)
+Decisions: the audio port (T14's question, standing rule) · never fill the height: in a height-bounding box the
+transient disc or text sits at the top (filling a real bound needs an sdk-swift API; follow-up) (minor)
+Review fit: pass (audio), pass (loading) · Review quality: the once test passed without its guard, fixed (1db399da);
+loading pass
+#### T8 · Kotlin player, group 4 addition (a603163f first frame)
+Files: VP/android/video-player/src/main/kotlin/com/orcagateway/plugins/videoplayer/VideoPlayback.kt ·
+VP/android/video-player/src/test/kotlin/com/orcagateway/plugins/videoplayer/VideoPlayerPluginTest.kt
+Cases: C17.2/K → green (`./gradlew build --continue` BUILD SUCCESSFUL, 20 + 6 tests, lint and warnings as errors
+clean; red first `expected:<[0]> but was:<[]>`; on emulator-5584 the first frame under the ▶, Position 0 ms)
+Changed: MediaPlayerPlayback.setSurface seeks to the player's position when a surface comes while it is prepared and
+not playing, so the box shows the first frame before any play as Flutter's ExoPlayer and the Swift plugin do (a
+MediaPlayer on a TextureView draws nothing until start or a seek); interface, fake and controller unchanged
+Decisions: the seek at the surface, not at prepare (no surface yet then) · in MediaPlayerPlayback, as ExoPlayer does it
+on its own · a new surface while paused gets the current frame (on API 24-25 the nearest sync frame) (all minor)
+Review fit: pass · Review quality: pass
+#### T12 · iOS demo links and registers player (cfdf0d0, 3790c88 rework)
+Files: examples/app-ios/OrcaCounter.xcodeproj/project.pbxproj · examples/app-ios/OrcaCounter/OrcaCounterApp.swift ·
+examples/app-ios/README.md · examples/app-ios/OrcaVideoPlayer (new, a git symlink to ../../plugins/orca_video_player/
+ios; added at 09)
+Cases: C17.2/hand-S → green (`xcodebuild clean build` BUILD SUCCEEDED, 0 Swift warnings; red first: "Missing package
+product 'OrcaVideoPlayer'", the first pass blocked on it: SwiftPM names a local package after its folder, and both
+plugins' are `ios`; the app opened /video on the simulator: the video, ▶, the five buttons, Position 0, Finished false)
+Changed: the pbxproj links the video through ./OrcaVideoPlayer (resolved locally, the SDK by path, one OrcaGateway) ·
+the app registers `VideoPlayerPlugin()` beside the voice's · the README says why the link, names four plugins and
+the video's row, and walks the "### Video player" hand check (needs the network; https needs no plist entry).
+Decisions: the link (decision swiftpm-local-package-identity) · the hand check's notes from the code (minor)
+Review fit: pass · Review quality: the README gave the link twice, now one sentence (3790c88), fixed
+#### T13 · Android demo includes and registers player (5bf993a)
+Files: examples/app-android/settings.gradle.kts · examples/app-android/app/build.gradle.kts ·
+examples/app-android/app/src/main/kotlin/com/orcagateway/examples/counter/MainActivity.kt · examples/app-android/README.md
+Cases: C17.2/hand-K → green (`./gradlew :app:assembleDebug` BUILD SUCCESSFUL, warnings as errors; red first:
+"Unresolved reference 'VideoPlayerPlugin'"; the build installs on emulator-5584 and /video opens with the plugin's
+view; `bun test test/launch-readmes.test.ts` 6 pass)
+Changed: settings includes ../../plugins/orca_video_player/android as `orca-video-player-android` (one sdk-kotlin build
+serves the app and both plugins) · the app depends on com.orcagateway:orca-video-player at the plugin's VERSION ·
+registers `VideoPlayerPlugin()` after the voice's · INTERNET arrives by the manifest merger, the app's manifest
+unchanged · the README's "### The video player" hand check (the network, the ORCA_PATH shortcut, five steps).
+Decisions: the video's build named `orca-video-player-android` (Gradle refused two builds at `:android`, the same
+folder-name clash as SwiftPM's) · `--es ORCA_PATH video` as the shortcut (both auto-decided, minor)
+Review fit: pass · Review quality: pass
+#### T14 · Native READMEs: install, register, ATS (fa5a43e5; 749e5163 rework)
+Files: VP/ios/README.md (new) · VP/android/README.md (new) · VP/README.md (its native apps section)
+Cases: P-readme → green (scratch check of 217 facts against the yaml, the Swift and Kotlin sources, release.sh,
+swift-mirror.sh, the workflows and every link; red first 96 fail before the READMEs, then 9 fail on the new Sound
+checks; `flutter pub publish --dry-run` the same 1 warning and 1 hint before and after, no ios/ or android/ file)
+Changed: ios/README.md, the mirror's front page (SwiftPM from orca-video-player-swift 0.1.0-alpha.1, which brings
+orca-gateway-swift from 0.1.0-alpha.2; `VideoPlayerPlugin()`; https as is, http through the narrowest ATS exception;
+Sound: the plugin sets `.playback` on its first player as Flutter's video_player does; the tables; LICENSE) ·
+android/README.md (Maven Central, `VideoPlayerPlugin()` without Context, INTERNET merged, cleartext by the app's own
+network security config) · the pub README's "Native apps (Swift and Kotlin SDKs)" section, absolute links
+Decisions: three wrong Flutter facts fixed in the pub README (`^0.1.0` → `^0.3.0` and `^0.2.0`, the class name
+`VideoPlayerPlugin`) · the narrowest http exceptions, not Flutter's NSAllowsArbitraryLoads (both auto-decided, minor)
+· the missing iOS audio session became T7's change 63ccee93 (standing rule) and this README's Sound section
+Review fit: pass · Review quality: pass
+#### T15 · Outside repo: walkthrough, release table (not in git, not in the PR)
+Files: /Users/amrebada/workspace/orca-gateway/docs/User_Actions.md · /Users/amrebada/workspace/orca-gateway/CLAUDE.md
+Cases: P-docs → green (SC/s17v/t15/check.py 95 of 95, red first 37 of 91: every doc check failing, every code check
+passing; the code checks run release.sh's own mirror_url, maven_artifacts, check_swift_mirror (git stubbed), bump_pre
+and tag_exists, swift-mirror.sh `info`, both workflows' tag patterns, Package.swift, build.gradle.kts, the VERSIONs)
+Changed: User_Actions.md gains "## Native parity step 17: the orca_video_player Swift mirror (GitHub repository +
+deploy key)" after the voice's: its 7 steps with orca-video-player-swift, its own key pair, the secret
+ORCA_VIDEO_PLAYER_SWIFT_DEPLOY_KEY, sdk-swift 0.1.0-alpha.2 and sdk-kotlin first (Step 5 points to the voice's), then
+`13,14`, the failures and fixes · CLAUDE.md: rows 13-14, "1-14", the video in steps 2, 6 and 9, its pre-req, the
+Order bullet for `11,12` or `13,14`. Decisions: one script run per plugin · one staging path pattern · row 14 without
+the sdk dependency, the Order bullet carries it (all auto-decided, minor)
+Review fit: pass · Review quality: Step 5 copied the voice's sub-steps, now a pointer as Step 6 is, fixed
+#### Hand checks (2026-11-16)
+- iOS 18.5 simulator FDE5D612 and emulator-5584 (API 34), the demo's /video on :8094: the overlay tap plays and
+  pauses with the ▶ following the player; Play, Pause, Seek 0 (the frame moves, Position holds while paused, as
+  Flutter's onProgress fires only while playing); Speed 1.5 measured ≈1.4-1.5×; the end: the last frame, the ▶,
+  Finished true; play at the end starts from 0. Volume 0.5 not audible there (the unit tests pin it).
+- Two gaps from Flutter found and fixed: the iOS loading view took a Column's free height (e969c949), the Android
+  box was blank until the first play (a603163f); both seen fixed after a rebuild. Notes: SC/s17v/hand/C17.2-hand.md.
+
 ### Test run
 Group 1, on feat/native-parity-s17-video after T1-T3 (SC/s17v/g1run): `cd cli && dart test` 43 pass (40 + T1's 3) ·
 `dart analyze` no issues · `cd engine && bun test` 806 pass, 0 fail · `cd sdk && flutter test` 517 pass · `flutter
@@ -214,3 +298,8 @@ none
 - After the merge, the user's (T15 writes how): the empty public repo orca-gateway/orca-video-player-swift, its own
   write deploy key, the secret ORCA_VIDEO_PLAYER_SWIFT_DEPLOY_KEY; release sdk-swift 0.1.0-alpha.2 and sdk-kotlin
   before rows 13-14.
+- T15's two files are outside the repo (docs/User_Actions.md, CLAUDE.md at the workspace root): not in the PR.
+- Follow-ups for the PR body: sdk-swift's own Center and Align fill a Column's leftover height when the Column has no
+  flex child (drawn as a VStack), where Flutter's shrink to the child (measured by T7's rework); an sdk-swift way for
+  a plugin to tell a real height bound from that share; renaming the plugins' Swift and Gradle package folders so
+  they no longer clash (instead of the ./OrcaVideoPlayer link and the named Gradle build) before map and push.
