@@ -14,8 +14,9 @@ import AppKit
 /// `_buildUnsupportedWidgetPlaceholder` (sdk/lib/src/builders/
 /// primitive_builders.dart), the grey "known widget that cannot run here"
 /// card. The view is driven directly with fixture 17's node (schema/fixtures/
-/// render/17_unsupported_widget_placeholder.json) and variants of it; the
-/// page's registry knows the type, which the SDK does not advertise yet.
+/// render/17_unsupported_widget_placeholder.json) and variants of it, on a
+/// page with the SDK's standard registry (S18 advertises the type). The last
+/// case draws the page's node through the widget dispatch.
 @MainActor
 final class UnsupportedWidgetPlaceholderTests: XCTestCase {
     typealias RGB = (r: Int, g: Int, b: Int)
@@ -51,19 +52,23 @@ final class UnsupportedWidgetPlaceholderTests: XCTestCase {
         return try XCTUnwrap(fixture["expected"].arrayValue?.first?.objectValue)
     }
 
-    /// The view for fixture 17's node with `changes` to its props (nil
-    /// removes a prop), and the page model it draws with.
-    func placeholder(_ changes: [String: JSONValue?] = [:]) throws
-        -> (view: UnsupportedWidgetPlaceholderView, model: OrcaPageModel) {
+    /// A page whose one component is fixture 17's node with `changes` to its
+    /// props (nil removes a prop).
+    func fixturePage(_ changes: [String: JSONValue?] = [:]) throws -> PageResponse {
         var node = try fixtureNode()
         var props = node["props"]?.objectValue ?? [:]
         for (key, value) in changes { props[key] = value }
         node["props"] = .object(props)
-        let page = try JSONValue.object([
+        return try JSONValue.object([
             "pageId": "p", "title": "T", "state": [], "components": [.object(node)],
         ]).decode(PageResponse.self)
-        let registry = WidgetRegistry(types: Set(GeneratedCapabilities.widgets).union(["UnsupportedWidgetPlaceholder"]))
-        let model = OrcaPageModel(page: page, registry: registry)
+    }
+
+    /// The view for fixture 17's node with `changes` to its props, and the
+    /// page model it draws with (the standard registry).
+    func placeholder(_ changes: [String: JSONValue?] = [:]) throws
+        -> (view: UnsupportedWidgetPlaceholderView, model: OrcaPageModel) {
+        let model = OrcaPageModel(page: try fixturePage(changes))
         let resolved = try XCTUnwrap(model.resolve("root"))
         XCTAssertEqual(resolved.type, "UnsupportedWidgetPlaceholder", "not degraded")
         return (UnsupportedWidgetPlaceholderView(node: resolved, model: model), model)
@@ -254,6 +259,26 @@ final class UnsupportedWidgetPlaceholderTests: XCTestCase {
                              scale: 1)
         let tightRight = try XCTUnwrap(tight.bounds { near($0, Self.border) }).maxX
         XCTAssertEqual(tightRight, 600, "a stretched Column or a list: the card spans the width")
+    }
+
+    // MARK: on a page
+
+    func testC18_4_APageWithFixture17ResolvesUndegradedAndTheDispatchDrawsThePlaceholder() throws {
+        let model = OrcaPageModel(page: try fixturePage())
+        XCTAssertTrue(model.renderer.registry === WidgetRegistry.shared, "the standard registry")
+        let resolved = try XCTUnwrap(model.resolve("root"))
+        XCTAssertEqual(resolved.type, "UnsupportedWidgetPlaceholder", "degraded to FallbackPrompt")
+
+        let dispatched = WidgetView(node: resolved, model: model)
+        XCTAssertNotNil(ViewTree.first(UnsupportedWidgetPlaceholderView.self, in: dispatched), "the dispatch skips the card")
+        XCTAssertNil(ViewTree.first(FallbackPromptView.self, in: dispatched), "the dispatch draws FallbackPrompt")
+
+        // The page's node draws exactly the card.
+        let page = try draw(NodeView(id: "root", model: model))
+        let card = try draw(UnsupportedWidgetPlaceholderView(node: resolved, model: model))
+        XCTAssertEqual(page.width, card.width)
+        XCTAssertEqual(page.height, card.height)
+        XCTAssertTrue(page.bytes == card.bytes, "the page's node does not draw the card")
     }
 }
 #endif
