@@ -26,13 +26,13 @@ final class CapabilitiesTests: XCTestCase {
         XCTAssertEqual(advertised, listed.intersection(ios))
         XCTAssertEqual(advertised, listed)
 
-        // SnackBar and Tooltip have no ios target until native parity step 8,
-        // so they are never advertised on iOS. Checkbox, Radio,
-        // FloatingActionButton and InkWell, Epic 23b's other Material-only
-        // four, take it in step 6 (design D2).
-        for orphan in ["SnackBar", "Tooltip"] {
-            XCTAssertFalse(ios.contains(orphan), "\(orphan) has the ios target")
-            XCTAssertFalse(advertised.contains(orphan))
+        // SnackBar and Tooltip, Epic 23b's last iOS orphans, take the ios
+        // target in native parity step 8 (A8.3, A8.5; design D2), as
+        // Checkbox, Radio, FloatingActionButton and InkWell did in step 6.
+        // They are not advertised until step 8's caps task lists them.
+        for widget in ["SnackBar", "Tooltip"] {
+            XCTAssertTrue(ios.contains(widget), "\(widget) lacks the ios target")
+            XCTAssertFalse(advertised.contains(widget))
         }
         // Drawer now has the ios target.
         XCTAssertTrue(ios.contains("Drawer"), "Drawer lacks the ios target")

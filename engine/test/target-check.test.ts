@@ -3,21 +3,34 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { findOffTargetWidgets, resetOffTargetWarnings, warnOffTargetOnce } from "../src/core/target-check";
 import { PageDefinition } from "../src/core/page-definition";
 import { Text } from "../src/components";
+import { WIDGET_REGISTRY } from "../src/core/widget-registry-gen";
 
 describe("findOffTargetWidgets", () => {
+  // No built-in widget is off ios since native parity step 8 (A8.3, A8.5): the
+  // off-target examples are Video, on android and ios only, and an
+  // android-only entry added to the registry; Tooltip and SnackBar no longer
+  // hit on ios.
   test("names each widget type a declared target cannot render, once", () => {
+    const registry = {
+      ...WIDGET_REGISTRY,
+      AndroidOnly: { ...WIDGET_REGISTRY.Video, type: "AndroidOnly", targets: ["android"] },
+    };
     const hits = findOffTargetWidgets(
-      [{ type: "Column" }, { type: "Tooltip" }, { type: "Text" }, { type: "Tooltip" }, { type: "SnackBar" }],
-      ["ios"],
+      [
+        { type: "Column" }, { type: "Video" }, { type: "Text" }, { type: "AndroidOnly" }, { type: "Video" },
+        { type: "Tooltip" }, { type: "SnackBar" }, { type: "AndroidOnly" },
+      ],
+      ["web", "ios"],
+      registry,
     );
     expect(hits).toEqual([
-      { type: "Tooltip", missing: ["ios"] },
-      { type: "SnackBar", missing: ["ios"] },
+      { type: "Video", missing: ["web"] },
+      { type: "AndroidOnly", missing: ["web", "ios"] },
     ]);
   });
 
   test("B10.C-S Drawer is on every target, ios included: it never hits", () => {
-    expect(findOffTargetWidgets([{ type: "Drawer" }, { type: "SnackBar" }], ["ios"])).toEqual([{ type: "SnackBar", missing: ["ios"] }]);
+    expect(findOffTargetWidgets([{ type: "Drawer" }, { type: "Video" }], ["flutter", "ios"])).toEqual([{ type: "Video", missing: ["flutter"] }]);
     expect(findOffTargetWidgets([{ type: "Drawer" }], ["flutter", "web", "android", "ios"])).toEqual([]);
   });
 

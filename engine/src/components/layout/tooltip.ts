@@ -10,8 +10,6 @@ export interface TooltipProps {
 
 export class Tooltip extends SingleChildLayout {
   readonly type = "Tooltip";
-  /** No native iOS counterpart (Epic 23b); SwiftUI degrades it via the caps vector. */
-  static readonly targets = ["flutter", "web", "android"] as const;
   private props: Omit<TooltipProps, "child" | "actions">;
 
   private constructor(opts: TooltipProps) {
