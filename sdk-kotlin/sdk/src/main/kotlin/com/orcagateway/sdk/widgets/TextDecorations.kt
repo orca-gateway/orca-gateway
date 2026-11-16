@@ -59,13 +59,18 @@ internal fun wordSpaced(text: String, extra: Double, style: TextStyle): Annotate
 internal class DecorationLines(val path: Path, val color: Color, val stroke: Stroke)
 
 /**
- * The font's ascent for [layout]'s style, in px: the baseline of a line no
- * taller than the font. Measured by [measurer] (cached there).
+ * The font's ascent for [style] ([layout]'s unless given; a RichText run's
+ * own), in px: the baseline of a line no taller than the font. Measured by
+ * [measurer] (cached there) at [layout]'s density.
  */
-internal fun fontAscent(measurer: TextMeasurer, layout: TextLayoutResult): Float =
+internal fun fontAscent(
+    measurer: TextMeasurer,
+    layout: TextLayoutResult,
+    style: TextStyle = layout.layoutInput.style,
+): Float =
     measurer.measure(
         "H",
-        layout.layoutInput.style.copy(lineHeight = TextUnit.Unspecified),
+        style.copy(lineHeight = TextUnit.Unspecified),
         density = layout.layoutInput.density,
     ).firstBaseline
 
@@ -85,6 +90,62 @@ internal fun Density.decorationLines(
     ascent: Float,
 ): DecorationLines {
     val fontSize = layout.layoutInput.style.fontSize.takeIf { it.isSp }?.toPx() ?: DEFAULT_FONT_SIZE.sp.toPx()
+    val stretches = (0 until layout.lineCount).map { line ->
+        Stretch(layout.getLineLeft(line), layout.getLineRight(line), layout.getLineBaseline(line))
+    }
+    return strokedLines(stretches, props, fontSize, color, ascent, overlineDrop = fontSize / 14f / 2)
+}
+
+/**
+ * [decorationLines]' range form, for one RichText run: the line of [props]
+ * under (an overline: over) the characters [start] until [end] of [layout]
+ * alone, on each line they wrap onto (less the line's trailing spaces),
+ * from that line's baseline, as SkParagraph paints a decoration per style
+ * run (Skia modules/skparagraph Decorations.cpp). Placed, sized and
+ * stroked as a Text's for a font of [fontSize] (the run's), except the
+ * overline: centred on the run's top edge, the run font's [ascent] above
+ * the baseline, half of it above (Skia's `-ascent` from the run's top).
+ */
+internal fun Density.decorationLines(
+    layout: TextLayoutResult,
+    props: TextStyleProps,
+    color: Color,
+    ascent: Float,
+    fontSize: TextUnit,
+    start: Int,
+    end: Int,
+): DecorationLines {
+    val px = fontSize.takeIf { it.isSp }?.toPx() ?: DEFAULT_FONT_SIZE.sp.toPx()
+    val stretches = if (end <= start) {
+        emptyList()
+    } else {
+        (layout.getLineForOffset(start)..layout.getLineForOffset(end - 1)).mapNotNull { line ->
+            val from = maxOf(start, layout.getLineStart(line))
+            val to = minOf(end, layout.getLineEnd(line, visibleEnd = true))
+            if (to <= from) return@mapNotNull null
+            val box = layout.getPathForRange(from, to).getBounds()
+            Stretch(box.left, box.right, layout.getLineBaseline(line))
+        }
+    }
+    return strokedLines(stretches, props, px, color, ascent, overlineDrop = 0f)
+}
+
+/** A piece of one text line, from [left] to [right], on the line whose baseline is at [baseline]. */
+private class Stretch(val left: Float, val right: Float, val baseline: Float)
+
+/**
+ * [props]' line along each of [stretches] for a font of [fontSize] px: an
+ * overline [overlineDrop] below the font's [ascent] above the baseline, an
+ * underline a unit below it, a line-through at half the x-height above it.
+ */
+private fun Density.strokedLines(
+    stretches: List<Stretch>,
+    props: TextStyleProps,
+    fontSize: Float,
+    color: Color,
+    ascent: Float,
+    overlineDrop: Float,
+): DecorationLines {
     val unit = fontSize / 14f
     val effect = when (props.decorationStyle) {
         DecorationStyle.Dashed -> PathEffect.dashPathEffect(floatArrayOf(4 * unit, 2 * unit))
@@ -93,13 +154,13 @@ internal fun Density.decorationLines(
     }
     val gap = 3.dp.toPx()
     val path = Path()
-    for (line in 0 until layout.lineCount) {
-        val left = layout.getLineLeft(line)
-        val right = layout.getLineRight(line)
+    for (stretch in stretches) {
+        val left = stretch.left
+        val right = stretch.right
         if (right <= left) continue
-        val baseline = layout.getLineBaseline(line)
+        val baseline = stretch.baseline
         val y = when {
-            props.overline -> baseline - ascent + unit / 2
+            props.overline -> baseline - ascent + overlineDrop
             props.underline -> baseline + unit
             else -> baseline - fontSize * X_HEIGHT / 2
         }

@@ -11,13 +11,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.sp
 import com.orcagateway.core.render.ResolvedNode
@@ -38,16 +42,28 @@ import com.orcagateway.sdk.style.TextStyleProps
  * no ambient style, no DefaultTextStyle, and no text scaling (the font scale
  * is 1 inside, Flutter's `TextScaler.noScaling`). textAlign start unless
  * sent, soft wrap, `overflow` clip unless sent (`fade` fades as a Text's),
- * `maxLines`.
+ * `maxLines`. A run's solid underline or line-through in its own colour is
+ * the SpanStyle's; any other line (an overline; a double, wavy, dotted or
+ * dashed line; a decorationColor) is drawn under (an overline: over) that
+ * run alone ([RunLine]), in decorationColor else the run's colour, clipped
+ * only when the text overflows (Flutter's `RenderParagraph`).
  */
 @Composable
 internal fun RichTextWidget(node: ResolvedNode, modifier: Modifier) {
+    val lines = mutableListOf<RunLine>()
     val text = buildAnnotatedString {
         for (run in TextStyles.spans(node["text"], base = null)) {
             val start = length
             append(run.text)
             val props = run.style?.let(::TextStyleProps) ?: continue
-            addStyle(props.spanStyle(), start, length)
+            val span = props.spanStyle()
+            if (props.drawsDecoration) {
+                // The line is the RunLine's: the span draws none of the paragraph's or its own.
+                addStyle(span.copy(textDecoration = TextDecoration.None), start, length)
+                if (length > start) lines += RunLine(start, length, props, span)
+            } else {
+                addStyle(span, start, length)
+            }
             // After the run's style, so a space's letter spacing wins.
             props.wordSpacing?.let { extra ->
                 val space = SpanStyle(letterSpacing = ((props.letterSpacing ?: 0.0) + extra).sp)
@@ -58,34 +74,58 @@ internal fun RichTextWidget(node: ResolvedNode, modifier: Modifier) {
     val style = ENGINE_TEXT_STYLE.merge(TextStyleProps(node["text"]?.get("style")).textStyle())
         .merge(TextStyle(textAlign = Props.textAlign(node["textAlign"]) ?: TextAlign.Start))
     val maxLines = node["maxLines"]?.intValue?.takeIf { it > 0 }?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
+    val overflow = Props.overflow(node["overflow"])
     val fade = node["overflow"]?.stringValue == "fade"
-    val measurer = if (fade) rememberTextMeasurer() else null
+    val measurer = if (fade || lines.any { it.props.overline }) rememberTextMeasurer() else null
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    val faded = if (measurer == null) {
+    val drawn = if (!fade && lines.isEmpty()) {
         Modifier
     } else {
         Modifier.drawWithCache {
             // Read here, the layout rebuilds the cache whenever the text lays out anew.
-            val brush = layout?.let { fadeBrush(measurer, it, size, layoutDirection) }
-                ?: return@drawWithCache onDrawWithContent { drawContent() }
+            val result = layout ?: return@drawWithCache onDrawWithContent { drawContent() }
+            val strokes = lines.map { it.lines(this, result, style, measurer) }
+            val clip = result.hasVisualOverflow && overflow != TextOverflow.Visible
+            val brush = if (fade && measurer != null) fadeBrush(measurer, result, size, layoutDirection) else null
             val bounds = size.toRect()
             onDrawWithContent {
-                drawContext.canvas.saveLayer(bounds, Paint())
+                if (brush != null) drawContext.canvas.saveLayer(bounds, Paint())
                 drawContent()
-                fadeOverflow(brush)
-                drawContext.canvas.restore()
+                if (clip) clipRect { strokes.forEach { drawDecoration(it) } } else strokes.forEach { drawDecoration(it) }
+                if (brush != null) {
+                    fadeOverflow(brush)
+                    drawContext.canvas.restore()
+                }
             }
         }
     }
     CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale = 1f)) {
         Text(
             text = text,
-            modifier = modifier.then(faded),
-            overflow = Props.overflow(node["overflow"]),
+            modifier = modifier.then(drawn),
+            overflow = overflow,
             softWrap = true,
             maxLines = maxLines ?: Int.MAX_VALUE,
             onTextLayout = { layout = it },
             style = style,
         )
+    }
+}
+
+/**
+ * A RichText run's line that its SpanStyle cannot draw: the characters
+ * [start] until [end], in [props] (the run's merged style), whose
+ * [span] lies over the paragraph's style.
+ */
+private class RunLine(val start: Int, val end: Int, val props: TextStyleProps, val span: SpanStyle) {
+    /**
+     * The line on [layout] (decorationLines' range form) for the run in
+     * [paragraph] under its [span]: in decorationColor else the run's
+     * colour, an overline at the run font's ascent ([measurer]'s).
+     */
+    fun lines(density: Density, layout: TextLayoutResult, paragraph: TextStyle, measurer: TextMeasurer?): DecorationLines {
+        val run = paragraph.merge(span)
+        val ascent = if (props.overline && measurer != null) fontAscent(measurer, layout, run) else 0f
+        return density.decorationLines(layout, props, props.decorationColor ?: run.color, ascent, run.fontSize, start, end)
     }
 }
