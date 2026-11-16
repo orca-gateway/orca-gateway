@@ -19,8 +19,8 @@ import FoundationNetworking
 ///   and `OrcaClientError.invalidURL` (Dart `Uri.parse` throws a
 ///   `FormatException`) are "Configuration Error".
 /// - A `URLError` that never reached the server (Dart `SocketException`,
-///   "Connection refused") is "Connection Failed". A timeout counts too, a
-///   native difference: Flutter's `TimeoutException` falls to the default.
+///   "Connection refused") is "Connection Failed". A timeout counts too, as
+///   Flutter's client reports its timeout as a `SocketException`.
 /// - Anything else is "Something Went Wrong".
 public struct OrcaErrorInfo: Equatable, Sendable {
     /// Flutter's branches, each with its own icon there: unauthorized

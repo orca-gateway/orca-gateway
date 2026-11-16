@@ -71,7 +71,7 @@ public class OrcaClient private constructor(
     /**
      * How long one request may take, send to answer, in milliseconds: Dart
      * `timeout` (sdk/lib/src/client/orca_client.dart), 30 s by default,
-     * which Flutter declares but never applies; here every request the
+     * applied to every request as Flutter's is: every request the
      * client sends carries it ([HttpRequest.timeoutMillis]) and the
      * transport enforces it. Past it the request throws the transport's
      * timeout error (OkHttp's `InterruptedIOException`), which

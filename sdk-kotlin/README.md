@@ -660,8 +660,8 @@ The error screen is Flutter's (`buildOrcaError`): an icon, a title and a message
 
 `timeoutMillis` is how long one request may take, send to answer, 30 seconds by default.
 `OkHttpTransport` applies it as the call's timeout; a transport of your own must apply
-`HttpRequest.timeoutMillis` itself. Flutter's `OrcaClient` declares the same `timeout` but does not
-apply it, so a slow server there waits as long as the HTTP library does.
+`HttpRequest.timeoutMillis` itself. Flutter's `OrcaClient` applies its `timeout` the same way, and a
+request past it is Connection Failed there too.
 
 ## Plugins
 
