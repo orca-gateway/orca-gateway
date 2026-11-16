@@ -1,0 +1,93 @@
+{
+  "name": "update-sub-page-unknown-id",
+  "description": "updateSubPage naming an id no mounted SubPage has (contract S7), once with Value fields and mode join, once with literal fields and mode replace: nothing is fetched, no effect goes out, nothing fails, and the sequential group runs its next actions.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "target": "nope",
+      "which": "b",
+      "q": 3,
+      "count": 1
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "actionGroup",
+      "mode": "sequential",
+      "actions": [
+        {
+          "type": "updateSubPage",
+          "subPageId": {
+            "type": "state",
+            "key": "target",
+            "scope": "page"
+          },
+          "pageId": {
+            "type": "state",
+            "key": "which",
+            "scope": "page"
+          },
+          "mode": "join",
+          "params": {
+            "q": {
+              "type": "state",
+              "key": "q",
+              "scope": "page"
+            }
+          }
+        },
+        {
+          "type": "updateSubPage",
+          "subPageId": "no_such_sub_page",
+          "pageId": "b",
+          "mode": "replace"
+        },
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "count",
+          "value": {
+            "type": "static",
+            "value": 2
+          }
+        },
+        {
+          "type": "showToast",
+          "message": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "key": "count",
+              "scope": "page"
+            },
+            "by": [
+              {
+                "type": "template",
+                "template": "count is {{value}}"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "target": "nope",
+        "which": "b",
+        "q": 3,
+        "count": 2
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "showToast",
+        "message": "count is 2",
+        "duration": 2000
+      }
+    ]
+  }
+}
