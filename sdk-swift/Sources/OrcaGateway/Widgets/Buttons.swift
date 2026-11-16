@@ -287,10 +287,12 @@ private struct Autofocus: ViewModifier {
 // MARK: - IconButton and FloatingActionButton
 
 /// The gestures of Flutter's GestureDetector around a button, each attached
-/// only when given: a tap and a long press. With both, a touch is one or the
-/// other, never both: SwiftUI lets one of the two gestures on a view win,
-/// the long press once held `longPressDuration`, else the tap on release.
-/// With neither nothing is attached.
+/// only when given: a tap and a long press. With both they are one
+/// exclusive gesture, the long press first (`exclusive`), as Flutter's
+/// gesture arena decides between its two recognizers: a press held
+/// `longPressDuration`, moving at most `touchSlop`, is a long press and
+/// never also a tap; one lifted sooner is a tap. With neither nothing is
+/// attached.
 struct PressGestures: ViewModifier {
     /// A gesture's action: it fires the node's trigger and returns the run
     /// (`OrcaPageModel.fire`), nil when the node has no action for it.
@@ -301,6 +303,26 @@ struct PressGestures: ViewModifier {
     /// `minimumDuration`, iOS and macOS SDK 27.2); it is set here so it
     /// stays Flutter's.
     static let longPressDuration: Double = 0.5
+
+    /// Flutter's kTouchSlop, 18 pt (gestures/constants.dart:65): how far a
+    /// held press may move and still become a long press (the slop
+    /// Flutter's long-press recognizer allows before it gives up).
+    /// SwiftUI's LongPressGesture allows 10 by default.
+    static let touchSlop: CGFloat = 18
+
+    /// Flutter's long press: held `longPressDuration`, moving at most
+    /// `touchSlop`.
+    static var longPressGesture: LongPressGesture {
+        LongPressGesture(minimumDuration: longPressDuration, maximumDistance: touchSlop)
+    }
+
+    /// The long press and the tap of a button that has both, as one
+    /// gesture: the long press first, so the tap can succeed only once the
+    /// long press has failed (the press lifted before `longPressDuration`);
+    /// once the long press succeeds the tap cannot.
+    static var exclusive: ExclusiveGesture<LongPressGesture, TapGesture> {
+        longPressGesture.exclusively(before: TapGesture())
+    }
 
     /// A gesture firing `trigger` on `node` when the button `takes` it;
     /// nil, no gesture, otherwise.
@@ -315,21 +337,28 @@ struct PressGestures: ViewModifier {
     func body(content: Content) -> some View {
         switch (tap, longPress) {
         case let (tap?, longPress?):
-            content
-                .onTapGesture { _ = tap() }
-                .onLongPressGesture(minimumDuration: Self.longPressDuration) { _ = longPress() }
+            content.gesture(Self.exclusive.onEnded { value in
+                switch value {
+                case .first: _ = longPress()
+                case .second: _ = tap()
+                }
+            })
         case let (tap?, nil):
             content.onTapGesture { _ = tap() }
         case let (nil, longPress?):
-            content.onLongPressGesture(minimumDuration: Self.longPressDuration) { _ = longPress() }
+            content.gesture(Self.longPressGesture.onEnded { _ in _ = longPress() })
         case (nil, nil):
             content
         }
     }
 }
 
-/// `tooltip`, unless empty, as the accessibility label: iOS has no tooltip
-/// to show (Flutter adds no Tooltip for an empty one).
+/// `tooltip`, unless empty, as the accessibility label (Flutter adds no
+/// Tooltip for an empty one). iOS has no tooltip, and the SDK draws none
+/// until step 8: on mobile Flutter wraps a tooltipped IconButton or FAB in
+/// a Tooltip whose own long press shows the bubble, so holding a tooltipped
+/// IconButton with only onTap shows the tooltip and fires nothing; here the
+/// tooltip is only the accessibility label.
 private struct TooltipLabel: ViewModifier {
     let text: String?
 
@@ -357,7 +386,8 @@ private struct TooltipLabel: ViewModifier {
 /// it attaches no gesture, so the views around it get them. A long press
 /// waits Flutter's 500 ms (`PressGestures`). `constraints` bound the box
 /// from outside (Flutter's ConstrainedBox: the box's side clamped into
-/// them). `tooltip` is its accessibility label: iOS has no tooltip. No
+/// them). `tooltip` is its accessibility label: iOS has no tooltip, and
+/// until step 8 no Tooltip's long press shows a bubble (`TooltipLabel`). No
 /// press feedback, as Flutter draws none (`splashColor` and
 /// `highlightColor` are never read).
 @MainActor
@@ -448,7 +478,8 @@ struct IconButtonNodeView: View {
 /// floating_action_button.dart:538-542) and attaches no gesture, so the
 /// views around it get the tap; its fill (a mini's whole target) still
 /// takes the touch from the views behind, as Flutter's Material does.
-/// `tooltip` is its accessibility label (iOS has no tooltip). No ripple and
+/// `tooltip` is its accessibility label (iOS has no tooltip, and until step
+/// 8 no Tooltip's long press shows a bubble, `TooltipLabel`). No ripple and
 /// no press feedback on iOS: `splashColor`, `focusColor` and `hoverColor`
 /// have no counterpart and are not read; nor are `heroTag` (no Hero) and
 /// `isExtended` (no effect on Flutter's default FAB). The Scaffold's

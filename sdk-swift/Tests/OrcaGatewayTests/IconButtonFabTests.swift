@@ -172,6 +172,27 @@ final class IconButtonFabTests: XCTestCase {
         XCTAssertEqual(LongPressGesture().minimumDuration, PressGestures.longPressDuration, "SwiftUI's default")
     }
 
+    /// A6.5: a button with both handlers decides between them as Flutter's
+    /// gesture arena does, in one exclusive gesture, the long press first: a
+    /// press held 500 ms is a long press and never also a tap, one lifted
+    /// sooner a single tap. The long press allows Flutter's kTouchSlop, 18
+    /// (gestures/constants.dart:65), not SwiftUI's default 10. Read from the
+    /// gestures the buttons attach (`PressGestures`); that SwiftUI then
+    /// delivers a hold as the long press alone needs a touch, which a
+    /// package test cannot inject: a hand check.
+    func testA6_5ALongPressIsExclusiveOfTheTapWithinFlutters18ptSlop() {
+        let long = PressGestures.longPressGesture
+        XCTAssertEqual(long.minimumDuration, 0.5, "Flutter's kLongPressTimeout")
+        XCTAssertEqual(long.maximumDistance, 18, "Flutter's kTouchSlop")
+        XCTAssertEqual(PressGestures.touchSlop, 18)
+        XCTAssertEqual(LongPressGesture().maximumDistance, 10, "SwiftUI's default slop")
+
+        let both = PressGestures.exclusive
+        XCTAssertEqual(both.first.minimumDuration, 0.5, "the long press first")
+        XCTAssertEqual(both.first.maximumDistance, 18, "the long press first")
+        XCTAssertEqual(both.second.count, 1, "then a single tap")
+    }
+
     /// A6.5: in the Scaffold's floatingActionButton slot the FAB sits at the
     /// bottom end, 16 in from both edges (Flutter's endFloat,
     /// floating_action_button_location.dart:25, :528-534, :565-586): bottom
