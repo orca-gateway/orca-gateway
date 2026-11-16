@@ -179,30 +179,36 @@ struct CenterView: View {
     }
 }
 
-/// Flutter `RenderPositionedBox` with a factor: on an axis with a factor
+/// Flutter `RenderPositionedBox` (Center, Align): on an axis with a factor
 /// the box is the child's size times it, on one without it fills what is
-/// offered (the child's size when unbounded), never more than offered.
-/// The child, offered what the box is offered, sits in the middle.
+/// offered (the child's size when unbounded), never more than offered; on
+/// an axis the parent forces (`tight`, Align only) it is the forced size.
+/// The child, offered what the box is offered, sits at `alignment` (the
+/// middle for Center).
 struct CenterFactorLayout: Layout {
     var widthFactor: CGFloat?
     var heightFactor: CGFloat?
+    var alignment: UnitPoint = .center
+    var tight: TightAxes = []
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let child = subviews.first?.sizeThatFits(proposal) ?? .zero
-        return CGSize(width: side(child.width, widthFactor, proposal.width),
-                      height: side(child.height, heightFactor, proposal.height))
+        return CGSize(width: side(child.width, widthFactor, proposal.width, tight.contains(.horizontal)),
+                      height: side(child.height, heightFactor, proposal.height, tight.contains(.vertical)))
     }
 
-    private func side(_ child: CGFloat, _ factor: CGFloat?, _ offered: CGFloat?) -> CGFloat {
+    private func side(_ child: CGFloat, _ factor: CGFloat?, _ offered: CGFloat?, _ forced: Bool) -> CGFloat {
         let bound = offered.flatMap { $0.isFinite ? $0 : nil }
+        if forced, let bound { return bound }
         guard let factor else { return bound ?? child }
         return min(child * factor, bound ?? .infinity)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let child = subviews.first else { return }
-        child.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center,
-                    proposal: ProposedViewSize(child.sizeThatFits(proposal)))
+        child.place(at: CGPoint(x: bounds.minX + bounds.width * alignment.x,
+                                y: bounds.minY + bounds.height * alignment.y),
+                    anchor: alignment, proposal: ProposedViewSize(child.sizeThatFits(proposal)))
     }
 }
 
