@@ -7,6 +7,21 @@ import android.content.res.Configuration
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,10 +79,12 @@ import androidx.compose.ui.unit.sp
 import androidx.core.util.Consumer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.orcagateway.core.animation.Curves
 import com.orcagateway.core.client.DeviceInfo
 import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.client.OrcaClientException
@@ -75,6 +92,8 @@ import com.orcagateway.core.client.OrcaErrorInfo
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.navigation.DeeplinkEvent
 import com.orcagateway.core.navigation.RouteChangeEvent
+import com.orcagateway.core.navigation.TransitionKind
+import com.orcagateway.core.navigation.TransitionSpec
 import com.orcagateway.core.plugins.OrcaActionHandler
 import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.core.state.ElmStore
@@ -88,8 +107,11 @@ import com.orcagateway.sdk.navigation.OrcaRouter
 import com.orcagateway.sdk.navigation.TabShellScreen
 import com.orcagateway.sdk.navigation.deeplink
 import com.orcagateway.sdk.system.SystemActions
+import com.orcagateway.sdk.widgets.LocalOrcaHeroStage
 import com.orcagateway.sdk.widgets.LocalOrcaPageDrawerHost
+import com.orcagateway.sdk.widgets.OrcaHeroStage
 import com.orcagateway.sdk.widgets.PageDrawerHost
+import com.orcagateway.sdk.widgets.orcaReduceMotion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -689,32 +711,85 @@ private fun OrcaNavHost(router: OrcaRouter, modifier: Modifier) {
     }
 }
 
-/** The router as one stack, on a [NavHost]: a config without tabs, a host path, a route shown outside the tabs. */
+/**
+ * The router as one stack, on a [NavHost]: a config without tabs, a host path, a route shown outside the tabs.
+ *
+ * A pushed route with a transition ([TransitionSpec]) comes in with it:
+ * only the entering page moves, the page under it stays still and visible,
+ * and a pop plays the same run backwards, with the same duration and curve.
+ * A route with none, or with `none`, keeps the NavHost's own animation.
+ * Only a push plays a route's transition: a `go` or a replace that leaves
+ * the route alone at the bottom of the stack shows it at once, where
+ * Flutter animates it in (the Swift SDK does as here).
+ * With reduced motion ([orcaReduceMotion]) a route's transition is not
+ * played: the page is there at once.
+ *
+ * The NavHost is a shared-transition scope, and each page gets an
+ * [OrcaHeroStage]: a Hero whose tag is on both pages as one replaces the
+ * other flies between its two places (on a pop, and on a push whose page
+ * is loaded before the push ends), while the route's transition plays as
+ * above. Otherwise only the route's transition plays.
+ */
 @Composable
 private fun StackScreen(router: OrcaRouter, modifier: Modifier) {
     val navController = rememberNavController()
+    // The transition of every pushed page the NavHost shows, by route id: a popped
+    // route has left the router's stack by the time its page leaves the screen.
+    val specs = remember(router) { HashMap<String, TransitionSpec>() }
+    val reduceMotion by rememberUpdatedState(orcaReduceMotion())
+    // The route's own transition of the page that moves, or null: the NavHost's default.
+    fun moving(entry: NavBackStackEntry): TransitionSpec? =
+        specs[entry.arguments?.getString(ROUTE_ID)]?.takeIf { it.kind != TransitionKind.None }
+    val enter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition? = {
+        moving(targetState)?.let { if (reduceMotion) EnterTransition.None else it.enter() }
+    }
+    // The page under a page that comes in: still, and drawn until the run ends.
+    val exit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition? = {
+        moving(targetState)?.let { if (reduceMotion) ExitTransition.None else ExitTransition.KeepUntilTransitionsFinished }
+    }
+    // The page under a page that leaves: there at once, still.
+    val popEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition? = {
+        moving(initialState)?.let { EnterTransition.None }
+    }
+    val popExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition? = {
+        moving(initialState)?.let { if (reduceMotion) ExitTransition.None else it.popExit() }
+    }
     // The route ids of the pages pushed on the NavController, saved with it:
     // its own back stack is not public API.
     val shown = rememberSaveable { mutableStateOf(emptyList<String>()) }
     val atRoot = remember(router) { OrcaNavigation(router, canPop = false) }
     val pushed = remember(router) { OrcaNavigation(router, canPop = true) }
-    NavHost(navController, startDestination = ROOT_ROUTE, modifier = modifier) {
-        composable(ROOT_ROUTE) {
-            val root = router.root
-            CompositionLocalProvider(LocalOrcaNavigation provides atRoot) {
-                key(root.id) { RoutePage(router, root, if (root.isNotFound) null else router.loader(root)) }
+    // No layout of its own: the scope's modifier (the flight's overlay) goes on the NavHost.
+    SharedTransitionScope { overlay ->
+        val flights = this
+        NavHost(navController, startDestination = ROOT_ROUTE, modifier = modifier.then(overlay)) {
+            composable(ROOT_ROUTE, exitTransition = exit, popEnterTransition = popEnter) {
+                val root = router.root
+                val stage = remember(flights, this) { OrcaHeroStage(flights, this) }
+                CompositionLocalProvider(LocalOrcaNavigation provides atRoot, LocalOrcaHeroStage provides stage) {
+                    key(root.id) { RoutePage(router, root, if (root.isNotFound) null else router.loader(root)) }
+                }
             }
-        }
-        composable(PAGE_ROUTE) { entry ->
-            val id = entry.arguments?.getString(ROUTE_ID)
-            // Kept while a popped page leaves the screen, after the router dropped it.
-            // A not-found route has no loader: nothing is requested for it.
-            val page = remember(id) {
-                router.stack.firstOrNull { it.id.toString() == id }
-                    ?.let { route -> route to if (route.isNotFound) null else router.loader(route) }
-            }
-            if (page != null) {
-                CompositionLocalProvider(LocalOrcaNavigation provides pushed) { RoutePage(router, page.first, page.second) }
+            composable(
+                PAGE_ROUTE,
+                enterTransition = enter,
+                exitTransition = exit,
+                popEnterTransition = popEnter,
+                popExitTransition = popExit,
+            ) { entry ->
+                val id = entry.arguments?.getString(ROUTE_ID)
+                // Kept while a popped page leaves the screen, after the router dropped it.
+                // A not-found route has no loader: nothing is requested for it.
+                val page = remember(id) {
+                    router.stack.firstOrNull { it.id.toString() == id }
+                        ?.let { route -> route to if (route.isNotFound) null else router.loader(route) }
+                }
+                if (page != null) {
+                    val stage = remember(flights, this) { OrcaHeroStage(flights, this) }
+                    CompositionLocalProvider(LocalOrcaNavigation provides pushed, LocalOrcaHeroStage provides stage) {
+                        RoutePage(router, page.first, page.second)
+                    }
+                }
             }
         }
     }
@@ -722,6 +797,10 @@ private fun StackScreen(router: OrcaRouter, modifier: Modifier) {
     BackHandler(enabled = router.stack.isNotEmpty()) { router.goBack() }
     LaunchedEffect(router, navController) {
         snapshotFlow { router.stack }.collect { stack ->
+            // Before the NavController moves: it asks for the transitions as it does.
+            val ids = stack.mapTo(HashSet()) { it.id.toString() }
+            specs.keys.retainAll(ids + shown.value)
+            for (route in stack) specs[route.id.toString()] = TransitionSpec.of(route.transition)
             navController.follow(shown.value, stack)
             shown.value = stack.map { it.id.toString() }
         }
@@ -739,6 +818,34 @@ private fun NavHostController.follow(shown: List<String>, stack: List<OrcaRoute>
     while (same < shown.size && same < stack.size && shown[same] == stack[same].id.toString()) same++
     repeat(shown.size - same) { popBackStack() }
     for (route in stack.drop(same)) navigate("orca/page/${route.id}")
+}
+
+/** The route's curve for a Compose animation spec: every name of the core's [Curves] table. */
+private fun TransitionSpec.easing(): Easing = Easing { Curves.apply(curve, it.toDouble()).toFloat() }
+
+/** The same curve for the run played backwards: the value at `1 - t`, counted from the other end. */
+private fun TransitionSpec.reversedEasing(): Easing = Easing { 1f - Curves.apply(curve, 1.0 - it).toFloat() }
+
+private fun <T> TransitionSpec.tweenOf(easing: Easing): FiniteAnimationSpec<T> = tween(durationMs.toInt(), easing = easing)
+
+/** How the route's page comes in (design D11): only this page moves. */
+private fun TransitionSpec.enter(): EnterTransition = when (kind) {
+    TransitionKind.Fade -> fadeIn(tweenOf(easing()))
+    TransitionKind.SlideUp -> slideInVertically(tweenOf(easing())) { it }
+    TransitionKind.Scale -> scaleIn(tweenOf(easing()), initialScale = 0f)
+    TransitionKind.SlideRight -> slideInHorizontally(tweenOf(easing())) { it }
+    TransitionKind.Slide -> slideInHorizontally(tweenOf(easing())) { -it }
+    TransitionKind.None -> EnterTransition.None
+}
+
+/** How the route's page leaves on a pop: [enter] played backwards. */
+private fun TransitionSpec.popExit(): ExitTransition = when (kind) {
+    TransitionKind.Fade -> fadeOut(tweenOf(reversedEasing()))
+    TransitionKind.SlideUp -> slideOutVertically(tweenOf(reversedEasing())) { it }
+    TransitionKind.Scale -> scaleOut(tweenOf(reversedEasing()), targetScale = 0f)
+    TransitionKind.SlideRight -> slideOutHorizontally(tweenOf(reversedEasing())) { it }
+    TransitionKind.Slide -> slideOutHorizontally(tweenOf(reversedEasing())) { -it }
+    TransitionKind.None -> ExitTransition.None
 }
 
 /**

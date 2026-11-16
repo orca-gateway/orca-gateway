@@ -1,0 +1,118 @@
+{
+  "name": "animated-opacity",
+  "description": "AnimatedOpacity: opacity is a conditional over page state (stays a Value, watched); duration is static; curve is bounceOut, one of the 41 curve names and outside the nine the native SDKs knew before. With visible false the opacity resolves to the else branch.",
+  "input": {
+    "type": "AnimatedOpacity",
+    "key": "fade",
+    "props": {
+      "opacity": {
+        "type": "conditional",
+        "branches": [
+          {
+            "when": {
+              "op": "eq",
+              "left": {
+                "type": "state",
+                "key": "visible",
+                "scope": "page"
+              },
+              "right": {
+                "type": "static",
+                "value": true
+              }
+            },
+            "then": {
+              "type": "static",
+              "value": 1
+            }
+          }
+        ],
+        "else": {
+          "type": "static",
+          "value": 0.25
+        }
+      },
+      "duration": 450,
+      "curve": "bounceOut"
+    },
+    "children": [
+      {
+        "type": "Text",
+        "key": "fade_label",
+        "props": {
+          "data": "Draft"
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "visible": false
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "fade",
+      "type": "AnimatedOpacity",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "opacity": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "eq",
+                "left": {
+                  "type": "state",
+                  "key": "visible",
+                  "scope": "page"
+                },
+                "right": {
+                  "type": "static",
+                  "value": true
+                }
+              },
+              "then": {
+                "type": "static",
+                "value": 1
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": 0.25
+          }
+        },
+        "duration": 450,
+        "curve": "bounceOut"
+      },
+      "children": [
+        "fade_label"
+      ],
+      "watches": [
+        "visible"
+      ]
+    },
+    {
+      "id": "fade_label",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Draft"
+      },
+      "children": [],
+      "watches": []
+    }
+  ],
+  "resolved": {
+    "fade": {
+      "opacity": 0.25
+    }
+  }
+}

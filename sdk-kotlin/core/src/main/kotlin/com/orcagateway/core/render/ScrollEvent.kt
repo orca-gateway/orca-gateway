@@ -32,6 +32,34 @@ public data class ScrollMetrics(
                 "atEnd" to JsonValue.Bool(atEdge && offset >= maxExtent),
             )
         }
+
+    public companion object {
+        /**
+         * The metrics of a lazy list, which knows only the items in view:
+         * [items] in order, where they lie, in a view from [viewportStart]
+         * to [viewportEnd] (both in the items' origin: with padding before
+         * the first item the view starts before 0), over [count] items and
+         * [paddingAfter] past the last one. Items out of view are taken to
+         * be as long as the ones in view on average, so the numbers are
+         * exact for items of one length and at both ends of any list.
+         */
+        public fun ofItems(
+            items: List<ItemSpan>,
+            count: Int,
+            viewportStart: Double,
+            viewportEnd: Double,
+            paddingAfter: Double = 0.0,
+        ): ScrollMetrics {
+            val viewport = viewportEnd - viewportStart
+            val first = items.firstOrNull() ?: return ScrollMetrics(0.0, 0.0, viewport)
+            val last = items.last()
+            val average = items.sumOf { it.size } / items.size
+            val offset = (first.index * average - first.start).coerceAtLeast(0.0)
+            val unseen = (count - 1 - last.index).coerceAtLeast(0) * average
+            val remaining = (unseen + last.start + last.size + paddingAfter - viewportEnd).coerceAtLeast(0.0)
+            return ScrollMetrics(offset, offset + remaining, viewport)
+        }
+    }
 }
 
 /** A scroll trigger to fire on the view's node, with its payload. */

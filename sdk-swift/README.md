@@ -191,6 +191,104 @@ Minimum: Swift tools 5.9 (Xcode 15+), iOS 16.
 | S4 | Degrade policies and the 426 page, ten more widgets, `OrcaTheme` button styles | done |
 | S5 | `0.1.0-alpha.1` on the read-only `orca-gateway-swift` mirror | this release |
 
+## Animation
+
+What the animation step adds, in plain words:
+
+- **Controlled animations.** An AnimatedBuilder that carries an `animationId` can be told to play by a
+  button: the `animateForward` action starts it again from the beginning, `animateReverse` runs it back
+  from where it is. A builder with `autoStart: false` waits for one of them. `onComplete` fires at the end
+  of a forward run and of a reverse run, never for a repeating one. A tween may name the id of the
+  animation it follows.
+- **Implicit animations.** AnimatedContainer, AnimatedOpacity and AnimatedAlign glide to the new value
+  when a prop changes (size, colour, padding, opacity, alignment), over the widget's `duration`. The first
+  frame shows the value as is. All 41 of Flutter's curve names are understood, with Flutter's formulas; a
+  missing or unknown name is `easeInOut`. This is also the default of AnimatedBuilder now (it was linear).
+- **AnimatedSwitcher.** When its child is replaced by another node (a server action swaps it, or the
+  page is fetched again), the old child fades out while the new one fades in. The same node with new
+  props does not fade.
+- **Hero.** On iOS 18 and later, tapping inside a Hero zooms the pushed page out of it, and back into it
+  on return. The whole page zooms; it is not Flutter's flight of the one widget. On iOS 16 and 17, inside
+  tabs, or with an empty tag, the child is drawn and the push is the plain one.
+- **Route transitions.** A route's `fade` and `slideUp` are honoured: the pushed page's content fades in
+  or rises from the bottom, with the route's duration and curve. It appears over the page background,
+  not over the previous page, and going back is the system pop. Every other kind (`scale`, `slideRight`,
+  `slide`, `none`) keeps the system push.
+- **Reduced motion.** With "Reduce Motion" on in the system settings, every animation above jumps to its
+  end state at once, `onComplete` still fires once, and route transitions fall back to the system push.
+
+To see it all, run the `motion` app of the example server in the
+[iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios), booted from its
+config (`ORCA_APP_ID=motion ORCA_BOOT=config`): a menu with one page for the controlled animation, one
+for the three implicit widgets, one for the switcher, a Hero pair, and one page per transition kind at
+600 ms.
+
+## Reorderable list
+
+A ReorderableListView draws its children as the rows of a list; a long press on a row picks it up, no
+edit mode and no handles.
+
+- **What fires.** Dropping a row somewhere else runs the list's `onReorder` action with
+  `{oldIndex, newIndex}`, read through `V.event`. Dropping it back where it was runs nothing.
+- **The raw `newIndex`.** `newIndex` is Flutter's value: the position to insert at, counted before the
+  dragged row is taken out. The first of three rows dropped at the end gives 3 (not 2), dropped below
+  the second gives 2; the last row dropped at the top gives 0. Moving a row down, the action subtracts
+  one before inserting. `ReorderDrop` in the core holds the rule.
+- **The order comes from the page.** The list never moves a row itself. After the drop it draws the
+  children the page has, so the row goes back unless the action changes the order (page state, or a
+  server action that sends the new children).
+- **Padding.** `padding` is drawn inside the rows: its left and right in every row, its top in the
+  first and its bottom in the last, so it scrolls with them.
+- **Horizontal.** With `scrollDirection: "horizontal"` the children are drawn in a scrolling row that
+  cannot be reordered: SwiftUI drags rows in a vertical list only.
+- **Scroll triggers.** `onScrollBegin`, `onScrolling` and `onScrollEnd` fire as on a
+  SingleChildScrollView. The vertical list fires them on iOS 18 and later only; the horizontal row on
+  every supported version.
+
+To see it, run the `reorder` app of the example server in the
+[iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios), booted from its
+config (`ORCA_APP_ID=reorder ORCA_BOOT=config`): a list whose order lives in page state, moved by
+`onReorder`.
+
+## Sub-pages
+
+A SubPage draws another page inside the page. The SDK fetches it when the SubPage comes on screen,
+draws the SubPage's child (or a spinner) until the first answer, and `SubPage error: <message>` when
+that fetch fails.
+
+- **The prefix rule.** The embedded page is not a page of its own: its nodes go into the host page's
+  node store and its state into the host's page state, each id and each page-state key with a prefix
+  in front. For a SubPage with key `detail` the first page gets `detail:` (node `0` becomes
+  `detail:0`, state `count` becomes `detail:count`), and each joined page gets `detail#1:`,
+  `detail#2:` and so on. Every reference and action inside the embedded page is rewritten the same
+  way when it is mounted, so the page reads and writes its own `count` and never the host's; app
+  state is shared and left alone. A SubPage inside a sub-page composes (`outer:inner:`). The rules
+  are the core's `SubPage` and `SubPageRegistry`, pinned by the monorepo's
+  [`schema/fixtures/subpage`](https://github.com/orca-gateway/orca-gateway/tree/main/schema/fixtures/subpage).
+- **Params are the query.** The fetch is the normal page route for the resolved `pageId`, with the
+  resolved `params` as its query string (keys sorted, percent-encoded, null left out): the page
+  reads them as `V.request("queryParams.userId")`. When the resolved `pageId` or `params` change,
+  the page is fetched again and replaces what is mounted.
+- **Replace and join.** `updateSubPage` fetches another page into a SubPage on screen; the old
+  content stays until the answer comes, and a failed fetch leaves it and fails the action (a
+  lifecycle's `onError` runs). `replace`, the default, removes the mounted pages with their state
+  and mounts the new one; `join` adds it below the others, each page with its own state. The change
+  stays through redraws. A `subPageId` that names no SubPage on screen does nothing.
+- **Server actions inside.** A `serverAction` fired from a node of a sub-page posts that page's
+  state alone, under the keys the page declared (no prefix), and the actions the server returns are
+  rewritten with the prefix before they run: a returned `setState` or component mutation lands in
+  the sub-page. The server code is the same as for a page shown on its own.
+- **Leaving.** When the SubPage node goes away its nodes are removed; its state keys stay until a
+  SubPage with the same key loads again.
+- **Limits.** A SubPage key may not hold `:` or `#` (the engine refuses it). A plugin action's own
+  literal fields that name a state key or a node are not rewritten: inside a sub-page, pass the key
+  as a state Value.
+
+To see it, run the `subpage` app of the example server in the
+[iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios), booted from its
+config (`ORCA_APP_ID=subpage ORCA_BOOT=config`): a host count beside a sub-page's own count, a param
+sent to the sub-page, and two buttons, Replace with B and Join C.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An iOS host does it with

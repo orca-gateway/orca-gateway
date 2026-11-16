@@ -3,7 +3,11 @@
   "widgets": [
     "AbsorbPointer",
     "Align",
+    "AnimatedAlign",
     "AnimatedBuilder",
+    "AnimatedContainer",
+    "AnimatedOpacity",
+    "AnimatedSwitcher",
     "AppBar",
     "AspectRatio",
     "BackdropFilter",
@@ -30,6 +34,7 @@
     "Flexible",
     "FractionallySizedBox",
     "GestureDetector",
+    "Hero",
     "Icon",
     "IgnorePointer",
     "Image",
@@ -42,6 +47,7 @@
     "OutlinedButton",
     "Padding",
     "Positioned",
+    "ReorderableListView",
     "RotatedBox",
     "Row",
     "SafeArea",
@@ -50,6 +56,7 @@
     "SizedBox",
     "Spacer",
     "Stack",
+    "SubPage",
     "Text",
     "TextButton",
     "TextField",
@@ -62,6 +69,8 @@
     "actionGroup",
     "addComponent",
     "always",
+    "animateForward",
+    "animateReverse",
     "conditionalAction",
     "copyToClipboard",
     "debugLog",
@@ -78,6 +87,7 @@
     "showSnackbar",
     "showToast",
     "switchTab",
-    "updateComponent"
+    "updateComponent",
+    "updateSubPage"
   ]
 }

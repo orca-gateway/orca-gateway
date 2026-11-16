@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { Encoder } from "../src/types/widget";
 import { V, Expr } from "../src/types/value";
-import { Navigate, SetState } from "../src/types/action";
+import { Navigate, SetState, ServerAction } from "../src/types/action";
+import { ReorderableListView } from "../src/components";
 import {
   // Helpers
   EdgeInsets,
@@ -1027,5 +1028,77 @@ describe("Nested tree encode", () => {
       expect(Array.isArray(node.children)).toBe(true);
       expect(Array.isArray(node.watches)).toBe(true);
     }
+  });
+});
+
+// ── ReorderableListView ────────────────────────────────────
+
+describe("ReorderableListView", () => {
+  it("B13.3-F declares onReorder and the scroll triggers", () => {
+    expect([...(ReorderableListView as unknown as { triggers: readonly string[] }).triggers]).toEqual([
+      "onReorder",
+      "onScrollBegin",
+      "onScrolling",
+      "onScrollEnd",
+    ]);
+  });
+
+  it("B13.3-F encodes keyed children in order, padding and the onReorder action", () => {
+    const list = ReorderableListView.new({
+      padding: EdgeInsets.all(8),
+      children: [
+        Text.new({ data: "one" }).withKey("row-one"),
+        Text.new({ data: "two" }).withKey("row-two"),
+        Text.new({ data: "three" }).withKey("row-three"),
+      ],
+      actions: {
+        onReorder: ServerAction("move", {
+          oldIndex: V.event("oldIndex"),
+          newIndex: V.event("newIndex"),
+        }),
+      },
+    }).withKey("rows");
+    const encoder = new Encoder();
+    encoder.addNode(list);
+    const node = encoder.getNodes().find(n => n.type === "ReorderableListView")!;
+
+    expect(node.id).toBe("rows");
+    expect(node.kind).toBe("layout");
+    expect(node.childMode).toBe("multi");
+    expect(node.children).toEqual(["row-one", "row-two", "row-three"]);
+    expect(node.props).toEqual({ padding: { top: 8, right: 8, bottom: 8, left: 8 } });
+    expect(node.actions).toEqual({
+      onReorder: {
+        type: "serverAction",
+        id: "move",
+        params: {
+          oldIndex: { type: "event", key: "oldIndex" },
+          newIndex: { type: "event", key: "newIndex" },
+        },
+      },
+    });
+  });
+});
+
+// ── SubPage: the barrel export and the key rule (B13.4) ─────
+
+describe("SubPage", () => {
+  it("is exported from the components barrel and encodes under its key", async () => {
+    const { SubPage } = (await import("../src/components")) as Record<string, any>;
+    const { flatten } = await import("../src/types/widget");
+    expect(SubPage).toBeDefined();
+    const nodes = flatten(SubPage.new({ key: "detail", pageId: "profile" }));
+    expect(nodes[0]).toMatchObject({ id: "detail", type: "SubPage", props: { pageId: "profile" } });
+  });
+
+  it("refuses a key that contains a colon or a hash", async () => {
+    const { SubPage } = await import("../src/components/layout/sub-page");
+    // `feed#1` would give the prefix `feed#1:`, which is join 1 of `feed`.
+    for (const key of ["feed#1", "a:b", ":", "#", "feed:"]) {
+      expect(() => SubPage.new({ key, pageId: "p" })).toThrow(/must not contain ":" or "#"/);
+      expect(() => SubPage.new({ key: "feed", pageId: "p" }).withKey(key)).toThrow(/must not contain ":" or "#"/);
+    }
+    expect(SubPage.new({ key: "feed-1.a_b", pageId: "p" }).key).toBe("feed-1.a_b");
+    expect(SubPage.new({ key: "feed", pageId: "p" }).withKey("feed2").key).toBe("feed2");
   });
 });

@@ -38,19 +38,29 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.orcagateway.core.models.ComponentNode
 import com.orcagateway.core.models.DrawerItemDef
 import com.orcagateway.core.models.PageResponse
+import com.orcagateway.core.navigation.PageMotion
+import com.orcagateway.core.navigation.TransitionSpec
 import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.StoreState
@@ -59,6 +69,7 @@ import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.RoutePage
 import com.orcagateway.sdk.style.IconNames
+import com.orcagateway.sdk.widgets.orcaReduceMotion
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -259,15 +270,52 @@ private fun TabBar(router: OrcaRouter) {
  * told whether it can pop, for its AppBar's back arrow ([LocalOrcaNavigation]):
  * a tab's root cannot, a page pushed on it and a route over the shell can,
  * and the arrow pops the router as the system back does.
+ *
+ * A route's transition is played here too ([ShellMotion]): the page pushed
+ * on a tab, or over the shell, comes in over the previous top, which stays
+ * placed until the run ends, and a popped page stays drawn while the same
+ * run plays backwards over the page under it. A pop while the page is
+ * still coming in takes it back from where it is, in the time it had run.
+ * The moving page is drawn as
+ * the core's [TransitionSpec] samples it on each frame. A change of tab
+ * moves nothing, and neither does a route with no transition or `none`.
+ * With reduced motion ([orcaReduceMotion]) nothing is played.
  */
 @Composable
 private fun KeptPages(router: OrcaRouter) {
     val top = router.top
     val routes = router.tabStacks.flatten() + router.overRoutes
+    val live = routes.mapTo(HashSet()) { it.id }
     // Not Compose state: it changes only with the router's stacks, which are.
     val shown = remember(router) { HashSet<UUID>() }
-    shown.retainAll(routes.mapTo(HashSet()) { it.id })
+    shown.retainAll(live)
     shown.add(top.id)
+    // The loaders of the pages drawn: the router drops a popped route's before its page has left the screen.
+    val loaders = remember(router) { HashMap<UUID, OrcaPageLoader?>() }
+    val motion = remember(router) { ShellMotion() }
+    // The page the top lies over: the one before it on its stack; under the first route over the shell, the tab's top.
+    val over = router.overRoutes
+    val under = when (val at = over.indexOf(top)) {
+        -1 -> router.tabStacks.firstNotNullOfOrNull { stack -> stack.indexOf(top).takeIf { it > 0 }?.let { stack[it - 1] } }
+        0 -> router.currentTab?.let { router.tabStacks.getOrNull(it)?.lastOrNull() }
+        else -> over[at - 1]
+    }
+    motion.follow(top, under?.id, live, orcaReduceMotion())
+    val run = motion.run
+    LaunchedEffect(run) {
+        if (run == null) return@LaunchedEffect
+        var start = -1L
+        do {
+            val over = withFrameNanos { nanos ->
+                if (start < 0) start = nanos
+                motion.elapsedMs = run.fromMs + (nanos - start) / NANOS_PER_MILLI
+                run.spec.isOver(motion.elapsedMs, reduceMotion = false)
+            }
+        } while (!over)
+        motion.end(run)
+    }
+    val leaving = run?.route?.takeIf { run.leaving }
+    loaders.keys.retainAll(if (leaving == null) live else live + leaving.id)
     // As on the single stack: a tab's root cannot pop, a page pushed on it and a route over the shell can.
     val tabRoots = router.tabStacks.mapNotNullTo(HashSet()) { it.firstOrNull()?.id }
     val atRoot = remember(router) { OrcaNavigation(router, canPop = false) }
@@ -277,23 +325,116 @@ private fun KeptPages(router: OrcaRouter) {
     val focus = LocalFocusManager.current
     LaunchedEffect(top.id) { focus.clearFocus() }
 
-    for (route in routes) {
-        if (route.id !in shown) continue
+    // A page that leaves is no longer on a stack: it is drawn after the others, under the key it had.
+    for (route in routes + listOfNotNull(leaving)) {
+        if (route.id !in shown && route !== leaving) continue
         key(route.id) {
-            val onTop = route === top
-            val kept = Modifier.fillMaxSize().layout { measurable, constraints ->
+            val moves = run != null && route === run.route
+            val placed = route === top || moves || (run != null && route.id == run.under)
+            var kept = Modifier.fillMaxSize().layout { measurable, constraints ->
                 val placeable = measurable.measure(constraints)
-                layout(placeable.width, placeable.height) { if (onTop) placeable.place(0, 0) }
+                layout(placeable.width, placeable.height) { if (placed) placeable.place(0, 0) }
+            }
+            if (run != null && moves) {
+                kept = kept
+                    .zIndex(1f)
+                    .graphicsLayer {
+                        val at = run.at(motion.elapsedMs)
+                        alpha = at.opacity.toFloat()
+                        translationX = (at.offsetXFraction * size.width).toFloat()
+                        translationY = (at.offsetYFraction * size.height).toFloat()
+                        scaleX = at.scale.toFloat()
+                        scaleY = at.scale.toFloat()
+                    }
+                    .semantics { this[PageMotionKey] = run.at(motion.elapsedMs) }
             }
             // A not-found route has no loader: nothing is requested for it.
+            val loader = if (route.id in live) {
+                (if (route.isNotFound) null else router.loader(route)).also { loaders[route.id] = it }
+            } else {
+                loaders[route.id]
+            }
             Box(kept) {
                 CompositionLocalProvider(LocalOrcaNavigation provides if (route.id in tabRoots) atRoot else pushed) {
-                    RoutePage(router, route, if (route.isNotFound) null else router.loader(route))
+                    RoutePage(router, route, loader)
                 }
             }
         }
     }
 }
+
+/**
+ * The route transition the shell is playing, if any: which page moves and
+ * which stays under it. [follow] is told the top route on every
+ * composition and starts a run when it changed by a push or a pop.
+ */
+private class ShellMotion {
+    /**
+     * One run: [route] moves (in on a push, out when [leaving]) over the
+     * page of the route [under]. Its first frame is [fromMs] into the
+     * transition: more than 0 for a pop of a page that was still coming in.
+     */
+    class Run(val route: OrcaRoute, val under: UUID, val leaving: Boolean, val spec: TransitionSpec, val fromMs: Double = 0.0) {
+        /** The moving page [elapsedMs] into the run. */
+        fun at(elapsedMs: Double): PageMotion =
+            if (leaving) spec.leaving(elapsedMs, reduceMotion = false) else spec.entering(elapsedMs, reduceMotion = false)
+    }
+
+    /** The run on screen, or null. */
+    var run: Run? by mutableStateOf(null)
+        private set
+
+    /** How far into its transition the run is: [Run.fromMs] and the time since its first frame. */
+    var elapsedMs: Double by mutableDoubleStateOf(0.0)
+
+    private var lastTop: OrcaRoute? = null
+    private var lastLive: Set<UUID> = emptySet()
+
+    /**
+     * The top is now [top], lying over the page of [under] (null for the
+     * root of a stack), and the routes on the stacks are [live]. A push (the
+     * route on top was on no stack before and lies over another page) plays
+     * the new route's transition; a pop (the old top gone, the new one
+     * known) plays the old top's backwards, from where that page is when
+     * it was still coming in (Flutter's controller reversed: as long back
+     * as it came); anything else (the first page, a change of tab, the root
+     * of a stack) ends a run and starts none.
+     * Nothing is played for a transition that has no run
+     * ([TransitionSpec.runMs]).
+     */
+    fun follow(top: OrcaRoute, under: UUID?, live: Set<UUID>, reduceMotion: Boolean) {
+        val last = lastTop
+        if (last != null && last !== top) {
+            val pushed = top.id !in lastLive && under != null
+            val popped = last.id !in live && top.id in lastLive
+            val next = when {
+                pushed -> Run(top, checkNotNull(under), leaving = false, TransitionSpec.of(top.transition))
+                popped -> {
+                    val spec = TransitionSpec.of(last.transition)
+                    val entering = run?.takeIf { !it.leaving && it.route === last }
+                    // What is left of the way in is already behind on the way out.
+                    val from = if (entering == null) 0.0 else (spec.runMs(reduceMotion) - elapsedMs).coerceAtLeast(0.0)
+                    Run(last, top.id, leaving = true, spec, from)
+                }
+                else -> null
+            }
+            elapsedMs = next?.fromMs ?: 0.0
+            run = next?.takeIf { it.spec.runMs(reduceMotion) > 0.0 }
+        }
+        lastTop = top
+        lastLive = live
+    }
+
+    /** [ended] reached its last frame. */
+    fun end(ended: Run) {
+        if (run === ended) run = null
+    }
+}
+
+/** What the shell draws the moving page with on this frame, on that page's node while a route transition runs. */
+internal val PageMotionKey: SemanticsPropertyKey<PageMotion> = SemanticsPropertyKey("OrcaPageMotion")
+
+private const val NANOS_PER_MILLI = 1_000_000.0
 
 /**
  * A server tree of the tab shell (`tabBarComponents`, `drawerComponents`)

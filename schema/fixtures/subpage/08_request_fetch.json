@@ -1,0 +1,328 @@
+{
+  "name": "request-fetch",
+  "description": "S4. A sub-page is fetched on the normal page route: `path` is the resolved pageId without its leading slashes, each segment between slashes percent-encoded, `query` is built from the resolved params. Keys are sorted by code point (UTF-8 byte order). Both keys and values are percent-encoded: every UTF-8 byte except A-Z a-z 0-9 - . _ ~ becomes %XX in upper case, so a space is %20 and never a plus. A string is sent as it is, true and false as words, a whole number up to 2^53 either way as its digits (no fraction, no exponent, however the JSON spelt it), any other number from 0.0001 up to 2^53 in magnitude as the shortest plain decimal that reads back the same, a list or a map as compact JSON with map keys sorted the same way. A null param is not sent. No params, or none left, gives an empty query and no question mark.",
+  "kind": "request",
+  "cases": [
+    {
+      "name": "one string param",
+      "fetch": {
+        "pageId": "profile",
+        "params": {
+          "userId": "u-42"
+        }
+      },
+      "expected": {
+        "path": "profile",
+        "query": "userId=u-42"
+      }
+    },
+    {
+      "name": "no params",
+      "fetch": {
+        "pageId": "profile"
+      },
+      "expected": {
+        "path": "profile",
+        "query": ""
+      }
+    },
+    {
+      "name": "empty params",
+      "fetch": {
+        "pageId": "profile",
+        "params": {}
+      },
+      "expected": {
+        "path": "profile",
+        "query": ""
+      }
+    },
+    {
+      "name": "a page path with segments is kept",
+      "fetch": {
+        "pageId": "user/42/posts",
+        "params": {
+          "tab": "new"
+        }
+      },
+      "expected": {
+        "path": "user/42/posts",
+        "query": "tab=new"
+      }
+    },
+    {
+      "name": "keys are sorted",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "b": "2",
+          "a": "1",
+          "B": "3",
+          "a1": "4",
+          "_": "5",
+          "é": "6"
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": "B=3&_=5&a=1&a1=4&b=2&%C3%A9=6"
+      }
+    },
+    {
+      "name": "sorted by code point, not by UTF-16 unit",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "😀": "astral",
+          "Ａ": "bmp"
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": "%EF%BC%A1=bmp&%F0%9F%98%80=astral"
+      }
+    },
+    {
+      "name": "numbers, booleans and null",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "int": 42,
+          "neg": -7,
+          "zero": 0,
+          "whole": 3,
+          "frac": 1.5,
+          "small": 0.1,
+          "negFrac": -2.25,
+          "yes": true,
+          "no": false,
+          "none": null
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": "frac=1.5&int=42&neg=-7&negFrac=-2.25&no=false&small=0.1&whole=3&yes=true&zero=0"
+      }
+    },
+    {
+      "name": "only null params",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "a": null
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": ""
+      }
+    },
+    {
+      "name": "an empty string is sent",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "q": "",
+          "z": "1"
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": "q=&z=1"
+      }
+    },
+    {
+      "name": "percent-encoding of values",
+      "fetch": {
+        "pageId": "search",
+        "params": {
+          "q": "a b&c=d",
+          "plus": "1+1",
+          "path": "x/y?z#w",
+          "safe": "A-z_0.9~",
+          "pct": "100%",
+          "quote": "it's (ok)!*"
+        }
+      },
+      "expected": {
+        "path": "search",
+        "query": "path=x%2Fy%3Fz%23w&pct=100%25&plus=1%2B1&q=a%20b%26c%3Dd&quote=it%27s%20%28ok%29%21%2A&safe=A-z_0.9~"
+      }
+    },
+    {
+      "name": "unicode values",
+      "fetch": {
+        "pageId": "search",
+        "params": {
+          "city": "Zürich",
+          "ar": "مرحبا",
+          "emoji": "😀"
+        }
+      },
+      "expected": {
+        "path": "search",
+        "query": "ar=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7&city=Z%C3%BCrich&emoji=%F0%9F%98%80"
+      }
+    },
+    {
+      "name": "percent-encoding of keys",
+      "fetch": {
+        "pageId": "search",
+        "params": {
+          "a b": "1",
+          "c&d": "2",
+          "e=f": "3"
+        }
+      },
+      "expected": {
+        "path": "search",
+        "query": "a%20b=1&c%26d=2&e%3Df=3"
+      }
+    },
+    {
+      "name": "a list and a map are compact JSON",
+      "fetch": {
+        "pageId": "search",
+        "params": {
+          "ids": [
+            1,
+            2.5,
+            "x",
+            true,
+            null
+          ],
+          "filter": {
+            "b": 1,
+            "a": {
+              "d": "q\"r",
+              "c": []
+            }
+          },
+          "none": [],
+          "empty": {}
+        }
+      },
+      "expected": {
+        "path": "search",
+        "query": "empty=%7B%7D&filter=%7B%22a%22%3A%7B%22c%22%3A%5B%5D%2C%22d%22%3A%22q%5C%22r%22%7D%2C%22b%22%3A1%7D&ids=%5B1%2C2.5%2C%22x%22%2Ctrue%2Cnull%5D&none=%5B%5D"
+      }
+    },
+    {
+      "name": "a leading slash is removed",
+      "fetch": {
+        "pageId": "/profile",
+        "params": {
+          "userId": "u-42"
+        }
+      },
+      "expected": {
+        "path": "profile",
+        "query": "userId=u-42"
+      }
+    },
+    {
+      "name": "every leading slash is removed; inner and trailing ones are kept",
+      "fetch": {
+        "pageId": "//user//42/"
+      },
+      "expected": {
+        "path": "user//42/",
+        "query": ""
+      }
+    },
+    {
+      "name": "each path segment is percent-encoded",
+      "fetch": {
+        "pageId": "search/a b?x=1&y#top/café/100%/it's:@+$,;",
+        "params": {
+          "q": "1"
+        }
+      },
+      "expected": {
+        "path": "search/a%20b%3Fx%3D1%26y%23top/caf%C3%A9/100%25/it%27s%3A%40%2B%24%2C%3B",
+        "query": "q=1"
+      }
+    },
+    {
+      "name": "integers up to 2^53",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "max": 9007199254740992,
+          "min": -9007199254740992,
+          "big": 1000000000000000,
+          "in": [
+            9007199254740992,
+            -1
+          ]
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": "big=1000000000000000&in=%5B9007199254740992%2C-1%5D&max=9007199254740992&min=-9007199254740992"
+      }
+    },
+    {
+      "name": "a whole number, however the JSON spells it",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "fraction": 3.0,
+          "exponent": 1e3,
+          "negZero": -0.0,
+          "bigExponent": 9.007199254740992E15,
+          "in": [
+            2.0,
+            -4.0e0
+          ]
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": "bigExponent=9007199254740992&exponent=1000&fraction=3&in=%5B2%2C-4%5D&negZero=0"
+      }
+    },
+    {
+      "name": "other numbers in plain decimal form",
+      "fetch": {
+        "pageId": "list",
+        "params": {
+          "tiny": 0.0001,
+          "long": 0.30000000000000004,
+          "mixed": 1234567.125,
+          "large": 4503599627370495.5,
+          "neg": -123456789.5,
+          "spelt": 1.5e-3,
+          "in": [
+            0.0001,
+            -123456789.5
+          ]
+        }
+      },
+      "expected": {
+        "path": "list",
+        "query": "in=%5B0.0001%2C-123456789.5%5D&large=4503599627370495.5&long=0.30000000000000004&mixed=1234567.125&neg=-123456789.5&spelt=0.0015&tiny=0.0001"
+      }
+    },
+    {
+      "name": "JSON strings: only quote, backslash and control characters are escaped",
+      "fetch": {
+        "pageId": "search",
+        "params": {
+          "v": [
+            "a/b",
+            "é",
+            "tab\there",
+            "line\nbreak",
+            "back\\slash",
+            "\u0001"
+          ]
+        }
+      },
+      "expected": {
+        "path": "search",
+        "query": "v=%5B%22a%2Fb%22%2C%22%C3%A9%22%2C%22tab%5Cthere%22%2C%22line%5Cnbreak%22%2C%22back%5C%5Cslash%22%2C%22%5Cu0001%22%5D"
+      }
+    }
+  ]
+}

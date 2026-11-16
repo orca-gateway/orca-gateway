@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.orcagateway.core.animation.AlignmentBias
 import com.orcagateway.core.json.DartFormat
 import com.orcagateway.core.json.JsonValue
 
@@ -181,9 +182,15 @@ internal object Props {
         return Offset((bias.x + 1) / 2, (bias.y + 1) / 2)
     }
 
-    /** Flutter's `Alignment(x, y)` for a name, -1 to 1 on each axis; center when unknown. */
-    private fun alignmentBias(value: JsonValue?): Offset =
-        value?.stringValue?.let(ALIGNMENTS::get) ?: Offset.Zero
+    /**
+     * Flutter's `Alignment(x, y)` for a name, -1 to 1 on each axis; center
+     * when unknown. An `{x, y}` object is that point itself: what an implicit
+     * animation hands over between two names (the core's [AlignmentBias]).
+     */
+    private fun alignmentBias(value: JsonValue?): Offset {
+        if (value?.objectValue != null) return AlignmentBias.of(value).let { Offset(it.x.toFloat(), it.y.toFloat()) }
+        return value?.stringValue?.let(ALIGNMENTS::get) ?: Offset.Zero
+    }
 
     private val ALIGNMENTS: Map<String, Offset> = mapOf(
         "topLeft" to Offset(-1f, -1f),

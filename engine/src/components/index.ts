@@ -90,6 +90,7 @@ export {
   ReorderableListView,
   PullToRefresh,
   BlurView,
+  SubPage,
 } from "./layout";
 
 // Primitives

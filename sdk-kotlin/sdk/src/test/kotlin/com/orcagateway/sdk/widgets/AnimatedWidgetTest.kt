@@ -1,0 +1,817 @@
+package com.orcagateway.sdk.widgets
+
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.width
+import com.orcagateway.core.animation.AlignmentBias
+import com.orcagateway.core.animation.AnimationMix
+import com.orcagateway.core.animation.Curves
+import com.orcagateway.core.animation.ImplicitAnimation
+import com.orcagateway.core.json.JsonValue
+import com.orcagateway.core.models.Action
+import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.models.StateDefinition
+import com.orcagateway.core.models.StateScope
+import com.orcagateway.core.render.ComponentMutation
+import com.orcagateway.core.render.WidgetRegistry
+import com.orcagateway.sdk.NodeView
+import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.WidgetBuilders
+import com.orcagateway.sdk.support.button
+import com.orcagateway.sdk.support.column
+import com.orcagateway.sdk.support.leaf
+import com.orcagateway.sdk.support.page
+import com.orcagateway.sdk.support.text
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import kotlin.math.abs
+import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/**
+ * AnimatedContainer, AnimatedOpacity, AnimatedAlign, AnimatedSwitcher and
+ * Hero on the test frame clock, at 1 dp per pixel. The three implicit
+ * widgets are drawn by the real Container, opacity and Align code; the test
+ * builders only record the props that code was handed, frame by frame, and
+ * the expected values come from the core's [ImplicitAnimation] fed the same
+ * frame times.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "mdpi")
+class AnimatedWidgetTest {
+    @get:Rule
+    val compose = createComposeRule()
+
+    /** The props each implicit widget last handed to its drawing code, by node id. */
+    private val drawn = HashMap<String, Map<String, JsonValue>>()
+
+    /** How many times each implicit widget was drawn. */
+    private val draws = HashMap<String, Int>()
+
+    private val fade = SwitcherFade()
+
+    /** The Compose view, to draw it into a bitmap. */
+    private var view: View? = null
+
+    /** How many times a Probe was composed anew, by node id. */
+    private val probes = HashMap<String, Int>()
+
+    private fun record(id: String, props: Map<String, JsonValue>) {
+        drawn[id] = props
+        draws[id] = (draws[id] ?: 0) + 1
+    }
+
+    private fun model(vararg nodes: ComponentNode, state: Map<String, Any?> = emptyMap()): OrcaPageModel {
+        val definitions = state.map { StateDefinition(it.key, StateScope.Page, JsonValue.of(it.value)) }
+        val registry = WidgetRegistry(types = WidgetRegistry.shared.types + ANIMATED + setOf("Dot", "Probe", "TextField"))
+        return OrcaPageModel(page(*nodes, state = definitions), registry = registry).also { model ->
+            model.builders = WidgetBuilders.standard().apply {
+                register("AnimatedContainer") { node, m, modifier ->
+                    AnimatedContainerWidget(node, m, modifier) { sampled, sm, smod ->
+                        record(sampled.id, sampled.props)
+                        ContainerWidget(sampled, sm, smod.testTag(sampled.id))
+                    }
+                }
+                register("AnimatedOpacity") { node, m, modifier ->
+                    AnimatedOpacityWidget(node, m, modifier) { sampled, sm, smod ->
+                        record(sampled.id, sampled.props)
+                        OpacityWidget(sampled, sm, smod)
+                    }
+                }
+                register("AnimatedAlign") { node, m, modifier ->
+                    AnimatedAlignWidget(node, m, modifier) { sampled, sm, smod ->
+                        record(sampled.id, sampled.props)
+                        AlignWidget(sampled, sm, smod)
+                    }
+                }
+                // The switcher "sw" is the one the tests look into; any other keeps its own fade.
+                register("AnimatedSwitcher") { node, m, modifier ->
+                    if (node.id == "sw") AnimatedSwitcherWidget(node, m, modifier, fade) else AnimatedSwitcherWidget(node, m, modifier)
+                }
+                register("TextField") { node, m, modifier -> TextFieldWidget(node, m, modifier) }
+                // Counts each new composition of itself: one per node unless its composition state was dropped.
+                register("Probe") { node, _, modifier ->
+                    remember { probes.merge(node.id, 1, Int::plus) }
+                    Box(modifier.size(10.dp))
+                }
+                // A 20 x 10 box tagged with its node id.
+                register("Dot") { node, _, modifier -> Box(modifier.testTag(node.id).size(20.dp, 10.dp)) }
+            }
+        }
+    }
+
+    /** A single-child node; it watches the page state keys its props read ([state]), as the encoder would say. */
+    private fun single(id: String, type: String, child: String?, props: Map<String, Any?>): ComponentNode =
+        ComponentNode(
+            id, type, ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single,
+            props.mapValues { JsonValue.of(it.value) }, listOfNotNull(child),
+            watches = props.values.mapNotNull { (it as? Map<*, *>)?.get("key") as? String },
+        )
+
+    private fun dot(id: String): ComponentNode =
+        ComponentNode(id, "Dot", ComponentNode.Kind.Primitive, ComponentNode.ChildMode.None, emptyMap())
+
+    private fun state(key: String): Map<String, Any?> = mapOf("type" to "state", "key" to key, "scope" to "page")
+
+    private fun show(model: OrcaPageModel, root: String, reduceMotion: Boolean = false) {
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalOrcaReduceMotion provides reduceMotion) {
+                view = LocalView.current
+                Box(Modifier.size(300.dp, 200.dp)) { NodeView(root, model) }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+    }
+
+    /**
+     * Runs [change] on the main thread and hands what it wrote to Compose,
+     * so the next frame redraws it (the frame clock is stepped by hand here,
+     * and nothing else would deliver the write before that frame).
+     */
+    private fun change(change: () -> Unit) {
+        compose.runOnIdle {
+            change()
+            Snapshot.sendApplyNotifications()
+        }
+    }
+
+    private fun OrcaPageModel.set(vararg update: Pair<String, Any?>) {
+        change { store.dispatch(update.associate { it.first to JsonValue.of(it.second) }) }
+    }
+
+    /**
+     * Steps frames until the page takes one: a widget at rest takes none,
+     * so that frame is the one its run began at. Its time.
+     */
+    private fun OrcaPageModel.startOfRun(): Double {
+        val before = animationFrameMs
+        repeat(5) {
+            compose.mainClock.advanceTimeByFrame()
+            if (animationFrameMs != before) return animationFrameMs
+        }
+        error("no animation frame was taken")
+    }
+
+    /** Steps frames until [elapsed] ms after [start]; the frame's time. */
+    private fun OrcaPageModel.runTo(start: Double, elapsed: Double): Double {
+        while (animationFrameMs - start < elapsed) {
+            val before = animationFrameMs
+            compose.mainClock.advanceTimeByFrame()
+            check(animationFrameMs != before) { "the run stopped taking frames at ${before - start} ms" }
+        }
+        return animationFrameMs
+    }
+
+    private fun core(durationMs: Double, curve: String?, first: Map<String, JsonValue>) =
+        ImplicitAnimation(durationMs, curve, mix = AnimationMix::props).apply { retarget(first, 0.0) }
+
+    // MARK: AnimatedContainer (B12.2)
+
+    private fun container(curve: String?): OrcaPageModel = model(
+        single(
+            "box", "AnimatedContainer", "label",
+            mapOf("duration" to 300, "width" to state("w"), "height" to 40, "color" to state("c")) +
+                listOfNotNull(curve?.let { "curve" to it }),
+        ),
+        text("label", "Details"),
+        state = mapOf("w" to 100, "c" to "#1565C0"),
+    )
+
+    private fun containerMidRun(curve: String?) {
+        val model = container(curve)
+        show(model, "box")
+        val from = assertNotNull(drawn["box"])
+        assertEquals(100.0, from["width"]?.doubleValue)
+
+        model.set("w" to 200, "c" to "#FF6F00")
+        val start = model.startOfRun()
+        val to = from + mapOf("width" to JsonValue.Int(200), "color" to JsonValue.String("#FF6F00"))
+        val twin = core(300.0, curve, from).apply { retarget(to, start) }
+        // The run starts at the value on screen: the mix at 0, which writes 100 as 100.0 and the colour with its alpha.
+        assertEquals(AnimationMix.props(from, to, 0.0), drawn["box"])
+        assertEquals(100.0, drawn["box"]?.get("width")?.doubleValue)
+        assertEquals("#1565C0FF", drawn["box"]?.get("color")?.stringValue)
+
+        val now = model.runTo(start, 150.0)
+        val t = (now - start) / 300.0
+        assertTrue(t >= 0.5 && t < 0.6, "about half way by the test clock: $t")
+        val expected = AnimationMix.props(from, to, Curves.apply(curve ?: "easeInOut", t))
+        assertEquals(expected, drawn["box"])
+        assertEquals(twin.value(now), drawn["box"])
+        val width = assertNotNull(drawn["box"]?.get("width")?.doubleValue)
+        assertTrue(width > 140 && width < 175, "$width")
+        val colour = drawn["box"]?.get("color")?.stringValue
+        assertNotEquals("#1565C0", colour)
+        assertNotEquals("#FF6F00", colour)
+        // The Container on screen is as wide as the sampled prop says.
+        assertEquals(width, compose.onNodeWithTag("box").getUnclippedBoundsInRoot().width.value.toDouble(), 0.51)
+
+        compose.mainClock.advanceTimeBy(200)
+        assertEquals(to, drawn["box"], "the end state is the target itself")
+        assertEquals(200.dp, compose.onNodeWithTag("box").getUnclippedBoundsInRoot().width)
+        val rested = model.animationFrameMs
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(rested, model.animationFrameMs, "no frames once the run is over")
+    }
+
+    @Test
+    fun b12_2_k_containerWidthAndColourAt150Of300MsEqualTheCoresMix_linear() = containerMidRun("linear")
+
+    @Test
+    fun b12_2_k_containerWidthAndColourAt150Of300MsEqualTheCoresMix_easeInOut() = containerMidRun("easeInOut")
+
+    @Test
+    fun b12_2_k_aMissingCurveIsEaseInOut() = containerMidRun(null)
+
+    @Test
+    fun b12_2_k_aRetargetMidRunStartsFromTheValueOnScreen() {
+        val model = container("linear")
+        show(model, "box")
+        val first = assertNotNull(drawn["box"])
+        model.set("w" to 200)
+        val start = model.startOfRun()
+        val second = first + ("width" to JsonValue.Int(200))
+        val twin = core(300.0, "linear", first).apply { retarget(second, start) }
+        model.runTo(start, 150.0)
+
+        model.set("w" to 50)
+        // The frame that redraws the widget with its new target still belongs
+        // to the first run; the new run begins at the frame after it.
+        compose.mainClock.advanceTimeByFrame()
+        val before = assertNotNull(drawn["box"]?.get("width")?.doubleValue)
+        assertEquals(twin.value(model.animationFrameMs), drawn["box"])
+        compose.mainClock.advanceTimeByFrame()
+        val restart = model.animationFrameMs
+        val third = first + ("width" to JsonValue.Int(50))
+        twin.retarget(third, restart)
+        val turning = assertNotNull(drawn["box"]?.get("width")?.doubleValue)
+        assertTrue(turning >= before && turning < 200, "no jump back to an end: $before then $turning")
+
+        // From there a full 300 ms to the new target, each frame the core's mix.
+        var last = turning
+        while (model.animationFrameMs - restart < 280) {
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(twin.value(model.animationFrameMs), drawn["box"])
+            val width = assertNotNull(drawn["box"]?.get("width")?.doubleValue)
+            assertTrue(width < last && width > 50, "falling from the turning point: $last then $width")
+            last = width
+        }
+        compose.mainClock.advanceTimeBy(48)
+        assertEquals(third, drawn["box"])
+    }
+
+    @Test
+    fun b12_2_k_theFirstCompositionShowsTheTargetWithNoAnimation() {
+        val model = container("linear")
+        show(model, "box")
+        compose.mainClock.advanceTimeBy(1000)
+
+        assertEquals(model.resolve("box")?.props, drawn["box"])
+        assertEquals(1, draws["box"])
+        assertEquals(0.0, model.animationFrameMs, "a widget at rest takes no frames")
+        assertEquals(100.dp, compose.onNodeWithTag("box").getUnclippedBoundsInRoot().width)
+    }
+
+    // MARK: AnimatedOpacity and AnimatedAlign (B12.3)
+
+    @Test
+    fun b12_3_k_opacityMidRunEqualsTheCoresMixThroughItsCurve() {
+        val model = model(
+            single("fade", "AnimatedOpacity", "label", mapOf("opacity" to state("o"), "duration" to 300, "curve" to "bounceOut")),
+            text("label", "Draft"),
+            state = mapOf("o" to 1),
+        )
+        show(model, "fade")
+        val from = assertNotNull(drawn["fade"])
+
+        model.set("o" to 0.25)
+        val start = model.startOfRun()
+        val to = from + ("opacity" to JsonValue.Double(0.25))
+        val now = model.runTo(start, 150.0)
+        val t = (now - start) / 300.0
+        val expected = 1.0 + (0.25 - 1.0) * Curves.apply("bounceOut", t)
+        assertEquals(expected, assertNotNull(drawn["fade"]?.get("opacity")?.doubleValue), 1e-9)
+        assertEquals(AnimationMix.props(from, to, Curves.apply("bounceOut", t)), drawn["fade"])
+        compose.onNodeWithText("Draft").assertExists()
+
+        compose.mainClock.advanceTimeBy(200)
+        assertEquals(to, drawn["fade"])
+    }
+
+    @Test
+    fun b12_3_k_aMissingOpacityAnimatesFromFlutters1() {
+        val model = model(
+            single("fade", "AnimatedOpacity", "label", mapOf("opacity" to state("o"), "duration" to 300, "curve" to "linear")),
+            text("label", "Draft"),
+            state = mapOf("o" to null),
+        )
+        show(model, "fade")
+        assertEquals(1.0, drawn["fade"]?.get("opacity")?.doubleValue)
+
+        model.set("o" to 0)
+        val start = model.startOfRun()
+        val now = model.runTo(start, 150.0)
+        assertEquals(1.0 - (now - start) / 300.0, assertNotNull(drawn["fade"]?.get("opacity")?.doubleValue), 1e-9)
+    }
+
+    private fun align(corner: String?): OrcaPageModel = model(
+        single("dock", "AnimatedAlign", "dot", mapOf("alignment" to state("corner"), "duration" to 300, "curve" to "linear")),
+        dot("dot"),
+        state = mapOf("corner" to corner),
+    )
+
+    @Test
+    fun b12_3_k_alignMidRunIsThePointBetweenTheTwoAlignments() {
+        val model = align("topLeft")
+        show(model, "dock")
+        val from = assertNotNull(drawn["dock"])
+        assertEquals(0.dp, compose.onNodeWithTag("dot").getUnclippedBoundsInRoot().left)
+
+        model.set("corner" to "bottomRight")
+        val start = model.startOfRun()
+        val to = from + ("alignment" to JsonValue.String("bottomRight"))
+        val now = model.runTo(start, 150.0)
+        val t = (now - start) / 300.0
+        assertEquals(AnimationMix.props(from, to, t), drawn["dock"])
+        val bias = AlignmentBias.of(drawn["dock"]?.get("alignment"))
+        assertEquals(-1.0 + 2.0 * t, bias.x, 1e-9)
+        assertEquals(-1.0 + 2.0 * t, bias.y, 1e-9)
+        // On screen: the 20 x 10 dot that far along the 300 x 200 box.
+        val bounds = compose.onNodeWithTag("dot").getUnclippedBoundsInRoot()
+        assertEquals(280.0 * t, bounds.left.value.toDouble(), 0.51)
+        assertEquals(190.0 * t, bounds.top.value.toDouble(), 0.51)
+
+        compose.mainClock.advanceTimeBy(200)
+        assertEquals(to, drawn["dock"])
+        assertEquals(280.dp, compose.onNodeWithTag("dot").getUnclippedBoundsInRoot().left)
+        assertEquals(190.dp, compose.onNodeWithTag("dot").getUnclippedBoundsInRoot().top)
+    }
+
+    @Test
+    fun b12_3_k_aMissingAlignmentAnimatesFromFluttersCentre() {
+        val model = align(null)
+        show(model, "dock")
+        assertEquals(140.dp, compose.onNodeWithTag("dot").getUnclippedBoundsInRoot().left)
+
+        model.set("corner" to "bottomRight")
+        val start = model.startOfRun()
+        val now = model.runTo(start, 150.0)
+        val t = (now - start) / 300.0
+        val bias = AlignmentBias.of(drawn["dock"]?.get("alignment"))
+        assertEquals(t, bias.x, 1e-9)
+        assertEquals(t, bias.y, 1e-9)
+    }
+
+    // MARK: AnimatedSwitcher (B12.4)
+
+    private fun switcher(): OrcaPageModel = model(
+        single("sw", "AnimatedSwitcher", "a", mapOf("duration" to 300)),
+        text("a", "Old", mapOf("maxLines" to JsonValue.of(state("lines")))).copy(watches = listOf("lines")),
+        state = mapOf("lines" to 1),
+    )
+
+    @Test
+    fun b12_4_k_aNewChildIdFadesTheOldOutAndTheNewInThenOnlyTheNewStays() {
+        val model = switcher()
+        show(model, "sw")
+        compose.onNodeWithText("Old").assertExists()
+        assertNull(fade.outgoing)
+        assertEquals(1.0, fade.incomingAlpha)
+
+        change { model.apply(ComponentMutation.Add("sw", listOf(text("b", "New")), position = 0)) }
+        val start = model.startOfRun()
+        val now = model.runTo(start, 150.0)
+        val t = (now - start) / 300.0
+
+        compose.onNodeWithText("Old").assertExists()
+        compose.onNodeWithText("New").assertExists()
+        assertEquals("a", fade.outgoing)
+        assertEquals("b", fade.current)
+        assertEquals(t, fade.incomingAlpha, 1e-9)
+        assertEquals(1.0 - t, fade.outgoingAlpha, 1e-9)
+        assertEquals(1.0, fade.incomingAlpha + fade.outgoingAlpha, 1e-9)
+
+        compose.mainClock.advanceTimeBy(200)
+        compose.onNodeWithText("New").assertExists()
+        compose.onNodeWithText("Old").assertDoesNotExist()
+        assertNull(fade.outgoing)
+        assertEquals(1.0, fade.incomingAlpha)
+        val rested = model.animationFrameMs
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(rested, model.animationFrameMs, "no frames once the fade is over")
+    }
+
+    @Test
+    fun b12_4_k_theSameChildIdWithNewPropsDoesNotFade() {
+        val model = switcher()
+        show(model, "sw")
+
+        model.set("lines" to 2)
+        change { model.apply(ComponentMutation.Update("a", mapOf("data" to JsonValue.String("Edited")))) }
+        compose.mainClock.advanceTimeBy(160)
+
+        compose.onNodeWithText("Edited").assertExists()
+        compose.onNodeWithText("Old").assertDoesNotExist()
+        assertEquals("a", fade.current)
+        assertNull(fade.outgoing)
+        assertEquals(1.0, fade.incomingAlpha)
+        assertEquals(0.0, model.animationFrameMs, "no fade, so no frames")
+    }
+
+    /** Runs [actions] through the page's executor, as a server action's answer does, in one go. */
+    private fun OrcaPageModel.execute(vararg actions: Action) {
+        change { runBlocking { actions.forEach { run(it) } } }
+    }
+
+    private fun replace(target: String, vararg nodes: ComponentNode): Action {
+        val components = nodes.joinToString(",") { Json.encodeToString(ComponentNode.serializer(), it) }
+        return Json.decodeFromString(
+            Action.serializer(),
+            """{"type":"replaceComponent","targetId":"$target","components":[$components]}""",
+        )
+    }
+
+    private fun add(parent: String, vararg nodes: ComponentNode): Action {
+        val components = nodes.joinToString(",") { Json.encodeToString(ComponentNode.serializer(), it) }
+        return Json.decodeFromString(
+            Action.serializer(),
+            """{"type":"addComponent","parentId":"$parent","components":[$components],"position":0}""",
+        )
+    }
+
+    /** Mid-fade both children are on screen with complementary alphas; after it only the new one, the snapshot dropped. */
+    private fun crossFades(model: OrcaPageModel, vararg actions: Action) {
+        show(model, "sw")
+        compose.onNodeWithText("Old").assertExists()
+        assertNull(fade.outgoingNodes)
+
+        model.execute(*actions)
+        assertNull(model.resolve("a"), "the old child has left the page")
+        val start = model.startOfRun()
+        val now = model.runTo(start, 150.0)
+        val t = (now - start) / 300.0
+
+        // The old child's content is still drawn, from the snapshot.
+        compose.onNodeWithText("Old").assertExists()
+        compose.onNodeWithText("New").assertExists()
+        assertEquals("a", fade.outgoing)
+        assertEquals("b", fade.current)
+        assertEquals(setOf("a"), fade.outgoingNodes?.keys)
+        assertEquals(t, fade.incomingAlpha, 1e-9)
+        assertEquals(1.0 - t, fade.outgoingAlpha, 1e-9)
+
+        compose.mainClock.advanceTimeBy(200)
+        compose.onNodeWithText("New").assertExists()
+        compose.onNodeWithText("Old").assertDoesNotExist()
+        assertNull(fade.outgoing)
+        assertNull(fade.outgoingNodes, "the snapshot is released with the fade")
+        assertEquals(1.0, fade.incomingAlpha)
+        val rested = model.animationFrameMs
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(rested, model.animationFrameMs, "no frames once the fade is over")
+    }
+
+    @Test
+    fun b12_4_k_aReplacedChildFadesOutFromItsSnapshotWhileTheNewOneFadesIn() {
+        crossFades(switcher(), replace("a", text("b", "New")))
+    }
+
+    @Test
+    fun b12_4_k_aDeletedChildFadesOutFromItsSnapshotWhileTheAddedOneFadesIn() {
+        crossFades(switcher(), Action.DeleteComponent("a"), add("sw", text("b", "New")))
+    }
+
+    @Test
+    fun b12_4_k_theOutgoingLayerIsInert() {
+        val tap = Action.SetState("taps", StateScope.Page, JsonValue.of(mapOf("type" to "state", "key" to "next", "scope" to "page")))
+        val model = model(
+            single("sw", "AnimatedSwitcher", "a", mapOf("duration" to 300)),
+            button("a", "ElevatedButton", "spin", mapOf("onTap" to tap)),
+            single("spin", "AnimatedBuilder", "old", mapOf("animationId" to "spin", "duration" to 1000, "repeat" to true)),
+            text("old", "Old"),
+            state = mapOf("taps" to 0, "next" to 1),
+        )
+        show(model, "sw")
+        compose.mainClock.advanceTimeByFrame()
+        assertNotNull(model.animations.controller("spin"), "registered while its builder is live")
+        compose.onNodeWithText("Old").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(1L, model.store.state.merged["taps"]?.intValue, "live, the button fires")
+        model.set("next" to 2)
+
+        model.execute(replace("a", text("b", "New")))
+        compose.mainClock.advanceTimeBy(100)
+        assertTrue(fade.isFading)
+        compose.onNodeWithText("Old").assertExists()
+        compose.onNodeWithText("New").assertExists()
+        assertNull(model.animations.controller("spin"), "the outgoing builder holds no controller")
+
+        compose.onNodeWithText("Old").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(1L, model.store.state.merged["taps"]?.intValue, "the outgoing button fires nothing")
+        val frozen = assertNotNull(fade.outgoingNodes?.get("a"))
+        assertEquals(setOf("onTap"), frozen.actions.keys)
+        assertNull(model.fire("onTap", frozen), "a snapshot node's action does not run")
+        assertEquals(setOf("a", "spin", "old"), fade.outgoingNodes?.keys)
+
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithText("Old").assertDoesNotExist()
+        assertNull(fade.outgoingNodes)
+        val rested = model.animationFrameMs
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(rested, model.animationFrameMs, "the repeating builder left with its layer: no frames")
+    }
+
+    /** One pixel of the page drawn in software on white, as BoxTest draws it: red, green, blue. */
+    private fun pixel(x: Int, y: Int): List<Int> {
+        val page = requireNotNull(view)
+        val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(android.graphics.Color.WHITE)
+        page.draw(Canvas(bitmap))
+        val argb = bitmap.getPixel(x, y)
+        return listOf(android.graphics.Color.red(argb), android.graphics.Color.green(argb), android.graphics.Color.blue(argb))
+    }
+
+    private fun assertPixel(expected: List<Double>, x: Int, y: Int) {
+        val actual = pixel(x, y)
+        assertTrue(expected.zip(actual).all { (want, got) -> abs(want - got) <= 4 }, "($x, $y) is $actual, expected $expected")
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun b12_4_k_midFadeBothLayersAreDrawnAtTheirAlphas() {
+        // A 100 x 100 red square replaced by a 20 x 20 blue one, centred on it.
+        val model = model(
+            single("sw", "AnimatedSwitcher", "a", mapOf("duration" to 300)),
+            single("a", "Container", null, mapOf("width" to 100, "height" to 100, "color" to "#FF0000")),
+        )
+        show(model, "sw")
+        assertPixel(listOf(255.0, 0.0, 0.0), 5, 5)
+
+        model.execute(replace("a", single("b", "Container", null, mapOf("width" to 20, "height" to 20, "color" to "#0000FF"))))
+        val start = model.startOfRun()
+        val now = model.runTo(start, 150.0)
+        val t = (now - start) / 300.0
+        assertTrue(t >= 0.5 && t < 0.6, "about half way by the test clock: $t")
+
+        // Outside the new child: red at 1 - t over the white page.
+        val under = listOf(255.0, 255.0 * t, 255.0 * t)
+        assertPixel(under, 5, 5)
+        // On it: blue at t over that.
+        val blue = listOf(0.0, 0.0, 255.0)
+        assertPixel(blue.zip(under).map { (top, below) -> top * t + below * (1 - t) }, 50, 50)
+
+        // After the fade the switcher is its 20 x 20 child alone.
+        compose.mainClock.advanceTimeBy(200)
+        assertPixel(blue, 5, 5)
+        assertPixel(listOf(255.0, 255.0, 255.0), 50, 50)
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun b12_4_k_aFieldThatHeldFocusInTheOutgoingChildWritesNothingToTheStore() {
+        val model = model(
+            single("sw", "AnimatedSwitcher", "a", mapOf("duration" to 300)),
+            leaf("a", "TextField", mapOf("stateKey" to JsonValue.String("name"))),
+            state = mapOf("name" to ""),
+        )
+        show(model, "sw")
+        val field = compose.onNode(hasSetTextAction())
+        field.performClick()
+        compose.mainClock.advanceTimeByFrame()
+        field.assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.A) }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals("a", model.store.value("name").stringValue, "live and focused, a key is an edit")
+
+        model.execute(replace("a", text("b", "New")))
+        compose.mainClock.advanceTimeBy(100)
+        assertTrue(fade.isFading)
+        field.assertExists()
+        field.assertIsNotFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.B) }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals("a", model.store.value("name").stringValue, "the outgoing field takes no key")
+    }
+
+    @Test
+    fun b12_4_k_theRecorderForgetsANodeThatLeftTheCurrentChild() {
+        // "sw" holds a switcher of its own: what "in" draws is also recorded by "sw" through the parent link.
+        val model = model(
+            single("sw", "AnimatedSwitcher", "in", mapOf("duration" to 300)),
+            single("in", "AnimatedSwitcher", "a", mapOf("duration" to 300)),
+            column("a", "x", "y"),
+            text("x", "Kept"),
+            text("y", "Deleted"),
+        )
+        show(model, "sw")
+        assertEquals(setOf("in", "a", "x", "y"), fade.recorder.frozen("in").keys)
+        assertEquals(setOf("y"), fade.recorder.frozen("y").keys)
+
+        model.execute(Action.DeleteComponent("y"))
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithText("Deleted").assertDoesNotExist()
+        assertEquals(emptySet(), fade.recorder.frozen("y").keys, "a node deleted inside the child is forgotten")
+        assertEquals(setOf("in", "a", "x"), fade.recorder.frozen("in").keys)
+
+        // The inner switcher's child is replaced: the outer one forgets the old child and its subtree.
+        model.execute(replace("a", text("b", "New")))
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(emptySet(), fade.recorder.frozen("a").keys)
+        assertEquals(emptySet(), fade.recorder.frozen("x").keys)
+        assertEquals(setOf("in", "b"), fade.recorder.frozen("in").keys)
+    }
+
+    @Test
+    fun b12_4_k_aFrozenImplicitWidgetShowsItsTargetAtOnce() {
+        val model = model(
+            single("sw", "AnimatedSwitcher", "box", mapOf("duration" to 300)),
+            single("box", "AnimatedContainer", null, mapOf("duration" to 2000, "curve" to "linear", "width" to state("w"), "height" to 40)),
+            state = mapOf("w" to 100),
+        )
+        show(model, "sw")
+        val from = assertNotNull(drawn["box"])
+        model.set("w" to 200)
+        val start = model.startOfRun()
+        model.runTo(start, 150.0)
+        val to = from + ("width" to JsonValue.Int(200))
+        val midRun = assertNotNull(drawn["box"]?.get("width")?.doubleValue)
+        assertTrue(midRun > 100 && midRun < 120, "early in its 2000 ms run: $midRun")
+
+        model.execute(replace("box", text("b", "New")))
+        // Every frame of the fade the outgoing container is drawn with its target: its run is over.
+        repeat(6) {
+            compose.mainClock.advanceTimeByFrame()
+            assertTrue(fade.isFading)
+            assertEquals(to, drawn["box"])
+        }
+        assertEquals(200.dp, compose.onNodeWithTag("box").getUnclippedBoundsInRoot().width)
+    }
+
+    @Test
+    fun b12_4_k_aFrozenBuilderKeepsItsChildrensCompositionState() {
+        val model = model(
+            single("sw", "AnimatedSwitcher", "spin", mapOf("duration" to 300)),
+            single("spin", "AnimatedBuilder", "probe", mapOf("duration" to 1000, "repeat" to true)),
+            ComponentNode("probe", "Probe", ComponentNode.Kind.Primitive, ComponentNode.ChildMode.None, emptyMap()),
+        )
+        show(model, "sw")
+        compose.mainClock.advanceTimeBy(64)
+        assertEquals(1, probes["probe"])
+
+        model.execute(replace("spin", text("b", "New")))
+        compose.mainClock.advanceTimeBy(100)
+        assertTrue(fade.isFading)
+        assertEquals(setOf("spin", "probe"), fade.outgoingNodes?.keys)
+        assertEquals(1, probes["probe"], "the child was not composed anew as its builder froze")
+    }
+
+    @Test
+    fun b12_4_k_reducedMotionSwapsAReplacedChildAtOnceWithNoOutgoingLayer() {
+        val model = switcher()
+        show(model, "sw", reduceMotion = true)
+
+        model.execute(replace("a", text("b", "New")))
+        compose.mainClock.advanceTimeByFrame()
+
+        compose.onNodeWithText("New").assertExists()
+        compose.onNodeWithText("Old").assertDoesNotExist()
+        assertNull(fade.outgoing)
+        assertNull(fade.outgoingNodes)
+        assertEquals(1.0, fade.incomingAlpha)
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(0.0, model.animationFrameMs, "no fade, so no frames")
+    }
+
+    // MARK: reduced motion (B12.7)
+
+    @Test
+    fun b12_7_k_reducedMotionShowsTheEndStateAtOnceForAllFour() {
+        val model = model(
+            ComponentNode(
+                "col", "Column", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Multi, emptyMap(),
+                listOf("box", "fade", "dock", "sw"),
+            ),
+            single("box", "AnimatedContainer", null, mapOf("duration" to 300, "width" to state("w"), "height" to 20, "color" to state("c"))),
+            single("fade", "AnimatedOpacity", "label", mapOf("duration" to 300, "opacity" to state("o"))),
+            text("label", "Draft"),
+            single("dock", "AnimatedAlign", "dot", mapOf("duration" to 300, "alignment" to state("corner"), "heightFactor" to 1)),
+            dot("dot"),
+            single("sw", "AnimatedSwitcher", "a", mapOf("duration" to 300)),
+            text("a", "Old"),
+            state = mapOf("w" to 100, "c" to "#1565C0", "o" to 1, "corner" to "topLeft"),
+        )
+        show(model, "col", reduceMotion = true)
+        val box = assertNotNull(drawn["box"])
+        val opacity = assertNotNull(drawn["fade"])
+        val dock = assertNotNull(drawn["dock"])
+
+        model.set("w" to 200, "c" to "#FF6F00", "o" to 0.25, "corner" to "bottomRight")
+        change { model.apply(ComponentMutation.Add("sw", listOf(text("b", "New")), position = 0)) }
+        compose.mainClock.advanceTimeByFrame()
+
+        assertEquals(box + mapOf("width" to JsonValue.Int(200), "color" to JsonValue.String("#FF6F00")), drawn["box"])
+        assertEquals(opacity + ("opacity" to JsonValue.Double(0.25)), drawn["fade"])
+        assertEquals(dock + ("alignment" to JsonValue.String("bottomRight")), drawn["dock"])
+        assertEquals(200.dp, compose.onNodeWithTag("box").getUnclippedBoundsInRoot().width)
+        assertEquals(280.dp, compose.onNodeWithTag("dot").getUnclippedBoundsInRoot().left)
+        compose.onNodeWithText("New").assertExists()
+        compose.onNodeWithText("Old").assertDoesNotExist()
+        assertNull(fade.outgoing)
+        assertEquals(1.0, fade.incomingAlpha)
+
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(0.0, model.animationFrameMs, "nothing ran, so no frames")
+        assertEquals(200.0, drawn["box"]?.get("width")?.doubleValue)
+    }
+
+    // MARK: Hero (the plain-push half of B12.5) and the registry
+
+    @Test
+    fun b12_5_k_heroDrawsItsChildAndCarriesItsTag() {
+        val model = model(
+            ComponentNode(
+                "col", "Column", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Multi, emptyMap(),
+                listOf("tagged", "empty", "bare", "childless"),
+            ),
+            single("tagged", "Hero", "t1", mapOf("tag" to "product-7")),
+            text("t1", "Wireless Headphones"),
+            single("empty", "Hero", "t2", mapOf("tag" to "")),
+            text("t2", "Empty tag"),
+            single("bare", "Hero", "t3", emptyMap()),
+            text("t3", "No tag"),
+            single("childless", "Hero", null, mapOf("tag" to "nothing")),
+        )
+        show(model, "col")
+
+        compose.onNodeWithText("Wireless Headphones").assertExists()
+        compose.onNodeWithText("Empty tag").assertExists()
+        compose.onNodeWithText("No tag").assertExists()
+        // The seam of the shared-element flight: a Hero with a tag is findable by it.
+        compose.onNode(SemanticsMatcher.expectValue(OrcaHeroTag, "product-7")).assertExists()
+        compose.onNode(SemanticsMatcher.expectValue(OrcaHeroTag, "")).assertDoesNotExist()
+        compose.onNode(SemanticsMatcher.expectValue(OrcaHeroTag, "nothing")).assertDoesNotExist()
+    }
+
+    @Test
+    fun b12_k_theFiveWidgetsAreDrawnAndNotDegraded() {
+        val standard = WidgetBuilders.standard()
+        for (type in ANIMATED) {
+            assertNotNull(standard[type], "no builder for $type")
+            assertTrue(WidgetRegistry.shared.supports(type), "$type degrades to the fallback")
+        }
+        // Drawn by the standard builders, through the shared registry.
+        val page = page(
+            single("box", "AnimatedContainer", "fade", mapOf("width" to 120)),
+            single("fade", "AnimatedOpacity", "dock", mapOf("opacity" to 0.5)),
+            single("dock", "AnimatedAlign", "sw", mapOf("alignment" to "center")),
+            single("sw", "AnimatedSwitcher", "hero", emptyMap()),
+            single("hero", "Hero", "label", mapOf("tag" to "t")),
+            text("label", "Inside all five"),
+        )
+        val model = OrcaPageModel(page)
+        show(model, "box")
+
+        compose.onNodeWithText("Inside all five").assertExists()
+        assertEquals(emptySet(), model.builders.reportedMissing)
+        assertNull(model.resolve("box")?.degradedFrom)
+    }
+
+    private companion object {
+        val ANIMATED = setOf("AnimatedContainer", "AnimatedOpacity", "AnimatedAlign", "AnimatedSwitcher", "Hero")
+    }
+}

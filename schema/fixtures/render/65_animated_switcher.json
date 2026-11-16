@@ -1,0 +1,73 @@
+{
+  "name": "animated-switcher",
+  "description": "AnimatedSwitcher: duration only (it has no curve prop) and one child with its own key, which becomes the child's node id. A client decides the child changed by that id; here the child's text reads page state, so a new label under the same id is a prop change, not a new child.",
+  "input": {
+    "type": "AnimatedSwitcher",
+    "key": "step_switcher",
+    "props": {
+      "duration": 250
+    },
+    "children": [
+      {
+        "type": "Text",
+        "key": "step_1",
+        "props": {
+          "data": {
+            "type": "state",
+            "key": "stepLabel",
+            "scope": "page"
+          }
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "stepLabel": "Step one"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "step_switcher",
+      "type": "AnimatedSwitcher",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "duration": 250
+      },
+      "children": [
+        "step_1"
+      ],
+      "watches": []
+    },
+    {
+      "id": "step_1",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": {
+          "type": "state",
+          "key": "stepLabel",
+          "scope": "page"
+        }
+      },
+      "children": [],
+      "watches": [
+        "stepLabel"
+      ]
+    }
+  ],
+  "resolved": {
+    "step_switcher": {
+      "duration": 250
+    },
+    "step_1": {
+      "data": "Step one"
+    }
+  }
+}

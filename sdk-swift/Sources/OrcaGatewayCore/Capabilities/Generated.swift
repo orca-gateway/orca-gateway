@@ -20,7 +20,11 @@ public enum GeneratedCapabilities {
     public static let widgets: [String] = [
         "AbsorbPointer",
         "Align",
+        "AnimatedAlign",
         "AnimatedBuilder",
+        "AnimatedContainer",
+        "AnimatedOpacity",
+        "AnimatedSwitcher",
         "AppBar",
         "AspectRatio",
         "BackdropFilter",
@@ -47,6 +51,7 @@ public enum GeneratedCapabilities {
         "Flexible",
         "FractionallySizedBox",
         "GestureDetector",
+        "Hero",
         "Icon",
         "IgnorePointer",
         "Image",
@@ -59,6 +64,7 @@ public enum GeneratedCapabilities {
         "OutlinedButton",
         "Padding",
         "Positioned",
+        "ReorderableListView",
         "RotatedBox",
         "Row",
         "SafeArea",
@@ -67,6 +73,7 @@ public enum GeneratedCapabilities {
         "SizedBox",
         "Spacer",
         "Stack",
+        "SubPage",
         "Text",
         "TextButton",
         "TextField",
@@ -92,6 +99,8 @@ public enum GeneratedCapabilities {
         "actionGroup",
         "addComponent",
         "always",
+        "animateForward",
+        "animateReverse",
         "conditionalAction",
         "copyToClipboard",
         "debugLog",
@@ -109,6 +118,7 @@ public enum GeneratedCapabilities {
         "showToast",
         "switchTab",
         "updateComponent",
+        "updateSubPage",
     ]
 
     public static let transformKinds: [String] = [
@@ -162,5 +172,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "88e7bb81149d3fba1694339e70662671579b69a85b1d273fa96b1ff137f1e08f"
+    public static let capsHash = "cae35f8dd9e0234d4fb04745b6dfe79322ed74f26e33c3089d515af07841bf86"
 }

@@ -1,0 +1,934 @@
+{
+  "name": "merge-state-refs",
+  "description": "S2c and S2d. A state Value with page scope gets the prefix on its key wherever it sits in props: alone, as a transform input, in a transform's `by` and template `params`, in a conditional's `when`, `then` and `else`, inside a map or a list, in a nested SubPage's `pageId` and `params`. A dotted key is prefixed as a whole. App-scoped references are left alone. The same holds in the `map`, `filter` and `contains` transforms and the `contains`, `startsWith`, `matches` and `or` conditions. A reference with no `scope` is page-scoped. A static Value is data and is never rewritten, with or without a `value`, and gives no watch. `watches` carries bare keys with no scope, so an entry is prefixed when the node's props hold a page-scoped reference with that key; a key read in both scopes is listed twice, prefixed then bare.",
+  "kind": "merge",
+  "cases": [
+    {
+      "name": "references in props",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "counter",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "inner",
+              "8"
+            ],
+            "watches": []
+          },
+          {
+            "id": "8",
+            "type": "BottomNavigationBar",
+            "kind": "structure",
+            "childMode": "none",
+            "props": {
+              "currentIndex": {
+                "type": "state",
+                "key": "tabIndex",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "tabIndex"
+            ]
+          },
+          {
+            "id": "inner",
+            "type": "SubPage",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "pageId": {
+                "type": "state",
+                "key": "tab",
+                "scope": "page"
+              },
+              "params": {
+                "userId": {
+                  "type": "state",
+                  "key": "selected",
+                  "scope": "page"
+                },
+                "locale": {
+                  "type": "state",
+                  "key": "locale",
+                  "scope": "app"
+                }
+              }
+            },
+            "children": [
+              "7"
+            ],
+            "watches": [
+              "tab",
+              "selected",
+              "locale"
+            ]
+          },
+          {
+            "id": "7",
+            "type": "CircularProgressIndicator",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {},
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "6",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "static",
+                "value": {
+                  "type": "state",
+                  "key": "count",
+                  "scope": "page"
+                }
+              }
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "5",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "shared",
+                "scope": "page"
+              },
+              "semanticsLabel": {
+                "type": "state",
+                "key": "shared",
+                "scope": "app"
+              }
+            },
+            "children": [],
+            "watches": [
+              "shared"
+            ]
+          },
+          {
+            "id": "4",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "conditional",
+                "branches": [
+                  {
+                    "when": {
+                      "op": "and",
+                      "exprs": [
+                        {
+                          "op": "gt",
+                          "left": {
+                            "type": "state",
+                            "key": "count",
+                            "scope": "page"
+                          },
+                          "right": {
+                            "type": "static",
+                            "value": 0
+                          }
+                        },
+                        {
+                          "op": "not",
+                          "expr": {
+                            "op": "isNull",
+                            "value": {
+                              "type": "state",
+                              "key": "token",
+                              "scope": "app"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "then": {
+                      "type": "state",
+                      "key": "label",
+                      "scope": "page"
+                    }
+                  }
+                ],
+                "else": {
+                  "type": "state",
+                  "key": "fallback",
+                  "scope": "app"
+                }
+              },
+              "style": {
+                "color": {
+                  "type": "state",
+                  "key": "color",
+                  "scope": "page"
+                },
+                "fontSize": 14
+              }
+            },
+            "children": [],
+            "watches": [
+              "count",
+              "token",
+              "label",
+              "fallback",
+              "color"
+            ]
+          },
+          {
+            "id": "3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "transform",
+                "input": {
+                  "type": "state",
+                  "key": "price",
+                  "scope": "page"
+                },
+                "by": [
+                  {
+                    "type": "multiply",
+                    "by": {
+                      "type": "state",
+                      "key": "qty",
+                      "scope": "page"
+                    }
+                  },
+                  {
+                    "type": "add",
+                    "by": {
+                      "type": "state",
+                      "key": "shipping",
+                      "scope": "app"
+                    }
+                  },
+                  {
+                    "type": "template",
+                    "template": "{{value}} for {{who}}",
+                    "params": {
+                      "who": {
+                        "type": "state",
+                        "key": "user.name",
+                        "scope": "page"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "children": [],
+            "watches": [
+              "price",
+              "qty",
+              "shipping",
+              "user.name"
+            ]
+          },
+          {
+            "id": "2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "userName",
+                "scope": "app"
+              }
+            },
+            "children": [],
+            "watches": [
+              "userName"
+            ]
+          },
+          {
+            "id": "1",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail:1",
+              "detail:2",
+              "detail:3",
+              "detail:4",
+              "detail:5",
+              "detail:6",
+              "detail:inner",
+              "detail:8"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:8",
+            "type": "BottomNavigationBar",
+            "kind": "structure",
+            "childMode": "none",
+            "props": {
+              "currentIndex": {
+                "type": "state",
+                "key": "detail:tabIndex",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:tabIndex"
+            ]
+          },
+          {
+            "id": "detail:inner",
+            "type": "SubPage",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "pageId": {
+                "type": "state",
+                "key": "detail:tab",
+                "scope": "page"
+              },
+              "params": {
+                "userId": {
+                  "type": "state",
+                  "key": "detail:selected",
+                  "scope": "page"
+                },
+                "locale": {
+                  "type": "state",
+                  "key": "locale",
+                  "scope": "app"
+                }
+              }
+            },
+            "children": [
+              "detail:7"
+            ],
+            "watches": [
+              "detail:tab",
+              "detail:selected",
+              "locale"
+            ]
+          },
+          {
+            "id": "detail:7",
+            "type": "CircularProgressIndicator",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {},
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:6",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "static",
+                "value": {
+                  "type": "state",
+                  "key": "count",
+                  "scope": "page"
+                }
+              }
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:5",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail:shared",
+                "scope": "page"
+              },
+              "semanticsLabel": {
+                "type": "state",
+                "key": "shared",
+                "scope": "app"
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:shared",
+              "shared"
+            ]
+          },
+          {
+            "id": "detail:4",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "conditional",
+                "branches": [
+                  {
+                    "when": {
+                      "op": "and",
+                      "exprs": [
+                        {
+                          "op": "gt",
+                          "left": {
+                            "type": "state",
+                            "key": "detail:count",
+                            "scope": "page"
+                          },
+                          "right": {
+                            "type": "static",
+                            "value": 0
+                          }
+                        },
+                        {
+                          "op": "not",
+                          "expr": {
+                            "op": "isNull",
+                            "value": {
+                              "type": "state",
+                              "key": "token",
+                              "scope": "app"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "then": {
+                      "type": "state",
+                      "key": "detail:label",
+                      "scope": "page"
+                    }
+                  }
+                ],
+                "else": {
+                  "type": "state",
+                  "key": "fallback",
+                  "scope": "app"
+                }
+              },
+              "style": {
+                "color": {
+                  "type": "state",
+                  "key": "detail:color",
+                  "scope": "page"
+                },
+                "fontSize": 14
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:count",
+              "token",
+              "detail:label",
+              "fallback",
+              "detail:color"
+            ]
+          },
+          {
+            "id": "detail:3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "transform",
+                "input": {
+                  "type": "state",
+                  "key": "detail:price",
+                  "scope": "page"
+                },
+                "by": [
+                  {
+                    "type": "multiply",
+                    "by": {
+                      "type": "state",
+                      "key": "detail:qty",
+                      "scope": "page"
+                    }
+                  },
+                  {
+                    "type": "add",
+                    "by": {
+                      "type": "state",
+                      "key": "shipping",
+                      "scope": "app"
+                    }
+                  },
+                  {
+                    "type": "template",
+                    "template": "{{value}} for {{who}}",
+                    "params": {
+                      "who": {
+                        "type": "state",
+                        "key": "detail:user.name",
+                        "scope": "page"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:price",
+              "detail:qty",
+              "shipping",
+              "detail:user.name"
+            ]
+          },
+          {
+            "id": "detail:2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "userName",
+                "scope": "app"
+              }
+            },
+            "children": [],
+            "watches": [
+              "userName"
+            ]
+          },
+          {
+            "id": "detail:1",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail:count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:count"
+            ]
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "references inside map, filter and contains transforms and inside contains, startsWith, matches and or",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "list",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "transform",
+                "input": {
+                  "type": "state",
+                  "key": "items",
+                  "scope": "page"
+                },
+                "by": [
+                  {
+                    "type": "map",
+                    "transform": {
+                      "type": "add",
+                      "by": {
+                        "type": "state",
+                        "key": "step",
+                        "scope": "page"
+                      }
+                    }
+                  },
+                  {
+                    "type": "filter",
+                    "expr": {
+                      "op": "or",
+                      "exprs": [
+                        {
+                          "op": "contains",
+                          "haystack": {
+                            "type": "state",
+                            "key": "tags",
+                            "scope": "page"
+                          },
+                          "needle": {
+                            "type": "state",
+                            "key": "tag",
+                            "scope": "page"
+                          }
+                        },
+                        {
+                          "op": "startsWith",
+                          "str": {
+                            "type": "state",
+                            "key": "name",
+                            "scope": "page"
+                          },
+                          "prefix": {
+                            "type": "state",
+                            "key": "initial",
+                            "scope": "app"
+                          }
+                        },
+                        {
+                          "op": "matches",
+                          "str": {
+                            "type": "state",
+                            "key": "code",
+                            "scope": "page"
+                          },
+                          "regex": "^code$"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "type": "contains",
+                    "value": {
+                      "type": "state",
+                      "key": "wanted",
+                      "scope": "page"
+                    }
+                  }
+                ]
+              }
+            },
+            "children": [],
+            "watches": [
+              "items",
+              "tags",
+              "tag",
+              "name",
+              "initial",
+              "code",
+              "wanted"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail:1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:1",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "transform",
+                "input": {
+                  "type": "state",
+                  "key": "detail:items",
+                  "scope": "page"
+                },
+                "by": [
+                  {
+                    "type": "map",
+                    "transform": {
+                      "type": "add",
+                      "by": {
+                        "type": "state",
+                        "key": "detail:step",
+                        "scope": "page"
+                      }
+                    }
+                  },
+                  {
+                    "type": "filter",
+                    "expr": {
+                      "op": "or",
+                      "exprs": [
+                        {
+                          "op": "contains",
+                          "haystack": {
+                            "type": "state",
+                            "key": "detail:tags",
+                            "scope": "page"
+                          },
+                          "needle": {
+                            "type": "state",
+                            "key": "detail:tag",
+                            "scope": "page"
+                          }
+                        },
+                        {
+                          "op": "startsWith",
+                          "str": {
+                            "type": "state",
+                            "key": "detail:name",
+                            "scope": "page"
+                          },
+                          "prefix": {
+                            "type": "state",
+                            "key": "initial",
+                            "scope": "app"
+                          }
+                        },
+                        {
+                          "op": "matches",
+                          "str": {
+                            "type": "state",
+                            "key": "detail:code",
+                            "scope": "page"
+                          },
+                          "regex": "^code$"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "type": "contains",
+                    "value": {
+                      "type": "state",
+                      "key": "detail:wanted",
+                      "scope": "page"
+                    }
+                  }
+                ]
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:items",
+              "detail:tags",
+              "detail:tag",
+              "detail:name",
+              "initial",
+              "detail:code",
+              "detail:wanted"
+            ]
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "a reference with no scope is page-scoped",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "legacy",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "legacy"
+              },
+              "semanticsLabel": {
+                "type": "transform",
+                "input": {
+                  "type": "state",
+                  "key": "first"
+                },
+                "transforms": [
+                  {
+                    "type": "add",
+                    "by": {
+                      "type": "state",
+                      "scope": "app",
+                      "key": "last"
+                    }
+                  }
+                ]
+              }
+            },
+            "children": [],
+            "watches": [
+              "legacy",
+              "first",
+              "last"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail:legacy"
+              },
+              "semanticsLabel": {
+                "type": "transform",
+                "input": {
+                  "type": "state",
+                  "key": "detail:first"
+                },
+                "transforms": [
+                  {
+                    "type": "add",
+                    "by": {
+                      "type": "state",
+                      "scope": "app",
+                      "key": "last"
+                    }
+                  }
+                ]
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:legacy",
+              "detail:first",
+              "last"
+            ]
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "a static Value without a value is data too",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "odd",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "static"
+              },
+              "semanticsLabel": {
+                "type": "static",
+                "meta": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "count"
+                }
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "static"
+              },
+              "semanticsLabel": {
+                "type": "static",
+                "meta": {
+                  "type": "state",
+                  "scope": "page",
+                  "key": "count"
+                }
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ],
+        "state": {}
+      }
+    }
+  ]
+}

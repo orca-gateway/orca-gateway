@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "slug": "native-parity-s12",
+  "idea": "Native parity step 12 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase B): finish animation on sdk-swift and sdk-kotlin. Actions animateForward, animateReverse and the registry by animationId; AnimatedContainer, AnimatedOpacity, AnimatedAlign, AnimatedSwitcher; Hero; per-route page transitions (iOS: keep NavigationStack, fade and slide-up only). Test cases B12.1-B12.7. Stages 01-07 skipped as covered by the approved plan file.",
+  "kind": "feature",
+  "created_at": "2026-11-15T23:54:47Z",
+  "updated_at": "2026-11-16T01:20:19Z",
+  "active_session": "fe23fb0a-f62c-4a83-a51f-655a2e0bf8ff",
+  "current": "12",
+  "stages": {
+    "01": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file"
+    },
+    "02": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file"
+    },
+    "03": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file"
+    },
+    "04": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file"
+    },
+    "05": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file"
+    },
+    "06": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file"
+    },
+    "07": {
+      "status": "skipped",
+      "reason": "covered by the approved plan file"
+    },
+    "08": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-16T00:07:37Z",
+      "approved_with": "A (standing rule: minor gate; plan-default deviation M1 flagged for the user in the PR)"
+    },
+    "09": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/09-r1.md",
+      "approved_at": "2026-11-16T01:20:18Z",
+      "approved_with": "A (standing rule: minor and patch gates approved by the session; the iOS transition call is put to the user in the PR)"
+    },
+    "10": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/10-r1.md",
+      "approved_at": "2026-11-16T01:20:19Z",
+      "approved_with": "A (standing rule: minor and patch gates approved by the session)"
+    },
+    "11": {
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": true
+  }
+}

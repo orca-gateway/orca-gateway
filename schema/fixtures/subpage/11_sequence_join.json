@@ -1,0 +1,653 @@
+{
+  "name": "sequence-join",
+  "description": "S1, S5 and S7, join. The j-th joined page is mounted after the current ones under `K#j:`, j counting from 1. Roots are drawn oldest first. Nothing is removed: the earlier pages keep their nodes and their state, including what the user wrote under their prefix, and two pages with the same keys and the same node ids do not clash. A replace after joins removes every page and starts the count again.",
+  "kind": "sequence",
+  "cases": [
+    {
+      "name": "join twice",
+      "subPageKey": "detail",
+      "pageState": {
+        "hostCount": 1
+      },
+      "steps": [
+        {
+          "op": "mount",
+          "response": {
+            "pageId": "posts",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 12
+              },
+              {
+                "key": "sort",
+                "scope": "page",
+                "initial": "new"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "total",
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Posts"
+                },
+                "children": [],
+                "watches": []
+              },
+              {
+                "id": "total",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1",
+              "detail:total"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:count": 12,
+              "detail:sort": "new"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "key": "detail:count",
+          "value": 13,
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1",
+              "detail:total"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:count": 13,
+              "detail:sort": "new"
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "join",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:",
+              "detail#1:"
+            ],
+            "roots": [
+              "detail:0",
+              "detail#1:0"
+            ],
+            "nodeIds": [
+              "detail#1:0",
+              "detail:0",
+              "detail:1",
+              "detail:total"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:count": 13,
+              "detail:sort": "new",
+              "detail#1:count": 4
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "join",
+          "response": {
+            "pageId": "posts",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 12
+              },
+              {
+                "key": "sort",
+                "scope": "page",
+                "initial": "new"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "total",
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Posts"
+                },
+                "children": [],
+                "watches": []
+              },
+              {
+                "id": "total",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:",
+              "detail#1:",
+              "detail#2:"
+            ],
+            "roots": [
+              "detail:0",
+              "detail#1:0",
+              "detail#2:0"
+            ],
+            "nodeIds": [
+              "detail#1:0",
+              "detail#2:0",
+              "detail#2:1",
+              "detail#2:total",
+              "detail:0",
+              "detail:1",
+              "detail:total"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:count": 13,
+              "detail:sort": "new",
+              "detail#1:count": 4,
+              "detail#2:count": 12,
+              "detail#2:sort": "new"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "join, then replace, then join again",
+      "subPageKey": "detail",
+      "pageState": {
+        "hostCount": 1
+      },
+      "steps": [
+        {
+          "op": "mount",
+          "response": {
+            "pageId": "profile",
+            "title": "",
+            "state": [
+              {
+                "key": "name",
+                "scope": "page",
+                "initial": "Ann"
+              },
+              {
+                "key": "theme",
+                "scope": "app",
+                "initial": "dark"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "name",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "name"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:name": "Ann"
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "join",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:",
+              "detail#1:"
+            ],
+            "roots": [
+              "detail:0",
+              "detail#1:0"
+            ],
+            "nodeIds": [
+              "detail#1:0",
+              "detail:0",
+              "detail:1"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:name": "Ann",
+              "detail#1:count": 4
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "replace",
+          "response": {
+            "pageId": "posts",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 12
+              },
+              {
+                "key": "sort",
+                "scope": "page",
+                "initial": "new"
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Column",
+                "kind": "layout",
+                "childMode": "multi",
+                "props": {},
+                "children": [
+                  "total",
+                  "1"
+                ],
+                "watches": []
+              },
+              {
+                "id": "1",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Posts"
+                },
+                "children": [],
+                "watches": []
+              },
+              {
+                "id": "total",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:"
+            ],
+            "roots": [
+              "detail:0"
+            ],
+            "nodeIds": [
+              "detail:0",
+              "detail:1",
+              "detail:total"
+            ],
+            "removedNodeIds": [
+              "detail#1:0",
+              "detail:0",
+              "detail:1"
+            ],
+            "state": {
+              "hostCount": 1,
+              "detail:count": 12,
+              "detail:sort": "new"
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "join",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "detail:",
+              "detail#1:"
+            ],
+            "roots": [
+              "detail:0",
+              "detail#1:0"
+            ],
+            "nodeIds": [
+              "detail#1:0",
+              "detail:0",
+              "detail:1",
+              "detail:total"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "hostCount": 1,
+              "detail:count": 12,
+              "detail:sort": "new",
+              "detail#1:count": 4
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a nested sub-page joins under its own composed key",
+      "subPageKey": "outer:inner",
+      "pageState": {
+        "outer:tab": "posts"
+      },
+      "steps": [
+        {
+          "op": "mount",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "outer:inner:"
+            ],
+            "roots": [
+              "outer:inner:0"
+            ],
+            "nodeIds": [
+              "outer:inner:0"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "outer:tab": "posts",
+              "outer:inner:count": 4
+            }
+          }
+        },
+        {
+          "op": "update",
+          "mode": "join",
+          "response": {
+            "pageId": "likes",
+            "title": "",
+            "state": [
+              {
+                "key": "count",
+                "scope": "page",
+                "initial": 4
+              }
+            ],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": {
+                    "type": "state",
+                    "key": "count",
+                    "scope": "page"
+                  }
+                },
+                "children": [],
+                "watches": [
+                  "count"
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "prefixes": [
+              "outer:inner:",
+              "outer:inner#1:"
+            ],
+            "roots": [
+              "outer:inner:0",
+              "outer:inner#1:0"
+            ],
+            "nodeIds": [
+              "outer:inner#1:0",
+              "outer:inner:0"
+            ],
+            "removedNodeIds": [],
+            "state": {
+              "outer:tab": "posts",
+              "outer:inner:count": 4,
+              "outer:inner#1:count": 4
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

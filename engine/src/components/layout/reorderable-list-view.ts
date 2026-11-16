@@ -12,6 +12,9 @@ export interface ReorderableListViewProps {
 
 export class ReorderableListView extends MultiChildLayout {
   readonly type = "ReorderableListView";
+  // onReorder carries event data {oldIndex, newIndex}; newIndex is the
+  // insertion index before the dragged item is removed (Flutter's raw value).
+  static readonly triggers = ["onReorder", "onScrollBegin", "onScrolling", "onScrollEnd"] as const;
   private props: Omit<ReorderableListViewProps, "children" | "actions">;
 
   private constructor(opts: ReorderableListViewProps) {

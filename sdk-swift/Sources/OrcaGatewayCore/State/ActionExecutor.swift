@@ -41,7 +41,7 @@ public final class ActionExecutor {
         "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
         "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
         "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
-        "once", "always", "debugLog",
+        "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage",
     ]
 
     public let store: ElmStore
@@ -53,6 +53,16 @@ public final class ActionExecutor {
     public var perform: ((ActionEffect) async -> Void)?
     /// A structural change from a server action, for the page's node tree.
     public var onMutation: ((ComponentMutation) -> Void)?
+    /// Prefix of every page mounted in a SubPage of this page. A
+    /// `serverAction` fired from a node under one of them posts that page's
+    /// own state and has its answer rewritten for it (SubPage contract S6).
+    public var subPagePrefixes: (() -> [String])?
+    /// Carries out an `updateSubPage`: the resolved subPageId, pageId and
+    /// params, and the mode (`replace` when the action has none). What it
+    /// throws fails the action. It is no effect: nothing goes to `onEffect`.
+    public var onUpdateSubPage: (
+        (_ subPageId: String, _ pageId: String, _ params: [String: JSONValue]?, _ mode: String) async throws -> Void
+    )?
     /// The page's current nodes in the order the page sent them, set by the
     /// page that owns the node tree. Asked only while DevTools is on, after
     /// a setState wrote its value, for the event's `affectedWidgets` (the
@@ -226,6 +236,12 @@ public final class ActionExecutor {
         case .openDrawer:
             await emit(ActionEffect("openDrawer"))
 
+        // The page model plays these on its animation registry; an id no
+        // builder registered still goes out, an empty one does not.
+        case .animateForward(let ref), .animateReverse(let ref):
+            guard !ref.animationId.isEmpty else { return }
+            await emit(ActionEffect(action.kind, ["animationId": .string(ref.animationId)]))
+
         case .openUrl(let o):
             await emit(ActionEffect("openUrl", ["url": .string(resolver.resolveToString(o.url ?? .null))]))
 
@@ -242,6 +258,13 @@ public final class ActionExecutor {
 
         case .serverAction(let s):
             try await runServerAction(s)
+
+        case .updateSubPage(let u):
+            let resolver = self.resolver
+            try await onUpdateSubPage?(
+                resolver.resolveToString(u.subPageId), resolver.resolveToString(u.pageId),
+                u.params?.mapValues { resolver.resolve($0) },
+                u.mode.map { resolver.resolveToString($0) } ?? "replace")
 
         case .updateComponent(let u):
             onMutation?(.update(id: u.id, props: u.props ?? [:]))
@@ -351,6 +374,12 @@ public final class ActionExecutor {
     /// Emit the request, POST it, run what comes back. A refused call (a
     /// status other than 200) shows its message in a snackbar and does not
     /// throw, as in Dart; a transport failure throws.
+    ///
+    /// Fired from a node of a mounted sub-page (`subPagePrefixes`, the
+    /// longest match), it posts that page's keys without their prefix, and
+    /// the actions that come back are rewritten with the prefix before they
+    /// run. The source is read before the first suspension: it is this
+    /// chain's.
     private func runServerAction(_ s: Action.ServerAction) async throws {
         let resolver = self.resolver
         let params = s.params?.mapValues { resolver.resolve($0) }
@@ -359,10 +388,16 @@ public final class ActionExecutor {
         onEffect?(ActionEffect("serverAction", payload))
 
         guard let client else { return }
+        let subPage = SubPage.prefixOf(prefixes: subPagePrefixes?() ?? [], sourceId: source?.widgetId)
         do {
             let state = store.state
-            let actions = try await client.executeAction(
-                s.id, params: params, pageState: state.page, appState: state.app)
+            var actions = try await client.executeAction(
+                s.id, params: params,
+                pageState: SubPage.postedState(prefix: subPage, pageState: state.page), appState: state.app)
+            if let subPage {
+                actions = try SubPage.rewriteActions(prefix: subPage, actions: actions.map(\.json))
+                    .map { try $0.decode(Action.self) }
+            }
             for action in actions { try await run(action) }
         } catch OrcaClientError.action(_, let message) {
             try await run(.showSnackbar(.init(message: .string(message))))

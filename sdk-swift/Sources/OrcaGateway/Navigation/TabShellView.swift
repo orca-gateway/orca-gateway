@@ -259,6 +259,12 @@ private struct PlainTabs: View {
 #endif
 
 /// One tab: its pages as a NavigationStack, or nothing before its first visit.
+/// Route transitions work here as in the single stack: the path comes from
+/// the router's `tabStacks` and `overRoutes`, which it writes with the system
+/// animation off for a pushed `fade` or `slideUp` route, and `RoutePage`
+/// animates that page's content in (the shell's bars around the page are
+/// not part of it and appear at once). Any other push, a tab switch and
+/// going back are the system's.
 @MainActor
 private struct TabStack: View {
     @ObservedObject var router: OrcaRouter

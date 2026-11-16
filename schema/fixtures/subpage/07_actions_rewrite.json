@@ -1,0 +1,931 @@
+{
+  "name": "actions-rewrite",
+  "description": "S6. The actions a server returns to a serverAction fired inside a sub-page are rewritten with that sub-page's prefix before they run, by the same rules as the actions of a merged node. A server setState's `value` is walked like any Value: plain JSON is copied, and a map that is a page-state reference is rewritten. A reference with no `scope` is page-scoped. In a plugin (custom) action the references are rewritten and nested standard actions follow the rules, but its own literal fields (`key`, `stateKey`, `id`) are not known and stay. An entry of `components` that is not an object is left as it is. A static Value is data, with or without a `value`. addComponent and replaceComponent carry whole nodes, which are merged like the nodes of a page (ids, children, slot props, references, watches, actions). An updateComponent's `props` follow the prop rules, except that a slot cannot be recognised there.",
+  "kind": "actions",
+  "cases": [
+    {
+      "name": "state actions a server returns",
+      "prefix": "detail:",
+      "actions": [
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "count",
+          "value": 3
+        },
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "user",
+          "value": {
+            "name": "Ann",
+            "roles": [
+              "admin"
+            ]
+          }
+        },
+        {
+          "type": "setState",
+          "scope": "app",
+          "key": "cartCount",
+          "value": 2
+        },
+        {
+          "type": "setState",
+          "key": "implicit",
+          "value": 1
+        },
+        {
+          "type": "clearState",
+          "scope": "page",
+          "key": "error"
+        },
+        {
+          "type": "showSnackbar",
+          "message": "Saved",
+          "duration": 2000
+        },
+        {
+          "type": "navigate",
+          "route": "/home"
+        },
+        {
+          "type": "closeDialog"
+        }
+      ],
+      "expected": [
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "detail:count",
+          "value": 3
+        },
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "detail:user",
+          "value": {
+            "name": "Ann",
+            "roles": [
+              "admin"
+            ]
+          }
+        },
+        {
+          "type": "setState",
+          "scope": "app",
+          "key": "cartCount",
+          "value": 2
+        },
+        {
+          "type": "setState",
+          "key": "detail:implicit",
+          "value": 1
+        },
+        {
+          "type": "clearState",
+          "scope": "page",
+          "key": "detail:error"
+        },
+        {
+          "type": "showSnackbar",
+          "message": "Saved",
+          "duration": 2000
+        },
+        {
+          "type": "navigate",
+          "route": "/home"
+        },
+        {
+          "type": "closeDialog"
+        }
+      ]
+    },
+    {
+      "name": "component mutations a server returns",
+      "prefix": "detail:",
+      "actions": [
+        {
+          "type": "updateComponent",
+          "id": "heading",
+          "props": {
+            "data": "Done",
+            "color": {
+              "type": "state",
+              "key": "color",
+              "scope": "page"
+            }
+          }
+        },
+        {
+          "type": "deleteComponent",
+          "id": "row-3"
+        },
+        {
+          "type": "addComponent",
+          "parentId": "list",
+          "components": [
+            {
+              "id": "row-7",
+              "type": "Column",
+              "kind": "layout",
+              "childMode": "multi",
+              "props": {},
+              "children": [
+                "0",
+                "1"
+              ],
+              "watches": []
+            },
+            {
+              "id": "1",
+              "type": "ElevatedButton",
+              "kind": "button",
+              "childMode": "single",
+              "props": {},
+              "children": [
+                "2"
+              ],
+              "watches": [],
+              "actions": {
+                "onTap": {
+                  "type": "setState",
+                  "scope": "page",
+                  "key": "count",
+                  "value": {
+                    "type": "transform",
+                    "input": {
+                      "type": "state",
+                      "key": "count",
+                      "scope": "page"
+                    },
+                    "by": [
+                      {
+                        "type": "add",
+                        "by": {
+                          "type": "static",
+                          "value": 1
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "id": "2",
+              "type": "Text",
+              "kind": "primitive",
+              "childMode": "none",
+              "props": {
+                "data": "+"
+              },
+              "children": [],
+              "watches": []
+            },
+            {
+              "id": "0",
+              "type": "Text",
+              "kind": "primitive",
+              "childMode": "none",
+              "props": {
+                "data": {
+                  "type": "state",
+                  "key": "count",
+                  "scope": "page"
+                }
+              },
+              "children": [],
+              "watches": [
+                "count"
+              ]
+            }
+          ],
+          "position": 0
+        },
+        {
+          "type": "replaceComponent",
+          "targetId": "bar",
+          "components": [
+            {
+              "id": "bar",
+              "type": "AppBar",
+              "kind": "structure",
+              "childMode": "none",
+              "props": {
+                "title": "new-title"
+              },
+              "children": [
+                "new-title"
+              ],
+              "watches": []
+            },
+            {
+              "id": "new-title",
+              "type": "Text",
+              "kind": "primitive",
+              "childMode": "none",
+              "props": {
+                "data": "New"
+              },
+              "children": [],
+              "watches": []
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "type": "updateComponent",
+          "id": "detail:heading",
+          "props": {
+            "data": "Done",
+            "color": {
+              "type": "state",
+              "key": "detail:color",
+              "scope": "page"
+            }
+          }
+        },
+        {
+          "type": "deleteComponent",
+          "id": "detail:row-3"
+        },
+        {
+          "type": "addComponent",
+          "parentId": "detail:list",
+          "components": [
+            {
+              "id": "detail:row-7",
+              "type": "Column",
+              "kind": "layout",
+              "childMode": "multi",
+              "props": {},
+              "children": [
+                "detail:0",
+                "detail:1"
+              ],
+              "watches": []
+            },
+            {
+              "id": "detail:1",
+              "type": "ElevatedButton",
+              "kind": "button",
+              "childMode": "single",
+              "props": {},
+              "children": [
+                "detail:2"
+              ],
+              "watches": [],
+              "actions": {
+                "onTap": {
+                  "type": "setState",
+                  "scope": "page",
+                  "key": "detail:count",
+                  "value": {
+                    "type": "transform",
+                    "input": {
+                      "type": "state",
+                      "key": "detail:count",
+                      "scope": "page"
+                    },
+                    "by": [
+                      {
+                        "type": "add",
+                        "by": {
+                          "type": "static",
+                          "value": 1
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "id": "detail:2",
+              "type": "Text",
+              "kind": "primitive",
+              "childMode": "none",
+              "props": {
+                "data": "+"
+              },
+              "children": [],
+              "watches": []
+            },
+            {
+              "id": "detail:0",
+              "type": "Text",
+              "kind": "primitive",
+              "childMode": "none",
+              "props": {
+                "data": {
+                  "type": "state",
+                  "key": "detail:count",
+                  "scope": "page"
+                }
+              },
+              "children": [],
+              "watches": [
+                "detail:count"
+              ]
+            }
+          ],
+          "position": 0
+        },
+        {
+          "type": "replaceComponent",
+          "targetId": "detail:bar",
+          "components": [
+            {
+              "id": "detail:bar",
+              "type": "AppBar",
+              "kind": "structure",
+              "childMode": "none",
+              "props": {
+                "title": "detail:new-title"
+              },
+              "children": [
+                "detail:new-title"
+              ],
+              "watches": []
+            },
+            {
+              "id": "detail:new-title",
+              "type": "Text",
+              "kind": "primitive",
+              "childMode": "none",
+              "props": {
+                "data": "New"
+              },
+              "children": [],
+              "watches": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nested actions",
+      "prefix": "detail#2:",
+      "actions": [
+        {
+          "type": "actionGroup",
+          "mode": "sequential",
+          "actions": [
+            {
+              "type": "conditionalAction",
+              "branches": [
+                {
+                  "when": {
+                    "op": "isNull",
+                    "value": {
+                      "type": "state",
+                      "key": "user",
+                      "scope": "page"
+                    }
+                  },
+                  "then": {
+                    "type": "openDialog",
+                    "dialogId": "login"
+                  }
+                }
+              ],
+              "else": {
+                "type": "actionGroup",
+                "mode": "parallel",
+                "actions": [
+                  {
+                    "type": "animateForward",
+                    "animationId": "pulse"
+                  },
+                  {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "seen",
+                    "value": {
+                      "type": "static",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "lifecycle",
+              "action": {
+                "type": "serverAction",
+                "id": "load",
+                "params": {
+                  "page": {
+                    "type": "state",
+                    "key": "page",
+                    "scope": "page"
+                  },
+                  "token": {
+                    "type": "state",
+                    "key": "token",
+                    "scope": "app"
+                  }
+                }
+              },
+              "onSuccess": {
+                "type": "updateSubPage",
+                "subPageId": "feed",
+                "pageId": "feed/more",
+                "mode": "join"
+              },
+              "onError": [
+                {
+                  "type": "setState",
+                  "scope": "page",
+                  "key": "error",
+                  "value": {
+                    "type": "event",
+                    "key": "message"
+                  }
+                },
+                {
+                  "type": "animateReverse",
+                  "animationId": "pulse"
+                }
+              ]
+            },
+            {
+              "type": "once",
+              "action": {
+                "type": "clearState",
+                "scope": "page",
+                "key": "draft"
+              }
+            },
+            {
+              "type": "custom:track",
+              "name": "opened",
+              "value": {
+                "type": "state",
+                "key": "count",
+                "scope": "page"
+              }
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "type": "actionGroup",
+          "mode": "sequential",
+          "actions": [
+            {
+              "type": "conditionalAction",
+              "branches": [
+                {
+                  "when": {
+                    "op": "isNull",
+                    "value": {
+                      "type": "state",
+                      "key": "detail#2:user",
+                      "scope": "page"
+                    }
+                  },
+                  "then": {
+                    "type": "openDialog",
+                    "dialogId": "detail#2:login"
+                  }
+                }
+              ],
+              "else": {
+                "type": "actionGroup",
+                "mode": "parallel",
+                "actions": [
+                  {
+                    "type": "animateForward",
+                    "animationId": "detail#2:pulse"
+                  },
+                  {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "detail#2:seen",
+                    "value": {
+                      "type": "static",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "lifecycle",
+              "action": {
+                "type": "serverAction",
+                "id": "load",
+                "params": {
+                  "page": {
+                    "type": "state",
+                    "key": "detail#2:page",
+                    "scope": "page"
+                  },
+                  "token": {
+                    "type": "state",
+                    "key": "token",
+                    "scope": "app"
+                  }
+                }
+              },
+              "onSuccess": {
+                "type": "updateSubPage",
+                "subPageId": "detail#2:feed",
+                "pageId": "feed/more",
+                "mode": "join"
+              },
+              "onError": [
+                {
+                  "type": "setState",
+                  "scope": "page",
+                  "key": "detail#2:error",
+                  "value": {
+                    "type": "event",
+                    "key": "message"
+                  }
+                },
+                {
+                  "type": "animateReverse",
+                  "animationId": "detail#2:pulse"
+                }
+              ]
+            },
+            {
+              "type": "once",
+              "action": {
+                "type": "clearState",
+                "scope": "page",
+                "key": "detail#2:draft"
+              }
+            },
+            {
+              "type": "custom:track",
+              "name": "opened",
+              "value": {
+                "type": "state",
+                "key": "detail#2:count",
+                "scope": "page"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "a Value where an id goes, and a static payload",
+      "prefix": "detail:",
+      "actions": [
+        {
+          "type": "updateSubPage",
+          "subPageId": {
+            "type": "state",
+            "key": "target",
+            "scope": "page"
+          },
+          "pageId": "feed",
+          "mode": "replace"
+        },
+        {
+          "type": "updateSubPage",
+          "subPageId": {
+            "type": "state",
+            "key": "target",
+            "scope": "app"
+          },
+          "pageId": "feed",
+          "mode": "replace"
+        },
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "copy",
+          "value": {
+            "type": "static",
+            "value": {
+              "type": "state",
+              "key": "count",
+              "scope": "page"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "type": "updateSubPage",
+          "subPageId": {
+            "type": "state",
+            "key": "detail:target",
+            "scope": "page"
+          },
+          "pageId": "feed",
+          "mode": "replace"
+        },
+        {
+          "type": "updateSubPage",
+          "subPageId": {
+            "type": "state",
+            "key": "target",
+            "scope": "app"
+          },
+          "pageId": "feed",
+          "mode": "replace"
+        },
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "detail:copy",
+          "value": {
+            "type": "static",
+            "value": {
+              "type": "state",
+              "key": "count",
+              "scope": "page"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a reference with no scope, and a server setState whose value is a Value",
+      "prefix": "detail:",
+      "actions": [
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "copy",
+          "value": {
+            "type": "state",
+            "key": "legacy"
+          }
+        },
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "copy",
+          "value": {
+            "type": "state",
+            "scope": "page",
+            "key": "count"
+          }
+        },
+        {
+          "type": "setState",
+          "scope": "app",
+          "key": "copy",
+          "value": {
+            "type": "state",
+            "key": "count"
+          }
+        },
+        {
+          "type": "showSnackbar",
+          "message": {
+            "type": "state",
+            "key": "message"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "detail:copy",
+          "value": {
+            "type": "state",
+            "key": "detail:legacy"
+          }
+        },
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "detail:copy",
+          "value": {
+            "type": "state",
+            "scope": "page",
+            "key": "detail:count"
+          }
+        },
+        {
+          "type": "setState",
+          "scope": "app",
+          "key": "copy",
+          "value": {
+            "type": "state",
+            "key": "detail:count"
+          }
+        },
+        {
+          "type": "showSnackbar",
+          "message": {
+            "type": "state",
+            "key": "detail:message"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a plugin action: its references are rewritten, its literal key fields are not",
+      "prefix": "detail:",
+      "actions": [
+        {
+          "type": "custom:cache",
+          "key": "draft",
+          "scope": "page",
+          "stateKey": "draft",
+          "id": "row-1",
+          "value": {
+            "type": "state",
+            "key": "draft",
+            "scope": "page"
+          }
+        },
+        {
+          "type": "custom:group",
+          "actions": [
+            {
+              "type": "setState",
+              "scope": "page",
+              "key": "done",
+              "value": {
+                "type": "static",
+                "value": true
+              }
+            },
+            {
+              "type": "openDialog",
+              "dialogId": "thanks"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "type": "custom:cache",
+          "key": "draft",
+          "scope": "page",
+          "stateKey": "draft",
+          "id": "row-1",
+          "value": {
+            "type": "state",
+            "key": "detail:draft",
+            "scope": "page"
+          }
+        },
+        {
+          "type": "custom:group",
+          "actions": [
+            {
+              "type": "setState",
+              "scope": "page",
+              "key": "detail:done",
+              "value": {
+                "type": "static",
+                "value": true
+              }
+            },
+            {
+              "type": "openDialog",
+              "dialogId": "detail:thanks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entries of components that are not objects are left as they are",
+      "prefix": "detail:",
+      "actions": [
+        {
+          "type": "addComponent",
+          "parentId": "list",
+          "components": [
+            "row-9",
+            7,
+            null,
+            true,
+            [
+              "x"
+            ],
+            {
+              "id": "bar",
+              "type": "AppBar",
+              "kind": "structure",
+              "childMode": "none",
+              "props": {
+                "title": "new-title"
+              },
+              "children": [
+                "new-title"
+              ],
+              "watches": []
+            }
+          ]
+        },
+        {
+          "type": "replaceComponent",
+          "targetId": "bar",
+          "components": [
+            null,
+            "bar"
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "type": "addComponent",
+          "parentId": "detail:list",
+          "components": [
+            "row-9",
+            7,
+            null,
+            true,
+            [
+              "x"
+            ],
+            {
+              "id": "detail:bar",
+              "type": "AppBar",
+              "kind": "structure",
+              "childMode": "none",
+              "props": {
+                "title": "detail:new-title"
+              },
+              "children": [
+                "detail:new-title"
+              ],
+              "watches": []
+            }
+          ]
+        },
+        {
+          "type": "replaceComponent",
+          "targetId": "detail:bar",
+          "components": [
+            null,
+            "bar"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "a static Value without a value is data too",
+      "prefix": "detail:",
+      "actions": [
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "odd",
+          "value": {
+            "type": "static"
+          }
+        },
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "odd",
+          "value": {
+            "type": "static",
+            "meta": {
+              "type": "state",
+              "scope": "page",
+              "key": "count"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "detail:odd",
+          "value": {
+            "type": "static"
+          }
+        },
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "detail:odd",
+          "value": {
+            "type": "static",
+            "meta": {
+              "type": "state",
+              "scope": "page",
+              "key": "count"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "an empty list",
+      "prefix": "detail:",
+      "actions": [],
+      "expected": []
+    }
+  ]
+}

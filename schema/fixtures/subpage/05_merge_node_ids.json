@@ -1,0 +1,774 @@
+{
+  "name": "merge-node-ids",
+  "description": "S2f. Literal ids that address the sub-page's own nodes get the prefix: the `animationId` prop, `animationId` of a tween or tweenSequence Value and of animateForward and animateReverse, `dialogId`, `id` of updateComponent and deleteComponent, `subPageId` of updateSubPage. A Value in one of those fields is not an id: only the page-state key inside it is rewritten. A nested SubPage node is a node like any other: its id gets the prefix, which is how its own prefix composes later. The Hero `tag`, a navigate route, a tab id, `pageId` and `mode` are left alone. A node id and a state key may be the same string: the id is rewritten where an id goes and the key where a key goes, and a plain string (a Text's `data`, an updateComponent's `data`) stays.",
+  "kind": "merge",
+  "cases": [
+    {
+      "name": "animation, dialog, mutation and sub-page ids",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "gallery",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "1",
+              "7",
+              "confirm",
+              "comments",
+              "go"
+            ],
+            "watches": []
+          },
+          {
+            "id": "go",
+            "type": "ElevatedButton",
+            "kind": "button",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "10"
+            ],
+            "watches": [],
+            "actions": {
+              "onTap": {
+                "type": "actionGroup",
+                "mode": "sequential",
+                "actions": [
+                  {
+                    "type": "animateForward",
+                    "animationId": "fade"
+                  },
+                  {
+                    "type": "animateReverse",
+                    "animationId": "fade"
+                  },
+                  {
+                    "type": "openDialog",
+                    "dialogId": "confirm"
+                  },
+                  {
+                    "type": "closeDialog"
+                  },
+                  {
+                    "type": "updateComponent",
+                    "id": "confirm",
+                    "props": {
+                      "dismissible": false,
+                      "animationId": "fade",
+                      "stateKey": "email"
+                    }
+                  },
+                  {
+                    "type": "deleteComponent",
+                    "id": "confirm"
+                  },
+                  {
+                    "type": "updateSubPage",
+                    "subPageId": "comments",
+                    "pageId": "comments/latest",
+                    "mode": "join",
+                    "params": {
+                      "after": {
+                        "type": "state",
+                        "key": "cursor",
+                        "scope": "page"
+                      }
+                    }
+                  },
+                  {
+                    "type": "updateSubPage",
+                    "subPageId": {
+                      "type": "state",
+                      "key": "target",
+                      "scope": "page"
+                    },
+                    "pageId": {
+                      "type": "state",
+                      "key": "nextPage",
+                      "scope": "page"
+                    },
+                    "mode": {
+                      "type": "state",
+                      "key": "mode",
+                      "scope": "app"
+                    }
+                  },
+                  {
+                    "type": "navigate",
+                    "route": "/photo/1",
+                    "params": {
+                      "from": {
+                        "type": "state",
+                        "key": "origin",
+                        "scope": "page"
+                      }
+                    }
+                  },
+                  {
+                    "type": "switchTab",
+                    "tabId": "confirm"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "10",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Go"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "comments",
+            "type": "SubPage",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "pageId": "comments"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "confirm",
+            "type": "Dialog",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "9"
+            ],
+            "watches": []
+          },
+          {
+            "id": "9",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Sure?"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "7",
+            "type": "Hero",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "tag": "photo-1"
+            },
+            "children": [
+              "8"
+            ],
+            "watches": []
+          },
+          {
+            "id": "8",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "photo"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "AnimatedBuilder",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {
+              "animationId": "fade",
+              "duration": 300
+            },
+            "children": [
+              "2",
+              "4",
+              "6"
+            ],
+            "watches": []
+          },
+          {
+            "id": "6",
+            "type": "Opacity",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "opacity": {
+                "type": "tweenSequence",
+                "items": [
+                  {
+                    "value": 0,
+                    "duration": 100
+                  },
+                  {
+                    "value": 1,
+                    "duration": 200
+                  }
+                ],
+                "animationId": "fade"
+              }
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "4",
+            "type": "Opacity",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "opacity": {
+                "type": "tween",
+                "begin": 0,
+                "end": 1
+              }
+            },
+            "children": [
+              "5"
+            ],
+            "watches": []
+          },
+          {
+            "id": "5",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "untargeted"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "2",
+            "type": "Opacity",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "opacity": {
+                "type": "tween",
+                "begin": 0,
+                "end": 1,
+                "animationId": "fade"
+              }
+            },
+            "children": [
+              "3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Hello"
+            },
+            "children": [],
+            "watches": []
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail:1",
+              "detail:7",
+              "detail:confirm",
+              "detail:comments",
+              "detail:go"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:go",
+            "type": "ElevatedButton",
+            "kind": "button",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "detail:10"
+            ],
+            "watches": [],
+            "actions": {
+              "onTap": {
+                "type": "actionGroup",
+                "mode": "sequential",
+                "actions": [
+                  {
+                    "type": "animateForward",
+                    "animationId": "detail:fade"
+                  },
+                  {
+                    "type": "animateReverse",
+                    "animationId": "detail:fade"
+                  },
+                  {
+                    "type": "openDialog",
+                    "dialogId": "detail:confirm"
+                  },
+                  {
+                    "type": "closeDialog"
+                  },
+                  {
+                    "type": "updateComponent",
+                    "id": "detail:confirm",
+                    "props": {
+                      "dismissible": false,
+                      "animationId": "detail:fade",
+                      "stateKey": "detail:email"
+                    }
+                  },
+                  {
+                    "type": "deleteComponent",
+                    "id": "detail:confirm"
+                  },
+                  {
+                    "type": "updateSubPage",
+                    "subPageId": "detail:comments",
+                    "pageId": "comments/latest",
+                    "mode": "join",
+                    "params": {
+                      "after": {
+                        "type": "state",
+                        "key": "detail:cursor",
+                        "scope": "page"
+                      }
+                    }
+                  },
+                  {
+                    "type": "updateSubPage",
+                    "subPageId": {
+                      "type": "state",
+                      "key": "detail:target",
+                      "scope": "page"
+                    },
+                    "pageId": {
+                      "type": "state",
+                      "key": "detail:nextPage",
+                      "scope": "page"
+                    },
+                    "mode": {
+                      "type": "state",
+                      "key": "mode",
+                      "scope": "app"
+                    }
+                  },
+                  {
+                    "type": "navigate",
+                    "route": "/photo/1",
+                    "params": {
+                      "from": {
+                        "type": "state",
+                        "key": "detail:origin",
+                        "scope": "page"
+                      }
+                    }
+                  },
+                  {
+                    "type": "switchTab",
+                    "tabId": "confirm"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "detail:10",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Go"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:comments",
+            "type": "SubPage",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "pageId": "comments"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:confirm",
+            "type": "Dialog",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "detail:9"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:9",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Sure?"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:7",
+            "type": "Hero",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "tag": "photo-1"
+            },
+            "children": [
+              "detail:8"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:8",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "photo"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:1",
+            "type": "AnimatedBuilder",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {
+              "animationId": "detail:fade",
+              "duration": 300
+            },
+            "children": [
+              "detail:2",
+              "detail:4",
+              "detail:6"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:6",
+            "type": "Opacity",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "opacity": {
+                "type": "tweenSequence",
+                "items": [
+                  {
+                    "value": 0,
+                    "duration": 100
+                  },
+                  {
+                    "value": 1,
+                    "duration": 200
+                  }
+                ],
+                "animationId": "detail:fade"
+              }
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:4",
+            "type": "Opacity",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "opacity": {
+                "type": "tween",
+                "begin": 0,
+                "end": 1
+              }
+            },
+            "children": [
+              "detail:5"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:5",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "untargeted"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:2",
+            "type": "Opacity",
+            "kind": "layout",
+            "childMode": "single",
+            "props": {
+              "opacity": {
+                "type": "tween",
+                "begin": 0,
+                "end": 1,
+                "animationId": "detail:fade"
+              }
+            },
+            "children": [
+              "detail:3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Hello"
+            },
+            "children": [],
+            "watches": []
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "a node id equal to a state key: each by its own rule",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "counter",
+        "title": "",
+        "state": [
+          {
+            "key": "count",
+            "scope": "page",
+            "initial": 0
+          },
+          {
+            "key": "count",
+            "scope": "app",
+            "initial": 5
+          }
+        ],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "count",
+              "1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "ElevatedButton",
+            "kind": "button",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "2"
+            ],
+            "watches": [],
+            "actions": {
+              "onTap": {
+                "type": "actionGroup",
+                "mode": "sequential",
+                "actions": [
+                  {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "count",
+                    "value": {
+                      "type": "static",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "type": "setState",
+                    "scope": "app",
+                    "key": "count",
+                    "value": {
+                      "type": "static",
+                      "value": 2
+                    }
+                  },
+                  {
+                    "type": "updateComponent",
+                    "id": "count",
+                    "props": {
+                      "data": "count"
+                    }
+                  },
+                  {
+                    "type": "deleteComponent",
+                    "id": "count"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "count"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "count",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail:count",
+              "detail:1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:1",
+            "type": "ElevatedButton",
+            "kind": "button",
+            "childMode": "single",
+            "props": {},
+            "children": [
+              "detail:2"
+            ],
+            "watches": [],
+            "actions": {
+              "onTap": {
+                "type": "actionGroup",
+                "mode": "sequential",
+                "actions": [
+                  {
+                    "type": "setState",
+                    "scope": "page",
+                    "key": "detail:count",
+                    "value": {
+                      "type": "static",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "type": "setState",
+                    "scope": "app",
+                    "key": "count",
+                    "value": {
+                      "type": "static",
+                      "value": 2
+                    }
+                  },
+                  {
+                    "type": "updateComponent",
+                    "id": "detail:count",
+                    "props": {
+                      "data": "count"
+                    }
+                  },
+                  {
+                    "type": "deleteComponent",
+                    "id": "detail:count"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "detail:2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "count"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:count",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail:count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:count"
+            ]
+          }
+        ],
+        "state": {
+          "detail:count": 0
+        }
+      }
+    }
+  ]
+}

@@ -173,7 +173,7 @@ class ActionHandlerTest {
                 "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
                 "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
                 "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
-                "once", "always", "debugLog",
+                "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage",
             ),
             ActionExecutor.kinds,
         )

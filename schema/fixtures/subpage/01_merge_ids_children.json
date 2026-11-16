@@ -1,0 +1,397 @@
+{
+  "name": "merge-ids-children",
+  "description": "S2a. Every node id and every entry of `children` gets the prefix, author keys and encoder counters alike; `type`, `kind`, `childMode` and plain props are copied. The same response under a page 0 prefix, a joined page prefix and a nested prefix.",
+  "kind": "merge",
+  "cases": [
+    {
+      "name": "page 0 prefix",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "profile",
+        "title": "Profile",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "heading",
+              "1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "Row",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "2",
+              "3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "right"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "left"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "heading",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Profile"
+            },
+            "children": [],
+            "watches": []
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail:heading",
+              "detail:1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:1",
+            "type": "Row",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail:2",
+              "detail:3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail:3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "right"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "left"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail:heading",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Profile"
+            },
+            "children": [],
+            "watches": []
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "joined page prefix",
+      "prefix": "detail#1:",
+      "response": {
+        "pageId": "profile",
+        "title": "Profile",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "heading",
+              "1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "Row",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "2",
+              "3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "right"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "left"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "heading",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Profile"
+            },
+            "children": [],
+            "watches": []
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail#1:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail#1:heading",
+              "detail#1:1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail#1:1",
+            "type": "Row",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "detail#1:2",
+              "detail#1:3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "detail#1:3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "right"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail#1:2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "left"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "detail#1:heading",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Profile"
+            },
+            "children": [],
+            "watches": []
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "nested sub-page prefix",
+      "prefix": "outer:inner:",
+      "response": {
+        "pageId": "profile",
+        "title": "Profile",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "heading",
+              "1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "1",
+            "type": "Row",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "2",
+              "3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "right"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "left"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "heading",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Profile"
+            },
+            "children": [],
+            "watches": []
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "outer:inner:0",
+            "type": "Column",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "outer:inner:heading",
+              "outer:inner:1"
+            ],
+            "watches": []
+          },
+          {
+            "id": "outer:inner:1",
+            "type": "Row",
+            "kind": "layout",
+            "childMode": "multi",
+            "props": {},
+            "children": [
+              "outer:inner:2",
+              "outer:inner:3"
+            ],
+            "watches": []
+          },
+          {
+            "id": "outer:inner:3",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "right"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "outer:inner:2",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "left"
+            },
+            "children": [],
+            "watches": []
+          },
+          {
+            "id": "outer:inner:heading",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": "Profile"
+            },
+            "children": [],
+            "watches": []
+          }
+        ],
+        "state": {}
+      }
+    }
+  ]
+}

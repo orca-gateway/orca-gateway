@@ -26,6 +26,9 @@ private struct WatchedNode: View {
     @StateObject private var observer: NodeObserver
     /// Set by an enclosing AnimatedBuilder; redraws this node every frame.
     @Environment(\.orcaAnimationProgress) private var animationProgress
+    /// Set by an enclosing AnimatedSwitcher: where this node is recorded
+    /// each time it is drawn.
+    @Environment(\.orcaNodeRecorder) private var recorder
 
     init(id: String, model: OrcaPageModel) {
         self.id = id
@@ -37,6 +40,9 @@ private struct WatchedNode: View {
         // Reading the revision ties this body to the node's watches.
         let _ = observer.revision
         if let node = model.resolve(id, animationProgress: animationProgress) {
+            // What is on screen from now on. A frozen copy is a record
+            // already.
+            let _ = record(node)
             // Only a node with a lifecycle trigger is wrapped (Flutter
             // component_renderer.dart:230-255); the others keep their tree.
             if let triggers = LifecycleTriggers(node.actions) {
@@ -46,6 +52,26 @@ private struct WatchedNode: View {
                 WidgetView(node: node, model: model)
             }
         }
+    }
+}
+
+extension WatchedNode {
+    private func record(_ node: ResolvedNode) {
+        guard let recorder, !model.isInert, let source = model.renderer.node(id) else { return }
+        recorder.record(node, source: source)
+    }
+}
+
+/// Where the nodes drawn below this point are recorded as they are resolved
+/// (`NodeRecorder`); nil, the default: nowhere.
+private struct OrcaNodeRecorderKey: EnvironmentKey {
+    static let defaultValue: NodeRecorder? = nil
+}
+
+extension EnvironmentValues {
+    var orcaNodeRecorder: NodeRecorder? {
+        get { self[OrcaNodeRecorderKey.self] }
+        set { self[OrcaNodeRecorderKey.self] = newValue }
     }
 }
 
@@ -79,6 +105,8 @@ struct WidgetView: View {
         case "Padding": PaddingView(node: node, model: model)
         case "SizedBox": SizedBoxView(node: node, model: model)
         case "SingleChildScrollView": ScrollNodeView(node: node, model: model)
+        case "ReorderableListView": ReorderableListNodeView(node: node, model: model)
+        case "SubPage": SubPageNodeView(node: node, model: model)
         case "Card": CardView(node: node, model: model)
         case "Text": TextNodeView(node: node)
         case "Divider": DividerView(node: node)
@@ -96,8 +124,21 @@ struct WidgetView: View {
         case "Positioned": PositionedView(node: node, model: model)
         case "ClipRRect": ClipRRectView(node: node, model: model)
         case "GestureDetector": GestureNodeView(node: node, model: model)
-        case "AnimatedBuilder": AnimatedBuilderView(node: node, model: model)
+        case "AnimatedBuilder":
+            // In a frozen copy (an AnimatedSwitcher's outgoing child) the
+            // builder is its child as it last resolved: no controller, no
+            // `animationId` registered, no frames.
+            if model.isInert {
+                ChildView(node: node, model: model)
+            } else {
+                AnimatedBuilderView(node: node, model: model)
+            }
         case "Transform": TransformView(node: node, model: model)
+        case "AnimatedContainer": AnimatedContainerView(node: node, model: model)
+        case "AnimatedOpacity": AnimatedOpacityView(node: node, model: model)
+        case "AnimatedAlign": AnimatedAlignView(node: node, model: model)
+        case "AnimatedSwitcher": AnimatedSwitcherView(node: node, model: model)
+        case "Hero": HeroView(node: node, model: model)
         case "Video": VideoNodeView(node: node)
         case "BottomNavigationBar": BottomNavigationBarView(node: node, model: model)
         case "BottomNavItem": BottomNavItemView(node: node)

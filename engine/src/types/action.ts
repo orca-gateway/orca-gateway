@@ -273,7 +273,7 @@ export interface ConditionalAction {
 //
 //   1. Widget-specific (declared in each widget class's `static readonly
 //      triggers`): onTap, onLongPress, onDoubleTap, onChange, onScrollBegin,
-//      onScrolling, onScrollEnd, onRefresh, onAction, onComplete.
+//      onScrolling, onScrollEnd, onRefresh, onAction, onReorder, onComplete.
 //      These fire from Flutter gesture/input/scroll callbacks specific to
 //      the widget. See `widget-registry.json` for which triggers each
 //      widget supports.
@@ -312,6 +312,7 @@ export type ActionTrigger =
   | "onScrollEnd"
   | "onRefresh"
   | "onAction"
+  | "onReorder"
   // Widget lifecycle (universal, applied to any widget)
   | "onVisible"
   | "onInit"

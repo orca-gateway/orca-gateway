@@ -48,6 +48,17 @@ class ElmStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Take [keys] out of the state and notify, when any of them is there.
+  void removeKeys(Iterable<String> keys) {
+    final present = keys.where(_state.containsKey).toSet();
+    if (present.isEmpty) return;
+    _state = {
+      for (final entry in _state.entries)
+        if (!present.contains(entry.key)) entry.key: entry.value,
+    };
+    notifyListeners();
+  }
+
   void _scheduleDebugFlush() {
     if (_debugFlushScheduled || _pendingDebugEvents == null) return;
     _debugFlushScheduled = true;

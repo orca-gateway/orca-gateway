@@ -297,6 +297,65 @@ final class LifecycleTests: XCTestCase {
         XCTAssertEqual(deleted, ["item-42_0", "item-17_0", "8"])
     }
 
+    /// C19.2 with a SubPage (step 13): the nodes of a mounted sub-page are in
+    /// the host's store, so a setState on a key they watch lists them, in
+    /// Flutter's node map order: at the end, in the order the sub-page sent
+    /// them, after the nodes the page already had. A replace takes the old
+    /// page's nodes out and puts the new ones at the end; a SubPage node
+    /// that leaves takes its pages' nodes out of the list.
+    func testC19_2_theNodesOfAMountedSubPageAreListedInNodeMapOrder() async throws {
+        let recorder = DevToolsHookTests.Recorder()
+        OrcaDebug.reporter = recorder
+        defer { OrcaDebug.reporter = nil }
+        func node(_ id: String, _ type: String = "Text", _ watches: [String] = ["count"],
+                  children: [String] = []) -> ComponentNode {
+            ComponentNode(id: id, type: type, kind: children.isEmpty ? .primitive : .layout,
+                          childMode: children.isEmpty ? .none : .multi, children: children, watches: watches)
+        }
+        func subPage(_ ids: [String]) -> PageResponse {
+            PageResponse(
+                pageId: "detail", title: "Detail", state: [StateDefinition(key: "count", scope: .page, initial: 0)],
+                components: [node("0", "Column", [], children: ids)] + ids.map {
+                    // The node reads the page's count, so its watch is the sub-page's key.
+                    ComponentNode(id: $0, type: "Text", kind: .primitive, childMode: .none,
+                                  props: ["data": ["type": "state", "key": "count", "scope": "page"]],
+                                  watches: ["count"])
+                })
+        }
+        let model = OrcaPageModel(page: PageResponse(
+            pageId: "home", title: "Home", state: [],
+            components: [
+                node("0", "Column", [], children: ["1", "detail", "9"]),
+                node("1", "Text", ["detail:count"]), node("detail", "SubPage", []),
+                node("9", "Text", ["detail:count"]),
+            ]))
+        let increment = try Self.count("detail:count").decode(Action.self)
+        func ids() async -> [String] {
+            await model.run(increment)
+            let last = recorder.of("action").last { $0.payload["actionType"] == "setState" }
+            return (last?.payload["affectedWidgets"]?.arrayValue ?? []).compactMap { $0["id"].stringValue }
+        }
+
+        try model.mountSubPage("detail", mode: "replace", page: subPage(["7", "2"]))
+        let mounted = await ids()
+        XCTAssertEqual(mounted, ["1", "9", "detail:7", "detail:2"])
+
+        model.apply(.add(parentId: "0", components: [node("30", "Text", ["detail:count"])], position: nil))
+        try model.mountSubPage("detail", mode: "replace", page: subPage(["2", "5"]))
+        let replaced = await ids()
+        XCTAssertEqual(replaced, ["1", "9", "30", "detail:2", "detail:5"])
+
+        try model.mountSubPage("detail", mode: "join", page: subPage(["4"]))
+        let joined = await ids()
+        XCTAssertEqual(joined, ["1", "9", "30", "detail:2", "detail:5"], "a joined page has its own count")
+
+        _ = model.subPage("detail")
+        model.apply(.delete(id: "detail"))
+        let left = await ids()
+        XCTAssertEqual(left, ["1", "9", "30"])
+        XCTAssertTrue(model.renderer.nodes.keys.allSatisfy { !$0.hasPrefix("detail") })
+    }
+
     // MARK: helpers
 
     /// The node runs `trigger` once on its first build; its own state change

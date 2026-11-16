@@ -22,7 +22,11 @@ public object GeneratedCapabilities {
     public val widgets: List<String> = listOf(
         "AbsorbPointer",
         "Align",
+        "AnimatedAlign",
         "AnimatedBuilder",
+        "AnimatedContainer",
+        "AnimatedOpacity",
+        "AnimatedSwitcher",
         "AppBar",
         "AspectRatio",
         "BackdropFilter",
@@ -49,6 +53,7 @@ public object GeneratedCapabilities {
         "Flexible",
         "FractionallySizedBox",
         "GestureDetector",
+        "Hero",
         "Icon",
         "IgnorePointer",
         "Image",
@@ -61,6 +66,7 @@ public object GeneratedCapabilities {
         "OutlinedButton",
         "Padding",
         "Positioned",
+        "ReorderableListView",
         "RotatedBox",
         "Row",
         "SafeArea",
@@ -69,6 +75,7 @@ public object GeneratedCapabilities {
         "SizedBox",
         "Spacer",
         "Stack",
+        "SubPage",
         "Text",
         "TextButton",
         "TextField",
@@ -94,6 +101,8 @@ public object GeneratedCapabilities {
         "actionGroup",
         "addComponent",
         "always",
+        "animateForward",
+        "animateReverse",
         "conditionalAction",
         "copyToClipboard",
         "debugLog",
@@ -111,6 +120,7 @@ public object GeneratedCapabilities {
         "showToast",
         "switchTab",
         "updateComponent",
+        "updateSubPage",
     )
 
     public val transformKinds: List<String> = listOf(
@@ -164,5 +174,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "88e7bb81149d3fba1694339e70662671579b69a85b1d273fa96b1ff137f1e08f"
+    public const val capsHash: String = "cae35f8dd9e0234d4fb04745b6dfe79322ed74f26e33c3089d515af07841bf86"
 }

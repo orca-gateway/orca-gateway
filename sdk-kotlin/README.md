@@ -190,6 +190,104 @@ the router: `router.handleDeeplink(url)` (pass `isColdStart = true` when the lin
 or `router.handleIntent(intent)`, which returns false when the Intent carries no link. Before the
 router exists, `OrcaAppBoot.handleDeeplink(url)` holds the link for it.
 
+## Animation
+
+What the animation step adds, in plain words:
+
+- **Controlled animations.** An AnimatedBuilder that carries an `animationId` can be told to play by a
+  button: the `animateForward` action starts it again from the beginning, `animateReverse` runs it back
+  from where it is. A builder with `autoStart: false` waits for one of them. `onComplete` fires at the end
+  of a forward run and of a reverse run, never for a repeating one. A tween may name the id of the
+  animation it follows.
+- **Implicit animations.** AnimatedContainer, AnimatedOpacity and AnimatedAlign glide to the new value
+  when a prop changes (size, colour, padding, opacity, alignment), over the widget's `duration`. The first
+  frame shows the value as is. All 41 of Flutter's curve names are understood, with Flutter's formulas; a
+  missing or unknown name is `easeInOut`. This is also the default of AnimatedBuilder now (it was linear).
+- **AnimatedSwitcher.** When its child is replaced by another node (a server action swaps it, or the
+  page is fetched again), the old child fades out while the new one fades in. The same node with new
+  props does not fade.
+- **Hero.** On the single stack, two pages that hold a Hero with the same tag share the element: it
+  flies from one to the other when both are on hand as the transition starts (always on going back, and on
+  a push when the page is already loaded). Inside tabs, or with an empty tag, the child is drawn and the
+  push is the plain one.
+- **Route transitions.** Every kind a route can ask for is honoured, also inside tabs: `fade`, `slideUp`
+  (from the bottom), `scale` (from the centre), `slideRight` (in from the right), `slide` (in from the
+  left), with the route's duration and curve. Only the entering page moves, and going back plays it the
+  other way. `none`, or no transition, is the platform's default.
+- **Reduced motion.** With animations turned off in the system settings (animator duration scale 0),
+  every animation above jumps to its end state at once and `onComplete` still fires once.
+
+To see it all, run the `motion` app of the example server in the
+[Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android), booted
+from its config (`ORCA_APP_ID=motion ORCA_BOOT=config`): a menu with one page for the controlled
+animation, one for the three implicit widgets, one for the switcher, a Hero pair, and one page per
+transition kind at 600 ms.
+
+## Reorderable list
+
+`ReorderableListView` draws its children in a scrolling list, a column by default or a row with
+`scrollDirection: "horizontal"`, with `padding` inside the scrolled content.
+
+- **Dragging.** A long press picks a row up. It follows the finger, the rows it passes make room, and
+  holding it past the top or bottom edge scrolls the list.
+- **What fires.** Letting go fires the list's `onReorder` once, with the event `{oldIndex, newIndex}`,
+  read with `V.event("oldIndex")` and `V.event("newIndex")`. A row dropped where it was fires nothing.
+  `onScrollBegin`, `onScrolling` and `onScrollEnd` fire as on a SingleChildScrollView.
+- **The raw `newIndex`.** `newIndex` is Flutter's value: the position to insert at, counted before the
+  dragged row is taken out. The first of three rows dropped at the end gives `newIndex: 3`, not 2; dropped
+  below the second row it gives 2; the last row dropped at the top gives 0. A server that moves the row
+  subtracts one when `newIndex > oldIndex`.
+- **The order comes from the page.** The SDK never reorders by itself. After the drop every row is back
+  where the page has it; the `onReorder` action changes the order (page state, or a server action that
+  answers with the new order), and the list then draws that.
+
+To try it, run the `reorder` app of the example server in the
+[Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android), booted
+from its config (`ORCA_APP_ID=reorder ORCA_BOOT=config`): five rows whose order lives in page state, and
+a line showing the last move as `oldIndex → newIndex`.
+
+## Sub-pages
+
+`SubPage` fetches another page and draws it in place; the `updateSubPage` action changes what it holds.
+The rules are shared with Flutter and iOS and pinned by the fixtures in
+[`schema/fixtures/subpage`](https://github.com/orca-gateway/orca-gateway/tree/main/schema/fixtures/subpage).
+
+- **The prefix rule.** A sub-page lives in its host page: its nodes go into the host's node tree and its
+  state into the host's page state, each under a prefix so that nothing clashes. For a SubPage with the key
+  `feed` the prefix is `feed:`: the node `title` becomes `feed:title`, the page-state key `count` becomes
+  `feed:count`, and every reference to them inside the sub-page (state Values, `setState`, watches, slots,
+  animation and component ids) is rewritten the same way. App state is shared and left alone. A SubPage
+  inside a sub-page composes by itself (`feed:inner:`). The sub-page is written as any page: it never sees
+  its prefix.
+- **Params as a query.** The resolved `pageId` is the path of a normal page fetch and the resolved `params`
+  its query string, keys sorted and percent-encoded (`feed?tab=new&user=7`); the app state is posted as on
+  any page fetch. The fetch runs when the SubPage is first drawn, and again when the resolved `pageId` or
+  `params` change.
+- **What is drawn.** While the first fetch runs, the SubPage's child if it has one, else a progress
+  indicator; after a failed fetch, the text `SubPage error: <message>`; then the fetched page.
+- **Replace and join.** `updateSubPage(subPageId, pageId, params, mode)` fetches a page for a SubPage of the
+  current page; an id no SubPage has does nothing. `replace` (the default) removes the mounted pages, their
+  nodes and their state, and puts the new page in their place. `join` adds the new page below the ones
+  already there, under `feed#1:`, `feed#2:` and so on, each with its own state. The old content stays on
+  screen during the fetch; a failed fetch leaves it and fails the action, so a `lifecycle`'s `onError` runs.
+  The change stays until the next `updateSubPage` or until the SubPage's own `pageId` or `params` change.
+- **Server actions inside.** A `serverAction` fired by a node of a sub-page posts, as `pageState`, only that
+  sub-page's keys, without the prefix: the server sees the state the sub-page declared. The actions it
+  answers with are rewritten with the same prefix before they run, so a `setState("count")` or an
+  `updateComponent("title")` lands on the sub-page. A server action of the host page posts the whole page
+  state, as before.
+- **When it leaves.** When the SubPage node is removed from the page its nodes are removed with it; its
+  state keys are left.
+- **Limits.** A SubPage key may not hold `:` or `#` (the engine refuses it): they separate the prefix from
+  what is under it. In a plugin's or a custom action, state Values are rewritten like anywhere else, but a
+  key or an id written as a plain string is not, since the SDK does not know which of its fields are keys;
+  such an action takes the key as a state Value, or is not used inside a sub-page.
+
+To try it, run the `subpage` app of the example server in the
+[Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android), booted
+from its config (`ORCA_APP_ID=subpage ORCA_BOOT=config`): a host page and a sub-page that each count on
+their own, a param sent to the sub-page, and two buttons, Replace with B and Join C.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An Android host does it with

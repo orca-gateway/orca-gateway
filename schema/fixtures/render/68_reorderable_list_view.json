@@ -1,0 +1,175 @@
+{
+  "name": "reorderable-list-view",
+  "description": "ReorderableListView on the wire: padding as a prop, three keyed children in order, and its triggers. onReorder reads the event {oldIndex, newIndex} (newIndex is the insertion index before the dragged item is removed, so item 0 dropped below item 1 gives 2); onScrollEnd reads the scroll event. The client never reorders locally: the children stay as sent until an action changes them.",
+  "input": {
+    "type": "ReorderableListView",
+    "key": "rows",
+    "props": {
+      "padding": {
+        "top": 8,
+        "right": 16,
+        "bottom": 8,
+        "left": 16
+      }
+    },
+    "actions": {
+      "onReorder": {
+        "type": "actionGroup",
+        "mode": "sequential",
+        "actions": [
+          {
+            "type": "setState",
+            "scope": "page",
+            "key": "from",
+            "value": {
+              "type": "event",
+              "key": "oldIndex"
+            }
+          },
+          {
+            "type": "setState",
+            "scope": "page",
+            "key": "to",
+            "value": {
+              "type": "event",
+              "key": "newIndex"
+            }
+          }
+        ]
+      },
+      "onScrollEnd": {
+        "type": "setState",
+        "scope": "page",
+        "key": "offset",
+        "value": {
+          "type": "event",
+          "key": "offset"
+        }
+      }
+    },
+    "children": [
+      {
+        "type": "Text",
+        "key": "row_a",
+        "props": {
+          "data": "Alpha"
+        }
+      },
+      {
+        "type": "Text",
+        "key": "row_b",
+        "props": {
+          "data": "Bravo"
+        }
+      },
+      {
+        "type": "Text",
+        "key": "row_c",
+        "props": {
+          "data": "Charlie"
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "from": -1,
+      "to": -1,
+      "offset": 0
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "rows",
+      "type": "ReorderableListView",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "padding": {
+          "top": 8,
+          "right": 16,
+          "bottom": 8,
+          "left": 16
+        }
+      },
+      "children": [
+        "row_a",
+        "row_b",
+        "row_c"
+      ],
+      "watches": [],
+      "actions": {
+        "onReorder": {
+          "type": "actionGroup",
+          "mode": "sequential",
+          "actions": [
+            {
+              "type": "setState",
+              "scope": "page",
+              "key": "from",
+              "value": {
+                "type": "event",
+                "key": "oldIndex"
+              }
+            },
+            {
+              "type": "setState",
+              "scope": "page",
+              "key": "to",
+              "value": {
+                "type": "event",
+                "key": "newIndex"
+              }
+            }
+          ]
+        },
+        "onScrollEnd": {
+          "type": "setState",
+          "scope": "page",
+          "key": "offset",
+          "value": {
+            "type": "event",
+            "key": "offset"
+          }
+        }
+      }
+    },
+    {
+      "id": "row_c",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Charlie"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "row_b",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Bravo"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "row_a",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Alpha"
+      },
+      "children": [],
+      "watches": []
+    }
+  ]
+}

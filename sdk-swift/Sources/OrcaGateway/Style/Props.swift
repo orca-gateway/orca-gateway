@@ -135,8 +135,13 @@ enum Props {
         }
     }
 
-    /// The same nine names as a point in a unit square (gradient ends).
+    /// The same nine names as a point in a unit square (gradient ends), or
+    /// an `{x, y}` object in -1...1, the form the core writes an alignment
+    /// in while an implicit animation mixes two (`AnimationMix.alignment`).
     static func unitPoint(_ value: JSONValue?) -> UnitPoint {
+        if case .object(let o)? = value, let x = o["x"]?.doubleValue, let y = o["y"]?.doubleValue {
+            return UnitPoint(x: (x + 1) / 2, y: (y + 1) / 2)
+        }
         switch value?.stringValue {
         case "topLeft": return .topLeading
         case "topCenter": return .top

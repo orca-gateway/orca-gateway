@@ -13,6 +13,7 @@ import com.orcagateway.core.models.ComponentNode
 import com.orcagateway.core.plugins.OrcaActionHandler
 import com.orcagateway.core.render.ComponentMutation
 import com.orcagateway.core.resolver.ValueResolver
+import com.orcagateway.core.subpage.SubPage
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.cancellation.CancellationException
@@ -65,6 +66,19 @@ public class ActionExecutor(
 
     /** A structural change from a server action, for the page's node tree. */
     public var onMutation: ((ComponentMutation) -> Unit)? = null
+
+    /**
+     * Prefix of every sub-page mounted in the page (`SubPageHost.prefixes`). A `serverAction` fired by a node
+     * under one of them posts that sub-page's state only and has its answer rewritten for it (contract S6).
+     */
+    public var subPagePrefixes: (() -> List<String>)? = null
+
+    /**
+     * Carries out an `updateSubPage` (contract S7) with its fields resolved: the SubPage node's id, the page
+     * to fetch, its params and the mode (`replace` when the action has none). What it throws is the action's
+     * failure. Without it the action does nothing.
+     */
+    public var onUpdateSubPage: (suspend (subPageId: String, pageId: String, params: Map<String, JsonValue>?, mode: String) -> Unit)? = null
 
     /**
      * The page's current nodes in the order the page sent them (Flutter's
@@ -258,6 +272,18 @@ public class ActionExecutor(
 
             Action.OpenDrawer -> emit(ActionEffect("openDrawer", emptyMap()))
 
+            // The page model plays it on its animation registry; an id no
+            // builder registered still goes out. No id, no effect (Dart).
+            is Action.AnimateForward ->
+                if (action.animationId.isNotEmpty()) {
+                    emit(ActionEffect("animateForward", mapOf("animationId" to JsonValue.String(action.animationId))))
+                }
+
+            is Action.AnimateReverse ->
+                if (action.animationId.isNotEmpty()) {
+                    emit(ActionEffect("animateReverse", mapOf("animationId" to JsonValue.String(action.animationId))))
+                }
+
             is Action.OpenUrl ->
                 emit(ActionEffect("openUrl", mapOf("url" to JsonValue.String(resolver.resolveToString(action.url ?: JsonValue.Null)))))
 
@@ -287,6 +313,18 @@ public class ActionExecutor(
             is Action.AddComponent -> {
                 val nodes = (action.components?.arrayValue ?: emptyList()).map { it.decode(ComponentNode.serializer()) }
                 onMutation?.invoke(ComponentMutation.Add(action.parentId, nodes, action.position))
+            }
+
+            is Action.UpdateSubPage -> {
+                val update = onUpdateSubPage ?: return
+                val resolver = this.resolver
+                val mode = action.mode?.takeUnless { it.isNull }?.let { resolver.resolveToString(it) } ?: "replace"
+                update(
+                    resolver.resolveToString(action.subPageId),
+                    resolver.resolveToString(action.pageId),
+                    action.params?.mapValues { resolver.resolve(it.value) },
+                    mode,
+                )
             }
 
             is Action.Unknown -> {
@@ -431,6 +469,9 @@ public class ActionExecutor(
      * Emit the request, POST it, run what comes back. A refused call (a
      * status other than 200) shows its message in a snackbar and does not
      * throw, as in Dart; a transport failure throws.
+     *
+     * Fired by a node of a mounted sub-page (S6): the posted page state is that sub-page's keys without their
+     * prefix, and the actions that come back get the prefix before they run (`SubPage.rewriteActions`).
      */
     private suspend fun runServerAction(s: Action.ServerAction) {
         val resolver = this.resolver
@@ -442,11 +483,18 @@ public class ActionExecutor(
         val client = client ?: return
         try {
             val state = store.state
-            val actions = client.executeAction(s.id, params, state.page, state.app)
-            for (action in actions) run(action)
+            val prefix = SubPage.prefixOf(subPagePrefixes?.invoke().orEmpty(), source?.widgetId)
+            val actions = client.executeAction(s.id, params, SubPage.postedState(prefix, state.page), state.app)
+            for (action in if (prefix == null) actions else rewritten(prefix, actions)) run(action)
         } catch (e: OrcaActionException) {
             run(Action.ShowSnackbar(message = JsonValue.String(e.message)))
         }
+    }
+
+    /** [actions] as a sub-page's own: every key and id in them under [prefix]. One that cannot be written as JSON stays as it is. */
+    private fun rewritten(prefix: String, actions: List<Action>): List<Action> = actions.map { action ->
+        val json = action.json
+        if (json.isNull) action else SubPage.rewriteActions(prefix, listOf(json)).single().decode(Action.serializer())
     }
 
     public companion object {
@@ -461,7 +509,7 @@ public class ActionExecutor(
             "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
             "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
             "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
-            "once", "always", "debugLog",
+            "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage",
         )
 
         /** True when the action and everything nested in it is implemented. */

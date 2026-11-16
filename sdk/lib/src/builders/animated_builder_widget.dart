@@ -85,7 +85,7 @@ class _OrcaAnimatedBuilderState extends State<OrcaAnimatedBuilder>
     final animationId = widget.animationId;
     if (animationId != null) {
       widget.parentContext.actionExecutor?.animationRegistry
-          ?.unregister(animationId);
+          ?.unregister(animationId, _controller);
     }
     _controller.dispose();
     super.dispose();

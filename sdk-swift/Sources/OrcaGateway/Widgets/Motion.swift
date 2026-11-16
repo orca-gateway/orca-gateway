@@ -1,4 +1,5 @@
 #if canImport(SwiftUI)
+import Combine
 import SwiftUI
 
 /// Progress (0...1) of the nearest enclosing AnimatedBuilder, after its
@@ -14,47 +15,68 @@ extension EnvironmentValues {
     }
 }
 
+/// Reduced motion for the SDK's animations: nil follows the system's
+/// `accessibilityReduceMotion`, a value wins over it (the system key cannot
+/// be set in a test). Read it through `@OrcaReduceMotion`.
+private struct OrcaReduceMotionKey: EnvironmentKey {
+    static let defaultValue: Bool? = nil
+}
+
+extension EnvironmentValues {
+    var orcaReduceMotion: Bool? {
+        get { self[OrcaReduceMotionKey.self] }
+        set { self[OrcaReduceMotionKey.self] = newValue }
+    }
+}
+
+/// `@OrcaReduceMotion private var reduceMotion`: whether a view's animations
+/// jump to their end state, the `reduceMotion` flag of the core's
+/// controllers, implicit animations and transitions.
+@propertyWrapper
+struct OrcaReduceMotion: DynamicProperty {
+    @Environment(\.orcaReduceMotion) private var override
+    @Environment(\.accessibilityReduceMotion) private var system
+
+    var wrappedValue: Bool { Self.resolve(override: override, system: system) }
+
+    static func resolve(override: Bool?, system: Bool) -> Bool { override ?? system }
+}
+
 /// Flutter `OrcaAnimatedBuilder` (sdk/lib/src/builders/animated_builder_widget.dart):
 /// a clock of `duration` ms shaped by `curve`, running once or, with
 /// `repeat`, forever (back and forth with `reverse`). Every frame its
 /// descendants are resolved again with the clock's value, so their `tween`
-/// props move. `autoStart: false` holds it at 0. `onComplete` fires when a
-/// one-shot run ends.
+/// props move. `autoStart: false` holds it at 0 until an `animateForward`
+/// names its `animationId`. `onComplete` fires each time a run reaches 1 or
+/// reaches 0, never for a repeat cycle.
 ///
-/// Not ported yet: `animationId` targeting from actions (Dart's
-/// AnimationRegistry); a tween naming an id resolves against the nearest
-/// builder like an unnamed one.
+/// The clock is the core's `AnimationController`; the view only passes it
+/// the frame's time, and frames are asked for only while a run is live.
 @MainActor
 struct AnimatedBuilderView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
-    @State private var start = Date()
-    @State private var completed = false
+    @StateObject private var driver: AnimatedBuilderDriver
+    @OrcaReduceMotion private var reduceMotion
+
+    init(node: ResolvedNode, model: OrcaPageModel) {
+        self.node = node
+        self.model = model
+        _driver = StateObject(wrappedValue: AnimatedBuilderDriver(model: model))
+    }
 
     var body: some View {
-        let duration = max((node["duration"]?.doubleValue ?? 300) / 1000, 0.001)
-        let repeats = node["repeat"]?.boolValue ?? false
-        let reverse = node["reverse"]?.boolValue ?? false
-        let autoStart = node["autoStart"]?.boolValue ?? true
-        let curve = node["curve"]?.stringValue ?? "linear"
-        let running = autoStart && (repeats || !completed)
-
-        TimelineView(.animation(minimumInterval: nil, paused: !running)) { context in
-            let raw = Self.clock(
-                elapsed: context.date.timeIntervalSince(start), duration: duration,
-                repeats: repeats, reverse: reverse, autoStart: autoStart)
+        let live = driver.needsTick(at: model.frameClock())
+        TimelineView(.animation(minimumInterval: nil, paused: !live)) { context in
+            let now = OrcaPageModel.milliseconds(context.date)
             content
-                .environment(\.orcaAnimationProgress, OrcaCurve.apply(curve, raw))
+                .environment(\.orcaAnimationProgress, driver.progress(at: now))
+                .onChange(of: context.date) { date in
+                    driver.settle(at: OrcaPageModel.milliseconds(date), node: node)
+                }
         }
-        .task(id: node.id) {
-            start = Date()
-            completed = false
-            guard autoStart, !repeats else { return }
-            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            completed = true
-            model.fire("onComplete", on: node)
-        }
+        .onAppear { driver.appear(node: node, reduceMotion: reduceMotion, at: model.frameClock()) }
+        .onDisappear { driver.disappear() }
     }
 
     /// One child as is; several are stacked, as Dart's `Stack(fit: expand)`.
@@ -68,50 +90,104 @@ struct AnimatedBuilderView: View {
             }
         }
     }
-
-    /// The controller's raw value at `elapsed` seconds (Flutter's
-    /// `forward()` and `repeat(reverse:)`).
-    static func clock(elapsed: Double, duration: Double, repeats: Bool,
-                      reverse: Bool, autoStart: Bool) -> Double {
-        guard autoStart else { return 0 }
-        let cycles = max(elapsed, 0) / duration
-        guard repeats else { return min(cycles, 1) }
-        let phase = cycles.truncatingRemainder(dividingBy: 1)
-        guard reverse else { return phase }
-        return Int(cycles) % 2 == 0 ? phase : 1 - phase
-    }
 }
 
-/// Flutter's named curves (the `Curve` the engine sends), as cubic beziers.
-enum OrcaCurve {
-    static func apply(_ name: String, _ t: Double) -> Double {
-        switch name {
-        case "easeIn": return bezier(0.42, 0, 1, 1, t)
-        case "easeOut": return bezier(0, 0, 0.58, 1, t)
-        case "easeInOut": return bezier(0.42, 0, 0.58, 1, t)
-        case "ease": return bezier(0.25, 0.1, 0.25, 1, t)
-        case "fastOutSlowIn": return bezier(0.4, 0, 0.2, 1, t)
-        case "easeInCubic": return bezier(0.55, 0.055, 0.675, 0.19, t)
-        case "easeOutCubic": return bezier(0.215, 0.61, 0.355, 1, t)
-        case "easeInOutCubic": return bezier(0.645, 0.045, 0.355, 1, t)
-        case "decelerate": return 1 - (1 - t) * (1 - t)
-        default: return t
-        }
+/// One AnimatedBuilder's clock while it is on screen: a core
+/// `AnimationController`, kept in the page's registry under the node's
+/// `animationId` when it has one, so effects and targeted tweens reach it.
+/// Every call takes "now" in milliseconds (`OrcaPageModel.milliseconds`):
+/// the view passes its frame's date, tests pass numbers.
+@MainActor
+final class AnimatedBuilderDriver: ObservableObject {
+    private let model: OrcaPageModel
+    private let owner: AnimationRegistry.Owner
+    private var node: ResolvedNode?
+    private var id: String?
+    /// The builder's own controller. While the builder owns its id the
+    /// registry's entry is the one effects move, and `current()` copies it
+    /// here; a builder with no id, or one whose id a later builder took,
+    /// carries on from this one.
+    private var local = AnimationController()
+    private var wake: AnyCancellable?
+
+    init(model: OrcaPageModel) {
+        self.model = model
+        self.owner = model.animations.makeOwner()
     }
 
-    /// y on the bezier (0,0)-(x1,y1)-(x2,y2)-(1,1) at x = t (Flutter's Cubic).
-    static func bezier(_ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double, _ t: Double) -> Double {
-        if t <= 0 { return 0 }
-        if t >= 1 { return 1 }
-        func point(_ a: Double, _ b: Double, _ m: Double) -> Double {
-            3 * a * (1 - m) * (1 - m) * m + 3 * b * (1 - m) * m * m + m * m * m
+    /// The builder came on screen (Flutter's `initState`): build the
+    /// controller from the node's props, start it when `autoStart`, and
+    /// register the id; the last builder to register an id owns it.
+    func appear(node: ResolvedNode, reduceMotion: Bool, at now: Double) {
+        self.node = node
+        var controller = AnimationController(
+            durationMs: AnimationDuration.milliseconds(node["duration"], default: 300),
+            curve: node["curve"]?.stringValue,
+            repeats: node["repeat"]?.boolValue ?? false,
+            reverses: node["reverse"]?.boolValue ?? false,
+            reduceMotion: reduceMotion)
+        if node["autoStart"]?.boolValue ?? true { controller.start(at: now) }
+        local = controller
+        id = node["animationId"]?.stringValue
+        if let id {
+            model.animations.register(id: id, owner: owner, controller: controller)
+            // An effect started a run on this id: the paused view has to ask
+            // for frames again.
+            wake = model.animationChanged.sink { [weak self] changed in
+                guard let self, changed == self.id else { return }
+                _ = self.current()
+                self.objectWillChange.send()
+            }
         }
-        var lo = 0.0, hi = 1.0
-        for _ in 0..<30 {
-            let mid = (lo + hi) / 2
-            if point(x1, x2, mid) < t { lo = mid } else { hi = mid }
-        }
-        return point(y1, y2, (lo + hi) / 2)
+        objectWillChange.send()
+    }
+
+    /// The builder left the screen: its id goes, unless a later builder owns
+    /// it by now.
+    func disappear() {
+        wake = nil
+        guard let id else { return }
+        _ = current()
+        model.animations.unregister(id: id, owner: owner)
+        self.id = nil
+    }
+
+    /// The builder's controller as it is now: the registry's while this
+    /// builder owns its id, copied into `local` so that a builder losing its
+    /// id keeps its last state, completions already taken included.
+    private func current() -> AnimationController {
+        if let id, let owned = model.animations.controller(id: id, owner: owner) { local = owned }
+        return local
+    }
+
+    /// The value after the curve: what the builder's descendants resolve by.
+    func progress(at now: Double) -> Double {
+        current().progress(at: now)
+    }
+
+    /// Whether the view needs another frame: a run is live, or one has ended
+    /// and `settle` has not reported it yet.
+    func needsTick(at now: Double) -> Bool {
+        var probe = current()
+        return probe.isRunning(at: now) || probe.takeCompletion(at: now)
+    }
+
+    /// The frame tick: fires `onComplete` when a run has reached 1 or
+    /// reached 0 since the last tick, and lets the view pause. `current` is
+    /// the node as the view has it now (its `onComplete` may have been
+    /// replaced since the builder appeared); without one, the node it
+    /// appeared with. The returned task is the action's run; nil when
+    /// nothing completed or the node has no `onComplete`.
+    @discardableResult
+    func settle(at now: Double, node current: ResolvedNode? = nil) -> Task<Void, Never>? {
+        var controller = self.current()
+        let completed = controller.takeCompletion(at: now)
+        local = controller
+        // Nothing happens here once a later builder owns the id.
+        if let id { model.animations.update(id: id, owner: owner) { $0 = controller } }
+        guard completed, let node = current ?? node else { return nil }
+        objectWillChange.send()
+        return model.fire("onComplete", on: node)
     }
 }
 

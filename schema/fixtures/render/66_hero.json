@@ -1,0 +1,88 @@
+{
+  "name": "hero",
+  "description": "Hero: tag is a template transform over page state, so it stays a Value on the wire and its key is watched; the client resolves it to the tag two pages share. One child.",
+  "input": {
+    "type": "Hero",
+    "key": "product_hero",
+    "props": {
+      "tag": {
+        "type": "transform",
+        "input": {
+          "type": "state",
+          "key": "productId",
+          "scope": "page"
+        },
+        "by": [
+          {
+            "type": "template",
+            "template": "product-{{value}}"
+          }
+        ]
+      }
+    },
+    "children": [
+      {
+        "type": "Text",
+        "key": "product_title",
+        "props": {
+          "data": "Wireless Headphones"
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "productId": "42"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "product_hero",
+      "type": "Hero",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "tag": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "key": "productId",
+            "scope": "page"
+          },
+          "by": [
+            {
+              "type": "template",
+              "template": "product-{{value}}"
+            }
+          ]
+        }
+      },
+      "children": [
+        "product_title"
+      ],
+      "watches": [
+        "productId"
+      ]
+    },
+    {
+      "id": "product_title",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Wireless Headphones"
+      },
+      "children": [],
+      "watches": []
+    }
+  ],
+  "resolved": {
+    "product_hero": {
+      "tag": "product-42"
+    }
+  }
+}

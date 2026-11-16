@@ -23,6 +23,7 @@ import '../widgets/orca_nav_config.dart';
 import 'animation_registry.dart';
 import 'component_store.dart';
 import 'state_manager.dart';
+import 'sub_page_core.dart';
 import 'url_scheme_policy.dart';
 import 'value_resolver.dart';
 
@@ -667,17 +668,32 @@ class ActionExecutor {
       final actionAppId = exec.appId;
       if (actionClient == null || actionAppId == null) return;
 
+      // Fired from a node of a mounted sub-page (contract S6): the server
+      // sees that page's own state, and what it returns addresses that page.
+      // Read before the first await: the source belongs to this chain.
+      final subPage = subPagePrefixOf(
+        exec.componentStore?.subPagePrefixes ?? const <String>[],
+        exec._currentSource?.widgetId,
+      );
+      final pageState = exec.stateManager.getPageStore(exec.pageId)?.state;
+
       try {
         final response = await actionClient.executeAction(
           actionAppId,
           action: id,
           params: resolvedParams,
-          pageState: exec.stateManager.getPageStore(exec.pageId)?.state,
+          pageState: subPage == null || pageState == null
+              ? pageState
+              : subPagePostedState(subPage, pageState),
           appState: exec.stateManager.appStore.state,
         );
 
         // Execute each response action sequentially
-        await exec.executeAll(response.actions);
+        await exec.executeAll(
+          subPage == null
+              ? response.actions
+              : rewriteSubPageActions(subPage, response.actions),
+        );
       } on OrcaClientException catch (e) {
         // Server returned error — show error snackbar
         await exec.execute({'type': 'showSnackbar', 'message': e.message});
@@ -793,6 +809,7 @@ class ActionExecutor {
     _handlers['animateForward'] = (action, exec) async {
       final id = action['animationId'] as String?;
       if (id == null) return;
+      exec._emit('animateForward', {'animationId': id});
       // Reset to start so the animation replays on every trigger.
       exec.animationRegistry?.getController(id)?.forward(from: 0.0);
       if (OrcaDebug.isEnabled) {
@@ -803,6 +820,7 @@ class ActionExecutor {
     _handlers['animateReverse'] = (action, exec) async {
       final id = action['animationId'] as String?;
       if (id == null) return;
+      exec._emit('animateReverse', {'animationId': id});
       exec.animationRegistry?.getController(id)?.reverse();
       if (OrcaDebug.isEnabled) {
         exec._lastAffectedWidgets = findAnimationAffectedWidgets(exec, id);

@@ -1,6 +1,7 @@
 import 'dart:collection' show UnmodifiableMapView;
 import 'package:flutter/foundation.dart';
 import '../models/component_node.dart';
+import 'sub_page_core.dart';
 
 /// Mutable store for the component tree.
 ///
@@ -13,6 +14,30 @@ import '../models/component_node.dart';
 /// Signature for a SubPage content update callback.
 typedef SubPageUpdateCallback = Future<void> Function(
     String pageId, Map<String, dynamic>? params, String mode);
+
+/// What one SubPage node has mounted. It belongs to the node, not to the
+/// widget that draws it: the [ComponentStore] holds it under the node's id
+/// for as long as the node is in the store, so a widget that is built anew
+/// for the same node (a list scrolled it away and back, a parent re-keyed
+/// it) finds the pages as they were and does not fetch.
+class SubPageSlot {
+  /// The pages mounted in the SubPage, oldest first.
+  final SubPageMounts mounts;
+
+  /// Whether the SubPage node was in the store when the slot was made. A
+  /// slot of a node the store never had lives as long as its widget.
+  final bool anchored;
+
+  /// Location of the last fetch for the node's own `pageId` and `params`
+  /// that came back, mounted or failed; null before the first.
+  String? location;
+
+  /// Counts the mounts that are not a join (see the widget's page keys).
+  int generation = 0;
+
+  SubPageSlot(String subPageKey, {this.anchored = false})
+    : mounts = SubPageMounts(subPageKey);
+}
 
 class ComponentStore extends ChangeNotifier {
   final Map<String, ComponentNode> _nodeMap = {};
@@ -27,9 +52,14 @@ class ComponentStore extends ChangeNotifier {
     _subPageCallbacks[subPageId] = callback;
   }
 
-  /// Unregister a SubPage update callback.
-  void unregisterSubPage(String subPageId) {
-    _subPageCallbacks.remove(subPageId);
+  /// Unregister a SubPage update callback. With [callback], only when it is
+  /// the one registered (another SubPage may have taken the id since).
+  /// Returns whether a registration was removed.
+  bool unregisterSubPage(String subPageId, [SubPageUpdateCallback? callback]) {
+    if (callback != null && _subPageCallbacks[subPageId] != callback) {
+      return false;
+    }
+    return _subPageCallbacks.remove(subPageId) != null;
   }
 
   /// Invoke the update callback for a SubPage. Returns false if not found.
@@ -41,13 +71,117 @@ class ComponentStore extends ChangeNotifier {
     return true;
   }
 
-  /// Initialize from a flat node list (as received from the server).
+  /// What each SubPage node has mounted, keyed by the node's id.
+  final Map<String, SubPageSlot> _subPageSlots = {};
+
+  /// The slot of the SubPage node [subPageId]: the one it has, else a new
+  /// one. It stays until the node leaves the store (S8).
+  SubPageSlot subPageSlot(String subPageId) => _subPageSlots.putIfAbsent(
+    subPageId,
+    () => SubPageSlot(subPageId, anchored: _nodeMap.containsKey(subPageId)),
+  );
+
+  /// Called by a SubPage widget that goes away. While the SubPage node is in
+  /// the store its pages stay mounted for the next widget of that node; a
+  /// slot whose node is not there is unmounted. A [slot] that is no longer
+  /// the node's (it was unmounted already) is left alone.
+  void releaseSubPage(String subPageId, SubPageSlot slot) {
+    if (!identical(_subPageSlots[subPageId], slot)) return;
+    if (slot.anchored && _nodeMap.containsKey(subPageId)) return;
+    _unmountSubPage(subPageId);
+  }
+
+  /// S8: forgets the SubPage [subPageId] and takes the nodes of its pages
+  /// out of the store, with the SubPages nested in them.
+  void _unmountSubPage(String subPageId) {
+    final slot = _subPageSlots.remove(subPageId);
+    final prefixes = <String>{
+      ...?_subPagePrefixes.remove(subPageId),
+      ...?slot?.mounts.prefixes,
+    };
+    removeSubPagePages(prefixes);
+  }
+
+  /// Unmounts every SubPage whose node the store had and has no more.
+  void _unmountMissingSubPages() {
+    for (final id in _subPageSlots.keys.toList()) {
+      final slot = _subPageSlots[id];
+      if (slot != null && slot.anchored && !_nodeMap.containsKey(id)) {
+        _unmountSubPage(id);
+      }
+    }
+  }
+
+  /// Prefixes of the pages mounted in each SubPage, keyed by subPageId.
+  final Map<String, List<String>> _subPagePrefixes = {};
+
+  /// Prefix of every page mounted in a SubPage of this page, nested ones
+  /// included: what `subPagePrefixOf` is asked with.
+  Iterable<String> get subPagePrefixes =>
+      _subPagePrefixes.values.expand((prefixes) => prefixes);
+
+  /// Record the prefixes of the pages mounted in a SubPage (oldest first).
+  /// An empty list forgets the SubPage.
+  void setSubPagePrefixes(String subPageId, List<String> prefixes) {
+    if (prefixes.isEmpty) {
+      _subPagePrefixes.remove(subPageId);
+    } else {
+      _subPagePrefixes[subPageId] = List.of(prefixes);
+    }
+  }
+
+  /// Put the merged nodes of a mounted sub-page into the store. They hang
+  /// under no parent: the SubPage widget draws them from their root. Does not
+  /// notify; the SubPage redraws itself.
+  void putSubPageNodes(Iterable<ComponentNode> nodes) {
+    for (final node in nodes) {
+      _nodeMap[node.id] = node;
+    }
+  }
+
+  /// Take the nodes with these ids out of the store; a SubPage among them
+  /// is unmounted. Does not notify.
+  void removeSubPageNodes(Iterable<String> ids) {
+    for (final id in ids.toList()) {
+      _nodeMap.remove(id);
+      if (_subPageSlots.containsKey(id)) _unmountSubPage(id);
+    }
+  }
+
+  /// Take every node of the pages mounted under [prefixes] out of the store:
+  /// each node whose id starts with one of them, so the nodes added to a page
+  /// after it was mounted go with it, and a SubPage among them is unmounted.
+  /// Does not notify.
+  void removeSubPagePages(Iterable<String> prefixes) {
+    final gone = prefixes.toList();
+    if (gone.isEmpty) return;
+    _nodeMap.removeWhere((id, _) => gone.any(id.startsWith));
+    for (final id in _subPageSlots.keys.toList()) {
+      if (gone.any(id.startsWith)) _unmountSubPage(id);
+    }
+  }
+
+  /// The node [id] and everything under it, the root first; empty when the
+  /// node is not in the store.
+  List<ComponentNode> subtree(String id) {
+    final result = <ComponentNode>[];
+    _collectSubtree(id, result);
+    return result;
+  }
+
+  /// Initialize from a flat node list (as received from the server). The
+  /// nodes of the sub-pages whose SubPage node is still there stay; a
+  /// SubPage the new list no longer has is unmounted.
   void init(List<ComponentNode> nodes) {
-    _nodeMap.clear();
+    final prefixes = subPagePrefixes.toList();
+    _nodeMap.removeWhere(
+      (id, _) => !prefixes.any((prefix) => id.startsWith(prefix)),
+    );
     for (final node in nodes) {
       _nodeMap[node.id] = node;
     }
     _rootId = nodes.isNotEmpty ? nodes.first.id : null;
+    _unmountMissingSubPages();
   }
 
   /// The current node map (unmodifiable — use mutation methods to modify).
@@ -93,6 +227,7 @@ class ComponentStore extends ChangeNotifier {
       }
     }
     _removeSubtree(id);
+    _unmountMissingSubPages();
     notifyListeners();
   }
 
@@ -161,6 +296,7 @@ class ComponentStore extends ChangeNotifier {
       }
       _nodeMap[parentId] = parent.copyWith(children: newChildren);
     }
+    _unmountMissingSubPages();
     notifyListeners();
   }
 

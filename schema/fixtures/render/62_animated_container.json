@@ -1,0 +1,158 @@
+{
+  "name": "animated-container",
+  "description": "AnimatedContainer: duration and curve are static; width and height read page state and color is a conditional over it, so all three stay Values on the wire and their keys are watched (the client animates when one resolves to a new value). padding and alignment are static. The resolved map pins the targets for the given state; the first frame shows them as is.",
+  "input": {
+    "type": "AnimatedContainer",
+    "key": "box",
+    "props": {
+      "duration": 300,
+      "curve": "easeInOut",
+      "width": {
+        "type": "state",
+        "key": "boxWidth",
+        "scope": "page"
+      },
+      "height": {
+        "type": "state",
+        "key": "boxHeight",
+        "scope": "page"
+      },
+      "color": {
+        "type": "conditional",
+        "branches": [
+          {
+            "when": {
+              "op": "eq",
+              "left": {
+                "type": "state",
+                "key": "expanded",
+                "scope": "page"
+              },
+              "right": {
+                "type": "static",
+                "value": true
+              }
+            },
+            "then": {
+              "type": "static",
+              "value": "#FF6F00"
+            }
+          }
+        ],
+        "else": {
+          "type": "static",
+          "value": "#1565C0"
+        }
+      },
+      "padding": {
+        "top": 12,
+        "right": 12,
+        "bottom": 12,
+        "left": 12
+      },
+      "alignment": "topLeft"
+    },
+    "children": [
+      {
+        "type": "Text",
+        "key": "box_label",
+        "props": {
+          "data": "Details"
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "expanded": true,
+      "boxWidth": 240,
+      "boxHeight": 160
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "box",
+      "type": "AnimatedContainer",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "duration": 300,
+        "curve": "easeInOut",
+        "width": {
+          "type": "state",
+          "key": "boxWidth",
+          "scope": "page"
+        },
+        "height": {
+          "type": "state",
+          "key": "boxHeight",
+          "scope": "page"
+        },
+        "color": {
+          "type": "conditional",
+          "branches": [
+            {
+              "when": {
+                "op": "eq",
+                "left": {
+                  "type": "state",
+                  "key": "expanded",
+                  "scope": "page"
+                },
+                "right": {
+                  "type": "static",
+                  "value": true
+                }
+              },
+              "then": {
+                "type": "static",
+                "value": "#FF6F00"
+              }
+            }
+          ],
+          "else": {
+            "type": "static",
+            "value": "#1565C0"
+          }
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "alignment": "topLeft"
+      },
+      "children": [
+        "box_label"
+      ],
+      "watches": [
+        "boxHeight",
+        "boxWidth",
+        "expanded"
+      ]
+    },
+    {
+      "id": "box_label",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Details"
+      },
+      "children": [],
+      "watches": []
+    }
+  ],
+  "resolved": {
+    "box": {
+      "width": 240,
+      "height": 160,
+      "color": "#FF6F00"
+    }
+  }
+}

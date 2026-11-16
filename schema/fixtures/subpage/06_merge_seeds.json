@@ -1,0 +1,337 @@
+{
+  "name": "merge-seeds",
+  "description": "S2 seeds. Each page-scoped state definition gives `prefix + key = initial`, whatever JSON type the initial value has, null included. App-scoped definitions are ignored. A key that itself contains `:` or `#` is prefixed like any other. A key defined twice keeps the last initial. A response without definitions or without components merges to empty results.",
+  "kind": "merge",
+  "cases": [
+    {
+      "name": "page and app definitions",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "counter",
+        "title": "",
+        "state": [
+          {
+            "key": "count",
+            "scope": "page",
+            "initial": 0
+          },
+          {
+            "key": "theme",
+            "scope": "app",
+            "initial": "dark"
+          },
+          {
+            "key": "user",
+            "scope": "page",
+            "initial": {
+              "name": "Ann",
+              "tags": [
+                "a",
+                "b"
+              ]
+            }
+          },
+          {
+            "key": "items",
+            "scope": "page",
+            "initial": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "key": "error",
+            "scope": "page",
+            "initial": null
+          },
+          {
+            "key": "ready",
+            "scope": "page",
+            "initial": false
+          },
+          {
+            "key": "ratio",
+            "scope": "page",
+            "initial": 0.5
+          }
+        ],
+        "components": [
+          {
+            "id": "0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail:count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:count"
+            ]
+          }
+        ],
+        "state": {
+          "detail:count": 0,
+          "detail:user": {
+            "name": "Ann",
+            "tags": [
+              "a",
+              "b"
+            ]
+          },
+          "detail:items": [
+            1,
+            2,
+            3
+          ],
+          "detail:error": null,
+          "detail:ready": false,
+          "detail:ratio": 0.5
+        }
+      }
+    },
+    {
+      "name": "joined page prefix, a key defined twice",
+      "prefix": "detail#2:",
+      "response": {
+        "pageId": "counter",
+        "title": "",
+        "state": [
+          {
+            "key": "count",
+            "scope": "page",
+            "initial": 1
+          },
+          {
+            "key": "count",
+            "scope": "page",
+            "initial": 7
+          }
+        ],
+        "components": [
+          {
+            "id": "0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail#2:0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail#2:count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail#2:count"
+            ]
+          }
+        ],
+        "state": {
+          "detail#2:count": 7
+        }
+      }
+    },
+    {
+      "name": "keys that contain a colon or a hash are prefixed like any other",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "counter",
+        "title": "",
+        "state": [
+          {
+            "key": "a:b",
+            "scope": "page",
+            "initial": 1
+          },
+          {
+            "key": "x#1:y",
+            "scope": "page",
+            "initial": 2
+          },
+          {
+            "key": "detail:count",
+            "scope": "page",
+            "initial": 3
+          },
+          {
+            "key": "#",
+            "scope": "page",
+            "initial": 4
+          },
+          {
+            "key": ":",
+            "scope": "page",
+            "initial": 5
+          }
+        ],
+        "components": [
+          {
+            "id": "0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail:count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:count"
+            ]
+          }
+        ],
+        "state": {
+          "detail:a:b": 1,
+          "detail:x#1:y": 2,
+          "detail:detail:count": 3,
+          "detail:#": 4,
+          "detail::": 5
+        }
+      }
+    },
+    {
+      "name": "no definitions",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "counter",
+        "title": "",
+        "state": [],
+        "components": [
+          {
+            "id": "0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "count"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "nodes": [
+          {
+            "id": "detail:0",
+            "type": "Text",
+            "kind": "primitive",
+            "childMode": "none",
+            "props": {
+              "data": {
+                "type": "state",
+                "key": "detail:count",
+                "scope": "page"
+              }
+            },
+            "children": [],
+            "watches": [
+              "detail:count"
+            ]
+          }
+        ],
+        "state": {}
+      }
+    },
+    {
+      "name": "no components",
+      "prefix": "detail:",
+      "response": {
+        "pageId": "empty",
+        "title": "",
+        "state": [
+          {
+            "key": "count",
+            "scope": "page",
+            "initial": 0
+          }
+        ],
+        "components": []
+      },
+      "expected": {
+        "nodes": [],
+        "state": {
+          "detail:count": 0
+        }
+      }
+    }
+  ]
+}
