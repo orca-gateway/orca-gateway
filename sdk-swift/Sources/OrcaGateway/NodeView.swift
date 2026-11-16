@@ -111,6 +111,7 @@ struct WidgetView: View {
         case "ColorFiltered": ColorFilteredView(node: node, model: model)
         case "AbsorbPointer": AbsorbPointerView(node: node, model: model)
         case "IgnorePointer": IgnorePointerView(node: node, model: model)
+        case "InteractiveViewer": InteractiveViewerView(node: node, model: model)
         default:
             // A plugin or host widget; any other type draws nothing.
             if let build = model.widgets.builder(for: node.type) { build(node, model) } else { EmptyView() }
