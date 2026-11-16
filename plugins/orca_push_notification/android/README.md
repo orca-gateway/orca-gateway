@@ -107,8 +107,7 @@ none (as in Flutter), or a foreground message's data as JSON (see [Firebase](#fi
 plugin never navigates: the app decides. A link goes to the SDK's router with
 `router.handleDeeplink(payload)`, so the tap lands where the same link from outside the app would.
 The Intent that starts an activity is not read: a tap that starts the app never reaches
-`onNotificationTap`, and the app opens where it starts (see
-[Differences from Flutter](#differences-from-flutter)).
+`onNotificationTap`, and the app opens where it starts, as in Flutter.
 
 ## The actions
 
@@ -199,9 +198,6 @@ does not open.
 - The messaging service is in the manifest, so a message that arrives while the app is in the
   foreground is shown even before `initialize`, or in an app that never calls it. Flutter shows one
   only once `initialize` has started listening.
-- As in Flutter, a tap on a notification the system showed in the background, and a tap that
-  starts the app, from any notification, never reach `onNotificationTap`: the plugin reads neither
-  the message that opened the app nor the Intent the activity started with.
 
 ## Tests
 
