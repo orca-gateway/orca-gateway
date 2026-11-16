@@ -129,7 +129,7 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 68 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 73 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
@@ -138,9 +138,11 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
          * and Hero, the 13 layout wrappers of native parity step 3 (A3.1),
          * the 11 effect and touch wrappers of native parity step 4
          * (A4.x), S13's ReorderableListView and SubPage, S18's
-         * UnsupportedWidgetPlaceholder, and the five scroll widgets of native
+         * UnsupportedWidgetPlaceholder, the five scroll widgets of native
          * parity step 5 (A5.x: ListView, GridView, PageView, Scrollbar,
-         * PullToRefresh). Keep the two lists in step: the caps
+         * PullToRefresh), and step 13's CustomScrollView, SliverAppBar,
+         * SliverList, SliverGrid and SliverToBoxAdapter (B13.1, B13.2).
+         * Keep the two lists in step: the caps
          * vector advertises what this draws (WidgetBuildersTest checks it).
          */
         public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
