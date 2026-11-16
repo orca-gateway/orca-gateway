@@ -2,7 +2,7 @@
 
 > [!WARNING]
 > **Alpha (`0.1.0-alpha.1`).** The native Android client for Orca Gateway (Epic 23b) works for the
-> pages its 56 widgets and 20 action kinds cover, but its API may still change between alphas, so
+> pages its 63 widgets and 25 action kinds cover, but its API may still change between alphas, so
 > use it with care. The Flutter SDK
 > ([`orca_gateway`](https://github.com/orca-gateway/orca-gateway/tree/main/sdk)) stays the stable
 > one; use it for production apps.
@@ -88,7 +88,7 @@ It needs JDK 17 or later and brings no HTTP library: `OrcaClient` sends through 
 | Module | What | Platforms |
 |---|---|---|
 | `core` | Wire models (`ComponentNode`, `Value`, `Action`, `PageResponse`), `ValueResolver` (9 Value kinds, 31 transforms, 13 BoolExpr ops), `ElmStore` with page and app scopes, the action executor with effects as data, the render tree, `OrcaClient` with the 412 caps handshake behind an `HttpTransport` interface, the generated capability vector, DevTools events (`DevToolsEvent`, `OrcaDebug`). kotlinx.serialization only. Artifact `com.orcagateway:sdk-core`. | JVM 17+, Android |
-| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with 56 widgets (those in [`capabilities.json`](capabilities.json)) and the degrade policies (an unknown widget becomes a FallbackPrompt; the server's `warn` banner, its `require` blocking prompt and the 426 upgrade page are drawn like any page), `OrcaTheme` button styles, `OrcaApp` on `OrcaRouter` (a `NavHost`) with its error screen (`OrcaErrorView`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
+| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with 63 widgets (those in [`capabilities.json`](capabilities.json)) and the degrade policies (an unknown widget becomes a FallbackPrompt; the server's `warn` banner, its `require` blocking prompt and the 426 upgrade page are drawn like any page), `OrcaTheme` button styles, `OrcaApp` on `OrcaRouter` (a `NavHost`) with its error screen (`OrcaErrorView`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
 
 Build: Gradle 9 through the committed wrapper, Kotlin 2.4, AGP 9, any JDK 17 or later, and an
 Android SDK with platform 36 (`ANDROID_HOME` or `local.properties`).
@@ -288,6 +288,66 @@ To try it, run the `subpage` app of the example server in the
 from its config (`ORCA_APP_ID=subpage ORCA_BOOT=config`): a host page and a sub-page that each count on
 their own, a param sent to the sub-page, and two buttons, Replace with B and Join C.
 
+## Saved state
+
+Two actions keep a state key when its page or the app goes away, as in the Flutter SDK:
+`persistState` saves the key's value and `clearState` forgets it. The engine writes them
+`PersistState(key, scope?, storage?)` (scope `"page"`, the default, or `"app"`; storage `"local"`,
+the default, or `"session"`) and `ClearState(key, scope?)`.
+
+- **A snapshot.** `persistState` saves the value the key holds when it runs, null included. A later
+  `setState` does not change the saved copy; the next `persistState` does. A key the page (or, with
+  scope `"app"`, the app state) does not hold saves nothing.
+- **Local or session.** `local` keeps the key on the device: it is still there after the app is
+  killed and launched again. `session` keeps it in memory while the process lives: across page
+  changes and a new `OrcaApp`, gone after a relaunch. A key is saved in one of them at a time:
+  saving it in one removes it from the other.
+- **Forget.** `clearState` sets the key to null and removes it from both storages.
+- **Where.** One entry per scope: the app state under `orca_saved_app`, a page under
+  `orca_saved_page_<pageId>`, each a JSON object of the saved keys. Local entries are files in
+  `context.filesDir/orca_gateway`, beside the offline cache's (see "Offline, sessions and
+  analytics"; the names do not clash). An entry left with no key is deleted. A file that cannot be
+  read or written is ignored, and the action still completes.
+- **When it comes back.** The saved app entry is laid over the app state at boot, before the first
+  route is resolved: over the config's `initialAppState`, or over an empty app state with a `path`.
+  The route's redirect and the first page request see it. A page's entry is laid over the page's
+  state each time that state is set up, right after the page's declared initials, whether the page
+  comes from the network or from the offline cache. A saved key replaces the declared initial, or
+  is added when the page does not declare it. All of it happens before the page is shown. A page's
+  app-scope initial never replaces an app key that is set, a restored one included.
+- **Sub-pages.** A sub-page keeps its state in its host page, under its prefix (see "Sub-pages"),
+  and has no entry of its own.
+- **Flutter.** The rules and the entry names are Flutter's, pinned by the monorepo's action
+  fixtures 48 to 50 in
+  [`schema/fixtures/actions`](https://github.com/orca-gateway/orca-gateway/tree/main/schema/fixtures/actions).
+  Flutter keeps `local` in SharedPreferences instead of files.
+
+`OrcaApp` takes the storage as `savedState`. Left null, it makes one `SavedState` over
+`offlineStore(context)`, the files of the offline cache, and keeps it as it keeps its router. To
+save somewhere else, give it your own over any `KeyValueStore`, made once:
+
+```kotlin
+import com.orcagateway.core.state.SavedState
+import com.orcagateway.sdk.SharedPreferencesKeyValueStore
+
+val saved = remember { SavedState(SharedPreferencesKeyValueStore(context, "my_saved_state")) }
+OrcaApp(client, savedState = saved)
+```
+
+A host that builds its own `OrcaRouter` for `OrcaApp(router)` passes it `savedState =`, as in
+`OrcaRouter(client, config, savedState = saved)`; a router built without one saves and restores
+nothing.
+
+`SavedState(null)` keeps local saves in memory, for the life of that object (a preview, a test).
+The session storage is one for the whole process: `SavedState.resetSession()` empties it, for
+example when a user signs out, and leaves local saves alone.
+
+To try it, run the `saved-state` app of the example server in the
+[Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android#saved-state),
+at its home page (`ORCA_APP_ID=saved-state ORCA_PATH=home`) or from its config
+(`ORCA_BOOT=config`): a count to save on the device or for the session and to forget, a visits
+count in app state saved on the device, and a second page to leave to and come back from.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An Android host does it with
@@ -403,7 +463,10 @@ files under `context.filesDir/orca_gateway`:
   When one differs (a missing one too), the whole `/config` is fetched and saved again, and the
   saved pages of a versioned flow it no longer has are deleted.
 - Offline is any `/version` failure (no connectivity monitor): the app boots from the saved
-  config. With none saved, the error view says "No network and no cached config available".
+  config. With none saved, the boot fails on Flutter's screen for it: "Something Went Wrong" and
+  "An unexpected error occurred. Please try again.", with the native "Try again". An `error` view
+  of yours gets the `OfflineBootException`, whose message is "No network and no cached config
+  available".
 - Dynamic routes (`isDynamic`) and pages outside static flows are never cached: they are always
   asked of the server, and offline they show the page's error view. A page the network answers is
   never saved.

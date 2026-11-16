@@ -70,6 +70,7 @@ The same app draws any app on the example server. Pass `APP` and `PAGE` to the r
 | Native widgets | `native-widgets` | `home` | the ten widgets of S9: Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector (the images come from picsum.photos) |
 | Todo | `todo` | `home` | add, tick, delete |
 | Custom extensions | `custom` | `home` | a widget and actions from the app's plugins; see [Plugins](#plugins) |
+| Saved state | `saved-state` | `home` | a count saved on the device or for the session, then forgotten; see [Saved state](#saved-state) |
 
 ```bash
 task example:android:run APP=basic-actions PAGE=home
@@ -214,11 +215,11 @@ To check it offline:
 1. Boot once with the server up (the command above).
 2. Stop the server, then launch again with the same command. `/version` fails, so the app boots
    from the saved config: "Home (Static)" opens, "Go to About (also static)" opens
-   "About (Static)", and "Go to Profile (dynamic, always fresh)" shows "Could not load this page"
-   with the connection error: a dynamic page is never cached.
+   "About (Static)", and "Go to Profile (dynamic, always fresh)" shows "Connection Failed" under
+   a crossed-out Wi-Fi sign: a dynamic page is never cached.
 3. With nothing saved the boot fails. Clear the app's data and launch again, the server still
-   down: "Could not load this app" with "No network and no cached config available", and "Try
-   again".
+   down: Flutter's screen for it, "Something Went Wrong" under a circled exclamation mark, with
+   "An unexpected error occurred. Please try again." and "Try again".
 
    ```bash
    adb shell pm clear com.orcagateway.examples.counter
@@ -281,6 +282,53 @@ start the server again and bring the app back. The end that failed was queued: t
 
 `ORCA_OFFLINE` and `ORCA_SESSIONS` work with `ORCA_BOOT config` too: the version check then comes
 before `/config`, and a force update fetches neither the config nor a page.
+
+## Saved state
+
+The example server's `saved-state` app ([`saved-state.ts`](../server/saved-state.ts)) tries
+`persistState` and `clearState`. Its home page shows a page-state count and an app-state visits
+count, each 0 when nothing is saved, and "Leave this page" opens a second page whose "Back home"
+opens the home page again. The app gives `OrcaApp` no `savedState`, so the SDK saves in the app's
+`files/orca_gateway`, beside the offline cache. Install the app once with
+`task example:android:run`, clear its data so nothing is saved, then start it on the app:
+
+```bash
+adb shell pm clear com.orcagateway.examples.counter
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
+  --es ORCA_APP_ID saved-state --es ORCA_PATH home
+```
+
+"Launch again" below is the `am start` command again: `-S` force-stops the app first, so the
+process ends and the next launch is a new one. Each saved entry is a file, which a debug build
+lets you read:
+
+```bash
+adb shell run-as com.orcagateway.examples.counter ls files/orca_gateway
+adb shell run-as com.orcagateway.examples.counter cat files/orca_gateway/orca_saved_page_home
+```
+
+1. **Count up.** "Count: 0" and "Visits: 0" show. Tap "+1" three times: "Count: 3". Launch again:
+   "Count: 0". "+1" alone saves nothing.
+2. **Save on device.** Tap "+1" three times, then "Save on device", then "+1" once more:
+   "Count: 4". Launch again: "Count: 3", the value at the save. A save is a snapshot: the later
+   "+1" was not saved. The `cat` prints `{"count":3}`.
+3. **Session.** Tap "+1" ("Count: 4"), then "Save for this session". Tap "Leave this page", then
+   "Back home": the home page is set up again and shows "Count: 4", the session copy. Launch
+   again: "Count: 0". The session copy ended with the process, and saving for the session removed
+   the copy on the device: `ls` shows no `orca_saved_page_home`.
+4. **Forget.** Tap "+1" twice and "Save on device" ("Count: 2"), then launch again: "Count: 2". Tap
+   "Forget": "Count:" with no number, the key is empty. Leave the page and come back: "Count: 0".
+   Launch again: "Count: 0", and `ls` shows no `orca_saved_page_home`: both copies are gone. A
+   session copy goes the same way: tap "+1", "Save for this session" and "Forget", then leave the
+   page and come back: "Count: 0".
+5. **Visits.** Tap "+1 and save" twice: "Visits: 2". Leave the page and come back: "Visits: 2",
+   since app state is shared and the page's initial 0 does not replace a key that is set. Launch
+   again: "Visits: 2", laid over the app state at boot, before the first page. The app's entry is
+   the file `orca_saved_app`: `cat` it as above and it prints `{"visits":2}`.
+
+The same steps give the same results booted from the app's config: put `--es ORCA_BOOT config` in
+place of `--es ORCA_PATH home`. The config's `initialRoute` is `/home`, and the saved visits are in
+the app state before that first route.
 
 ## Error screens, dark mode, locale and splash
 
