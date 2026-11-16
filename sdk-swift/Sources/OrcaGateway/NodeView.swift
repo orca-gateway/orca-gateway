@@ -108,6 +108,8 @@ struct WidgetView: View {
         case "ReorderableListView": ReorderableListNodeView(node: node, model: model)
         case "SubPage": SubPageNodeView(node: node, model: model)
         case "PageView": PagerView(node: node, model: model)
+        case "ListView": ListNodeView(node: node, model: model)
+        case "GridView": GridNodeView(node: node, model: model)
         case "Card": CardView(node: node, model: model)
         case "Text": TextNodeView(node: node)
         case "Divider": DividerView(node: node)
