@@ -229,6 +229,10 @@ final class SwitcherDriver: ObservableObject {
     private var fades: [Fade] = []
     private var current: String?
     private var started = false
+    /// The current child's subtree as it resolved at the last redraw.
+    private var snapshot: NodeSnapshot?
+    /// The children fading out, each as an inert page of its last snapshot.
+    private var frozen: [String: OrcaPageModel] = [:]
     /// Whether the view needs another frame (see `ImplicitDriver.needsTick`).
     private(set) var needsTick = false
 
@@ -269,6 +273,34 @@ final class SwitcherDriver: ObservableObject {
         return true
     }
 
+    /// The view was redrawn with `node` on `model`: the fades as above, and
+    /// the snapshots. The current child's subtree is snapshotted on every
+    /// redraw, while it is still on the page; when the child changes, the
+    /// last snapshot of the one that left becomes its frozen page, which its
+    /// layer is drawn from until its fade ends.
+    @discardableResult
+    func update(node: ResolvedNode, in model: OrcaPageModel, animationProgress: Double? = nil,
+                reduceMotion: Bool, at now: Double) -> Bool {
+        let previous = current
+        let childId = node.childIds.first
+        let live = update(node: node, reduceMotion: reduceMotion, at: now)
+        if let previous, previous != childId, let snapshot, snapshot.rootId == previous {
+            frozen[previous] = OrcaPageModel(snapshot: snapshot, of: model)
+        }
+        // A child that came back is the live one again; under reduced motion
+        // or a duration of 0 nothing fades out, so nothing stays frozen.
+        let fading = Set(fades.filter { !$0.rising }.map(\.id))
+        frozen = frozen.filter { fading.contains($0.key) }
+        snapshot = childId.flatMap { model.snapshot(of: $0, animationProgress: animationProgress) }
+        return live
+    }
+
+    /// The frozen page a child on its way out is drawn from; nil for the
+    /// current child, which is drawn from the live page.
+    func outgoing(_ id: String) -> OrcaPageModel? {
+        frozen[id]
+    }
+
     private func rest(_ childId: String?, at now: Double) -> [Fade] {
         childId.map { [Fade(id: $0, start: now, from: 1, rising: true, span: 1)] } ?? []
     }
@@ -285,6 +317,7 @@ final class SwitcherDriver: ObservableObject {
     func settle(at now: Double) {
         guard needsTick, fades.allSatisfy({ $0.ended(at: now) }) else { return }
         fades.removeAll { !$0.rising }
+        frozen.removeAll()
         needsTick = false
         objectWillChange.send()
     }
@@ -295,22 +328,34 @@ final class SwitcherDriver: ObservableObject {
 /// Unlike Flutter, which compares widget class and key, a new child is a new
 /// node id.
 ///
-/// A child fades out only while its node is still on the page: one that a
-/// replace or a delete removed has nothing left to draw, so it goes at once
-/// and the new one fades in.
+/// A replace or a delete takes the old child's nodes off the page, so the
+/// outgoing layer is drawn from the driver's frozen page of that child: the
+/// subtree as it resolved at the switcher's last redraw. That layer only
+/// draws: no hit testing, no actions, no animation ids, no requests.
 @MainActor
 struct AnimatedSwitcherView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
     @StateObject private var driver = SwitcherDriver()
     @OrcaReduceMotion private var reduceMotion
+    @Environment(\.orcaAnimationProgress) private var animationProgress
 
     var body: some View {
-        let live = driver.update(node: node, reduceMotion: reduceMotion, at: model.frameClock())
+        let live = driver.update(node: node, in: model, animationProgress: animationProgress,
+                                 reduceMotion: reduceMotion, at: model.frameClock())
         TimelineView(.animation(minimumInterval: nil, paused: !live)) { context in
             ZStack(alignment: .center) {
                 ForEach(driver.layers(at: OrcaPageModel.milliseconds(context.date))) { layer in
-                    NodeView(id: layer.id, model: model).opacity(layer.opacity)
+                    Group {
+                        if let frozen = driver.outgoing(layer.id) {
+                            NodeView(id: layer.id, model: frozen)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        } else {
+                            NodeView(id: layer.id, model: model)
+                        }
+                    }
+                    .opacity(layer.opacity)
                 }
             }
             .onChange(of: context.date) { date in

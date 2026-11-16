@@ -82,7 +82,15 @@ struct WidgetView: View {
         case "Positioned": PositionedView(node: node, model: model)
         case "ClipRRect": ClipRRectView(node: node, model: model)
         case "GestureDetector": GestureNodeView(node: node, model: model)
-        case "AnimatedBuilder": AnimatedBuilderView(node: node, model: model)
+        case "AnimatedBuilder":
+            // In a frozen copy (an AnimatedSwitcher's outgoing child) the
+            // builder is its child as it last resolved: no controller, no
+            // `animationId` registered, no frames.
+            if model.isInert {
+                ChildView(node: node, model: model)
+            } else {
+                AnimatedBuilderView(node: node, model: model)
+            }
         case "Transform": TransformView(node: node, model: model)
         case "AnimatedContainer": AnimatedContainerView(node: node, model: model)
         case "AnimatedOpacity": AnimatedOpacityView(node: node, model: model)

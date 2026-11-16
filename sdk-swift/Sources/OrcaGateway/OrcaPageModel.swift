@@ -13,6 +13,18 @@ public struct OrcaToast: Identifiable, Equatable, Sendable {
     public var style: Style
 }
 
+/// A node and everything below it, frozen as it resolved at one moment: what
+/// an AnimatedSwitcher draws its outgoing child from once a replace or a
+/// delete has taken that child off the page.
+struct NodeSnapshot: Equatable {
+    let rootId: String
+    /// The subtree's nodes as they resolved, by id.
+    let nodes: [String: ResolvedNode]
+    /// The same nodes as the page held them (what layout reads types from).
+    let components: [ComponentNode]
+    let state: StoreState
+}
+
 /// One rendered page: its nodes, its store, and the executor that runs its
 /// actions. Views resolve nodes through it and fire triggers into it.
 ///
@@ -58,18 +70,65 @@ public final class OrcaPageModel: ObservableObject {
         date.timeIntervalSinceReferenceDate * 1000
     }
 
+    /// The resolved nodes of a frozen copy (`init(snapshot:of:)`), nil on a
+    /// live page.
+    private let frozen: [String: ResolvedNode]?
+    /// A frozen copy draws and nothing else: no action runs, no effect is
+    /// performed, nothing reaches the server or the live page.
+    var isInert: Bool { frozen != nil }
+
     public init(page: PageResponse, store: ElmStore = ElmStore(),
                 registry: WidgetRegistry = .shared, client: OrcaClient? = nil,
                 widgets: WidgetBuilders = WidgetBuilders()) {
         self.renderer = PageRenderer(page: page, registry: registry)
         self.store = store
         self.widgets = widgets
+        self.frozen = nil
         self.executor = ActionExecutor(store: store, client: client)
         store.pageId = page.pageId
         store.seed(page.state)
         executor.onEffect = { [weak self] effect in self?.onEffect?(effect) }
         executor.perform = { [weak self] effect in self?.perform(effect) }
         executor.onMutation = { [weak self] mutation in self?.apply(mutation) }
+    }
+
+    /// An inert page of `snapshot` alone, drawn by the same views as the
+    /// live one: `resolve` answers from the snapshot, the store is a private
+    /// copy of the state at that moment, and the executor is wired to
+    /// nothing.
+    init(snapshot: NodeSnapshot, of live: OrcaPageModel) {
+        let page = PageResponse(pageId: live.page.pageId, title: live.page.title,
+                                components: snapshot.components, extra: live.page.extra)
+        self.renderer = PageRenderer(page: page, registry: live.renderer.registry)
+        self.store = ElmStore(snapshot.state)
+        self.widgets = live.widgets
+        self.frozen = snapshot.nodes
+        self.executor = ActionExecutor(store: store, client: nil)
+        self.frameClock = live.frameClock
+    }
+
+    /// The node `id` and every node below it (children and slots) as they
+    /// resolve now; nil when the page has no such node. `animationProgress`
+    /// is the enclosing AnimatedBuilder's value. Below an AnimatedBuilder
+    /// that registered an `animationId`, its nodes take that controller's.
+    func snapshot(of id: String, animationProgress: Double? = nil) -> NodeSnapshot? {
+        var nodes: [String: ResolvedNode] = [:]
+        var components: [ComponentNode] = []
+        func walk(_ id: String, _ progress: Double?) {
+            guard nodes[id] == nil, let node = resolve(id, animationProgress: progress),
+                  let source = renderer.nodes[id] else { return }
+            nodes[id] = node
+            components.append(source)
+            var below = progress
+            if node.type == "AnimatedBuilder", let name = node["animationId"]?.stringValue {
+                below = animations.progress(id: name, at: frameClock())
+            }
+            for child in node.childIds { walk(child, below) }
+            for slot in node.slots.keys.sorted() { walk(node.slots[slot] ?? "", below) }
+        }
+        walk(id, animationProgress)
+        guard nodes[id] != nil else { return nil }
+        return NodeSnapshot(rootId: id, nodes: nodes, components: components, state: store.state)
     }
 
     public var page: PageResponse { renderer.page }
@@ -82,6 +141,7 @@ public final class OrcaPageModel: ObservableObject {
     /// A tween naming an `animationId` takes that controller's curved
     /// progress from the page's registry instead, 0 for an unknown id.
     public func resolve(_ id: String, animationProgress: Double?) -> ResolvedNode? {
+        if let frozen { return frozen[id] }
         guard var node = renderer.resolve(id, state: store.state, animationProgress: animationProgress)
         else { return nil }
         // The renderer builds its resolver without the id lookup, so the
@@ -124,7 +184,7 @@ public final class OrcaPageModel: ObservableObject {
     @discardableResult
     public func fire(_ trigger: String, on node: ResolvedNode,
                      eventData: [String: JSONValue]? = nil) -> Task<Void, Never>? {
-        guard let action = node.actions[trigger] else { return nil }
+        guard !isInert, let action = node.actions[trigger] else { return nil }
         let source = ActionSource(widgetId: node.id, trigger: trigger)
         return Task { await run(action, eventData: eventData, source: source) }
     }
@@ -133,6 +193,7 @@ public final class OrcaPageModel: ObservableObject {
     /// fired it, when there is one.
     public func run(_ action: Action, eventData: [String: JSONValue]? = nil,
                     source: ActionSource? = nil) async {
+        guard !isInert else { return }
         do {
             try await executor.execute(action, eventData: eventData, source: source)
         } catch {
@@ -164,7 +225,7 @@ public final class OrcaPageModel: ObservableObject {
     func textChanged(_ value: String, on node: ResolvedNode) -> Task<Void, Never>? {
         let stateKey = node["stateKey"]?.stringValue
         let onChange = node.actions["onChange"]
-        guard stateKey != nil || onChange != nil else { return nil }
+        guard !isInert, stateKey != nil || onChange != nil else { return nil }
         let previous = textEdits
         let edit = Task {
             await previous?.value
@@ -186,7 +247,7 @@ public final class OrcaPageModel: ObservableObject {
     /// `openUrl` effect, like the action; a page shown on its own opens it
     /// with `fallback` (SwiftUI's `openURL`).
     func openLink(_ raw: String, fallback: (URL) -> Void) {
-        guard let url = OrcaURLPolicy.standard.url(raw) else { return }
+        guard !isInert, let url = OrcaURLPolicy.standard.url(raw) else { return }
         if let effectHandler {
             effectHandler(ActionEffect("openUrl", ["url": .string(url.absoluteString)]))
         } else {
@@ -195,6 +256,7 @@ public final class OrcaPageModel: ObservableObject {
     }
 
     func perform(_ effect: ActionEffect) {
+        guard !isInert else { return }
         switch effect.type {
         case "showSnackbar", "showToast":
             toast = OrcaToast(
@@ -239,6 +301,7 @@ public final class OrcaPageModel: ObservableObject {
     }
 
     func apply(_ mutation: ComponentMutation) {
+        guard !isInert else { return }
         renderer.apply(mutation)
         structureRevision += 1
     }

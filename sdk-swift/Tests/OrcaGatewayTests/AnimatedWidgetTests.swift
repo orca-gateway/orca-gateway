@@ -280,6 +280,158 @@ final class AnimatedWidgetTests: XCTestCase {
         assertRect(try XCTUnwrap(pixels.bounds(of: Pixels.isRed)), CGRect(x: 0, y: 0, width: 20, height: 20))
     }
 
+    // MARK: B12.4 the outgoing child is drawn from its snapshot
+
+    /// A switcher `w` over `a`: a GestureDetector (onTap sets `n`) over a
+    /// red 20 by 20 Container over a Text. The clock reads `now.value`.
+    private func liveSwitcher(_ now: Clock) throws -> OrcaPageModel {
+        let model = OrcaPageModel(page: try JSONValue.object([
+            "pageId": "p", "title": "T",
+            "state": [["key": "n", "scope": "page", "initial": 0]],
+            "components": [
+                ["id": "w", "type": "AnimatedSwitcher", "kind": "layout", "childMode": "single",
+                 "props": ["duration": 200], "children": ["a"], "watches": []],
+                ["id": "a", "type": "GestureDetector", "kind": "layout", "childMode": "single",
+                 "props": [:], "children": ["a-box"], "watches": [],
+                 "actions": ["onTap": ["type": "setState", "scope": "page", "key": "n",
+                                       "value": ["type": "static", "value": 1]]]],
+                ["id": "a-box", "type": "Container", "kind": "layout", "childMode": "single",
+                 "props": ["width": 20, "height": 20, "color": "#FF0000"], "children": ["a-text"], "watches": []],
+                ["id": "a-text", "type": "Text", "kind": "primitive", "childMode": "none",
+                 "props": ["data": "old"], "children": [], "watches": []],
+            ],
+        ]).decode(PageResponse.self))
+        model.frameClock = { now.value }
+        return model
+    }
+
+    /// What the view does on a redraw, snapshots included.
+    @discardableResult
+    private func show(_ driver: SwitcherDriver, _ model: OrcaPageModel, reduceMotion: Bool = false) throws -> Bool {
+        driver.update(node: try XCTUnwrap(model.resolve("w")), in: model,
+                      reduceMotion: reduceMotion, at: model.frameClock())
+    }
+
+    /// The outgoing layer of `a` has the old child to draw: its node, its
+    /// descendants down to the Text, and red pixels through NodeView.
+    private func assertOutgoingHasTheOldChild(_ driver: SwitcherDriver, file: StaticString = #filePath,
+                                              line: UInt = #line) throws -> OrcaPageModel {
+        let frozen = try XCTUnwrap(driver.outgoing("a"), "the outgoing layer has nothing to draw",
+                                   file: file, line: line)
+        XCTAssertEqual(frozen.resolve("a")?.type, "GestureDetector", file: file, line: line)
+        XCTAssertEqual(frozen.resolve("a")?.childIds, ["a-box"], file: file, line: line)
+        XCTAssertEqual(frozen.resolve("a-box")?["color"], "#FF0000", file: file, line: line)
+        XCTAssertEqual(frozen.resolve("a-text")?["data"], "old", file: file, line: line)
+        let renderer = ImageRenderer(content: NodeView(id: "a", model: frozen)
+            .frame(width: 100, height: 100, alignment: .topLeading))
+        renderer.scale = 1
+        let pixels = try Pixels(XCTUnwrap(renderer.cgImage))
+        assertRect(try XCTUnwrap(pixels.bounds(of: Pixels.isRed), "the old child drew nothing", file: file, line: line),
+                   CGRect(x: 0, y: 0, width: 20, height: 20), file: file, line: line)
+        return frozen
+    }
+
+    /// A replace takes the old child off the page; mid-fade it is still
+    /// drawn, from its snapshot, under the new one, opacities complementary.
+    /// After `duration` only the new child is left and the snapshot is gone.
+    func test_B12_4_aReplacedChildFadesOutFromItsSnapshot() async throws {
+        let now = Clock()
+        let model = try liveSwitcher(now)
+        let driver = SwitcherDriver()
+        XCTAssertFalse(try show(driver, model))
+        XCTAssertNil(driver.outgoing("a"), "the current child is drawn live")
+
+        now.value = 1000
+        let mutate = try XCTUnwrap(model.executor.onMutation)
+        mutate(.replace(targetId: "a", components: [try Self.kid("c")]))
+        XCTAssertNil(model.resolve("a"), "the replace left the old child on the page")
+        XCTAssertNil(model.resolve("a-text"))
+        XCTAssertTrue(try show(driver, model))
+
+        let mid = driver.layers(at: 1100)
+        XCTAssertEqual(mid.map(\.id), ["a", "c"])
+        XCTAssertEqual(mid[0].opacity, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(mid[0].opacity + mid[1].opacity, 1, accuracy: 1e-9)
+        let frozen = try assertOutgoingHasTheOldChild(driver)
+        XCTAssertNil(driver.outgoing("c"), "the new child is drawn live")
+        XCTAssertNotNil(model.resolve("c"))
+
+        // The outgoing layer is inert: its actions do not run, on either store.
+        XCTAssertTrue(frozen.isInert)
+        let old = try XCTUnwrap(frozen.resolve("a"))
+        XCTAssertNil(frozen.fire("onTap", on: old))
+        await frozen.run(try XCTUnwrap(old.actions["onTap"]))
+        XCTAssertEqual(model.store.value("n"), 0)
+        XCTAssertEqual(frozen.store.value("n"), 0)
+        XCTAssertNil(frozen.textChanged("x", on: old))
+        frozen.apply(.delete(id: "a"))
+        XCTAssertNotNil(frozen.resolve("a"))
+        XCTAssertFalse(model.isInert)
+
+        // A redraw mid-fade keeps the same frozen child.
+        now.value = 1100
+        XCTAssertTrue(try show(driver, model))
+        XCTAssertTrue(driver.outgoing("a") === frozen)
+
+        XCTAssertEqual(driver.layers(at: 1200), [.init(id: "c", opacity: 1)])
+        driver.settle(at: 1200)
+        XCTAssertFalse(driver.needsTick)
+        XCTAssertNil(driver.outgoing("a"), "the snapshot outlived the fade")
+    }
+
+    /// A delete, then an add: the old child fades out alone from its
+    /// snapshot, and the new one fades in when it comes.
+    func test_B12_4_aDeletedChildFadesOutAndAnAddedOneFadesIn() throws {
+        let now = Clock()
+        let model = try liveSwitcher(now)
+        let driver = SwitcherDriver()
+        try show(driver, model)
+        let mutate = try XCTUnwrap(model.executor.onMutation)
+
+        now.value = 1000
+        mutate(.delete(id: "a"))
+        XCTAssertNil(model.resolve("a"))
+        XCTAssertTrue(try show(driver, model))
+        let alone = driver.layers(at: 1100)
+        XCTAssertEqual(alone.map(\.id), ["a"])
+        XCTAssertEqual(alone[0].opacity, 0.5, accuracy: 1e-9)
+        _ = try assertOutgoingHasTheOldChild(driver)
+
+        now.value = 1100
+        mutate(.add(parentId: "w", components: [try Self.kid("c")], position: nil))
+        XCTAssertTrue(try show(driver, model))
+        let both = driver.layers(at: 1150)
+        XCTAssertEqual(both.map(\.id), ["a", "c"])
+        XCTAssertEqual(both[0].opacity, 0.25, accuracy: 1e-9)
+        XCTAssertEqual(both[1].opacity, 0.25, accuracy: 1e-9)
+        _ = try assertOutgoingHasTheOldChild(driver)
+
+        XCTAssertEqual(driver.layers(at: 1300), [.init(id: "c", opacity: 1)])
+        driver.settle(at: 1300)
+        XCTAssertNil(driver.outgoing("a"))
+        XCTAssertFalse(driver.needsTick)
+    }
+
+    /// Reduced motion swaps at once with no outgoing layer; the same id with
+    /// new props keeps the live child and freezes nothing.
+    func test_B12_4_reducedMotionAndAPropChangeHaveNoOutgoingLayer() throws {
+        let now = Clock()
+        let model = try liveSwitcher(now)
+        let driver = SwitcherDriver()
+        try show(driver, model, reduceMotion: true)
+        now.value = 50
+        model.executor.onMutation?(.update(id: "a", props: ["behavior": "opaque"]))
+        XCTAssertFalse(try show(driver, model, reduceMotion: true))
+        XCTAssertNil(driver.outgoing("a"))
+
+        model.executor.onMutation?(.replace(targetId: "a", components: [try Self.kid("c")]))
+        XCTAssertFalse(try show(driver, model, reduceMotion: true))
+        XCTAssertEqual(driver.layers(at: 50), [.init(id: "c", opacity: 1)])
+        XCTAssertNil(driver.outgoing("a"))
+        XCTAssertNil(driver.outgoing("c"))
+        XCTAssertFalse(driver.needsTick)
+    }
+
     // MARK: B12.7 reduced motion
 
     /// Reduced motion: the end state at once, no frames, for the three
@@ -388,6 +540,12 @@ final class AnimatedWidgetTests: XCTestCase {
             XCTAssertEqual(a, e, accuracy: 0.5, "\(actual) vs \(expected)", file: file, line: line)
         }
     }
+}
+
+/// The time a test's page reads as "now", in milliseconds.
+@MainActor
+private final class Clock {
+    var value = 0.0
 }
 
 /// A page of one widget `w` of `type` over a red 20 by 20 Container. The
