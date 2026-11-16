@@ -9,7 +9,17 @@ import SwiftUI
 /// arrives after newer typing. A `readOnly` field takes focus and lets its
 /// text be selected, but an edit is put back at once and sends nothing
 /// (Flutter `readOnly`); SwiftUI has no switch for that, so the keyboard
-/// still opens on iOS.
+/// still opens on iOS. A disabled bare field (`enabled` false, no
+/// decoration) is a readOnly one, as Flutter's EditableText takes
+/// `readOnly: !enabled || readOnly` (input_builders.dart ~:464-467). A
+/// disabled decorated field is Flutter's TextField(enabled: false): it
+/// takes no focus (`.disabled`), and an edit made to it anyway is put back
+/// the same way (Flutter's onChanged is null); its decoration draws
+/// Material's disabled colours (DecoratedField). The text keeps its look on
+/// both paths, as Flutter's does (the builder's style wins over Material's
+/// disabled colour, material text_field.dart:1584-1586); SwiftUI does not
+/// dim it. TextFormField is drawn by this view too (Flutter's builder is a
+/// copy of this one).
 ///
 /// Without `decoration` the field is bare, as Flutter's EditableText path
 /// (16 point text, grey placeholder). With one it draws the label above,
@@ -58,7 +68,7 @@ struct TextFieldNodeView: View {
                     pageText = nil
                     if page == new { return }
                 }
-                if readOnly {
+                if readOnly || !enabled {
                     let page = pageValue
                     if new != page { pageText = page; text = page }
                     return
@@ -98,12 +108,20 @@ struct TextFieldNodeView: View {
         node["readOnly"]?.boolValue ?? false
     }
 
+    private var enabled: Bool {
+        node["enabled"]?.boolValue ?? true
+    }
+
     /// The placeholder in grey (#9E9E9E) at the field's size, or in the
     /// decoration's `hintStyle` over that (a weight or family alone keeps the
-    /// field's size).
+    /// field's size); a disabled decorated field's in Material's disabled
+    /// ink unless the hintStyle sets a colour.
     private var prompt: Text {
         var style = TextStyleProps(decoration?["hintStyle"])
-        if style.color == nil { style.color = Props.color(hex: "#9E9E9E") }
+        if style.color == nil {
+            style.color = decoration != nil && !enabled ? DecoratedField<EmptyView>.disabledInk
+                : Props.color(hex: "#9E9E9E")
+        }
         if style.size == nil, style.font != nil { style.size = TextStyleProps(node["style"]).size ?? 16 }
         return style.apply(Text(placeholder))
     }
@@ -111,7 +129,7 @@ struct TextFieldNodeView: View {
     @ViewBuilder
     private var decorated: some View {
         if let decoration {
-            DecoratedField(decoration: decoration, focused: focused, count: text.count,
+            DecoratedField(decoration: decoration, focused: focused, enabled: enabled, count: text.count,
                            maxLength: node["maxLength"]?.intValue) {
                 field
             }
@@ -122,7 +140,6 @@ struct TextFieldNodeView: View {
 
     private var field: some View {
         let style = TextStyleProps(node["style"])
-        let enabled = node["enabled"]?.boolValue ?? true
         let maxLines = max(node["maxLines"]?.intValue ?? 1, 1)
         return Group {
             if node["obscureText"]?.boolValue == true {
@@ -137,7 +154,8 @@ struct TextFieldNodeView: View {
         .font(style.font ?? .system(size: 16))
         .foregroundColor(style.color ?? Props.color(hex: "#000000"))
         .focused($focused)
-        .disabled(!enabled)
+        // A disabled bare field stays live to take focus, as a readOnly one.
+        .disabled(!enabled && decoration != nil)
         .autocorrectionDisabled(node["autocorrect"]?.boolValue == false)
         .submitLabel(Self.submitLabel(node["textInputAction"]?.stringValue))
         #if os(iOS)
@@ -177,37 +195,54 @@ struct TextFieldNodeView: View {
 /// padding, as Flutter's InputDecorator does for every border (here 12 to 8
 /// for an outlined or filled field, 8 to 4 for an underlined one); a
 /// `contentPadding` sent wins over both. Its sides are absolute (D4).
+///
+/// Disabled, it draws Material 3's disabled state
+/// (input_decorator_defaults_m3.g.dart): the label, helper, counter, prefix
+/// and suffix in onSurface #1D1B20 at 0.38 (`disabledInk`, the hint too,
+/// TextFieldNodeView), the border at 0.12, a filled field's underline at
+/// 0.38 and its fill at 0.04; the error text keeps its red. A colour the
+/// decoration sets wins, as Flutter merges the decoration's styles over the
+/// state's: labelStyle, helperStyle (the counter's too) and hintStyle
+/// (Flutter's prefix and suffix take it), and fillColor.
 private struct DecoratedField<Field: View>: View {
     let decoration: [String: JSONValue]
     let focused: Bool
+    let enabled: Bool
     let count: Int
     let maxLength: Int?
     @ViewBuilder let field: () -> Field
+
+    /// Material 3's disabled text: onSurface at 0.38.
+    static var disabledInk: Color { Props.color(hex: "#1D1B20").opacity(0.38) }
 
     var body: some View {
         let error = decoration["errorText"]?.stringValue
         let helper = decoration["helperText"]?.stringValue
         let border = decoration["border"]?.stringValue ?? "underline"
-        let accent = error != nil ? Props.color(hex: "#D32F2F") : focused ? Color.accentColor
-            : Props.color(hex: "#9E9E9E")
-        let grey = Props.color(hex: "#666666")
+        let filled = decoration["filled"]?.boolValue == true
+        let red = Props.color(hex: "#D32F2F")
+        let accent = !enabled ? Props.color(hex: "#1D1B20").opacity(filled ? 0.38 : 0.12)
+            : error != nil ? red : focused ? Color.accentColor : Props.color(hex: "#9E9E9E")
+        let grey = enabled ? Props.color(hex: "#666666") : Self.disabledInk
+        let affix = enabled ? grey : TextStyleProps(decoration["hintStyle"]).color ?? grey
         VStack(alignment: .leading, spacing: 4) {
             if let label = decoration["labelText"]?.stringValue {
                 let style = TextStyleProps(decoration["labelStyle"])
                 Text(label)
                     .font(style.font ?? .system(size: 12))
-                    .foregroundColor(style.color ?? (error != nil ? accent : grey))
+                    .foregroundColor(style.color ?? (enabled && error != nil ? red : grey))
             }
             HStack(spacing: 4) {
-                if let prefix = decoration["prefixText"]?.stringValue { Text(prefix).foregroundColor(grey) }
+                if let prefix = decoration["prefixText"]?.stringValue { Text(prefix).foregroundColor(affix) }
                 field()
-                if let suffix = decoration["suffixText"]?.stringValue { Text(suffix).foregroundColor(grey) }
+                if let suffix = decoration["suffixText"]?.stringValue { Text(suffix).foregroundColor(affix) }
             }
             .orcaPadding(decoration["contentPadding"], fallback: defaultPadding(border: border))
             .background {
-                if decoration["filled"]?.boolValue == true {
+                if filled {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Props.color(decoration["fillColor"]) ?? Props.color(hex: "#F5F5F5"))
+                        .fill(Props.color(decoration["fillColor"])
+                              ?? (enabled ? Props.color(hex: "#F5F5F5") : Props.color(hex: "#1D1B20").opacity(0.04)))
                 }
             }
             .overlay {
@@ -226,13 +261,14 @@ private struct DecoratedField<Field: View>: View {
             if error != nil || helper != nil || maxLength != nil {
                 HStack {
                     if let error {
-                        supporting(error, style: "errorStyle", color: accent)
+                        supporting(error, style: "errorStyle", color: red)
                     } else if let helper {
                         supporting(helper, style: "helperStyle", color: grey)
                     }
                     Spacer(minLength: 0)
                     if let maxLength {
-                        Text("\(count)/\(maxLength)").foregroundColor(grey)
+                        Text("\(count)/\(maxLength)")
+                            .foregroundColor(enabled ? grey : TextStyleProps(decoration["helperStyle"]).color ?? grey)
                     }
                 }
                 .font(.system(size: 12))

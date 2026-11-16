@@ -133,9 +133,14 @@ struct WidgetView: View {
         case "Expanded": ExpandedView(node: node, model: model)
         case "Flexible": FlexibleView(node: node, model: model)
         case "Spacer": SpacerNodeView()
-        case "TextField": TextFieldNodeView(node: node, model: model)
+        // Flutter's TextFormField builder is a copy of TextField's.
+        case "TextField", "TextFormField": TextFieldNodeView(node: node, model: model)
         case "Checkbox": CheckboxNodeView(node: node, model: model)
         case "Radio": RadioNodeView(node: node, model: model)
+        case "Switch": SwitchNodeView(node: node, model: model)
+        case "Slider": SliderNodeView(node: node, model: model)
+        // Flutter `_buildForm`: its child, no validation or save.
+        case "Form": ChildView(node: node, model: model)
         case "Stack": StackNodeView(node: node, model: model)
         case "Positioned": PositionedView(node: node, model: model)
         case "ClipRRect": ClipRRectView(node: node, model: model)
