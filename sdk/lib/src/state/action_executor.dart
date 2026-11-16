@@ -300,6 +300,30 @@ class ActionExecutor {
       }
     };
 
+    // persistState — save the key's current value (a snapshot) in local or
+    // session storage, restored when its scope is set up again. No effect.
+    _handlers['persistState'] = (action, exec) async {
+      final key = action['key'] as String?;
+      if (key == null) return;
+      await exec.stateManager.persistState(
+        exec.pageId,
+        key,
+        scope: action['scope'] as String? ?? 'page',
+        storage: action['storage'] as String? ?? 'local',
+      );
+    };
+
+    // clearState — the live key becomes null and every saved copy goes.
+    _handlers['clearState'] = (action, exec) async {
+      final key = action['key'] as String?;
+      if (key == null) return;
+      await exec.stateManager.clearState(
+        exec.pageId,
+        key,
+        scope: action['scope'] as String? ?? 'page',
+      );
+    };
+
     // navigate — GoRouter-first with Navigator fallback
     _handlers['navigate'] = (action, exec) async {
       final path = exec.resolveString(action['route'] ?? action['path']);
