@@ -50,6 +50,29 @@ public struct OrcaRoute: Hashable, Identifiable, Sendable {
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
+/// A pushed page animating its own content in: the route's transition and
+/// the time of its push, on the scale of `OrcaRouter.frameClock`.
+struct RouteEntrance: Equatable {
+    let spec: TransitionSpec
+    let startMs: Double
+
+    /// The page at `ms`: `TransitionSpec.entering`.
+    func look(at ms: Double, reduceMotion: Bool = false)
+        -> (opacity: Double, offsetXFraction: Double, offsetYFraction: Double, scale: Double)
+    {
+        spec.entering(at: ms - startMs, reduceMotion: reduceMotion)
+    }
+
+    func isOver(at ms: Double, reduceMotion: Bool = false) -> Bool {
+        spec.isOver(at: ms - startMs, reduceMotion: reduceMotion)
+    }
+
+    /// Points for an offset given as a fraction of the page's height.
+    static func offset(fraction: Double, height: CGFloat) -> CGFloat {
+        CGFloat(fraction) * height
+    }
+}
+
 /// The navigation stack of an Orca app, the Swift side of Flutter's GoRouter
 /// wiring (sdk/lib/src/navigation/navigation_handler.dart):
 /// - every route is its own page fetch with its own page state;
@@ -67,6 +90,20 @@ public struct OrcaRoute: Hashable, Identifiable, Sendable {
 /// another tab is shown, `root` and `stack` are the stack on screen (the
 /// current tab's, then the routes over the shell), and app state `_tabIndex`
 /// follows the current tab and switches it when written.
+///
+/// Route transitions (a config route's `transition`): `fade` and `slideUp`
+/// are played by the pushed page itself. When `navigate`, a deep link or a
+/// tab change leaves a route new to the stacks on top of another page, and
+/// its transition is one of the two, the stacks are written with the system
+/// push animation off (a `Transaction` with `disablesAnimations`) and the
+/// page fades or rises in over the route's duration with its curve. Every
+/// other kind, a route without one, and reduced motion keep the system push;
+/// going back is always the system pop. Known limits: the page under is gone
+/// at once, so the new page fades or rises over the page background, not
+/// over the old page; the navigation bar and its back button appear at once;
+/// iOS 16 may not obey the transaction and play its push as well; a route
+/// the host or the system writes into `stack` itself is not animated here;
+/// the first page of a stack never is.
 @MainActor
 public final class OrcaRouter: ObservableObject {
     /// The page under every pushed route: with tabs, the current tab's root.
@@ -136,6 +173,21 @@ public final class OrcaRouter: ObservableObject {
     public let table: RouteTable?
     /// OrcaApp's plugins: every page this router loads is built by it.
     var plugins: OrcaPluginHost?
+
+    /// "Now" for route entrances, in milliseconds, on the scale of
+    /// `OrcaPageModel.milliseconds(_:)`: the time a push is stamped with.
+    /// Tests set it.
+    var frameClock: () -> Double = { OrcaPageModel.milliseconds(Date()) }
+    /// Reduced motion (`@OrcaReduceMotion`, set by the view that draws the
+    /// router): every push is the system's.
+    var reduceMotion = false
+    /// Whether the last change of the stacks was left to the system's
+    /// animation (true), or made with it off for a page that animates
+    /// itself in (false); nil before the first change.
+    private(set) var lastPathWriteAnimated: Bool?
+    /// The entrance of every route on the stacks that was pushed with the
+    /// system animation off, by route id; it stays while the route does.
+    private var entrances: [UUID: RouteEntrance] = [:]
 
     private var loaders: [UUID: OrcaPageLoader] = [:]
     /// The stacks of a router made with a config; nil in path mode.
@@ -212,7 +264,8 @@ public final class OrcaRouter: ObservableObject {
         self.bootLink = link
         // `_tabIndex` is in app state before the first page is requested.
         if let index = change.tabIndexWrite { appState["_tabIndex"] = .int(index) }
-        publishStacks()
+        // The boot is no push: whatever is on top is simply there.
+        publishStacks(isBoot: true)
         onRouteChanged?(RouteChangeEvent(location: lastLocation, previousLocation: nil, type: .push))
         if let link, let opened {
             onDeeplink?(DeepLink.event(link: link, resolution: opened.resolution, coldStart: true))
@@ -229,6 +282,41 @@ public final class OrcaRouter: ObservableObject {
 
     /// The route on top: the one a user is looking at.
     public var top: OrcaRoute { stack.last ?? root }
+
+    // MARK: - Route entrances
+
+    /// The entrance of a route pushed with the system animation off; nil for
+    /// every other route.
+    func entrance(of id: OrcaRoute.ID) -> RouteEntrance? {
+        entrances[id]
+    }
+
+    /// A route's page content at `ms`: at rest unless the route has an
+    /// entrance still playing.
+    func entering(_ route: OrcaRoute, at ms: Double)
+        -> (opacity: Double, offsetXFraction: Double, offsetYFraction: Double, scale: Double)
+    {
+        entrances[route.id]?.look(at: ms, reduceMotion: reduceMotion) ?? (1, 0, 0, 1)
+    }
+
+    /// Where a push is decided. `body` writes the stacks; `pushed` is the
+    /// route it leaves on top when that route is new to the stacks and lies
+    /// over another page, else nil. A `fade` or `slideUp` route (what iOS
+    /// honours of `TransitionSpec`) is stamped with an entrance and written
+    /// with the system animation off; anything else, and reduced motion, is
+    /// written as before.
+    private func writeStacks(pushed: OrcaRoute?, _ body: () -> Void) {
+        let spec = pushed.map { TransitionSpec.spec(for: $0.transition) }
+        guard let pushed, let spec, !reduceMotion, spec.honoured(on: .iOS) else {
+            lastPathWriteAnimated = true
+            return body()
+        }
+        entrances[pushed.id] = RouteEntrance(spec: spec, startMs: frameClock())
+        lastPathWriteAnimated = false
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction, body)
+    }
 
     public func navigate(to path: String, replace: Bool = false) {
         guard !path.isEmpty else { return }
@@ -248,7 +336,8 @@ public final class OrcaRouter: ObservableObject {
             stack = Array(routes.dropFirst())
         } else {
             pendingType = .push
-            stack.append(routes[0])
+            // Without a config no route has a transition: the system push.
+            writeStacks(pushed: routes[0]) { stack.append(routes[0]) }
         }
     }
 
@@ -416,7 +505,7 @@ public final class OrcaRouter: ObservableObject {
     /// route (its id, so its loader) for as long as the entry lives. Loaders
     /// of entries that left every stack go, and a page drawer request with
     /// its route.
-    private func publishStacks() {
+    private func publishStacks(isBoot: Bool = false) {
         guard let shell else { return }
         var next: [Int: (route: OrcaRoute, entry: TabShellEntry)] = [:]
         let known = bound
@@ -433,17 +522,30 @@ public final class OrcaRouter: ObservableObject {
         let live = Set(next.values.map(\.route.id))
         loaders = loaders.filter { live.contains($0.key) }
         if let asked = pageDrawerRequest, !live.contains(asked) { pageDrawerRequest = nil }
+        entrances = entrances.filter { live.contains($0.key) }
 
         let visible = (shell.currentTab.map { tabs[$0] } ?? []) + over
-        isSyncing = true
-        defer { isSyncing = false }
-        if currentTab != shell.currentTab { currentTab = shell.currentTab }
-        if tabStacks.count != tabs.count || !zip(tabStacks, tabs).allSatisfy(Self.same) { tabStacks = tabs }
-        if !Self.same(overRoutes, over) { overRoutes = over }
-        guard let bottom = visible.first else { return }
-        if !Self.same([root], [bottom]) { root = bottom }
-        let above = Array(visible.dropFirst())
-        if !Self.same(stack, above) { stack = above }
+        let sync = {
+            self.isSyncing = true
+            defer { self.isSyncing = false }
+            if self.currentTab != shell.currentTab { self.currentTab = shell.currentTab }
+            if self.tabStacks.count != tabs.count || !zip(self.tabStacks, tabs).allSatisfy(Self.same) {
+                self.tabStacks = tabs
+            }
+            if !Self.same(self.overRoutes, over) { self.overRoutes = over }
+            guard let bottom = visible.first else { return }
+            if !Self.same([self.root], [bottom]) { self.root = bottom }
+            let above = Array(visible.dropFirst())
+            if !Self.same(self.stack, above) { self.stack = above }
+        }
+        // The boot's stacks are simply there, with no word on animation.
+        if isBoot { return sync() }
+        // A push: the route on top was on no stack before and lies over
+        // another page. A route the path binding brought (`pathWritten`) is
+        // bound already, so it is not one.
+        let was = Set(known.values.map(\.route.id))
+        let pushed = visible.count > 1 ? visible.last.flatMap { was.contains($0.id) ? nil : $0 } : nil
+        writeStacks(pushed: pushed, sync)
     }
 
     /// `shell` did an operation: publish its stacks, write the `_tabIndex`
@@ -525,6 +627,8 @@ public final class OrcaRouter: ObservableObject {
         let live = Set(stack.map(\.id) + [root.id])
         loaders = loaders.filter { live.contains($0.key) }
         if let asked = pageDrawerRequest, !live.contains(asked) { pageDrawerRequest = nil }
+        entrances = entrances.filter { live.contains($0.key) }
+        if pendingType != .push { lastPathWriteAnimated = true }
         handTopTheAppState()
         // A change that `navigate` and `goBack` did not start came through
         // the `NavigationStack` path: a back swipe when the stack shrank.

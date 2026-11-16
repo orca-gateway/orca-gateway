@@ -374,6 +374,7 @@ public struct OrcaApp: View {
 private struct RouterRoot: View {
     @ObservedObject var router: OrcaRouter
     @State private var drawers = DrawerHost()
+    @OrcaReduceMotion private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -387,10 +388,16 @@ private struct RouterRoot: View {
             .environment(\.orcaDrawerHost, drawers)
             DrawerHostLayer(host: drawers)
         }
+        // The router decides each push; with reduced motion all are the
+        // system's.
+        .onAppear { router.reduceMotion = reduceMotion }
+        .onChange(of: reduceMotion) { router.reduceMotion = $0 }
     }
 }
 
-/// The router's pages as a NavigationStack.
+/// The router's pages as a NavigationStack. The system animates its pushes
+/// and pops, but for a `fade` or `slideUp` route: the router writes the path
+/// with animations off and `RoutePage` animates its content in.
 @MainActor
 private struct RouteStack: View {
     @ObservedObject var router: OrcaRouter
@@ -422,6 +429,11 @@ extension OrcaRoute {
 /// (no loader is made for it, so nothing is fetched), with Flutter's "Go to
 /// home page" button, a `go` to `/`. `isStackRoot`: the first
 /// page of its NavigationStack, where no back swipe takes the leading edge.
+///
+/// A route the router pushed with the system animation off (a `fade` or
+/// `slideUp` transition, `OrcaRouter.entrance(of:)`) animates its content in
+/// here, in a tab's stack as in the single one; every other route is drawn
+/// as it is.
 @MainActor
 struct RoutePage: View {
     let router: OrcaRouter
@@ -437,6 +449,14 @@ struct RoutePage: View {
     }
 
     var body: some View {
+        if let entrance = router.entrance(of: route.id) {
+            page.modifier(RouteEntranceEffect(entrance: entrance))
+        } else {
+            page
+        }
+    }
+
+    @ViewBuilder private var page: some View {
         if route.isNotFound {
             VStack(spacing: 12) {
                 Text("Page not found").font(.headline)
@@ -450,6 +470,49 @@ struct RoutePage: View {
         } else {
             LoadedRoutePage(route: route, loader: router.loader(for: route))
                 .environment(\.orcaPage, OrcaPageContext(router: router, route: route, isStackRoot: isStackRoot))
+        }
+    }
+}
+
+/// The content of a pushed page coming in by itself (the route's `fade` or
+/// `slideUp` transition): its opacity from 0 to 1, or its offset from its
+/// own height down to 0, over the route's duration with the route's curve.
+/// Sampled from the core's `TransitionSpec` on the frame clock, not a
+/// SwiftUI animation, so every curve of the core's table plays and there is
+/// one clock. Frames are asked for only until the entrance is over.
+///
+/// Known limits: the system push was turned off, so the page under is gone
+/// at once and this page fades or rises over the page background, not over
+/// the old page; the navigation bar and its back button are not part of the
+/// content and appear at once; iOS 16 may ignore the transaction and play
+/// its own push under this; going back is the system pop.
+private struct RouteEntranceEffect: ViewModifier {
+    let entrance: RouteEntrance
+    @OrcaReduceMotion private var reduceMotion
+    @State private var isOver = false
+    /// The height the page has to itself, 0 until it is measured.
+    @State private var height: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        TimelineView(.animation(minimumInterval: nil, paused: isOver || reduceMotion)) { context in
+            let now = OrcaPageModel.milliseconds(context.date)
+            let look = entrance.look(at: now, reduceMotion: reduceMotion)
+            let rises = look.offsetYFraction != 0
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(GeometryReader { area in
+                    Color.clear
+                        .onAppear { height = area.size.height }
+                        .onChange(of: area.size.height) { height = $0 }
+                })
+                // Until the height is known a rising page has no place yet.
+                .opacity(rises && height == 0 ? 0 : look.opacity)
+                .offset(y: RouteEntrance.offset(fraction: look.offsetYFraction, height: height))
+                .onChange(of: context.date) { date in
+                    if entrance.isOver(at: OrcaPageModel.milliseconds(date), reduceMotion: reduceMotion) {
+                        isOver = true
+                    }
+                }
         }
     }
 }
