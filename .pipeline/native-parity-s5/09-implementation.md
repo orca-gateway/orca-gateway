@@ -3,11 +3,11 @@
 ## Front page
 
 ### In one breath
-group 4 of 8 · tasks: 8 green, 0 blocked · A5.4 green on both SDKs (core and UI)
-K-page, S-page: PageView settles by Flutter's PageScrollPhysics through a pure PageSnap core, a
-fling only past both of Flutter's gates (speed and 18 of travel). Swift measures a release with a
-port of Flutter's iOS fling tracker, Kotlin with Android's windowed one, as Flutter per platform.
-Ahead: K-list, S-list (G5), K-bar (G6) committed; S-bar, K-pull (G6-G7) running.
+group 5 of 8 · tasks: 10 green, 0 blocked · A5.1-A5.3 green on both SDKs (core and UI)
+K-list, S-list: ListView and GridView lay out lazily, as Flutter's; a pure GridCells core sizes
+the cells with the same 8 cases on both SDKs. shrinkWrap stays lazy and hugs its content, as
+Flutter's ShrinkWrappingViewport; only an unbounded scroll axis lays out eagerly.
+Ahead: K-bar, K-pull committed; S-bar and K-caps running.
 
 ### New for you
 nothing new
@@ -17,7 +17,7 @@ none
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 5 (ListView, GridView), both committed, Swift in review. (default: go)
+2. Next: group 6 (Scrollbar), Kotlin committed, Swift running. (default: go)
 
 ## Appendix
 
@@ -142,6 +142,40 @@ Decided (main session): edges stop with no bounce; the drag is simultaneous, so 
 moves with the pager (follow-up); Kotlin keeps its windowed tracker and Compose's own velocity cap (Android's).
 Not done: FreePager copies Layout.swift's private scrollView/phased helpers (follow-up); the nested-scroll case and
 real swipes stay on the hand check (q3).
+
+### Group 5
+Commits: K-list 5727426, S-list 316da40 (staged by path). Nothing pushed. Both reviewed (fit and quality); K-list went
+back once for doc wording, S-list passed with nits. Group 5 approved under the standing rule.
+
+#### Task K-list · Kotlin ListView, GridView and GridCells
+Files: `sdk-kotlin/core/.../render/GridCells.kt` (new) · `.../render/GridCellsTest.kt` (new) ·
+`sdk-kotlin/sdk/.../widgets/Lists.kt` (new) · `.../widgets/ListTest.kt` (new)
+Cases: A5.1 kt, A5.2 kt, A5.3 kt → green: 8 core `a5_3_kt_*`, 16 UI; `./gradlew build` green, lint clean. Red first.
+Changed: GridCells (frame, contentExtent): cross extent (extent − spacing × (n − 1)) / n, main = cross / ratio,
+horizontal reads the ratio along the scroll axis; values Flutter only asserts on fall back (count < 1 → 1, ratio <= 0
+→ 1, negative spacing → 0). ListViewWidget LazyColumn/LazyRow (reverseLayout, contentPadding, itemExtent), GridViewWidget
+LazyVerticalGrid/LazyHorizontalGrid with cells from GridCells; onScroll* from the lazy state. shrinkWrap in a bounded
+parent stays lazy and hugs its content (Flutter's ShrinkWrappingViewport is lazy); only an unbounded scroll axis lays
+out eagerly (Flutter throws there).
+Rework (review): KDoc gave the wrong reason for no cache window; GridView KDoc lacked the safe-area note.
+Not done: Compose builds only rows on screen plus its prefetch (Flutter's 250 px cache builds a few more); a
+LazyLayoutCacheWindow was tried and built no extra rows, so it was reverted. Null padding adds no safe-area inset.
+
+#### Task S-list · Swift ListView, GridView and GridCells
+Files: `sdk-swift/Sources/OrcaGatewayCore/Render/GridCells.swift` (new) · `.../GridCellsTests.swift` (new) ·
+`sdk-swift/Sources/OrcaGateway/Widgets/Lists.swift` (new) · `NodeView.swift` · `.../ListTests.swift` (new)
+Cases: A5.1 sw, A5.2 sw, A5.3 sw → green: 8 core `testA5_3…` (Kotlin's inputs and numbers), 15 UI (2 on macOS, 13
+hosted on iOS); on HEAD plus its five files, `swift test` UI 303 / core 415, iOS scheme UI 382 / core 415, goldens
+unchanged. Red first (core did not compile; every UI test drew nothing).
+Changed: GridCells shaped like Kotlin's. ListNodeView a ScrollView of LazyVStack/LazyHStack (spacing 0), padding
+inside, reverse as SingleChildScrollView does it (iOS 16 fallback), itemExtent a fixed main frame; GridNodeView
+LazyVGrid/LazyHGrid with fixed items framed by GridCells; shrinkWrap stays lazy (HugLayout around the ScrollView), as
+Kotlin and Flutter; an unbounded scroll axis lays out eagerly (EagerGridLayout). onScroll* through the existing
+ScrollTriggers; Layout.swift unchanged.
+Not done: SwiftUI builds only rows on screen (10 rows, 6 cells where Flutter builds 17 and 10), documented. Not
+checked: the iOS 16 reverse fallback, a list inside a same-axis SingleChildScrollView (hand check).
+Review nits kept as follow-ups: LazyScroll is a third copy of the reversible ScrollView (Layout.swift, Pager.swift);
+an eager grid in right-to-left puts left padding on the right on both SDKs (Flutter's EdgeInsets are absolute).
 
 ### Test run
 engine `bun test` 755/0 · `flutter test` 352 pass · Swift core 397, 2 expected reds · Kotlin core 398, 2 expected reds
