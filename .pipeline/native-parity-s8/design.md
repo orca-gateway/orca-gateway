@@ -55,17 +55,23 @@ Kotlin minSdk 24, Compose BOM 2026.05.01 (material3 1.4.0).
   `TooltipPlacement`: given the child's rect, the bubble's size and the overlay's size: x centred on the child,
   clamped 10 from the overlay's edges; y = child centre + 24 below, above (centre − 24 − height) when below does not
   fit; the timing constants (500 ms press, 1.5 s after release, fade 150 / 75 ms).
-- D5 Dialog layer (A8.1; q1 a, with the user). Both SDKs draw the sheet themselves in the page host, over the page and
+- D5 Dialog layer (A8.1; q1 a, the user's call). Both SDKs draw the sheet themselves in the page host, over the page and
   under a tab bar (Flutter's branch Navigator): the barrier, the panel of D4's height from the bottom edge (no safe
   area, as useSafeArea false), white, top corners 24, clipped, at most 640 wide and centred, the slide 250 / 200 ms;
   barrier tap, drag down and Back pop it. Its content is the Dialog's subtree drawn with the page's stores and
   executor. openDialog and closeDialog are page-registered handlers (as refetchPage); openDialog returns when its sheet
-  closes. The Dialog node draws nothing in place. (b) would use `.sheet` + detents and ModalBottomSheet.
+  closes. The Dialog node draws nothing in place. Platform behaviour, covered explicitly (the user's call,
+  2026-11-16): Android Back closes the top sheet (as Flutter's route pop); VoiceOver and TalkBack focus moves into the
+  panel when it opens and back to where it was when it closes; while open the page below is out of reach of
+  accessibility and the backdrop is one element labelled "Scrim" whose action closes the sheet, the panel a container
+  named "Bottom Sheet" (MUI bottom_sheet.dart:801-803, :1356-1357; material_localizations.dart:1137-1140); a text field
+  in the panel stays above the keyboard (the panel lifts by the keyboard's height: beyond Flutter, whose modal sheet
+  lets the keyboard cover it; a known difference in the PR).
 - D6 BottomSheet and the Scaffold slot (A8.2). The widget is Flutter's Container. The slot draws the node at the
   bottom over the body (the body keeps its size), above the bottom bar and persistent footer, on M3's sheet surface
   (#F7F2FA, top radius 28, ≤ 640 wide, centred, elevation 1, no shadow); the FAB rises above it; a snackbar paints
   over it; no entrance and no drag.
-- D7 Tooltip (A8.3; q2 a, with the user). Both SDKs draw the bubble themselves in an overlay above the page: D4's
+- D7 Tooltip (A8.3; q2 a, the user's call). Both SDKs draw the bubble themselves in an overlay above the page: D4's
   placement, the look of A8.3's note (Flutter's light theme, the Scaffold's ThemeData()), a long press of 500 ms with
   a haptic, held while pressed, hidden 1.5 s after release or at any other touch; an empty message draws the child
   alone; the message is the accessibility label; the bubble takes no touches. IconButton's and the FAB's `tooltip`
@@ -91,8 +97,9 @@ Kotlin minSdk 24, Compose BOM 2026.05.01 (material3 1.4.0).
 - D12 Row corrections (written by the main session): A8.1 and A8.5 as above; notes on A8.2-A8.4.
 
 ## Open (from the inventory, decided by the standing rule unless marked)
-q1 Dialog layer drawn by the SDKs, not `.sheet` / ModalBottomSheet [major, sent to the user 2026-11-16] → a, built in a
-late group. q2 Tooltip bubble drawn by the SDKs, not a popover / TooltipBox [major, sent with q1] → a, late group.
+q1 Dialog layer drawn by the SDKs, not `.sheet` / ModalBottomSheet [major] → a, the user's call 2026-11-16 ("go with
+your recommendation"), with the platform behaviour of D5 covered. q2 Tooltip bubble drawn by the SDKs, not a popover /
+TooltipBox [major] → a, the user's call 2026-11-16.
 OQ1 rows A8.1, A8.5 → corrected to Flutter (the standing rule: rows follow Flutter, never weakened). OQ4 dialog kinds →
 no effect, page handlers; heightFactor into the schema. OQ5 queue → one at the router with toast. OQ6 bar → M3 fixed;
 no Scaffold → not drawn. OQ8 IconButton / FAB tooltip → the bubble. OQ9 slot → as Flutter. OQ10 Dialog.title → unread,
