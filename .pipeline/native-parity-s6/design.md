@@ -47,8 +47,10 @@ inventory.md. Swift deploys to iOS 16 / macOS 13; Kotlin minSdk 24, Compose BOM 
   in the cloud repo, so regenerating it there is a follow-up for the user, not part of this PR.
 - D3 Capabilities. Both capabilities.json gain the nine widgets (68 → 77), sorted, one generator run, in the last
   group; no new action kind. Kotlin registers the nine in standard(). The degrade tests that use Checkbox as the
-  widget the natives lack (Swift DegradeTests, Kotlin DegradeTest and their degrade-*.json pages) switch to a widget no
-  Phase A step adds. Engine test `engine/test/parity-a-forms.test.ts` (copy of parity-a-lists.test.ts): each native
+  widget the natives lack (Swift DegradeTests, Kotlin DegradeTest and their degrade-*.json pages) switch to a made-up type no host
+  registers, `UnregisteredPluginWidget` (decision degrade-widget, stage 09: the slivers, the last built-ins the natives
+  lack, are being drawn by Phase B; first try was CustomScrollView, ad8bb2d, reworked by D-deg2).
+  Engine test `engine/test/parity-a-forms.test.ts` (copy of parity-a-lists.test.ts): each native
   vector gets page `forms` whole (red until the caps group).
 - D4 Binding (both SDKs, as Flutter's builders, inventory §2-3). Read: the merged state (page wins) at `stateKey` when
   set, else the `value` prop, with the builder's default. Write on a user change: SetState(stateKey, new) in page scope,
@@ -66,8 +68,8 @@ inventory.md. Swift deploys to iOS 16 / macOS 13; Kotlin minSdk 24, Compose BOM 
   Swift (plan): Switch a SwiftUI `Toggle` (activeColor → the on tint; inactiveColor not settable on iOS, documented);
   Slider a SwiftUI `Slider` (step (max − min)/divisions; no value-indicator label and no trackHeight on iOS,
   documented); Checkbox an iOS-style tick control (SF Symbols square / checkmark.square.fill / minus.square.fill,
-  activeColor fill), with a label the whole row taps; Radio an iOS-style dot control (circle / record.circle, activeColor
-  ?? #2196F3, inactiveColor ?? #757575, #BDBDBD disabled unselected) at Flutter's 20 pt; FAB Flutter's M3 shape (56 pt,
+  activeColor fill), with a label the whole row taps; Radio a dot control drawn with SwiftUI shapes at Flutter's 20/2/10 pt (amended at 09: the SF Symbols circle /
+  record.circle have other ring and dot sizes), activeColor ?? #2196F3, inactiveColor ?? #757575, #BDBDBD disabled unselected) at Flutter's 20 pt; FAB Flutter's M3 shape (56 pt,
   corner radius 16; mini 40, radius 12; #EADDFF fill, #4F378B content, shadow for elevation 6), not a circle; InkWell a
   tappable area with the highlight colour while pressed (no ripple on iOS, documented); IconButton Flutter's own box
   (size + 16 square, centred child, 0.38 when disabled, no press feedback, as Flutter).

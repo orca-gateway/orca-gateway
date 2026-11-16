@@ -58,6 +58,7 @@ sdk 642; swift test UI 456 / core 548; iOS scheme UI 560 / core 548.
 | 5 | 2 | S-check | Swift Checkbox, Radio and value binding | sdk-swift/Sources/OrcaGateway/OrcaPageModel.swift · sdk-swift/Tests/OrcaGatewayTests/NativeWidgetTests.swift · sdk-swift/Sources/OrcaGateway/Widgets/Selection.swift (new) · sdk-swift/Sources/OrcaGateway/NodeView.swift · sdk-swift/Tests/OrcaGatewayTests/CheckboxRadioTests.swift (new) | A6.1 sw, A6.2 sw (unit + ui); A6.7 sw (Checkbox, Radio) | M | S-core |
 | 6 | 2 | K-check | Kotlin Checkbox, Radio and value binding | sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Input.kt · sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Selection.kt (new) · sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/widgets/CheckboxRadioTest.kt (new) | A6.1 kt, A6.2 kt (ui); A6.7 kt (Checkbox, Radio) | M | K-core |
 | 7 | 3 | D-deg | Degrade demo page off Checkbox | examples/server/capability-demo.ts · examples/server/index.ts · examples/app-android/README.md | A6.x deg eng (the page the four deg tasks record) | M | — |
+| 7b | 3 | D-deg2 | Degrade demo page on a made-up type (rework of D-deg, decision degrade-widget) | examples/server/capability-demo.ts · examples/server/index.ts · examples/app-android/README.md | A6.x deg eng (the page the four deg tasks record) | S | D-deg |
 | 8 | 3 | S-switch | Swift Switch, Slider, TextFormField, Form | sdk-swift/Sources/OrcaGateway/Widgets/Controls.swift (new) · sdk-swift/Sources/OrcaGateway/NodeView.swift · sdk-swift/Tests/OrcaGatewayTests/SwitchSliderTests.swift (new) · sdk-swift/Tests/OrcaGatewayTests/FormFieldTests.swift (new) | A6.3 sw, A6.4 sw (ui); A6.7 sw (Switch, Slider, TextFormField) | M | S-core, S-check |
 | 9 | 3 | K-switch | Kotlin Switch, Slider, TextFormField, Form | sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Controls.kt (new) · sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/widgets/SwitchSliderTest.kt (new) · sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/widgets/FormFieldTest.kt (new) | A6.3 kt, A6.4 kt (ui); A6.7 kt (Switch, Slider, TextFormField) | M | K-core, K-check |
 | 10 | 4 | E-ios2 | FAB and InkWell gain ios | engine/src/components/button/floating-action-button.ts · engine/src/components/layout/ink-well.ts · engine/src/core/widget-registry-gen.ts · schema/widget-registry.json · engine/test/widget-targets.test.ts | A6.5 eng, A6.6 eng (the target); A6.x tgt | M | — |
@@ -126,6 +127,9 @@ Test names are `testA6_N…` (Swift) and `a6_N_…` (Kotlin).
 - G2 → G3: S-switch and K-switch call the binding and sliderValue. D-deg takes the engine lane.
   - D-deg: capability-demo.ts:200-231 swaps the Checkbox for CustomScrollView(shrinkWrap) holding one
     SliverToBoxAdapter(Text), texts and comments to match; also index.ts:99 and app-android README.md:69.
+  - D-deg2 (added at 09, decision degrade-widget): the page moves again, to a local PrimitiveWidget subclass of type
+    UnregisteredPluginWidget (no props) between "Above the plugin widget." and "Below the plugin widget."; no host
+    registers it, so every SDK degrades it for good. The deg tasks record D-deg2's page.
   - S-switch: Controls.swift per D6. Switch a Toggle, activeColor the tint. Slider a SwiftUI Slider: min ?? 0,
     max ?? 1, step (max − min)/divisions, drawn clamped, the write and onChange on every drag update (D7). NodeView.swift:
     "TextFormField" beside "TextField" (:127); "Form" → ChildView (:177-186). Toggle and Slider tested through their
