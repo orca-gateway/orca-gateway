@@ -4,7 +4,7 @@
   "idea": "Native parity step 17, plugin 1 of 4: the voice recorder plugin as separate native packages (plugins/orca_voice_recorder/ios SwiftPM, plugins/orca_voice_recorder/android Gradle), matching the Flutter plugin: AVAudioRecorder on iOS, MediaRecorder on Android; this PR also sets the native plugin package template (mirror, Maven, release rows). Plan step 17; cases C17.3, C17.5 in phase-c-tests.md",
   "kind": "feature",
   "created_at": "2026-11-16T08:28:54Z",
-  "updated_at": "2026-11-16T11:10:54Z",
+  "updated_at": "2026-11-16T11:27:11Z",
   "active_session": "7317184b-fcd8-4ef3-bc8c-3dc085f8486c",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "draft",
-      "rounds": 2,
-      "card": "cards/09-r1.md"
+      "rounds": 3,
+      "card": "cards/09-r2.md"
     },
     "10": {
       "status": "pending"

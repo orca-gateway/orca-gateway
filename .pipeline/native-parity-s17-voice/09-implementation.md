@@ -3,22 +3,21 @@
 ## Front page
 
 ### In one breath
-group 1 of 4 · tasks: 5 green, 0 blocked · cases: 5 of 18 green · cli dart test: 38 pass
-T1 Voice schema: the yaml describes Flutter's widget, 3 triggers, 9 actions; a test pins it.
-T2 --types-only: the CLI writes the props, params and trigger types alone; full stubs unchanged.
-T3 Ignore files: the pub archive leaves out ios/ and android/; both lanes' build outputs ignored.
-T4 Android package: a Gradle build on the SDK's wrapper and catalog, publishable to Maven.
-T16 (added): TS string action params take a Value, so the demo can play the saved path.
+group 2 of 4 · tasks: 3 green, 0 blocked · cases: 9 of 18 green · engine bun test: 800 pass
+T5 Swift package: OrcaVoiceRecorder on sdk-swift by path here, the mirror once split out.
+T6 Kotlin types: the generated props, params and triggers compile under the SDK's strict flags.
+T7 Demo page: /voice records, stops into page state and plays the saved path.
+Both drift tests regenerate the types and fail on any byte that differs from the yaml's.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided: T16 added to group 1 (minor) · the Gradle project named orca-voice-recorder
+2 auto-decided: keep T5's manifest test · examples/server typing left as the map's (follow-up)
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 2 (Swift package, Kotlin types, the /voice demo page)? (default: go)
+2. Next: group 3 (both recorders, release.sh, mirror and Maven CI)? (default: go)
 
 ## Appendix
 
@@ -88,6 +87,53 @@ play the path stopRecording saved in page state; a cast or a hand-built action w
 A minor plan change under the standing rule: one S task in group 1, T7 now depends on it, C17.3/ts its case.
 Group 2's T7 also gains examples/server/README.md (its plugin-file row), a doc row.
 
+### Group 2
+#### T5 · SwiftPM package with generated props types (ff5c782, 37732f5 rework)
+Files: plugins/orca_voice_recorder/ios/Package.swift · VERSION · Sources/OrcaVoiceRecorder/Generated/
+OrcaVoiceRecorderTypes.swift · Tests/OrcaVoiceRecorderTests/VoiceRecorderPropsTests.swift (all new) ·
+cli/test/voice_recorder_swift_props_test.dart (new)
+Cases: P-pkg/S, C17.5/S → green (swift test 6, 0 warnings from a clean build; xcodebuild build and test on the
+iOS 18.5 simulator, 5 there: the manifest test is macOS only; cli 40; red first: no Package.swift, an empty target,
+"No types at …")
+Changed: tools 5.9, iOS 16 / macOS 13 as the SDK; package, product and module OrcaVoiceRecorder; the SDK dependency
+chosen from `Context.packageDirectory`: ../../../sdk-swift by path in the monorepo, else orca-gateway-swift
+from 0.1.0-alpha.2 (the first release that can carry the step 16 plugin API; the header says sdk-swift goes first);
+VERSION 0.1.0-alpha.1; the types file is the CLI's --types-only output; the tests pin the props, the three
+trigger names and the nine actions' params; the drift test regenerates and names the command on a difference.
+Decisions: a `swift package dump-package` test of both manifest branches, kept (auto-decided, minor: the only check
+of the mirror branch before a release) · the test target lists OrcaGateway explicitly · a Value-typed `path`
+reads nil from the params type, so T8 resolves path, recorderId and position from the raw action, as Flutter
+Review fit: pass · Review quality: the manifest test read SwiftPM's internal URL encoding (remote[0].urlString), fixed (37732f5)
+
+#### T6 · Kotlin generated props, params, drift test (e6f410f)
+Files: plugins/orca_voice_recorder/android/voice-recorder/src/main/kotlin/com/orcagateway/plugins/voicerecorder/
+OrcaVoiceRecorderTypes.kt (new) · the same path under src/test/: VoiceRecorderPropsTest.kt (new) ·
+cli/test/voice_recorder_kotlin_props_test.dart (new)
+Cases: C17.5/K → green (the plugin's Gradle build, VoiceRecorderPropsTest 7/7; the drift test 1/1; red first:
+"Unresolved reference 'VoiceRecorderProps'", "No types at …")
+Changed: the types file is the generator's output, unedited, and compiles under explicitApi and warnings as errors
+(no generator fix); the test pins exactly recorderId and showAmplitude, absent props null, Flutter's three
+triggers, the nine actions' param names and types; the drift test runs --types-only --package
+com.orcagateway.plugins.voicerecorder in a temp dir and compares the one file written byte for byte.
+Decisions: "exactly" by plain Java reflection (no kotlin-reflect) · plain JUnit (no Android API) · raw actions as
+"custom:<name>", as sdk-kotlin's GeneratedPluginTest
+Review fit: pass · Review quality: pass
+
+#### T7 · Demo /voice page in custom app (1d541d4)
+Files: examples/server/orca_voice_recorder.ts (new) · examples/server/custom.ts · examples/server/README.md ·
+engine/test/voice-demo.test.ts (new)
+Cases: C17.3/page → green (5 new tests, red first: /voice 404, no button; engine 800 = 795 + 5)
+Changed: the CLI's TS output for the yaml with its two imports pointed at ../../engine/src/types (the header says
+so and how to regenerate); home gains "Go to Voice Page"; /voice holds a VoiceRecorder (recorderId "demo"), Start,
+Stop (pathKey voicePath, durationKey voiceDuration) and Play (`V.pageState("voicePath")`) from the generated
+classes, and Texts of both keys; the test renders /voice and /home through the engine and pins the node, the
+actions' params, the Texts' watches and the buttons.
+Decisions: the home button copies the map's `Custom("navigate", { path })` · pathKey/durationKey plain strings
+(Flutter reads them `as String?`) · examples/server is outside the engine's tsconfig; its tsc errors (11 → 24) are
+of two kinds already there (`Custom("<name>")` vs `custom:${string}`, generated actions vs CustomAction): left
+as orca_google_map.ts is, a follow-up (auto-decided, minor; decision ts-generated-actions-vs-custom-type)
+Review fit: pass · Review quality: pass
+
 ### Test run
 Group 1, on feat/native-parity-s17-voice after T1-T4 and T16 (before T2's rework):
 `cd cli && dart test` 38 pass · `dart analyze` no issues · `cd engine && bun test` 795 pass, 0 fail ·
@@ -97,6 +143,14 @@ core 535, sdk 586, 0 failures · `cd plugins/orca_voice_recorder/android && ./gr
 SUCCESSFUL (no tests yet) · `bun run schema/gen-widget-registry.ts` and `gen-native-capabilities.ts`: no diff.
 After T2's rework (c9aa4d5, kotlin_generator.dart only): `cd cli && dart test` 38 pass · `dart analyze` no issues;
 the full and types-only Kotlin output for the voice and google_map yamls identical before and after (`diff -r`).
+
+Group 2, after T5-T7: `cd cli && dart test` 40 pass · `dart analyze` no issues · `cd engine && bun test` 800 pass,
+0 fail · `cd sdk && flutter test` 485 pass · `flutter analyze` no issues · sdk-swift core 523, SwiftUI 433, 0
+failures, 0 compiler warnings · sdk-kotlin core 535, sdk 586 · `cd plugins/orca_voice_recorder/ios && swift build
+--build-tests && swift test` 6 pass, 0 warnings · `xcodebuild test -scheme OrcaVoiceRecorder` on the iOS 18.5
+simulator 5 pass, TEST SUCCEEDED · `cd plugins/orca_voice_recorder/android && ./gradlew build --continue` 7 pass ·
+the generators leave no diff.
+After T5's rework (37732f5, the test file only): the Swift package's swift test 6 pass, 0 warnings.
 
 ### Blocked
 none
