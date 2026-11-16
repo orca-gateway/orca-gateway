@@ -24,8 +24,9 @@ name: SDK Swift Mirror
 # SWIFT_MIRROR_DEPLOY_KEY (orca-gateway/orca-gateway-swift), the voice
 # recorder's ORCA_VOICE_RECORDER_SWIFT_DEPLOY_KEY
 # (orca-gateway/orca-voice-recorder-swift), the video player's
-# ORCA_VIDEO_PLAYER_SWIFT_DEPLOY_KEY (orca-gateway/orca-video-player-swift).
-# See docs/User_Actions.md.
+# ORCA_VIDEO_PLAYER_SWIFT_DEPLOY_KEY (orca-gateway/orca-video-player-swift),
+# the Google map's ORCA_GOOGLE_MAP_SWIFT_DEPLOY_KEY
+# (orca-gateway/orca-google-map-swift). See docs/User_Actions.md.
 on:
   push:
     tags:
