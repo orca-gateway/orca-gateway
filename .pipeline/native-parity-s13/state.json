@@ -4,9 +4,9 @@
   "idea": "Native parity step 13 (Phase B): sliver scrolling, reorderable lists and sub-pages on sdk-swift and sdk-kotlin. SubPage with id and state prefixing, updateSubPage replace and join in both pure cores with fixtures; ReorderableListView with onReorder; CustomScrollView, SliverAppBar, SliverList, SliverGrid, SliverToBoxAdapter once Phase A step 5 is on main. Rows B13.1-B13.5.",
   "kind": "feature",
   "created_at": "2026-11-16T01:21:10Z",
-  "updated_at": "2026-11-16T01:25:26Z",
+  "updated_at": "2026-11-16T04:45:45Z",
   "active_session": "fe23fb0a-f62c-4a83-a51f-655a2e0bf8ff",
-  "current": "09",
+  "current": "12",
   "stages": {
     "01": {
       "status": "skipped",
@@ -44,14 +44,22 @@
       "approved_with": "A (standing rule: minor and patch gates approved by the session; the SubPage contract is asked of the user)"
     },
     "09": {
-      "status": "draft",
-      "rounds": 1
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/09-r1.md",
+      "approved_at": "2026-11-16T04:45:44Z",
+      "approved_with": "A (standing rule; the SubPage contract was the user's call: Yes, fix Flutter too)"
     },
     "10": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/10-r1.md",
+      "approved_at": "2026-11-16T04:45:45Z",
+      "approved_with": "A (standing rule: minor and patch gates approved by the session)"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
       "status": "pending"
