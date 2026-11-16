@@ -3,21 +3,20 @@
 ## Front page
 
 ### In one breath
-group 2 of 6 · tasks: 3 green, 0 blocked · A4.3 blur half green on both SDKs (unit + ui)
-S-blur: a system material by sigma, cut to the radius. K-blur: the page recorded, then blurred.
+group 3 of 6 · tasks: 5 green, 0 blocked · A4.1, A4.2 and ColorFiltered (A4.3) green on both SDKs
+Opacity, RotatedBox, the clips, DecoratedBox, ColorFiltered: pixels, sizes and taps as Flutter.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-4 auto-decided (minor): Kotlin records the page into a Picture (the design's GraphicsLayer copy
-vanished inside scroll views); a nested-scroll hook re-records it so a fixed bar follows a list;
-BlurView takes taps over its whole box, BackdropFilter none (Flutter's hit rules); the Kotlin copy's
-limits are documented (siblings above show in it; translation only).
+4 auto-decided (minor): Swift draws opacity below 0.02 invisibly so taps still land (Flutter keeps
+them); DecoratedBox takes taps over its whole (rounded) box, filled or not; one shared hit fill on
+Swift; Kotlin RotatedBox answers intrinsics with swapped axes (a Row sized it 300 tall, not 60).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 3, Opacity, RotatedBox, clips, DecoratedBox, ColorFiltered (running). (default: go)
+2. Next: group 4, AbsorbPointer and IgnorePointer (running on both SDKs). (default: go)
 
 ## Appendix
 
@@ -85,3 +84,47 @@ quality should-fix (KDoc claimed Flutter's copy) folded with two pins and two ti
 Not done: still stale behind a fixed backdrop: animations, code-driven scrolls, state changes inside a scroll view's
 layer. Hand check: blur strength against Flutter's sigma, cost while scrolling, scrim on a real Android 11 (q3: forced
 in unit tests only).
+
+### Group 3
+Commits: S-paint 0d2f8d5, K-paint f7f4030 (staged by path). Nothing pushed. Gate 09 group 2 approved under the
+standing rule. S-paint started while K-blur was in rework (disjoint files); the rebase on main still waits for a clean
+tree.
+
+#### Task S-paint · Swift opacity, rotation, clips, decoration, filter
+Files: `sdk-swift/Sources/OrcaGatewayCore/Render/BlendModes.swift` (new) · `.../OrcaGatewayCoreTests/BlendModesTests.swift`
+(new) · `sdk-swift/Sources/OrcaGateway/Widgets/Effects.swift` (new) · `.../NodeView.swift` ·
+`sdk-swift/Tests/OrcaGatewayTests/EffectsTests.swift` (new); approved outside the row: `Widgets/Backdrop.swift`
+(hitFill) and `OrcaGatewayTests/BackdropTests.swift` (empty renders over a page colour).
+Cases: A4.1 sw, A4.2 sw, A4.3 sw (ColorFiltered, core) → green: BlendModesTests 4, EffectsTests 22; `swift test` 259 +
+372; iOS scheme 313 + 372, 0 warnings, no golden moved. Red first, except guards that pinned behaviour already right
+(clips take no taps of their own, the mapping table, the white-page blend).
+Changed: OrcaBlendMode (21 names, srcATop otherwise); HitTestableOpacity; RotatedLayout (flipped proposal, tight and
+unbounded axes swapped on odd turns, turned about the centre, smallest size with no child); ClipRect/ClipOval
+(clipShape + contentShape, which takes no tap itself); DecoratedBoxView (one chain: background or overlay, no border
+inset, Shape.hitFill over the (rounded) box); ColorFilteredView (SwiftUI blend modes, srcIn/dstIn/dstATop composed).
+Decisions: s4-swift-opacity-floor, s4-decoratedbox-hits, s4-hitfill-helper; core enum named OrcaBlendMode (no clash
+with SwiftUI's); srcIn without a mask (child drawn once). Intrinsics: IntrinsicHeight probes through sizeThatFits,
+which RotatedLayout already swaps.
+Review: fit pass (notes folded: foreground radius hit case, clip tap-through test) · quality rework (orcaUnbounded swap,
+white-page blend test, one DecoratedBox chain, Color spelling, mapping table, hitFill, BackdropTests page colour) · pass
+Not done: nothing. ImageRenderer can return a stale image for an empty render: "nothing drawn" checks draw over a
+page colour.
+
+#### Task K-paint · Kotlin opacity, rotation, clips, decoration, filter
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/render/BlendModes.kt` (new) · `.../render/BlendModesTest.kt`
+(new) · `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Effects.kt` (new) · `.../sdk/style/Decoration.kt` ·
+`sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/widgets/EffectsTest.kt` (new)
+Cases: A4.1 kt, A4.2 kt, A4.3 kt (ColorFiltered, core) → green: BlendModesTest 4, EffectsTest 12; `./gradlew build`
+core 373, sdk 377, lint clean; GoldenTest and BoxTest unchanged, no golden moved. Red first (by compile, then the
+intrinsics case: 300 tall before the fix).
+Changed: OrcaBlendMode (same cases as Swift's); OpacityWidget (graphicsLayer alpha, taps kept at 0);
+RotatedBoxMeasurePolicy (swapped constraints and intrinsics, placeWithLayer only when turned); ClipRect/ClipOval
+(clip, oval by addOval); DecoratedBox (boxDecoration or the new foregroundDecoration, no padding; a matchParentSize
+clip(shape).pointerInput {} node takes the taps); ColorFiltered (offscreen layer + drawRect in the mode; the 21 mapped
+to Compose; below API 29 only PorterDuff modes, documented). Decoration.kt: boxDecoration's body moved into `surface`,
+drawing exactly as before.
+Decisions: s4-decoratedbox-hits, s4-kotlin-rotated-intrinsics; foreground shadows drawn after the child.
+Review: fit pass (48 dp note) · quality pass with one should-fix (intrinsics) and nits, folded · pass
+Not done: nothing. Known: ColorFiltered's layer is the box's size (a child's overflow is cut; Flutter's is unbounded);
+below API 29 "multiply" paints the colour over the child (Modulate would be closer: follow-up); Compose's 48 dp
+minimum touch target can give a small target a tap just outside its shape, SDK-wide.
