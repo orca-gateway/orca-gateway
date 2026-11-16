@@ -2,7 +2,7 @@
 
 > [!WARNING]
 > **Alpha (`0.1.0-alpha.1`).** The native Android client for Orca Gateway (Epic 23b) works for the
-> pages its 73 widgets and 26 action kinds cover, but its API may still change between alphas, so
+> pages its 82 widgets and 26 action kinds cover, but its API may still change between alphas, so
 > use it with care. The Flutter SDK
 > ([`orca_gateway`](https://github.com/orca-gateway/orca-gateway/tree/main/sdk)) stays the stable
 > one; use it for production apps.
@@ -88,7 +88,7 @@ It needs JDK 17 or later and brings no HTTP library: `OrcaClient` sends through 
 | Module | What | Platforms |
 |---|---|---|
 | `core` | Wire models (`ComponentNode`, `Value`, `Action`, `PageResponse`), `ValueResolver` (9 Value kinds, 31 transforms, 13 BoolExpr ops), `ElmStore` with page and app scopes, the action executor with effects as data, the render tree, `OrcaClient` with the 412 caps handshake behind an `HttpTransport` interface, the generated capability vector, DevTools events (`DevToolsEvent`, `OrcaDebug`). kotlinx.serialization only. Artifact `com.orcagateway:sdk-core`. | JVM 17+, Android |
-| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with 73 widgets (those in [`capabilities.json`](capabilities.json)) and the degrade policies (an unknown widget becomes a FallbackPrompt; the server's `warn` banner, its `require` blocking prompt and the 426 upgrade page are drawn like any page), `OrcaTheme` button styles, `OrcaApp` on `OrcaRouter` (a `NavHost`) with its error screen (`OrcaErrorView`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
+| `sdk` | The OkHttp transport, `DeviceInfo.current(context)`, the Compose renderer with 82 widgets (those in [`capabilities.json`](capabilities.json)) and the degrade policies (an unknown widget becomes a FallbackPrompt; the server's `warn` banner, its `require` blocking prompt and the 426 upgrade page are drawn like any page), `OrcaTheme` button styles, `OrcaApp` on `OrcaRouter` (a `NavHost`) with its error screen (`OrcaErrorView`), `SystemActions`, the DevTools client. Artifact `com.orcagateway:sdk`. | Android 7.0+ (minSdk 24) |
 
 Build: Gradle 9 through the committed wrapper, Kotlin 2.4, AGP 9, any JDK 17 or later, and an
 Android SDK with platform 36 (`ANDROID_HOME` or `local.properties`).
