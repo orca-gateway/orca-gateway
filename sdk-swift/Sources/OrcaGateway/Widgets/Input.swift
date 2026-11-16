@@ -15,14 +15,17 @@ import SwiftUI
 /// disabled decorated field is Flutter's TextField(enabled: false): it
 /// takes no focus (`.disabled`), and an edit made to it anyway is put back
 /// the same way (Flutter's onChanged is null); its decoration draws
-/// Material's disabled colours (DecoratedField). The text keeps its look on
-/// both paths, as Flutter's does (the builder's style wins over Material's
-/// disabled colour, material text_field.dart:1584-1586); SwiftUI does not
-/// dim it. TextFormField is drawn by this view too (Flutter's builder is a
-/// copy of this one).
+/// Material's disabled colours (DecoratedField). The text is in the
+/// style's colour, or the builder's 16 point black without a style, on
+/// both paths and enabled or not, as Flutter's (the builder's style wins
+/// over Material's disabled colour, material text_field.dart:1584-1586);
+/// SwiftUI does not dim it. What a sent style leaves out is Flutter's
+/// (`textStyle`): decorated, bodyLarge's 16 in onSurface, at 0.38
+/// disabled; bare, the engine's 14 in white. TextFormField is drawn by
+/// this view too (Flutter's builder is a copy of this one).
 ///
 /// Without `decoration` the field is bare, as Flutter's EditableText path
-/// (16 point text, grey placeholder). With one it draws the label above,
+/// (grey placeholder). With one it draws the label above,
 /// prefix and suffix, the border (`outline`, `underline`, the default, or
 /// `none`), the fill, helper or error text below, and the `n/max` counter
 /// when `maxLength` is set. `hintStyle`, `labelStyle`, `helperStyle`,
@@ -139,7 +142,7 @@ struct TextFieldNodeView: View {
     }
 
     private var field: some View {
-        let style = TextStyleProps(node["style"])
+        let style = textStyle
         let maxLines = max(node["maxLines"]?.intValue ?? 1, 1)
         return Group {
             if node["obscureText"]?.boolValue == true {
@@ -152,7 +155,7 @@ struct TextFieldNodeView: View {
             }
         }
         .font(style.font ?? .system(size: 16))
-        .foregroundColor(style.color ?? Props.color(hex: "#000000"))
+        .foregroundColor(style.color)
         .focused($focused)
         // A disabled bare field stays live to take focus, as a readOnly one.
         .disabled(!enabled && decoration != nil)
@@ -161,6 +164,30 @@ struct TextFieldNodeView: View {
         #if os(iOS)
         .keyboardType(Self.keyboard(node["inputType"]?.stringValue))
         #endif
+    }
+
+    /// The text's style, layered as Flutter's: the builder's 16 point black
+    /// when no style is sent (input_builders.dart ~:426-427). A sent one is
+    /// drawn over Material's input style when decorated, bodyLarge's 16 in
+    /// onSurface #1D1B20, at 0.38 when disabled (text_field.dart
+    /// ~:1556-1586; bodyLarge's height and letter spacing are not taken),
+    /// and over the engine's text defaults when bare, as EditableText draws
+    /// it: 14, white (txt text_style.h:26, :41).
+    private var textStyle: TextStyleProps {
+        var style = TextStyleProps(node["style"])
+        let size: CGFloat, color: Color
+        if case .object? = node["style"] {
+            if decoration == nil {
+                (size, color) = (14, Props.color(hex: "#FFFFFF"))
+            } else {
+                (size, color) = (16, enabled ? Props.color(hex: "#1D1B20") : DecoratedField<EmptyView>.disabledInk)
+            }
+        } else {
+            (size, color) = (16, Props.color(hex: "#000000"))
+        }
+        style.size = style.size ?? size
+        style.color = style.color ?? color
+        return style
     }
 
     static func submitLabel(_ action: String?) -> SubmitLabel {

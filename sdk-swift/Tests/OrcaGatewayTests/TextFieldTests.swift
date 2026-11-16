@@ -178,6 +178,110 @@ final class TextFieldTests: XCTestCase {
         }
     }
 
+    // MARK: A6.4 / A6.7 the text's colour and size
+
+    /// Flutter's builder gives the field `style ?? TextStyle(fontSize: 16,
+    /// color: black)` (input_builders.dart ~:426-427). Decorated, Material's
+    /// TextField draws bodyLarge (16) merged with its state style (onSurface
+    /// #1D1B20, at 0.38 when disabled) merged with that style
+    /// (text_field.dart ~:1556-1586, text_field_defaults_m3.g.dart:10-16):
+    /// a colour the style sets wins, and a style without one takes the
+    /// state's. Bare, EditableText draws only the style: without a colour it
+    /// paints in the engine's default, white, and without a size at 14
+    /// (txt text_style.h:26 and :41, paragraph_builder.cc ~:401).
+    /// bodyLarge's height and letter spacing are left out. TextFormField is
+    /// the same builder. Each field shows "hello" with nothing else drawn
+    /// ("border": "none").
+    static let types = ["TextField", "TextFormField"]
+
+    /// No `style`: the builder's black, enabled or disabled.
+    func testA6_7ADecoratedFieldWithoutAStyleIsBlackEnabledOrDisabled() throws {
+        for type in Self.types {
+            let black = try text(type, style: ["color": "#000000", "fontSize": 16])
+            XCTAssertNotNil(black.bounds(of: Pixels.isInk), "\(type): no text in black")
+            for enabled in [true, false] {
+                let drawn = try text(type, style: nil, enabled: enabled)
+                XCTAssertTrue(drawn.bytes == black.bytes,
+                              "\(type) enabled \(enabled): the darkest pixel \(Self.darkest(drawn)), not as in black")
+            }
+        }
+    }
+
+    /// A `style` with a colour: that colour, enabled or disabled.
+    func testA6_7ADecoratedFieldStyleColourWinsEnabledOrDisabled() throws {
+        let red: JSONValue = ["color": "#FF0000", "fontSize": 32]
+        for type in Self.types {
+            let live = try text(type, style: red)
+            XCTAssertNotNil(live.bounds(of: Pixels.isRed), "\(type): not drawn in red")
+            let disabled = try text(type, style: red, enabled: false)
+            XCTAssertTrue(disabled.bytes == live.bytes,
+                          "\(type): disabled, the darkest pixel \(Self.darkest(disabled)), not as its red")
+        }
+    }
+
+    /// A `style` without a colour, enabled: onSurface #1D1B20, and at
+    /// bodyLarge's 16 without a size.
+    func testA6_4ADecoratedFieldWithAColourlessStyleIsOnSurface() throws {
+        for type in Self.types {
+            for (style, onSurface) in [(["fontSize": 32], ["color": "#1D1B20", "fontSize": 32]),
+                                       (["fontWeight": "normal"],
+                                        ["color": "#1D1B20", "fontSize": 16, "fontWeight": "normal"])]
+                    as [(JSONValue, JSONValue)] {
+                let expected = try text(type, style: onSurface)
+                XCTAssertNotNil(expected.bounds(of: Pixels.isInk), "\(type) \(onSurface): no text")
+                let colourless = try text(type, style: style)
+                XCTAssertTrue(colourless.bytes == expected.bytes,
+                              "\(type) \(style): ink at \(String(describing: colourless.bounds(of: Pixels.isInk))), the darkest pixel \(Self.darkest(colourless)), not as \(onSurface) at \(String(describing: expected.bounds(of: Pixels.isInk)))")
+            }
+        }
+    }
+
+    /// A `style` without a colour, disabled: onSurface at 0.38 (the greyed
+    /// range CheckboxRadioTests uses for glyphs).
+    func testA6_7ADisabledDecoratedFieldWithAColourlessStyleIsOnSurfaceAt038() throws {
+        for type in Self.types {
+            let darkest = Self.darkest(try text(type, style: ["fontSize": 32], enabled: false))
+            XCTAssertTrue(CheckboxRadioTests.isGreyed(darkest), "\(type): the darkest pixel \(darkest)")
+        }
+    }
+
+    /// Bare, a field draws only its `style`, as EditableText: without a
+    /// colour in white, without a size at 14, enabled or disabled; drawn on
+    /// black so the text shows.
+    func testA6_4ABareFieldDrawsOnlyItsStyle() throws {
+        for type in Self.types {
+            for (style, white) in [(["fontSize": 32], ["color": "#FFFFFF", "fontSize": 32]),
+                                   (["fontWeight": "normal"],
+                                    ["color": "#FFFFFF", "fontSize": 14, "fontWeight": "normal"])]
+                    as [(JSONValue, JSONValue)] {
+                let expected = try text(type, style: white, decorated: false, on: .black)
+                XCTAssertNotNil(expected.bounds(of: Self.isWhite), "\(type) \(white): no text")
+                for enabled in [true, false] {
+                    let drawn = try text(type, style: style, enabled: enabled, decorated: false, on: .black)
+                    XCTAssertTrue(drawn.bytes == expected.bytes,
+                                  "\(type) \(style) enabled \(enabled): white at \(String(describing: drawn.bounds(of: Self.isWhite))), not as \(white) at \(String(describing: expected.bounds(of: Self.isWhite)))")
+                }
+            }
+        }
+    }
+
+    static func isWhite(_ p: (r: UInt8, g: UInt8, b: UInt8, a: UInt8)) -> Bool {
+        p.r > 230 && p.g > 230 && p.b > 230
+    }
+
+    /// The pixels of a `type` field showing "hello" with `style` (none when
+    /// nil), decorated with `"border": "none"` or bare, over `background`.
+    func text(_ type: String, style: JSONValue?, enabled: Bool = true, decorated: Bool = true,
+              on background: UIColor? = nil) throws -> Pixels {
+        var props: [String: JSONValue] = ["stateKey": "name"]
+        props["style"] = style
+        if decorated { props["decoration"] = ["border": "none"] }
+        if !enabled { props["enabled"] = false }
+        let (window, _) = try host(props, type: type, background: background)
+        defer { window.isHidden = true }
+        return try snapshot(window)
+    }
+
     /// The pixel with the least light.
     static func darkest(_ pixels: Pixels) -> (r: UInt8, g: UInt8, b: UInt8, a: UInt8) {
         var found = pixels.pixel(0, 0)
@@ -193,19 +297,24 @@ final class TextFieldTests: XCTestCase {
 
     // MARK: helpers
 
-    /// A page holding one TextField `f` with `props` (and `onChange` when
-    /// given); the page state `name` starts as "hello".
-    func model(_ props: [String: JSONValue], onChange: JSONValue? = nil) throws -> OrcaPageModel {
-        var field = AppBarCardTests.node("f", "TextField", kind: "input", childMode: "none", props: props)
+    /// A page holding one TextField (or `type`) `f` with `props` (and
+    /// `onChange` when given); the page state `name` starts as "hello". A
+    /// TextFormField page widens the registry by it (advertised in group 8),
+    /// as FormFieldTests does.
+    func model(_ props: [String: JSONValue], type: String = "TextField",
+               onChange: JSONValue? = nil) throws -> OrcaPageModel {
+        var field = AppBarCardTests.node("f", type, kind: "input", childMode: "none", props: props)
         if let onChange, case .object(var node) = field {
             node["actions"] = ["onChange": onChange]
             field = .object(node)
         }
-        return OrcaPageModel(page: try JSONValue.object([
+        let page = try JSONValue.object([
             "pageId": "p", "title": "T",
             "state": [["key": "name", "scope": "page", "initial": "hello"]],
             "components": [field],
-        ]).decode(PageResponse.self))
+        ]).decode(PageResponse.self)
+        if type == "TextField" { return OrcaPageModel(page: page) }
+        return OrcaPageModel(page: page, registry: WidgetRegistry(types: Set(GeneratedCapabilities.widgets).union([type])))
     }
 
     /// The height of a 300 wide field with `decoration`, in a real host.
@@ -228,12 +337,15 @@ final class TextFieldTests: XCTestCase {
         return try snapshot(window)
     }
 
-    /// A field with `props` in a light UIKit window at the top left.
-    func host(_ props: [String: JSONValue], onChange: JSONValue? = nil) throws -> (UIWindow, OrcaPageModel) {
-        let model = try model(props, onChange: onChange)
+    /// A field with `props` (a TextField, or `type`) in a light UIKit window
+    /// at the top left, over `background` when given.
+    func host(_ props: [String: JSONValue], type: String = "TextField", onChange: JSONValue? = nil,
+              background: UIColor? = nil) throws -> (UIWindow, OrcaPageModel) {
+        let model = try model(props, type: type, onChange: onChange)
         let host = UIHostingController(rootView: NodeView(id: "f", model: model)
             .frame(width: Self.window.width, height: Self.window.height, alignment: .topLeading)
             .ignoresSafeArea())
+        if let background { host.view.backgroundColor = background }
         let window = UIWindow(frame: CGRect(origin: .zero, size: Self.window))
         window.overrideUserInterfaceStyle = .light
         window.rootViewController = host
