@@ -16,7 +16,8 @@ public struct OrcaToast: Identifiable, Equatable, Sendable {
 /// One rendered page: its nodes, its store, and the executor that runs its
 /// actions. Views resolve nodes through it and fire triggers into it.
 ///
-/// Snackbars and toasts are drawn by the page itself. Navigation and system
+/// Snackbars and toasts are drawn by the page itself, and `animateForward` /
+/// `animateReverse` run on its animation registry. Navigation and system
 /// effects go to `effectHandler` (OrcaApp's router sets it), and a server
 /// action's structural changes edit the node tree here.
 @MainActor
@@ -39,6 +40,23 @@ public final class OrcaPageModel: ObservableObject {
     /// Builders for the plugin and host widget types this page draws beyond
     /// the SDK's own views.
     public let widgets: WidgetBuilders
+    /// The page's animation controllers by `animationId` (Flutter's
+    /// AnimationRegistry): what `animateForward` / `animateReverse` reach and
+    /// what a `tween` naming an id reads. An AnimatedBuilder registers here
+    /// while it is on screen.
+    let animations = AnimationRegistry()
+    /// "Now" for the page's animations, in milliseconds: the time an effect
+    /// starts a run at and a targeted tween is read at. Views pass their
+    /// frame's date through `milliseconds(_:)`, the same scale; tests set it.
+    var frameClock: () -> Double = { OrcaPageModel.milliseconds(Date()) }
+    /// The id an effect has just started a run on. The registry has no change
+    /// signal, so this is what wakes that id's paused builder.
+    let animationChanged = PassthroughSubject<String, Never>()
+
+    /// A frame date on the scale of `frameClock`.
+    nonisolated static func milliseconds(_ date: Date) -> Double {
+        date.timeIntervalSinceReferenceDate * 1000
+    }
 
     public init(page: PageResponse, store: ElmStore = ElmStore(),
                 registry: WidgetRegistry = .shared, client: OrcaClient? = nil,
@@ -57,12 +75,41 @@ public final class OrcaPageModel: ObservableObject {
     public var page: PageResponse { renderer.page }
 
     public func resolve(_ id: String) -> ResolvedNode? {
-        renderer.resolve(id, state: store.state)
+        resolve(id, animationProgress: nil)
     }
 
     /// Resolve under an AnimatedBuilder: `tween` props take `animationProgress`.
+    /// A tween naming an `animationId` takes that controller's curved
+    /// progress from the page's registry instead, 0 for an unknown id.
     public func resolve(_ id: String, animationProgress: Double?) -> ResolvedNode? {
-        renderer.resolve(id, state: store.state, animationProgress: animationProgress)
+        guard var node = renderer.resolve(id, state: store.state, animationProgress: animationProgress)
+        else { return nil }
+        // The renderer builds its resolver without the id lookup, so the
+        // props holding a targeted tween are resolved again with it.
+        let targeted = (renderer.node(id)?.props ?? [:]).filter { Self.namesAnimation($0.value) }
+        guard !targeted.isEmpty else { return node }
+        var resolver = store.state.resolver()
+        resolver.animationProgress = animationProgress
+        let now = frameClock()
+        resolver.animationProgressFor = { [animations] in animations.progress(id: $0, at: now) }
+        for (key, value) in targeted { node.props[key] = resolver.resolveDeep(value) }
+        return node
+    }
+
+    /// Whether a prop holds a `tween` or `tweenSequence` naming an id.
+    private static func namesAnimation(_ value: JSONValue) -> Bool {
+        switch value {
+        case .object(let map):
+            if let type = map["type"]?.stringValue, type == "tween" || type == "tweenSequence",
+               map["animationId"]?.stringValue != nil {
+                return true
+            }
+            return map.values.contains(where: namesAnimation)
+        case .array(let items):
+            return items.contains(where: namesAnimation)
+        default:
+            return false
+        }
     }
 
     public func watches(of id: String) -> [String] {
@@ -154,6 +201,13 @@ public final class OrcaPageModel: ObservableObject {
                 message: effect.payload["message"]?.stringValue ?? "",
                 duration: Double(effect.payload["duration"]?.intValue ?? 4000) / 1000,
                 style: effect.type == "showSnackbar" ? .snackbar : .toast)
+        case "animateForward", "animateReverse":
+            // Flutter: a missing or unknown id does nothing, no error.
+            guard let id = effect.payload["animationId"]?.stringValue else { return }
+            let now = frameClock()
+            let known = effect.type == "animateForward"
+                ? animations.forward(id: id, at: now) : animations.reverse(id: id, at: now)
+            if known { animationChanged.send(id) }
         case "debugLog":
             Self.log(effect)
             effectHandler?(effect)
