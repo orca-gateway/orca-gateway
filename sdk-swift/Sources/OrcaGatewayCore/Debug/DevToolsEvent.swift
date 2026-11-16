@@ -24,6 +24,28 @@ public struct DevToolsEvent: Equatable, Sendable {
     }
 }
 
+/// One step of a value's resolution, as DevTools shows it (the schema's
+/// TraceStep; Dart `TransformTrace.toJson`): the operation, what went in
+/// when something did, and what came out, each as Dart texts it (`'$x'`).
+public struct TraceStep: Equatable, Sendable {
+    public var op: String
+    public var `in`: String?
+    public var out: String
+
+    public init(op: String, in input: String? = nil, out: String) {
+        self.op = op
+        self.in = input
+        self.out = out
+    }
+
+    /// `{op, in?, out}`; `in` left out when nil.
+    var json: JSONValue {
+        var o: [String: JSONValue] = ["op": .string(op), "out": .string(out)]
+        if let input = self.in { o["in"] = .string(input) }
+        return .object(o)
+    }
+}
+
 // MARK: Builders
 
 extension DevToolsEvent {
@@ -110,12 +132,21 @@ extension DevToolsEvent {
     }
 
     /// One action ran: the action as sent on the wire, and how long it took.
-    public static func action(_ action: Action, pageId: String, durationMs: Double) -> DevToolsEvent {
-        DevToolsEvent("action", [
+    /// `transformTrace` is the trace of a setState's transform value and
+    /// `affectedWidgets` the page's nodes watching its key (`{id, type,
+    /// watches}`); each is left out when empty, as Dart does.
+    public static func action(
+        _ action: Action, pageId: String, durationMs: Double,
+        transformTrace: [TraceStep] = [], affectedWidgets: [JSONValue] = []
+    ) -> DevToolsEvent {
+        var p: [String: JSONValue] = [
             "actionType": .string(action.kind), "family": .string(family(of: action.kind)),
             "pageId": .string(pageId), "data": (try? JSONValue(encoding: action)) ?? .null,
             "durationMs": .double(durationMs),
-        ])
+        ]
+        if !transformTrace.isEmpty { p["transformTrace"] = .array(transformTrace.map(\.json)) }
+        if !affectedWidgets.isEmpty { p["affectedWidgets"] = .array(affectedWidgets) }
+        return DevToolsEvent("action", p)
     }
 
     /// The DevTools Actions panel's grouping (Dart `inferActionFamily`).
@@ -156,13 +187,14 @@ extension DevToolsEvent {
     }
 
     /// One HTTP request; `statusCode` 0 when the transport failed. Pass
-    /// headers through `sanitize` first. Empty and missing fields are left
-    /// out, as Dart does.
+    /// headers through `sanitize` first. `requestBody` and `responseBody`
+    /// are sent only when the host opts into bodies. Empty and missing fields
+    /// are left out, as Dart does (a JSON null body too: Dart's null).
     public static func network(
         method: String, url: String, statusCode: Int, durationMs: Double,
         requestSizeBytes: Int? = nil, responseSizeBytes: Int? = nil,
         requestHeaders: [String: String] = [:], responseHeaders: [String: String] = [:],
-        phases: [NetworkPhase] = []
+        phases: [NetworkPhase] = [], requestBody: JSONValue? = nil, responseBody: JSONValue? = nil
     ) -> DevToolsEvent {
         var p: [String: JSONValue] = [
             "method": .string(method), "url": .string(url), "statusCode": .int(statusCode),
@@ -175,6 +207,8 @@ extension DevToolsEvent {
         if !phases.isEmpty {
             p["phases"] = .array(phases.map { ["phase": .string($0.phase), "durationMs": .double($0.durationMs)] })
         }
+        if let requestBody, !requestBody.isNull { p["requestBody"] = requestBody }
+        if let responseBody, !responseBody.isNull { p["responseBody"] = responseBody }
         return DevToolsEvent("network", p)
     }
 
@@ -190,14 +224,14 @@ extension DevToolsEvent {
     }
 
     /// A node redrew because a key it watches changed. `propTraces` maps a
-    /// prop to its transform steps (`{op, in?, out}`); the Swift resolver does
-    /// not trace, so the SDK sends it empty.
+    /// prop to the steps of its resolution; sent as `{}` when nothing traced.
     public static func widgetRebuild(
-        widgetId: String, widgetType: String, watches: [String], propTraces: [String: [JSONValue]] = [:]
+        widgetId: String, widgetType: String, watches: [String], propTraces: [String: [TraceStep]] = [:]
     ) -> DevToolsEvent {
         DevToolsEvent("widget_rebuild", [
             "widgetId": .string(widgetId), "widgetType": .string(widgetType),
-            "watches": .array(watches.map(JSONValue.string)), "propTraces": .object(propTraces.mapValues(JSONValue.array)),
+            "watches": .array(watches.map(JSONValue.string)),
+            "propTraces": .object(propTraces.mapValues { .array($0.map(\.json)) }),
         ])
     }
 
