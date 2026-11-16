@@ -3,22 +3,20 @@
 ## Front page
 
 ### In one breath
-group 1 of 8 · tasks: 2 green, 0 blocked · fixtures 44 and 48 green on engine (755), Flutter (352)
-F1 fixtures 44 (the five, every wire prop) and 48 (refetchPage: no effect); Swift pins 46 and 25.
-F2 Kotlin pins 46 and 25. Native fixture-48 checks red until G3, as planned (q6).
-Ahead of their groups: K-refetch committed; S-refetch in a short rework; G3 (S-act, K-act) running.
+group 2 of 8 · tasks: 4 green, 0 blocked · A5.6 ui green on both SDKs (in-place reload)
+S-refetch: the model's built-in refetchPage awaits the loader's hook; a host's handler wins.
+K-refetch: the same model swaps its tree (renderer as Compose state); the awaiting Job survives.
+Ahead of their groups: G3 (S-act, K-act) and G4 (S-page, K-page) running, files disjoint.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided (minor), documented: after a refetch the natives keep `once` keys (Flutter resets
-them because it builds a new executor on every page build) and show the new page's title (Flutter
-keeps the first page's).
+none new (group 1's two documented differences stand: `once` keys kept, new page's title).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 2 (refetchPage in place); G3 already running, files disjoint. (default: go)
+2. Next: group 3 (executors run and advertise refetchPage), already running. (default: go)
 
 ## Appendix
 
@@ -51,6 +49,36 @@ Cases: A5.1-A5.5, A5.7 fx kt → green · A5.6 fx kt → red as planned (q6): `a
 `allTwentyFiveActionFixturesPass` at "every kind implemented"; `:core:test` 398, 2 failed (only those). Red first.
 Changed: render 45 → 46 ("01-44, 60-61"), action 24 → 25 ("45-48"), new `a5_6_refetchPageEmitsNothing`.
 Review: self (diff read: counts, messages, the new check) · pass
+
+### Group 2
+Commits: K-refetch 588d818, S-refetch bcbf30c (staged by path). Nothing pushed. Gate 09 group 1 approved under the
+standing rule.
+
+#### Task K-refetch · Kotlin refetchPage swaps tree in place
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/OrcaApp.kt` · `.../OrcaPageModel.kt` · `.../RefetchTest.kt` (new)
+Cases: A5.6 kt → green: `a5_6_kt_refetchPageSwapsTheTreeInPlaceKeepingAppStateAndResettingPageState`,
+`a5_6_kt_aFailedRefetchThrowsOutOfTheActionAndLeavesThePage`; `./gradlew build` sdk 438/0, lint clean; core 398 with
+F2's two expected reds. Red first (no second fetch; nothing thrown).
+Changed: `renderer` Compose state with a private setter; `replacePage(page)` swaps it, sets store.pageId, seeds (page
+state reset, unset app keys only) and bumps structureRevision through a shared `structureChanged()`; the loader
+registers a `refetchPage` handler before `plugins.install` (a host's wins) that fetches `path` with the app state and
+calls `replacePage` on the same model, never through reload/close (whose close would cancel the awaiting Job).
+Decisions: a failed fetch throws out of execute, `model.run` passes it to onError, so a fired Job still ends; nodes
+keeping their id do not run onInit again (firstMount guard), as Flutter's kept elements.
+Review: self (diff read: seed semantics checked in ElmStore.kt:130-140; every renderer reader re-reads per revision) ·
+pass
+
+#### Task S-refetch · Swift refetchPage reloads in place
+Files: `sdk-swift/Sources/OrcaGateway/OrcaApp.swift` · `.../OrcaPageModel.swift` · `.../RefetchTests.swift` (new)
+Cases: A5.6 sw → green: 5 tests (`testA5_6_RefetchPageSwapsTheTreeInPlaceWithoutLoading`, `…KeepsAppStateAndResets
+PageState`, `…EmitsNoEffect`, `testA5_6_FailedRefetchKeepsThePageAndThrowsOutOfTheAction`,
+`testA5_6_AHostRefetchPageHandlerWinsOverTheBuiltIn`); `swift test` UI 292/0, core 397 with F1's two expected reds.
+Changed: the model's init registers a built-in `refetchPage` awaiting `onRefetchPage` (Flutter's
+`ActionExecutor.onRefetchPage`), before a plugin host adds its handlers; the loader sets the hook (fetch path with the
+app state, `replacePage`); `replacePage` swaps renderer, page id, seeds, bumps structureRevision; no loading phase.
+Decisions: the hook lives on the model because the plugin host makes the model and adds handlers in one call; a model
+without a loader runs refetchPage as a no-op (Flutter with a null onRefetchPage).
+Review: self, fit rework (a host's `refetchPage` was overridden by the loader's; now it wins, test added) · pass
 
 ### Test run
 engine `bun test` 755/0 · `flutter test` 352 pass · Swift core 397, 2 expected reds · Kotlin core 398, 2 expected reds
