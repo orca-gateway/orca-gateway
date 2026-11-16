@@ -58,34 +58,64 @@ setup_steps:
   - "Create a Google Cloud project and enable the Maps SDK for iOS and Android"
   - "Generate an API key at https://console.cloud.google.com/apis/credentials"
 
+# What the Flutter plugin implements (lib/src/google_map_plugin.dart), for
+# `orca plugin generate` (TypeScript, Swift, Kotlin).
+# cli/test/google_map_schema_test.dart pins it against that source.
+# The CLI reads the names, `type`, `required` and `enum`; `default`,
+# `description` and `event_data` are notes for the native ports.
 schema:
   widgets:
     GoogleMap:
       kind: primitive
+      description: "The platform's Google map, its camera first at latitude, longitude and zoom, drawn as mapType, with a pin per marker; a tap on a pin opens its info window (title, snippet)."
       props:
-        latitude: { type: number, required: true }
-        longitude: { type: number, required: true }
-        zoom: { type: number }
-        mapType: { type: string, enum: [normal, satellite, terrain, hybrid] }
-        myLocationEnabled: { type: boolean }
-        zoomControlsEnabled: { type: boolean }
+        latitude: { type: number, default: 0, description: "The initial camera's latitude: read when the map is created; later only moveCamera moves the camera." }
+        longitude: { type: number, default: 0, description: "The initial camera's longitude: read when the map is created; later only moveCamera moves the camera." }
+        zoom: { type: number, default: 14, description: "The initial camera's zoom, Google's zoom level: read when the map is created; later only moveCamera moves the camera." }
+        mapType: { type: string, enum: [normal, satellite, terrain, hybrid], default: normal, description: "The map's tiles; anything else draws normal." }
+        myLocationEnabled: { type: boolean, default: false, description: "Shows the device's location on the map (once the app holds location permission; the plugin never asks for it)." }
+        zoomControlsEnabled: { type: boolean, default: true, description: "Shows the map's zoom + and - buttons (on Android; the iOS map has none)." }
         markers:
           type: array
+          description: "The map's pins. An entry that is not an object, or lacks a number latitude or longitude, is skipped."
           items:
             type: object
             name: MapMarker
             props:
-              id: { type: string, required: true }
-              latitude: { type: number, required: true }
-              longitude: { type: number, required: true }
-              title: { type: string }
-              snippet: { type: string }
+              id: { type: string, default: "", description: "The marker's id, which onMarkerTap fires as markerId." }
+              latitude: { type: number, required: true, description: "The pin's latitude." }
+              longitude: { type: number, required: true, description: "The pin's longitude." }
+              title: { type: string, default: "", description: "The info window's title." }
+              snippet: { type: string, description: "The info window's text under the title." }
       triggers: [onTap, onLongPress, onCameraMove, onMarkerTap]
+      # The eventData each trigger fires with.
+      event_data:
+        onTap:
+          description: "A tap on the map, off any marker."
+          props:
+            latitude: { type: number, description: "The tapped point's latitude." }
+            longitude: { type: number, description: "The tapped point's longitude." }
+        onLongPress:
+          description: "A long press on the map."
+          props:
+            latitude: { type: number, description: "The pressed point's latitude." }
+            longitude: { type: number, description: "The pressed point's longitude." }
+        onCameraMove:
+          description: "Repeatedly while the camera moves, from a gesture or moveCamera's animation."
+          props:
+            latitude: { type: number, description: "The camera target's latitude." }
+            longitude: { type: number, description: "The camera target's longitude." }
+            zoom: { type: number, description: "The camera's zoom, Google's zoom level." }
+        onMarkerTap:
+          description: "A tap on a marker's pin; the map also opens the marker's info window."
+          props:
+            markerId: { type: string, description: "The tapped marker's id." }
 
   actions:
     moveCamera:
+      description: "Animates the camera of the map targetId names to latitude, longitude at zoom. Fires no trigger itself; the map's onCameraMove fires as the camera moves."
       params:
-        targetId: { type: string, required: true }
-        latitude: { type: number, required: true }
-        longitude: { type: number, required: true }
-        zoom: { type: number }
+        targetId: { type: string, required: true, description: "The map node's id, resolved as a value; an empty or unknown id does nothing." }
+        latitude: { type: number, required: true, description: "Resolved as a value; missing does nothing, a non-number fails the action." }
+        longitude: { type: number, required: true, description: "Resolved as a value; missing does nothing, a non-number fails the action." }
+        zoom: { type: number, default: 14, description: "Google's zoom level, resolved as a value; a non-number fails the action." }
