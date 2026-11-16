@@ -40,9 +40,13 @@ val sdkVersion = rootDir.resolve("../../sdk-kotlin/VERSION").readText().trim()
 // The voice recorder's own version, read the same way, for its included build.
 val voiceRecorderVersion = rootDir.resolve("../../plugins/orca_voice_recorder/android/VERSION").readText().trim()
 
+// The video player's own version, read the same way, for its included build.
+val videoPlayerVersion = rootDir.resolve("../../plugins/orca_video_player/android/VERSION").readText().trim()
+
 dependencies {
     implementation("com.orcagateway:sdk:$sdkVersion")
     implementation("com.orcagateway:orca-voice-recorder:$voiceRecorderVersion")
+    implementation("com.orcagateway:orca-video-player:$videoPlayerVersion")
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.activity.compose)

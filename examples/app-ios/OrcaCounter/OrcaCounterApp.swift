@@ -1,4 +1,5 @@
 import OrcaGateway
+import OrcaVideoPlayer
 import OrcaVoiceRecorder
 import SwiftUI
 import UIKit
@@ -33,9 +34,11 @@ import UIKit
 /// The app opens `orcacounter://` links (see "Deep links" in the README) and
 /// prints one `OrcaCounter deeplink:` line for each.
 ///
-/// ORCA_APP_ID=custom shows the two plugins below at work, and the voice
+/// ORCA_APP_ID=custom shows the two plugins below at work, the voice
 /// recorder (`VoiceRecorderPlugin`, from plugins/orca_voice_recorder/ios) behind
-/// its home page's "Go to Voice Page".
+/// its home page's "Go to Voice Page", and the video player
+/// (`VideoPlayerPlugin`, from plugins/orca_video_player/ios) behind its "Go to
+/// Video Page".
 ///
 /// Five more switches try the screens OrcaApp draws around the pages; unset,
 /// each leaves the app as it was. ORCA_API_KEY (default `demo-key`): any other
@@ -87,7 +90,7 @@ struct OrcaCounterApp: App {
             preloadedConfig: preloadedConfig, staticFlowManager: staticFlowManager,
             enableSessionTracking: isOn("ORCA_SESSIONS"),
             onDeeplink: logDeeplink,
-            plugins: [BadgePlugin(), DeviceActionsPlugin(), VoiceRecorderPlugin()],
+            plugins: [BadgePlugin(), DeviceActionsPlugin(), VoiceRecorderPlugin(), VideoPlayerPlugin()],
             splashView: isOn("ORCA_SPLASH") ? { AnyView(HostSplash()) } : nil,
             colorScheme: colorScheme, locale: locale)
     }

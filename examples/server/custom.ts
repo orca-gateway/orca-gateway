@@ -29,6 +29,14 @@ import {
 import { TV } from "../../engine/src/types/value";
 import { GoogleMap, MoveCamera } from "./orca_google_map";
 import { VoiceRecorder, StartRecording, StopRecording, PlayRecording } from "./orca_voice_recorder";
+import {
+  VideoPlayer,
+  PlayVideo,
+  PauseVideo,
+  SeekVideo,
+  SetVolume,
+  SetPlaybackSpeed,
+} from "./orca_video_player";
 
 // ── Custom Widget: ColoredBadge ─────────────────────────
 // Defined server-side, rendered by a custom builder on the Flutter side.
@@ -108,6 +116,19 @@ const homePage = PageDefinition.create({
                 }),
                 actions: {
                   onTap: Custom("navigate", { path: "/voice" }),
+                },
+              }),
+              TextButton.new({
+                child: Row.new({
+                  mainAxisSize: "min",
+                  children: [
+                    Icon.new({ name: "play_arrow", size: 20 }),
+                    SizedBox.new({ width: 8 }),
+                    Text.new({ data: "Go to Video Page" }),
+                  ],
+                }),
+                actions: {
+                  onTap: Custom("navigate", { path: "/video" }),
                 },
               }),
               // ── Section 1: Custom Actions ──────────────
@@ -463,6 +484,91 @@ const voicePage = PageDefinition.create({
     }),
 });
 
+// ── Video Page ───────────────────────────────────────────
+// The video player plugin through the classes `orca plugin generate` writes
+// from plugins/orca_video_player/orca_plugin.yaml (./orca_video_player).
+// The player's onProgress keeps the position in ms in page state, onComplete
+// marks the end; the buttons address the player by its playerId.
+
+const PLAYER_ID = "demo";
+// The video_player package's own example video.
+const VIDEO_URL = "https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4";
+
+const videoPage = PageDefinition.create({
+  id: "video",
+  title: "Video Page",
+  state: [
+    { key: "videoPosition", scope: "page", initial: 0 },
+    { key: "videoDone", scope: "page", initial: false },
+  ],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({
+        title: Text.new({ data: "Video Player" }),
+        centerTitle: true,
+      }),
+      body: Padding.new({
+        padding: EdgeInsets.all(16),
+        child: Column.new({
+          crossAxisAlignment: "center",
+          children: [
+            VideoPlayer.new({
+              url: VIDEO_URL,
+              playerId: PLAYER_ID,
+              showControls: true,
+              actions: {
+                onProgress: SetState("videoPosition", V.event("position")),
+                onComplete: SetState("videoDone", V.static(true)),
+              },
+            }).withKey("player"),
+            SizedBox.new({ height: 16 }),
+            Row.new({
+              mainAxisAlignment: "center",
+              children: [
+                ElevatedButton.new({
+                  child: Text.new({ data: "Play" }),
+                  actions: { onTap: PlayVideo(PLAYER_ID) },
+                }).withKey("play"),
+                SizedBox.new({ width: 8 }),
+                ElevatedButton.new({
+                  child: Text.new({ data: "Pause" }),
+                  actions: { onTap: PauseVideo(PLAYER_ID) },
+                }).withKey("pause"),
+                SizedBox.new({ width: 8 }),
+                ElevatedButton.new({
+                  child: Text.new({ data: "Seek 0" }),
+                  actions: { onTap: SeekVideo(PLAYER_ID, 0) },
+                }).withKey("seek"),
+              ],
+            }),
+            SizedBox.new({ height: 8 }),
+            Row.new({
+              mainAxisAlignment: "center",
+              children: [
+                ElevatedButton.new({
+                  child: Text.new({ data: "Volume 0.5" }),
+                  actions: { onTap: SetVolume(PLAYER_ID, 0.5) },
+                }).withKey("volume"),
+                SizedBox.new({ width: 8 }),
+                ElevatedButton.new({
+                  child: Text.new({ data: "Speed 1.5" }),
+                  actions: { onTap: SetPlaybackSpeed(PLAYER_ID, 1.5) },
+                }).withKey("speed"),
+              ],
+            }),
+            SizedBox.new({ height: 16 }),
+            Text.new({
+              data: V.transform(V.pageState("videoPosition"), [TV.template("Position: {{value}} ms")]),
+            }).withKey("video-position"),
+            Text.new({
+              data: V.transform(V.pageState("videoDone"), [TV.template("Finished: {{value}}")]),
+            }).withKey("video-done"),
+          ],
+        }),
+      }),
+    }),
+});
+
 // ── App ──────────────────────────────────────────────────
 
 const customFlow = Flow.create({
@@ -471,6 +577,7 @@ const customFlow = Flow.create({
     { path: "home", page: homePage },
     { path: "map", page: mapPage },
     { path: "voice", page: voicePage },
+    { path: "video", page: videoPage },
   ],
 });
 

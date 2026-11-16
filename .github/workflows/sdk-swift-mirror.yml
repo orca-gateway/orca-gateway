@@ -23,7 +23,9 @@ name: SDK Swift Mirror
 # write access on it, its private half in an Actions secret: sdk-swift's is
 # SWIFT_MIRROR_DEPLOY_KEY (orca-gateway/orca-gateway-swift), the voice
 # recorder's ORCA_VOICE_RECORDER_SWIFT_DEPLOY_KEY
-# (orca-gateway/orca-voice-recorder-swift). See docs/User_Actions.md.
+# (orca-gateway/orca-voice-recorder-swift), the video player's
+# ORCA_VIDEO_PLAYER_SWIFT_DEPLOY_KEY (orca-gateway/orca-video-player-swift).
+# See docs/User_Actions.md.
 on:
   push:
     tags:

@@ -41,6 +41,8 @@ PACKAGES=(
   "sdk-kotlin|sdk-kotlin|sdk-kotlin-v|maven|sdk-kotlin/VERSION"
   "orca_voice_recorder-ios|plugins/orca_voice_recorder/ios|orca_voice_recorder-ios-v|mirror|plugins/orca_voice_recorder/ios/VERSION"
   "orca_voice_recorder-android|plugins/orca_voice_recorder/android|orca_voice_recorder-android-v|maven|plugins/orca_voice_recorder/android/VERSION"
+  "orca_video_player-ios|plugins/orca_video_player/ios|orca_video_player-ios-v|mirror|plugins/orca_video_player/ios/VERSION"
+  "orca_video_player-android|plugins/orca_video_player/android|orca_video_player-android-v|maven|plugins/orca_video_player/android/VERSION"
 )
 
 # The public repository the mirror workflow pushes sdk-swift to. The override
