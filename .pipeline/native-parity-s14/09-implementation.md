@@ -3,19 +3,21 @@
 ## Front page
 
 ### In one breath
-group 4 of 7 · tasks: 2 green, 0 blocked · cases: C14.1-C14.5 green, by hand too · all green
-T6/T7 demos: ORCA_PRELOAD runs the host's preload; the READMEs say what offline does.
-Hand check, both devices: offline boot, unvisited static pages open, dynamic fail, 4->5 refetch.
+group 5 of 7 · tasks: 6 green, 0 blocked · cases: C14.1-C14.5 green, C14.6's parts in
+T8-T11: persistState/clearState in Flutter, the engine, Swift and Kotlin, alike (decision 3 A).
+Rebased on main with #38: one boot screen over preload; T17/T18 moved 7 tests, no bug.
+Row C14.2 fixed to Flutter: nothing saved shows "Something Went Wrong"; redo by hand later.
+Planned red until group 6: "every advertised kind has a fixture" in Swift and Kotlin.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided: a host preload error is a plain line; a deep link in its splash is not held
+4 auto-decided: clear nulls the key · public session hooks · push home · tests cache in memory
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: groups 5-7 need decision 3: persistState/clearState in all 3 SDKs, or drop. (default: wait)
+2. Next: group 6, fixtures 48-50 on all three SDKs (they end the planned red). (default: go)
 
 ## Appendix
 
@@ -108,6 +110,82 @@ Decisions: preload from composition (produceState) · the host catches any Excep
 Review fit: the README told hosts to catch only the offline error; a failed /config throws too, fixed ·
 Review quality: the READMEs said saved versions are sent to /version (they are compared on the device), fixed
 
+### Group 5
+Decision 3 answered A by you (relayed by the parent session, 2026-11-16): persistState and clearState are defined and
+implemented in Flutter, Swift and Kotlin. The saved-state contract S1-S8 (scratchpad s14/g5-common.md) holds for all
+three: entries `orca_saved_app` / `orca_saved_page_<pageId>` as JSON objects; local survives a restart, session lives
+in a process-wide map; persist is a snapshot and keeps one saved copy per key; clear nulls the live key and every
+saved copy; a scope's set-up restores its entry; no effect is emitted.
+
+#### T9 · Engine PersistState builder, saved-state demo (c61cb78)
+Files: engine/src/types/action.ts · engine/src/types/index.ts · engine/test/types.test.ts ·
+examples/server/saved-state.ts (new) · examples/server/index.ts
+Cases: C14.6/hand enabled → `bun test` 775 (773 + 2 red first); the demo app compiles and serves /config and its pages
+Changed: `PersistState(key, scope = "page", storage = "local")` beside ClearState, both documented (S3, S4) and
+exported · app `saved-state`: Count +1 / Save on device / Save for this session / Forget, Visits "+1 and save", a note
+under each button, an `other` page and back
+Decisions: visits is an app-scoped definition on home, so it works with or without a config · `initialRoute: /home`
+for ORCA_BOOT=config · leaving and coming back pushes a fresh home, whose set-up runs the restore (main session's call)
+Review fit: pass · Review quality: pass
+
+#### T8 · Flutter persist/clear handlers, restore (fcdd8e2)
+Files: sdk/lib/src/state/action_executor.dart · sdk/lib/src/state/state_manager.dart · sdk/lib/src/widgets/orca_app.dart ·
+sdk/test/saved_state_test.dart (new)
+Cases: C14.6/F enabled → `flutter test` 385 (12 new, red first), `flutter analyze` clean; dropping the boot's
+`loadSaved` turns the OrcaApp test red
+Changed: `SavedState` in state_manager.dart (static session map, lazy SharedPreferencesAsync, local mirror, error-
+swallowing write-through) · `StateManager({saved})`: loadSaved, restoreApp, persistState, clearState; initPage restores
+· the two handlers (defaults page / local) · OrcaApp awaits loadSaved before every boot branch, restores app state
+after `initialAppState`
+Decisions: the test injects an in-memory SharedPreferencesAsync, as the offline runner does · clearState nulls the live
+key even when never held · the handlers await the local write
+Review fit: pass · Review quality: pass
+
+#### T10 · Swift core saved state, advertise both (7e2aa06)
+Files: State/SavedState.swift (new) · State/ActionExecutor.swift · capabilities.json · Capabilities/Generated.swift ·
+Tests: SavedStateTests.swift (new), CapabilitiesTests.swift, ActionHandlerTests.swift (one pin, accepted at this gate)
+Cases: C14.6/S enabled → SavedStateTests 10 (red first); core green but for the planned
+ModelRoundTripTests "every advertised kind has a fixture" red until group 6; 0 warnings
+Changed: `public final class SavedState` (NSLock): persist / clear / restore(into:) / restorePage(into:pageId:), local
+mirror and write-through, public sessionEntries / resetSession (documented: sign-out, tests) · executor
+`savedState`, both kinds handled and advertised (22 actions)
+Decisions: clearState keeps the key as null (same as Flutter and Kotlin) · page scope without a pageId does nothing
+Review fit: pass · Review quality: pass
+
+#### T11 · Kotlin core saved state, advertise both (09ccb55)
+Files: core/state/SavedState.kt (new) · core/state/ActionExecutor.kt · capabilities.json · capabilities/Generated.kt ·
+tests: SavedStateTest.kt (new), CapabilitiesTest.kt, ActionHandlerTest.kt (one pin, accepted at this gate)
+Cases: C14.6/K enabled → SavedStateTest 12 (red first); core green but for the planned ModelRoundTripTest red
+until group 6; sdk green; explicitApi, warnings as errors clean
+Changed: SavedState as Swift's in Kotlin terms (lock, mirror, write-through, java.io only), public sessionEntries /
+resetSession documented · executor `savedState`, both kinds handled and advertised (22)
+Decisions: as T10 · T10 committed before T11 (the cross-SDK capabilities check), reordered by the main session
+Review fit: pass · Review quality: pass
+
+Then the branch was rebased onto main 3518792 (your merge of #38, step 18): the T4 and T5 rework commits were folded
+into one commit per task, the boots merged by the main session (step 18's host views and OrcaErrorView over step 14's
+preload; one boot screen over /version and /config, as Flutter), the capability vectors regenerated (56 widgets,
+22 actions, one hash). Three Swift and four Kotlin tests of steps 14 and 18 then failed: T17 and T18 below.
+
+#### T17 · Swift: step 18's AppShellTests after the merge (d493a95)
+Files: sdk-swift/Tests/OrcaGatewayTests/AppShellTests.swift (no product change: no merge bug)
+Cases: C18.1, C18.3, C14.2 → `swift test` SwiftUI 347, `xcodebuild test` on the iOS 18.5 simulator 409, 0 failures;
+core 483 with the planned red; 0 warnings
+Changed: one splash over the preload (version, config, page in that order, the splash alone on screen as both go out);
+two new C14.2 tests: preload's forceUpdate through the host's view, and nothing saved drawing Flutter's "Something
+Went Wrong" with Try again re-running preload; test boots with enableOffline get an in-memory cache
+Decisions: the real Application Support cache leaked a saved config between test runs, so the tests no longer use it
+Review fit: pass · Review quality: pass
+
+#### T18 · Kotlin: AppShellTest and OfflineBootTest after the merge (660825d)
+Files: sdk-kotlin/sdk/src/test/.../AppShellTest.kt · OfflineBootTest.kt (no product change: no merge bug)
+Cases: C18.1, C14.1, C14.2 → `./gradlew build --continue`: sdk 489, 0 failures (3 forced reruns stable); core 477 with
+the planned red
+Changed: the C18.1 tests wait for the preload's /version (sent off the main thread) with the splash still up; the
+offline tests read Flutter's texts ("Connection Failed", "Something Went Wrong"), keep the order and the retry
+Decisions: one test renamed, its name no longer true
+Review fit: pass · Review quality: pass
+
 ### Test run
 Group 1 (..6835ab0): sdk `flutter test` 364, `flutter analyze` clean · engine `bun test` 751 · Swift and Kotlin
 unchanged (no file of theirs touched). Files changed: the task's only.
@@ -117,6 +195,11 @@ Group 3 (..6be2e62): `swift test`: SwiftUI 275, core 400, 0 failures, 0 warnings
 iOS 18.5 simulator: TEST SUCCEEDED · `./gradlew build`: core 399, sdk 388, 0 failures · no stray file.
 Group 4 (..7bf081b): iOS demo xcodebuild BUILD SUCCEEDED, 0 Swift warnings · Android demo assembleDebug BUILD
 SUCCESSFUL (warnings as errors) · `swift test` core 400 · `./gradlew build` core 399, sdk 388 · no stray file.
+Group 5 Before the rebase (..09ccb55): engine 775 · Flutter 385, analyze clean · Swift core 452, SwiftUI 316, 0 warnings ·
+Kotlin core 453, sdk 461 · red only the planned "every advertised kind has an action fixture" test in Swift and Kotlin.
+After the rebase and T17/T18 (..d493a95): engine 775 · Flutter 385 · Swift core 483, SwiftUI 347 (409 on the iOS 18.5
+simulator), 0 warnings · Kotlin core 477, sdk 489 · the same planned red, which group 6's fixtures 48-50 turn green ·
+generators: no drift · no stray file.
 
 ### Hand check (both devices, 2026-11-16; server :8094, static-flows at version 4)
 1 nothing saved, server down: the boot error with "No network and no cached config available" (iOS "Could not
@@ -132,7 +215,14 @@ none
 none
 
 ### For ship (stage 10) to know
-- G5-G7 wait on the user's decision 3 (persistState/clearState).
+- Decision 3 = A (2026-11-16): persistState/clearState in all three SDKs; the saved-state contract S1-S8 is pinned by
+  action fixtures 48-50 in group 6. New public API: Swift and Kotlin core `SavedState` (persist, clear, restore,
+  restorePage, sessionEntries, resetSession) and `ActionExecutor.savedState`; engine `PersistState`; Flutter
+  `SavedState`, `StateManager({saved})`, loadSaved, restoreApp.
+- Row C14.2 corrected again against Flutter after step 18 (Flutter's "Something Went Wrong" screen for the offline boot
+  with nothing saved); its hand-check step is redone with C14.6.
+- Follow-up seen, not this step's: step 18's testC18_3_UnderALightSchemeAScaffoldPageLooksAsUnderADarkOne is flaky on
+  macOS (fails about 1 run in 4, also on the unchanged baseline), green on the simulator.
 - New public API: Swift OrcaApp(preloadedConfig:staticFlowManager:), FileKeyValueStore.applicationSupport(), core
   preload/PreloadResult/OfflineBootError/StaticFlowManager/FileKeyValueStore; Kotlin the same, offlineStore(context).
 - Rows C14.1-C14.5 tick with this branch; C14.6 waits on decision 3 (G5-G7), so the step's PR waits too.
