@@ -4,7 +4,7 @@
   "idea": "Native parity step 18 (Phase C): app shell, theming and error screens on both sdk-swift and sdk-kotlin, matching the Flutter SDK: host-supplied loading, splash, error and force-update views; status-specific error screens (401, 403, 404, 429, 5xx, offline) with Flutter's messages; dark mode and locale through the SDK; UnsupportedWidgetPlaceholder; a request timeout option. Plan step 18; rows C18.1-C18.5.",
   "kind": "feature",
   "created_at": "2026-11-15T21:57:28Z",
-  "updated_at": "2026-11-16T01:07:59Z",
+  "updated_at": "2026-11-16T04:04:28Z",
   "active_session": "7317184b-fcd8-4ef3-bc8c-3dc085f8486c",
   "current": "10",
   "stages": {
@@ -52,8 +52,8 @@
     },
     "10": {
       "status": "in_review",
-      "rounds": 1,
-      "card": "cards/10-r1.md"
+      "rounds": 2,
+      "card": "cards/10-r2.md"
     },
     "11": {
       "status": "pending"

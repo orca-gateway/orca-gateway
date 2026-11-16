@@ -279,3 +279,27 @@ Hand checks by the session after group 7 (iOS 04AFD6DE, Android emulator-5584, s
 error screen, a Scaffold page light under a dark scheme (iOS also with the device dark), the host splash reading
 "host splash · fr-FR" until the 5 s timeout shows Connection Failed, and the placeholder page's two cards.
 Screenshots: session scratchpad s18/hand-ios and s18/hand-android.
+
+### Stage 10 rework: rebase on main 6a7f0e0 (PRs #37, #40) and PR #38's CI (2026-11-16)
+PR #38 conflicted with main after PRs #37 (deep links) and #40 (13 layout wrappers, Scaffold insets) merged, and its
+"UI tests and example (iOS simulator)" job failed to build the test target on Xcode 16.4 (run 43784457921).
+Rebase (restore point backup/native-parity-s18-pre-rebase): conflicts resolved by hand in OrcaApp.kt (T4, T6:
+RouterApp takes the host views, onDeeplink kept), OrcaApp.swift (T3, T5: AppBootContent keeps firstRouteAppeared and
+the deep link modifiers), Structure.swift (doc), capabilities.json ×2 and the count pins (44 + UnsupportedWidgetPlaceholder
+= 45), both demo apps (onDeeplink and the step 18 switches); Generated.swift/.kt regenerated, never merged (45 widgets,
+one capsHash c24e80ed… for both).
+- T17 (226aab9) Swift: the C18.4 look test's padding points are typed sub-expressions; Xcode 16.4 gave up on them
+  (1.1 s on Xcode 27.2). Review fit: pass · Review quality: pass
+- T18 (9847d5e) Kotlin A3.1 pin and the README counts move to 45. Review fit: pass · Review quality: pass
+- T20 (de3bde5) Kotlin: PR #37's B11.1 failed-config test waits for step 18's "Server Error" screen. Review fit: pass ·
+  Review quality: pass
+- T19 (421f2e1) Swift: before iOS 26 a page AppBar's navigation bar and the status bar stayed dark under a dark scheme
+  (toolbarColorScheme applies only to a visible bar background); a UIKit pin keeps them light; the warn golden takes the
+  Scaffold's painted background (one seam row). Found on the iOS 18.5 simulator; T16 was checked on 26.5 only.
+  Decision (memory "ios-bar-light-pin", minor): a pin, not `.toolbarBackground(.visible)` (a hairline breaks three
+  goldens). Review fit: pass · Review quality: pass
+Test run (rebased head 421f2e1): engine 751 · Flutter 349 · cli 27 · generators no drift · `swift test` core 407,
+SwiftUI 286, 0 warnings · xcodebuild package on iOS 18.5 (CI's runtime) 407 + 330, 0 failures, goldens compared ·
+iOS 26.5: 5 AppBarCardTests/ButtonTests failures, all failing on origin/main alone (PR #33's four plus
+A1_9ScaffoldLeadingWidthSizesTheLeadingSlot since PR #40) · `./gradlew build` core 401, sdk 402, 0 failures · both
+example apps build.

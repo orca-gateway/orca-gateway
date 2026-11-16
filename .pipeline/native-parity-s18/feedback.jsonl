@@ -4,3 +4,4 @@
 {"ts":"2026-11-15T23:39:10Z","stage":"09","round":4,"template":null,"text":"A group 4 (standing rule: question 1 'next: group 5' is minor, default go)"}
 {"ts":"2026-11-16T00:06:01Z","stage":"09","round":5,"template":null,"text":"A group 5 (standing rule: question 1 'rebase onto main, then group 6' is minor, default go)"}
 {"ts":"2026-11-16T00:26:38Z","stage":"09","round":6,"template":null,"text":"A group 6 (standing rule: question 1 'group 7, the demo switches and README sections, then the hand checks' is minor, default go)"}
+{"ts":"2026-11-16T04:04:00Z","stage":"10","round":1,"template":null,"text":"PR #38 conflicts with main (PRs #37 and #40 merged) and its iOS simulator check failed; rebase, regenerate, fix the check, push (relayed by the parent session; you: fix the conflicts then start the step)"}
