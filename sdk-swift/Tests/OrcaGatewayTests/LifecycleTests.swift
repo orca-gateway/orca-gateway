@@ -171,6 +171,77 @@ final class LifecycleTests: XCTestCase {
         XCTAssertEqual(lines.first?.level, .error)
     }
 
+    // MARK: C19 DevTools on the page
+
+    /// C19.6: with DevTools on, a debugLog still writes its system log line
+    /// and still reaches the effect handler, and DevTools hears its generic
+    /// `action` event only (Flutter sends no log event; the schema has none).
+    func testC19_6_withDevToolsOnADebugLogIsLoggedAndDevToolsHearsItsActionEventOnly() async throws {
+        let recorder = DevToolsHookTests.Recorder()
+        OrcaDebug.reporter = recorder
+        defer { OrcaDebug.reporter = nil }
+        let model = OrcaPageModel(page: PageResponse(pageId: "p", title: "P"))
+        var handled: [ActionEffect] = []
+        model.effectHandler = { handled.append($0) }
+        let since = Date().addingTimeInterval(-1)
+        let tag = "devtools-\(UUID().uuidString)"
+        let log = Action.debugLog(.init(level: "info", message: "hi", tag: tag))
+        await model.run(log)
+        XCTAssertEqual(handled, [ActionEffect("debugLog", ["level": "info", "tag": .string(tag), "message": "hi"])])
+
+        let store = try OSLogStore(scope: .currentProcessIdentifier)
+        let entries = try store.getEntries(at: store.position(date: since),
+                                           matching: NSPredicate(format: "subsystem == %@", "com.orcagateway"))
+        let lines = entries.compactMap { $0 as? OSLogEntryLog }.filter { $0.category == tag }
+        XCTAssertEqual(lines.map(\.composedMessage), ["hi"], "the debugLog line")
+        XCTAssertEqual(lines.first?.level, .info)
+
+        XCTAssertEqual(recorder.events.map(\.type), ["action"])
+        var payload = try XCTUnwrap(recorder.events.first?.payload)
+        XCTAssertNotNil(payload.removeValue(forKey: "durationMs")?.doubleValue)
+        XCTAssertEqual(payload, [
+            "actionType": "debugLog", "family": "custom", "pageId": "p", "data": log.json,
+        ])
+    }
+
+    /// C19.2: a page's setState lists the page's own nodes watching its key,
+    /// in the order the page sent them (8 before 5 here), then a node a
+    /// server action added; a node watching another key is not listed.
+    func testC19_2_aPagesSetStateListsItsNodesWatchingTheKey() async throws {
+        let recorder = DevToolsHookTests.Recorder()
+        OrcaDebug.reporter = recorder
+        defer { OrcaDebug.reporter = nil }
+        func node(_ id: String, _ type: String, _ watches: [String], children: [String] = []) -> JSONValue {
+            ["id": .string(id), "type": .string(type), "kind": "layout", "childMode": "multi",
+             "props": [:], "children": .array(children.map { .string($0) }),
+             "watches": .array(watches.map { .string($0) })]
+        }
+        let model = try OrcaPageModel(page: JSONValue.object([
+            "pageId": "home", "title": "Home", "state": [Self.zero("count")],
+            "components": [
+                node("0", "Column", [], children: ["8", "3", "5"]),
+                node("8", "Container", ["count", "theme"]),
+                node("3", "Text", ["theme"]),
+                node("5", "Text", ["count"]),
+            ],
+        ]).decode(PageResponse.self))
+        let increment = try Self.count("count").decode(Action.self)
+        func watchers() -> JSONValue? {
+            recorder.of("action").last { $0.payload["actionType"] == "setState" }?.payload["affectedWidgets"]
+        }
+
+        await model.run(increment)
+        XCTAssertEqual(model.store.value("count"), 1)
+        let container: JSONValue = ["id": "8", "type": "Container", "watches": ["count", "theme"]]
+        let text: JSONValue = ["id": "5", "type": "Text", "watches": ["count"]]
+        XCTAssertEqual(watchers(), [container, text])
+
+        let added = ComponentNode(id: "20", type: "Text", kind: .primitive, childMode: .none, watches: ["count"])
+        model.apply(.add(parentId: "0", components: [added], position: 0))
+        await model.run(increment)
+        XCTAssertEqual(watchers(), [container, text, ["id": "20", "type": "Text", "watches": ["count"]]])
+    }
+
     // MARK: helpers
 
     /// The node runs `trigger` once on its first build; its own state change

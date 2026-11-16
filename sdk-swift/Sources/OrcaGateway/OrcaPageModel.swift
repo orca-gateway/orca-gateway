@@ -52,9 +52,20 @@ public final class OrcaPageModel: ObservableObject {
         executor.onEffect = { [weak self] effect in self?.onEffect?(effect) }
         executor.perform = { [weak self] effect in self?.perform(effect) }
         executor.onMutation = { [weak self] mutation in self?.apply(mutation) }
+        executor.pageNodes = { [weak self] in self?.nodesInPageOrder() ?? [] }
     }
 
     public var page: PageResponse { renderer.page }
+
+    /// The current nodes in Flutter's node map order: the page's wire order,
+    /// then the nodes a server action added, by id (the renderer's map keeps
+    /// no insertion order).
+    private func nodesInPageOrder() -> [ComponentNode] {
+        let nodes = renderer.nodes
+        var listed: Set<String> = []
+        let sent = page.components.compactMap { node in listed.insert(node.id).inserted ? nodes[node.id] : nil }
+        return sent + nodes.keys.filter { !listed.contains($0) }.sorted().compactMap { nodes[$0] }
+    }
 
     /// A read of a node's props by another view (a Row reading its
     /// Flexible's flex, an AppBar its title's text): never reported to
