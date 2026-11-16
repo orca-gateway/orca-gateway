@@ -1,112 +1,127 @@
 package com.orcagateway.sdk.widgets
 
-import androidx.compose.animation.core.CubicBezierEasing
+import android.provider.Settings
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
+import com.orcagateway.core.animation.AnimationController
+import com.orcagateway.core.animation.AnimationDuration
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.LocalOrcaAnimationProgress
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.style.Props
-import kotlin.math.min
+
+/**
+ * Whether animations jump to their end state (D14): true or false when a
+ * host or a test provides it, null (the default) to follow the system
+ * setting ([rememberSystemReduceMotion]). Every animated widget reads it
+ * through [orcaReduceMotion].
+ */
+public val LocalOrcaReduceMotion: ProvidableCompositionLocal<Boolean?> = compositionLocalOf { null }
+
+/**
+ * The system's "remove animations" setting: the animator duration scale is
+ * 0. Compose's own duration scale does not reach a `withFrameNanos` loop,
+ * so the widgets ask here. Read once per composition.
+ */
+@Composable
+public fun rememberSystemReduceMotion(): Boolean {
+    val resolver = LocalContext.current.contentResolver
+    return remember(resolver) { Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
+}
+
+/** [LocalOrcaReduceMotion], or the system setting when nothing provides it. */
+@Composable
+internal fun orcaReduceMotion(): Boolean = LocalOrcaReduceMotion.current ?: rememberSystemReduceMotion()
 
 /**
  * Flutter `OrcaAnimatedBuilder` (sdk/lib/src/builders/animated_builder_widget.dart),
- * as Swift's AnimatedBuilderView: a frame clock of `duration` ms shaped by
- * `curve`, running once or, with `repeat`, forever (back and forth with
- * `reverse`). Every frame its descendants are resolved again with the
- * clock's value ([LocalOrcaAnimationProgress]), so their `tween` props move.
- * `autoStart: false` holds it at 0. `onComplete` fires when a one-shot run
- * ends.
+ * as Swift's AnimatedBuilderView: a core [AnimationController] of `duration`
+ * ms (300) shaped by `curve` (the core's [com.orcagateway.core.animation.Curves];
+ * missing or unknown is easeInOut), stepped by the page's frame clock. With
+ * `autoStart` (true) it runs once or, with `repeat`, forever (back and forth
+ * with `reverse`); without, it rests at 0 until an action forwards it. Every
+ * frame of a run its descendants are resolved again with the curved value
+ * ([LocalOrcaAnimationProgress]), so their `tween` props move.
  *
- * Not ported yet: `animationId` targeting from actions (Dart's
- * AnimationRegistry); a tween naming an id resolves against the nearest
- * builder like an unnamed one.
+ * With an `animationId` it is registered in the page's
+ * [OrcaPageModel.animations] while composed, so `animateForward` and
+ * `animateReverse` reach it; the last builder to register an id owns it and
+ * a builder leaving removes only its own entry. `onComplete` fires each
+ * time a run reaches 1 or reaches 0, never for a cycle of a repeat. It
+ * takes frames only while a run is live. Reduced motion ([orcaReduceMotion]):
+ * a run ends the moment it starts.
  */
 @Composable
 internal fun AnimatedBuilderWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
-    val durationMs = maxOf(node["duration"]?.doubleValue ?: 300.0, 1.0)
+    val durationMs = AnimationDuration.milliseconds(node["duration"])
     val repeats = node["repeat"]?.boolValue ?: false
-    val reverse = node["reverse"]?.boolValue ?: false
+    val reverses = node["reverse"]?.boolValue ?: false
     val autoStart = node["autoStart"]?.boolValue ?: true
-    val curve = node["curve"]?.stringValue ?: "linear"
+    val curve = node["curve"]?.stringValue
+    val animationId = node["animationId"]?.stringValue
+    val reduceMotion = orcaReduceMotion()
 
-    var raw by remember(node.id) { mutableDoubleStateOf(0.0) }
-    LaunchedEffect(node.id, durationMs, repeats, reverse, autoStart) {
-        raw = 0.0
-        if (!autoStart) return@LaunchedEffect
-        val start = withFrameNanos { it }
-        while (true) {
-            val now = withFrameNanos { it }
-            val elapsed = (now - start) / 1_000_000.0
-            raw = animationClock(elapsed, durationMs, repeats, reverse, autoStart)
-            if (!repeats && elapsed >= durationMs) break
-        }
-        model.fire("onComplete", node)
+    val controller = remember(node.id, durationMs, curve, repeats, reverses, reduceMotion) {
+        AnimationController(durationMs, curve, repeats, reverses, reduceMotion)
+    }
+    var progress by remember(controller) { mutableDoubleStateOf(0.0) }
+    val current by rememberUpdatedState(node)
+
+    // Registered before the clock starts, so an action of the first frame finds it.
+    val owner = remember(node.id) { Any() }
+    DisposableEffect(model, owner, animationId, controller) {
+        if (animationId != null) model.animations.register(animationId, owner, controller)
+        onDispose { if (animationId != null) model.animations.unregister(animationId, owner) }
     }
 
-    CompositionLocalProvider(LocalOrcaAnimationProgress provides OrcaCurves.apply(curve, raw)) {
+    LaunchedEffect(model, controller, autoStart) {
+        // One frame: the value to draw in it, then an `onComplete` per run that ended by it.
+        suspend fun frame(starting: Boolean = false) {
+            val ended = model.withAnimationFrame { now ->
+                if (starting) controller.start(now)
+                progress = controller.progress(now)
+                var runs = 0
+                while (controller.takeCompletion(now)) runs += 1
+                runs
+            }
+            repeat(ended) { model.fire("onComplete", current) }
+        }
+        if (autoStart) frame(starting = true)
+        while (true) {
+            val seen = model.animationRequestCount
+            if (!controller.isRunning(model.animationFrameMs) && !model.hasPendingAnimation) {
+                model.awaitAnimationRequest(seen)
+            }
+            frame()
+        }
+    }
+
+    CompositionLocalProvider(LocalOrcaAnimationProgress provides progress) {
         if (node.childIds.size == 1) {
             NodeView(node.childIds[0], model, modifier)
         } else {
             // Several children are stacked, as Dart's `Stack(fit: expand)`.
             Box(modifier) { node.childIds.forEach { NodeView(it, model) } }
         }
-    }
-}
-
-/**
- * The controller's raw value at [elapsedMs] (Flutter's `forward()` and
- * `repeat(reverse:)`).
- */
-internal fun animationClock(
-    elapsedMs: Double,
-    durationMs: Double,
-    repeats: Boolean,
-    reverse: Boolean,
-    autoStart: Boolean,
-): Double {
-    if (!autoStart) return 0.0
-    val cycles = maxOf(elapsedMs, 0.0) / durationMs
-    if (!repeats) return min(cycles, 1.0)
-    val phase = cycles % 1.0
-    if (!reverse) return phase
-    return if (cycles.toLong() % 2 == 0L) phase else 1 - phase
-}
-
-/** Flutter's named curves (the `Curve` the engine sends), as Swift's OrcaCurve. */
-internal object OrcaCurves {
-    private val curves = mapOf(
-        "easeIn" to CubicBezierEasing(0.42f, 0f, 1f, 1f),
-        "easeOut" to CubicBezierEasing(0f, 0f, 0.58f, 1f),
-        "easeInOut" to CubicBezierEasing(0.42f, 0f, 0.58f, 1f),
-        "ease" to CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f),
-        "fastOutSlowIn" to CubicBezierEasing(0.4f, 0f, 0.2f, 1f),
-        "easeInCubic" to CubicBezierEasing(0.55f, 0.055f, 0.675f, 0.19f),
-        "easeOutCubic" to CubicBezierEasing(0.215f, 0.61f, 0.355f, 1f),
-        "easeInOutCubic" to CubicBezierEasing(0.645f, 0.045f, 0.355f, 1f),
-    )
-
-    fun apply(name: String, t: Double): Double {
-        if (t <= 0) return 0.0
-        if (t >= 1) return 1.0
-        if (name == "decelerate") return 1 - (1 - t) * (1 - t)
-        val easing = curves[name] ?: return t
-        return easing.transform(t.toFloat()).toDouble()
     }
 }
 
