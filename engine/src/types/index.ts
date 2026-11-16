@@ -43,6 +43,7 @@ export {
   CloseDialog,
   SetState,
   ClearState,
+  PersistState,
   ServerAction,
   CopyToClipboard,
   Share,

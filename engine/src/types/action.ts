@@ -362,8 +362,26 @@ export function SetState(key: string, value: Value, scope: "page" | "app" = "pag
   return { type: "setState", scope, key, value };
 }
 
+/**
+ * Sets the live key to null and removes it from the saved copies in both
+ * storages (local and session); an entry left with no key is deleted.
+ */
 export function ClearState(key: string, scope: "page" | "app" = "page"): ClearStateAction {
   return { type: "clearState", scope, key };
+}
+
+/**
+ * Saves a snapshot of the key's current value in `storage` (local: survives a
+ * restart; session: until the process ends) and drops it from the other one.
+ * A key absent from the live scope saves nothing. The saved value is restored
+ * when the page (or, for app scope, the app) is set up again.
+ */
+export function PersistState(
+  key: string,
+  scope: "page" | "app" = "page",
+  storage: "local" | "session" = "local",
+): PersistStateAction {
+  return { type: "persistState", scope, key, storage };
 }
 
 export function ServerAction(id: string, params?: Record<string, Value>): ServerActionRef {

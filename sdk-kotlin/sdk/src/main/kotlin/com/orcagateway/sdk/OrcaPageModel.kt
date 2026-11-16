@@ -25,6 +25,7 @@ import com.orcagateway.core.state.ActionExecutor
 import com.orcagateway.core.state.ActionSource
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.OrcaUrlPolicy
+import com.orcagateway.core.state.SavedState
 import com.orcagateway.core.subpage.SubPage
 import com.orcagateway.core.subpage.SubPageHost
 import com.orcagateway.core.subpage.SubPageMounts
@@ -65,12 +66,20 @@ public class OrcaToast(
  *
  * Actions run on the main dispatcher in a scope the model owns; [close]
  * cancels whatever is still running. Use the model from the main thread.
+ *
+ * With a [savedState] (a router's, see [OrcaPageLoader]) the page's saved
+ * entry is laid over its declared initials right after the seed, as
+ * Flutter's `StateManager.initPage` does, and the page's `persistState` and
+ * `clearState` save to and clear it ([ActionExecutor.savedState]). The
+ * first read of an entry reads its file, on the calling thread. A sub-page's
+ * state lives in this page's store and has no entry of its own.
  */
 public class OrcaPageModel(
     page: PageResponse,
     public val store: ElmStore = ElmStore(),
     registry: WidgetRegistry = WidgetRegistry.shared,
     client: ActionClient? = null,
+    savedState: SavedState? = null,
 ) : AutoCloseable {
     /** The page's node tree. A refetch ([replacePage]) takes the new page's nodes into it. */
     public val renderer: PageRenderer = PageRenderer(page, registry)
@@ -130,6 +139,9 @@ public class OrcaPageModel(
     init {
         store.pageId = page.pageId
         store.seed(page.state)
+        // The saved keys replace the declared initials, or are added (contract S5).
+        savedState?.restorePage(store, page.pageId)
+        executor.savedState = savedState
         executor.onEffect = { effect -> onEffect?.invoke(effect) }
         executor.perform = { effect -> perform(effect) }
         executor.onMutation = { mutation -> apply(mutation) }
@@ -337,7 +349,8 @@ public class OrcaPageModel(
     /**
      * Show [page] in place of the current one, in this model (Flutter's
      * refetch in OrcaPage, sdk/lib/src/widgets/orca_page.dart onRefetchPage,
-     * and ComponentStore.init): page state starts again from its initials and
+     * and ComponentStore.init): page state starts again from its initials,
+     * the saved entry laid over them as at set-up (`initPage`), and
      * app state is kept, only unset app keys taking its initials (`initPage`).
      * The pages mounted in SubPages stay, their nodes and their state keys;
      * every other node is the new page's, and a SubPage whose node did not
@@ -350,6 +363,7 @@ public class OrcaPageModel(
         val carried = store.state.page.filterKeys(mounted)
         store.pageId = page.pageId
         store.seed(page.state)
+        executor.savedState?.restorePage(store, page.pageId)
         if (carried.isNotEmpty()) store.dispatch(carried)
         renderer.replace(page, keep = mounted)
         subPages.sweep()

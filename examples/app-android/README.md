@@ -70,6 +70,7 @@ The same app draws any app on the example server. Pass `APP` and `PAGE` to the r
 | Native widgets | `native-widgets` | `home` | the ten widgets of S9: Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector (the images come from picsum.photos) |
 | Todo | `todo` | `home` | add, tick, delete |
 | Custom extensions | `custom` | `home` | a widget and actions from the app's plugins; see [Plugins](#plugins) |
+| Saved state | `saved-state` | `home` | a count saved on the device or for the session, then forgotten; see [Saved state](#saved-state) |
 
 ```bash
 task example:android:run APP=basic-actions PAGE=home
@@ -179,16 +180,75 @@ The green badge prints `hapticFeedback light`, "Trigger Haptic" `hapticFeedback 
 has no confetti or store SDK, so the handlers behind "Show Confetti", "Rate This App", "Pay $29.99"
 and the orange badge only log the action they get.
 
-## Force update and sessions
+## Offline, force update and sessions
 
-Two boolean extras turn on `OrcaApp`'s `enableOffline` and `enableSessionTracking`. The run task
-does not pass them: install the app once with `task example:android:run`, then start it with
-`adb shell am start`. `-S` stops the running app first, so the new extras apply.
+Two boolean extras turn on `OrcaApp`'s `enableOffline` and `enableSessionTracking`, and a third
+makes the host run the offline boot itself. The run task does not pass them: install the app once
+with `task example:android:run`, then start it with `adb shell am start`. `-S` stops the running
+app first, so the new extras apply, and the next launch is a cold start.
 
 | Extra | Type | Default | What |
 |---|---|---|---|
-| `ORCA_OFFLINE` | boolean | off | ask the server's `/version` before the first page |
+| `ORCA_OFFLINE` | boolean | off | ask the server's `/version` before the first page; with `ORCA_BOOT config`, also save the config and its static pages, and boot from them when the server cannot be reached |
+| `ORCA_PRELOAD` | boolean | off | with `ORCA_BOOT config` only: the host awaits `preload` under its own splash, then gives `OrcaApp` the config; implies the offline cache |
 | `ORCA_SESSIONS` | boolean | off | send a session start and end as the app comes and goes |
+
+**Offline.** The example server's `static-flows` app has one static flow, `main`, at version 4:
+its `home` and `about` pages come pre-rendered in `/config`, and `profile` is a dynamic route
+(`isDynamic`), which never does. Boot it from its config with the offline cache on:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
+  --ez ORCA_OFFLINE true --es ORCA_APP_ID static-flows --es ORCA_BOOT config
+```
+
+The app shows a spinner, then "Home (Static)". At boot the SDK asks `/version` and compares the flow
+versions in the answer with the ones it saved (none yet), then fetches `/config` and saves it with
+the pages of `home` and `about` (files in the app's `files/orca_gateway`). Those two pages then open
+with no request, `about` too though it was never visited; `profile` is asked of the server each
+time. The server's console shows it: `request_start` lines for `"path":"/version"` and
+`"path":"/config"`, none for `/page/home`. Launch again with the same command: only `/version` this
+time. The versions match, so the saved config is used and `/config` is not asked.
+
+To check it offline:
+
+1. Boot once with the server up (the command above).
+2. Stop the server, then launch again with the same command. `/version` fails, so the app boots
+   from the saved config: "Home (Static)" opens, "Go to About (also static)" opens
+   "About (Static)", and "Go to Profile (dynamic, always fresh)" shows "Connection Failed" under
+   a crossed-out Wi-Fi sign: a dynamic page is never cached.
+3. With nothing saved the boot fails. Clear the app's data and launch again, the server still
+   down: Flutter's screen for it, "Something Went Wrong" under a circled exclamation mark, with
+   "An unexpected error occurred. Please try again." and "Try again".
+
+   ```bash
+   adb shell pm clear com.orcagateway.examples.counter
+   ```
+
+4. A new flow version fetches the config again. Start the server from source (`task
+   example:dev:server`, which restarts when a file is saved), launch once, then set `version: 4`
+   to `version: 5` in `examples/server/static-flows.ts` and launch again: the console shows
+   `/version`, then `/config`, and the pages are saved again. Set it back to 4 when done (that is
+   a new version too: one more fetch).
+
+**The host's preload.** `ORCA_PRELOAD` boots the same way, run by the host
+([`PreloadedApp` in `MainActivity.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/MainActivity.kt)):
+it shows its own splash, a spinner over "Checking version...", awaits `preload(client, manager)`
+with a `StaticFlowManager` over `offlineStore(context)`, then shows `OrcaApp` with
+`preloadedConfig` and that manager. `OrcaApp` then asks no `/version` and no `/config` of its
+own, and the home page comes from the cache. The manager is over the files `ORCA_OFFLINE` uses, so
+the two boots share one cache, and `ORCA_OFFLINE` adds nothing to this one.
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
+  --ez ORCA_PRELOAD true --es ORCA_APP_ID static-flows --es ORCA_BOOT config
+```
+
+The offline check above holds as it is, with two texts of the host's own: with nothing saved and
+the server down, the plain line "No network and no cached config available" (the message of the
+`OfflineBootException` that `preload` throws); with `ORCA_FORCE_UPDATE=1` (below), a plain
+"Update required", which `OrcaApp` never sees, as in Flutter. With a path (no `ORCA_BOOT config`)
+the extra is ignored: there is no config to preload.
 
 **Force update.** With `ORCA_FORCE_UPDATE=1` the server's static-flows app answers `/version` with
 `forceUpdate: true`. Start the server that way, then that app with the check on:
@@ -220,11 +280,55 @@ To see the offline queue, stop the server while the app is open, send the app to
 start the server again and bring the app back. The end that failed was queued: the console prints
 `Session started`, then `Offline sessions registered: device=<id> count=1`.
 
-Not there yet: `ORCA_OFFLINE` runs only the version check. The offline cache of static flows and
-`preload()` arrive with plan step 14, so with the server down the app still cannot load a page.
+`ORCA_OFFLINE` and `ORCA_SESSIONS` work with `ORCA_BOOT config` too: the version check then comes
+before `/config`, and a force update fetches neither the config nor a page.
 
-Both extras work with `ORCA_BOOT config` too: the version check then comes before `/config`, and a
-force update fetches neither the config nor a page.
+## Saved state
+
+The example server's `saved-state` app ([`saved-state.ts`](../server/saved-state.ts)) tries
+`persistState` and `clearState`. Its home page shows a page-state count and an app-state visits
+count, each 0 when nothing is saved, and "Leave this page" opens a second page whose "Back home"
+opens the home page again. The app gives `OrcaApp` no `savedState`, so the SDK saves in the app's
+`files/orca_gateway`, beside the offline cache. Install the app once with
+`task example:android:run`, clear its data so nothing is saved, then start it on the app:
+
+```bash
+adb shell pm clear com.orcagateway.examples.counter
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
+  --es ORCA_APP_ID saved-state --es ORCA_PATH home
+```
+
+"Launch again" below is the `am start` command again: `-S` force-stops the app first, so the
+process ends and the next launch is a new one. Each saved entry is a file, which a debug build
+lets you read:
+
+```bash
+adb shell run-as com.orcagateway.examples.counter ls files/orca_gateway
+adb shell run-as com.orcagateway.examples.counter cat files/orca_gateway/orca_saved_page_home
+```
+
+1. **Count up.** "Count: 0" and "Visits: 0" show. Tap "+1" three times: "Count: 3". Launch again:
+   "Count: 0". "+1" alone saves nothing.
+2. **Save on device.** Tap "+1" three times, then "Save on device", then "+1" once more:
+   "Count: 4". Launch again: "Count: 3", the value at the save. A save is a snapshot: the later
+   "+1" was not saved. The `cat` prints `{"count":3}`.
+3. **Session.** Tap "+1" ("Count: 4"), then "Save for this session". Tap "Leave this page", then
+   "Back home": the home page is set up again and shows "Count: 4", the session copy. Launch
+   again: "Count: 0". The session copy ended with the process, and saving for the session removed
+   the copy on the device: `ls` shows no `orca_saved_page_home`.
+4. **Forget.** Tap "+1" twice and "Save on device" ("Count: 2"), then launch again: "Count: 2". Tap
+   "Forget": "Count:" with no number, the key is empty. Leave the page and come back: "Count: 0".
+   Launch again: "Count: 0", and `ls` shows no `orca_saved_page_home`: both copies are gone. A
+   session copy goes the same way: tap "+1", "Save for this session" and "Forget", then leave the
+   page and come back: "Count: 0".
+5. **Visits.** Tap "+1 and save" twice: "Visits: 2". Leave the page and come back: "Visits: 2",
+   since app state is shared and the page's initial 0 does not replace a key that is set. Launch
+   again: "Visits: 2", laid over the app state at boot, before the first page. The app's entry is
+   the file `orca_saved_app`: `cat` it as above and it prints `{"visits":2}`.
+
+The same steps give the same results booted from the app's config: put `--es ORCA_BOOT config` in
+place of `--es ORCA_PATH home`. The config's `initialRoute` is `/home`, and the saved visits are in
+the app state before that first route.
 
 ## Error screens, dark mode, locale and splash
 

@@ -4,9 +4,9 @@
   "idea": "Native parity step 18 (Phase C): app shell, theming and error screens on both sdk-swift and sdk-kotlin, matching the Flutter SDK: host-supplied loading, splash, error and force-update views; status-specific error screens (401, 403, 404, 429, 5xx, offline) with Flutter's messages; dark mode and locale through the SDK; UnsupportedWidgetPlaceholder; a request timeout option. Plan step 18; rows C18.1-C18.5.",
   "kind": "feature",
   "created_at": "2026-11-15T21:57:28Z",
-  "updated_at": "2026-11-16T04:04:28Z",
+  "updated_at": "2026-11-16T09:08:34Z",
   "active_session": "7317184b-fcd8-4ef3-bc8c-3dc085f8486c",
-  "current": "10",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -51,27 +51,38 @@
       "approved_with": "A (standing rule: gate 09's one question 'A approves the stage; stage 10 ticks C18.1-C18.5 and opens the step 18 PR' is minor, default go)"
     },
     "10": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 2,
-      "card": "cards/10-r2.md"
+      "card": "cards/10-r2.md",
+      "approved_at": "2026-11-16T09:07:58Z",
+      "approved_with": "standing rule (minor and patch auto-approved): question 1 answered by your merge of PR #38 (3518792, 2026-11-16T08:56Z, 15 of 15 checks green); questions 2-4 minor, defaults"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-16T09:08:34Z",
+      "approved_with": "standing rule (minor and patch auto-approved): gate 12's two questions (close step 18 with 13-16 skipped; step 14 goes on) are minor, defaults"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "step 18 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "step 18 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "step 18 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "step 18 has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     }
   },
   "gates": {

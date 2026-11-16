@@ -33,7 +33,7 @@ import { App, Flow, PageDefinition, Engine, ServerActionDefinition } from "orcag
 import { V, TV, Expr, SetState, Navigate, GoBack, Sequential, Parallel, When,
          ShowSnackbar, ShowToast, ServerAction, CopyToClipboard, Share, OpenUrl,
          Lifecycle, RefetchPage, OpenDialog, CloseDialog, SwitchTab, OpenDrawer,
-         AnimateForward, AnimateReverse, ClearState, Custom } from "orcagateway-engine/types";
+         AnimateForward, AnimateReverse, PersistState, ClearState, Custom } from "orcagateway-engine/types";
 
 // Components — widgets + helpers
 import { Scaffold, AppBar, Column, Row, Text, Container, Center, SizedBox, Padding,
@@ -213,6 +213,7 @@ Actions are event handlers on widget `actions` prop:
 | `SwitchTab` | `(tabId)` | `SwitchTab("home")` |
 | `OpenDrawer` | `()` | `OpenDrawer()` |
 | `SetState` | `(key, value, scope?)` | `SetState("name", V.event("value"))` |
+| `PersistState` | `(key, scope?, storage?)` | `PersistState("count")` |
 | `ClearState` | `(key, scope?)` | `ClearState("count")` |
 | `ServerAction` | `(id, params?)` | `ServerAction("submit", { name: V.pageState("name") })` |
 | `ShowSnackbar` | `(message, duration?)` | `ShowSnackbar("Saved!")` |

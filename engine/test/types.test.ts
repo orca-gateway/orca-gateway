@@ -11,6 +11,7 @@ import {
   GoBack,
   SetState,
   ClearState,
+  PersistState,
   ServerAction,
   CopyToClipboard,
   Share,
@@ -382,6 +383,24 @@ describe("Action helpers", () => {
 
   it("ClearState", () => {
     expect(ClearState("cart")).toEqual({ type: "clearState", scope: "page", key: "cart" });
+  });
+
+  it("PersistState: defaults to page scope and local storage", () => {
+    expect(PersistState("count")).toEqual({
+      type: "persistState", scope: "page", key: "count", storage: "local",
+    });
+  });
+
+  it("PersistState: takes an explicit scope and storage", () => {
+    expect(PersistState("visits", "app")).toEqual({
+      type: "persistState", scope: "app", key: "visits", storage: "local",
+    });
+    expect(PersistState("count", "page", "session")).toEqual({
+      type: "persistState", scope: "page", key: "count", storage: "session",
+    });
+    expect(PersistState("token", "app", "session")).toEqual({
+      type: "persistState", scope: "app", key: "token", storage: "session",
+    });
   });
 
   it("ServerAction", () => {

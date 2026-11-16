@@ -45,6 +45,7 @@ public final class ActionExecutor {
         "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
         "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
         "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage", "refetchPage",
+        "persistState", "clearState",
     ]
 
     public let store: ElmStore
@@ -71,6 +72,10 @@ public final class ActionExecutor {
     /// a setState wrote its value, for the event's `affectedWidgets` (the
     /// nodes watching its key; Flutter walks its ComponentStore). Nil: none.
     public var pageNodes: (() -> [ComponentNode])?
+    /// Where persistState saves and clearState deletes (page scope: the
+    /// entry of `store.pageId`). Nil: persistState saves nothing and
+    /// clearState only nulls the live key.
+    public var savedState: SavedState?
 
     private let reducer = ActionReducer()
     private var eventData: [String: JSONValue]?
@@ -186,6 +191,18 @@ public final class ActionExecutor {
                 transformTrace = trace
                 affectedWidgets = watchers(of: a.key)
             }
+
+        // A snapshot of the live value, or nothing when the key is absent;
+        // missing fields are scope page and storage local. No effect.
+        case .persistState(let p):
+            let storage: SavedState.Storage = p.storage == "session" ? .session : .local
+            savedState?.persist(p.key, scope: p.scope ?? .page, pageId: store.pageId, storage: storage, from: store)
+
+        // The live key becomes null and every saved copy goes. No effect.
+        case .clearState(let c):
+            let scope = c.scope ?? .page
+            store.commit(store.state.setting(c.key, .null, in: scope))
+            savedState?.clear(c.key, scope: scope, pageId: store.pageId)
 
         case .showSnackbar, .showToast:
             let (next, effects) = reducer.reduce(store.state, action, eventData: eventData)

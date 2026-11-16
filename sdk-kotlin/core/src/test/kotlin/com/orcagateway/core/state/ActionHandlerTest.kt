@@ -176,6 +176,7 @@ class ActionHandlerTest {
                 "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
                 "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
                 "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage", "refetchPage",
+                "persistState", "clearState",
             ),
             ActionExecutor.kinds,
         )

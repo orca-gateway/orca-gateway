@@ -105,6 +105,21 @@ final class OrcaBootTests: XCTestCase {
         XCTAssertEqual(stub.paths, [versionPath])
     }
 
+    /// Step 14: the gate's check is for a host `path` (and a host's router)
+    /// only; it caches nothing, a cache given or not. The config boot runs
+    /// `preload` instead (OfflineBootTests).
+    func testC14_2_withAPathEnableOfflineIsTheVersionCheckAloneAndCachesNothing() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orca-boot-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let stub = VersionStub(#"{"flows": {"main": 4}}"#)
+        let cache = StaticFlowManager(store: FileKeyValueStore(directory: directory))
+        try await showForAMoment(OrcaApp(client: client(stub, deviceId: "test-device"), path: "home",
+                                         enableOffline: true, staticFlowManager: cache))
+        XCTAssertEqual(stub.paths, [versionPath, "/api/v1/app/fixture-app/page/home"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path), "nothing saved")
+    }
+
     func testC15_1_aClientWithoutADeviceIdGetsTheStoredOne() {
         let store = MemoryKeyValueStore()
         let id = client(VersionStub(#"{}"#)).identified(by: store).deviceId

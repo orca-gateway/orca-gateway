@@ -36,7 +36,7 @@ final class ModelRoundTripTests: XCTestCase {
 
     func testAllActionFixturesRoundTrip() throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 29, "action fixtures 01-19, 30-35, 45-48")
+        XCTAssertEqual(files.count, 32, "action fixtures 01-19, 30-35, 45-51")
         var kinds = Set<String>()
         for (name, fixture) in files {
             // A fixture runs either `actions` or `steps` [{action, source?, event?}].

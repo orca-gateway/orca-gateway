@@ -51,6 +51,7 @@ The server runs on `http://localhost:8080` by default.
 | `reorder.ts`          | App `reorder`: one `ReorderableListView` of five rows. The order is a list in page state; a drop sends `oldIndex` and `newIndex` to a server action, which answers with the moved list |
 | `subpage.ts`          | App `subpage`: a host page with a `SubPage` showing `detail/a`. Both have a page state `count` that do not clash, the sub-page shows a param it was sent, a server action inside it answers with a setState, and the host replaces it with `detail/b` or joins `detail/c` below it (`updateSubPage`) |
 | `slivers.ts`          | App `slivers`: three tabs (`/pinned`, `/floating`, `/plain`), each one `CustomScrollView` whose first sliver is a `SliverAppBar` (pinned with `expandedHeight` 200, floating, neither with `expandedHeight` 120) over the same content: a `SliverToBoxAdapter` heading, a `SliverGrid` of 6 cells, a `SliverList` of 40 rows and a closing `SliverToBoxAdapter`. On the iOS and Android example apps, start it with `ORCA_APP_ID=slivers` |
+| `saved-state.ts`      | App `saved-state`: `PersistState` and `ClearState`. A page-state count saved on the device (kept after a relaunch) or for the session (kept until the app process ends), or forgotten; an app-state visits count saved on the device; a second page to leave to and come back from |
 | `orca_google_map.ts`  | Google Maps integration via the map plugin                    |
 | `index.ts`            | Entry point — registers all examples into a single engine     |
 

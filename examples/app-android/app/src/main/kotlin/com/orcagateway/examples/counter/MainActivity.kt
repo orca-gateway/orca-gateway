@@ -11,12 +11,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,12 +30,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.orcagateway.core.client.OrcaClient
+import com.orcagateway.core.client.PreloadResult
+import com.orcagateway.core.client.StaticFlowManager
+import com.orcagateway.core.client.preload
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.navigation.DeeplinkEvent
 import com.orcagateway.sdk.OrcaApp
+import com.orcagateway.sdk.OrcaPlugin
 import com.orcagateway.sdk.client.OkHttpTransport
 import com.orcagateway.sdk.debug.OrcaDebugConfig
 import com.orcagateway.sdk.debug.start
+import com.orcagateway.sdk.offlineStore
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.net.URI
 import java.util.Locale
 
@@ -43,7 +56,8 @@ import java.util.Locale
  * ORCA_PATH as intent extras (for example `basic-actions` and `home`, or
  * `server-actions` and `shop`), and ORCA_SERVER_URL for another server.
  * The boolean extras ORCA_OFFLINE and ORCA_SESSIONS turn on OrcaApp's
- * version check and session tracking; both are off by default.
+ * offline boot (the version check, and with a config the offline cache of
+ * static flows) and session tracking; both are off by default.
  *
  * While DevTools is on, the boolean extras ORCA_OVERLAY and ORCA_BODIES turn
  * on the load chip over each page and the request and response bodies in
@@ -51,7 +65,9 @@ import java.util.Locale
  *
  * An app with a navigation config (app id `navigation`) boots from it with
  * the extra ORCA_BOOT set to `config`: the server's config says where the
- * app starts, and ORCA_PATH is not used.
+ * app starts, and ORCA_PATH is not used. There the boolean extra
+ * ORCA_PRELOAD (off by default) makes the host await `preload` itself under
+ * its own splash, then hand OrcaApp the config (see [PreloadedApp]).
  *
  * The app opens `orcacounter://` links (see "Deep links" in the README) and
  * logs one `deeplink:` line for each under the tag `OrcaCounter`.
@@ -85,6 +101,8 @@ class MainActivity : ComponentActivity() {
         val path = if (setting("ORCA_BOOT", "path") == "config") null else setting("ORCA_PATH", "home")
         val offline = intent.getBooleanExtra("ORCA_OFFLINE", false)
         val sessions = intent.getBooleanExtra("ORCA_SESSIONS", false)
+        // Only with a config: a path has none to preload, and the extra is then ignored.
+        val preloadFirst = path == null && intent.getBooleanExtra("ORCA_PRELOAD", false)
         val plugins = listOf(BadgePlugin(), DeviceActionsPlugin(window.decorView))
         // No scheme (null): the theme's own, here and in OrcaApp.
         val scheme = when (setting("ORCA_SCHEME")) {
@@ -98,20 +116,93 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = scheme ?: MaterialTheme.colorScheme) {
                 Surface {
-                    OrcaApp(
-                        client,
-                        path = path,
-                        enableOffline = offline,
-                        enableSessionTracking = sessions,
-                        plugins = plugins,
-                        onDeeplink = ::logDeeplink,
-                        splash = splash,
-                        colorScheme = scheme,
-                        locale = locale,
-                    )
+                    if (preloadFirst) {
+                        PreloadedApp(client, sessions, plugins, scheme, locale)
+                    } else {
+                        OrcaApp(
+                            client,
+                            path = path,
+                            enableOffline = offline,
+                            enableSessionTracking = sessions,
+                            plugins = plugins,
+                            onDeeplink = ::logDeeplink,
+                            splash = splash,
+                            colorScheme = scheme,
+                            locale = locale,
+                        )
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * ORCA_PRELOAD: the host's own boot, as Flutter's `OrcaApp.preload` doc
+     * shows it. Under a small splash of its own the host awaits `preload`
+     * with a manager over `offlineStore(context)`, the files OrcaApp's
+     * `enableOffline` uses, so both boots share one cache; the extra implies
+     * the offline cache, and ORCA_OFFLINE adds nothing to it. OrcaApp then
+     * gets the config and the same manager: it asks no `/version` and no
+     * `/config`, and its first frame is the app. A force update is the host's
+     * to show (a plain "Update required"; OrcaApp never sees it), and so is a
+     * failed boot (a plain line with the error's message: offline with
+     * nothing saved, "No network and no cached config available").
+     *
+     * The preload runs again when the activity is made again (a rotation);
+     * OrcaApp keeps the router it started with.
+     */
+    @Composable
+    private fun PreloadedApp(
+        client: OrcaClient,
+        sessions: Boolean,
+        plugins: List<OrcaPlugin>,
+        scheme: ColorScheme?,
+        locale: Locale?,
+    ) {
+        val manager = remember { StaticFlowManager(offlineStore(applicationContext)) }
+        // Null while the preload runs; its file work stays off the main thread, as in OrcaApp.
+        val outcome by produceState<Result<PreloadResult>?>(null) {
+            value = try {
+                Result.success(withContext(Dispatchers.IO) { preload(client, manager) })
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+        when (val result = outcome) {
+            null -> Centered {
+                CircularProgressIndicator()
+                Text("Checking version...")
+            }
+            else -> result.fold(
+                onSuccess = { ready ->
+                    when (ready) {
+                        PreloadResult.ForceUpdate -> Centered { Text("Update required") }
+                        is PreloadResult.Success -> OrcaApp(
+                            client,
+                            enableSessionTracking = sessions,
+                            plugins = plugins,
+                            onDeeplink = ::logDeeplink,
+                            preloadedConfig = ready.config,
+                            staticFlowManager = manager,
+                            colorScheme = scheme,
+                            locale = locale,
+                        )
+                    }
+                },
+                onFailure = { error -> Centered { Text(error.message ?: error.toString()) } },
+            )
+        }
+    }
+
+    @Composable
+    private fun Centered(content: @Composable () -> Unit) {
+        Column(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) { content() }
     }
 
     /**

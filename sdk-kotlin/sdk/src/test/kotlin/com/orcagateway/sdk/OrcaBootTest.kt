@@ -7,13 +7,16 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
+import com.orcagateway.core.client.FileKeyValueStore
 import com.orcagateway.core.client.HttpRequest
 import com.orcagateway.core.client.HttpResponse
 import com.orcagateway.core.client.HttpTransport
 import com.orcagateway.core.client.OrcaClient
+import com.orcagateway.core.client.StaticFlowManager
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -31,7 +34,9 @@ import kotlin.test.assertTrue
  * first page, and a forceUpdate answer shows Flutter's force-update screen
  * (`_buildForceUpdate`, sdk/lib/src/widgets/orca_app.dart) with no page ever
  * fetched; any other answer boots as before, and without the option no
- * `/version` request is made. Also the device id OrcaApp gives a client that
+ * `/version` request is made. That gate is the version check of a host
+ * `path`; the config boot runs `preload` in its place (C14.2, OfflineBootTest)
+ * and shows the same screen. Also the device id OrcaApp gives a client that
  * has none, from SharedPreferences (Flutter's `_resolveDeviceId`). Swift
  * twin: OrcaBootTests.
  */
@@ -40,6 +45,9 @@ import kotlin.test.assertTrue
 class OrcaBootTest {
     @get:Rule
     val compose = createComposeRule()
+
+    @get:Rule
+    val folder = TemporaryFolder()
 
     private val context: Context = ApplicationProvider.getApplicationContext()
 
@@ -129,6 +137,37 @@ class OrcaBootTest {
 
         assertFalse(engine.paths.any { it.endsWith("/version") })
         assertEquals(listOf("/api/v1/app/counter/page/home", "/api/v1/app/counter/page/home"), engine.paths)
+    }
+
+    @Test
+    fun c14_2_aConfigBootWithEnableOfflineShowsTheForceUpdateScreenWhenPreloadSaysSo() {
+        val engine = BootEngine("""{"flows":{"home":1},"forceUpdate":true}""")
+        val cache = StaticFlowManager(FileKeyValueStore(folder.root))
+        compose.setContent { OrcaApp(client(engine), enableOffline = true, staticFlowManager = cache) }
+
+        waitForText("Update required. Please update the app.")
+        compose.onNodeWithTag("orca.forceUpdate").assertIsDisplayed()
+        compose.waitForIdle()
+
+        // preload's version check, against the saved versions; no /config, nothing saved.
+        assertEquals(listOf("/api/v1/app/counter/version"), engine.paths)
+        assertNull(cache.loadConfig())
+    }
+
+    @Test
+    fun c14_2_aPathBootWithEnableOfflineChecksTheVersionOnlyAndCachesNothing() {
+        val engine = BootEngine("""{"flows":{"home":1}}""")
+        val cache = StaticFlowManager(FileKeyValueStore(folder.root))
+        compose.setContent { OrcaApp(client(engine), path = "home", enableOffline = true, staticFlowManager = cache) }
+
+        waitForText("Counter Example")
+
+        assertEquals(
+            listOf("/api/v1/app/counter/version", "/api/v1/app/counter/page/home", "/api/v1/app/counter/page/home"),
+            engine.paths,
+        )
+        assertNull(cache.loadConfig())
+        assertEquals(emptyMap(), cache.getLocalVersions())
     }
 
     @Test

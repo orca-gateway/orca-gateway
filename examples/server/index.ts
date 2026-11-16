@@ -16,6 +16,7 @@ import { motionApp } from "./motion";
 import { reorderApp } from "./reorder";
 import { subPageApp } from "./subpage";
 import { sliversApp } from "./slivers";
+import { savedStateApp } from "./saved-state";
 import { recoveryMiddleware } from "../../engine/src/middlewares/recovery";
 import { loggingMiddleware } from "../../engine/src/middlewares/logging";
 import { corsMiddleware } from "../../engine/src/middlewares/cors";
@@ -26,7 +27,7 @@ import enginePackage from "../../engine/package.json";
 
 // ── Register middleware on each app ──────────────────────────
 
-const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp, navigationApp, tabsApp, tabsServerApp, parityAApp, motionApp, reorderApp, subPageApp, sliversApp];
+const apps = [counterApp, basicActionsApp, serverActionsApp, ecommerceApp, staticFlowsApp, animationsApp, customApp, capabilityDemoApp, nativeWidgetsApp, todoApp, navigationApp, tabsApp, tabsServerApp, parityAApp, motionApp, reorderApp, subPageApp, sliversApp, savedStateApp];
 
 for (const app of apps) {
   app
@@ -114,3 +115,4 @@ console.log("  - parity-a:       /api/v1/app/parity-a/page/layout");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/layout-safe");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/effects");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/lists");
+console.log("  - saved-state:    /api/v1/app/saved-state/page/home");
