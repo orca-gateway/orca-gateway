@@ -24,6 +24,9 @@ import com.orcagateway.core.navigation.TabShellChange
 import com.orcagateway.core.navigation.TabShellEntry
 import com.orcagateway.core.navigation.open
 import com.orcagateway.core.state.ActionEffect
+import com.orcagateway.core.state.ElmStore
+import com.orcagateway.core.state.SavedState
+import com.orcagateway.core.state.StoreState
 import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.OrcaPluginHost
@@ -85,7 +88,8 @@ public class OrcaRoute(
  *   only page (GoRouter `go`), and [goBack] pops.
  *
  * Built from a [NavConfig], it starts at the config's `initialRoute` with
- * the config's `initialAppState`, and every location goes through a
+ * the config's `initialAppState` (with a [savedState], the saved app entry
+ * laid over it first), and every location goes through a
  * [RouteTable]: the route's redirect rule is applied (once), a nested
  * location shown with `replace` comes with its parent pages under it, and a
  * location no route matches is a route with [OrcaRoute.isNotFound]. Built
@@ -127,14 +131,27 @@ public class OrcaRouter private constructor(
     public var onRouteChanged: ((RouteChangeEvent) -> Unit)?,
     // The link that opened the app: the router starts at its location, not at `start`.
     coldLink: String?,
+    /**
+     * Where the pages loaded here save (`persistState`) and drop
+     * (`clearState`) saved copies of their state, and what is restored
+     * (Flutter's StateManager `SavedState`): its app entry is laid over the
+     * first [appState] before the first route is resolved, so the redirect
+     * and the first page request see it, and each page's entry over the
+     * page's declared initials. Null: nothing is saved or restored.
+     */
+    public val savedState: SavedState?,
 ) : AutoCloseable {
     /** A router without a config, starting at [path]: every path is a page. */
-    public constructor(client: OrcaClient, path: String = "home", system: SystemActions? = null) :
-        this(client, system, null, path, null, null)
+    public constructor(
+        client: OrcaClient,
+        path: String = "home",
+        system: SystemActions? = null,
+        savedState: SavedState? = null,
+    ) : this(client, system, null, path, null, null, savedState)
 
     /** A router without a config that [coldLink] opened: it starts at the link's location instead of [path]. */
-    internal constructor(client: OrcaClient, path: String, system: SystemActions?, coldLink: String?) :
-        this(client, system, null, path, null, coldLink)
+    internal constructor(client: OrcaClient, path: String, system: SystemActions?, coldLink: String?, savedState: SavedState?) :
+        this(client, system, null, path, null, coldLink, savedState)
 
     /**
      * A router for [config] that [coldLink] opened: it starts at the link's
@@ -147,20 +164,23 @@ public class OrcaRouter private constructor(
         system: SystemActions?,
         onRouteChanged: ((RouteChangeEvent) -> Unit)?,
         coldLink: String?,
-    ) : this(client, system, RouteTable(config), config.initialRoute, onRouteChanged, coldLink)
+        savedState: SavedState?,
+    ) : this(client, system, RouteTable(config), config.initialRoute, onRouteChanged, coldLink, savedState)
 
     /**
      * A router for the server's [config] (`OrcaClient.fetchConfig`): app
-     * state starts as `initialAppState`, and `initialRoute` is resolved
-     * against it and shown. [onRouteChanged] passed here gets the first
-     * event, with no previous location and type `Push`.
+     * state starts as `initialAppState`, with [savedState]'s app entry laid
+     * over it, and `initialRoute` is resolved against it and shown.
+     * [onRouteChanged] passed here gets the first event, with no previous
+     * location and type `Push`.
      */
     public constructor(
         client: OrcaClient,
         config: NavConfig,
         system: SystemActions? = null,
         onRouteChanged: ((RouteChangeEvent) -> Unit)? = null,
-    ) : this(client, system, RouteTable(config), config.initialRoute, onRouteChanged, null)
+        savedState: SavedState? = null,
+    ) : this(client, system, RouteTable(config), config.initialRoute, onRouteChanged, null, savedState)
 
     /**
      * Called once per deep link ([handleDeeplink]), after the navigation and
@@ -183,7 +203,7 @@ public class OrcaRouter private constructor(
     private var firstEvent: RouteChangeEvent? = null
 
     /** The shared app scope, as the latest page or [setAppState] left it. */
-    public var appState: Map<String, JsonValue> = table?.config?.initialAppState.orEmpty()
+    public var appState: Map<String, JsonValue> = restored(table?.config?.initialAppState.orEmpty(), savedState)
         // Named apart from the host's `setAppState(Map)`.
         @JvmName("writeAppState")
         private set(value) {
@@ -626,6 +646,18 @@ public class OrcaRouter private constructor(
     private companion object {
         /** The app state key that holds the current tab's index (Flutter's `OrcaShell`). */
         const val TAB_INDEX = "_tabIndex"
+
+        /**
+         * [initial] with every key of [saved]'s app entry laid over it, replaced
+         * or added: Flutter's `restoreApp`, right after the `initialAppState`
+         * loop of `_initRouter`. The entry's first read reads its file.
+         */
+        fun restored(initial: Map<String, JsonValue>, saved: SavedState?): Map<String, JsonValue> {
+            if (saved == null) return initial
+            val store = ElmStore(StoreState(app = initial))
+            saved.restore(store)
+            return store.state.app
+        }
 
         /** Without a config, the route of a link's location: the page is its path, the query stays in the location. */
         fun pathRoute(location: String): OrcaRoute = OrcaRoute(location.substringBefore('?'), location = location)

@@ -101,6 +101,7 @@ import com.orcagateway.core.navigation.TransitionSpec
 import com.orcagateway.core.plugins.OrcaActionHandler
 import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.core.state.ElmStore
+import com.orcagateway.core.state.SavedState
 import com.orcagateway.core.state.StoreState
 import com.orcagateway.sdk.client.current
 import com.orcagateway.sdk.debug.PageDebugOverlay
@@ -137,6 +138,9 @@ import java.util.Locale
  * thread, as Flutter's `OrcaPage` does: a static page saved at boot is
  * used with no request and sends no `timing`; any other goes to the
  * network, and what the network answers is never saved.
+ *
+ * Under a router with a [OrcaRouter.savedState] the page, cached or not, is
+ * set up under its saved entry and saves into it ([OrcaPageModel]).
  *
  * A load cancelled mid-fetch (its page left the screen) leaves [phase] at
  * `Loading` and runs again on the next [loadIfNeeded]. After [close] it
@@ -189,7 +193,9 @@ public class OrcaPageLoader(
             val renderStart = timing?.elapsed()
             val plugins = router?.plugins
             val registry = plugins?.registry ?: WidgetRegistry.shared
-            val model = OrcaPageModel(page, store = ElmStore(StoreState(app = app)), registry = registry, client = client)
+            val model = OrcaPageModel(
+                page, store = ElmStore(StoreState(app = app)), registry = registry, client = client, savedState = router?.savedState,
+            )
             // Before the plugins: a custom `refetchPage` overrides it, as in Flutter.
             model.executor.registerHandler("refetchPage") { _, _ -> refetch(model, client) }
             plugins?.install(model)
@@ -303,6 +309,13 @@ public class OrcaAppBoot(
      */
     internal var enableOffline: Boolean = false
 
+    /**
+     * Where the pages of a router made here save, and what it restores
+     * ([OrcaRouter.savedState]); OrcaApp sets it before the boot starts.
+     * The offline boot reads its app entry off the main thread, with [preload].
+     */
+    internal var savedState: SavedState? = null
+
     private var started = false
     private var closed = false
 
@@ -344,9 +357,14 @@ public class OrcaAppBoot(
         phase = Phase.Loading
         val client = if (client.device == DeviceInfo()) client.copy(device = DeviceInfo.current(context)) else client
         val cache = staticFlowManager
+        val saved = savedState
         phase = try {
             val result = if (enableOffline && cache != null) {
-                withContext(Dispatchers.IO) { preload(client, cache) }
+                withContext(Dispatchers.IO) {
+                    // Into a throwaway store: the app entry is then in the mirror the router restores from.
+                    saved?.restore(ElmStore())
+                    preload(client, cache)
+                }
             } else {
                 PreloadResult.Success(client.fetchConfig())
             }
@@ -374,7 +392,7 @@ public class OrcaAppBoot(
         val link = pendingLink
         pendingLink = null
         staticFlowManager?.initDynamicPaths(config.flows)
-        return OrcaRouter(client, config, system, onRouteChanged, link).also {
+        return OrcaRouter(client, config, system, onRouteChanged, link, savedState).also {
             it.plugins = plugins
             it.staticFlowManager = staticFlowManager
         }
@@ -446,8 +464,11 @@ public class OrcaAppBoot(
  * the version check against the saved flow versions, before anything else
  * is asked. A forceUpdate answer shows the force-update screen and fetches
  * nothing more; offline (any `/version` failure) the saved config is used,
- * and with none saved the error view says "No network and no cached config
- * available"; fresh versions use the saved config with no `/config`
+ * and with none saved the boot fails: the error view shows Flutter's screen
+ * for it, "Something Went Wrong" and "An unexpected error occurred. Please
+ * try again.", with a retry, while the error's message (what [error] gets,
+ * and what a host's own [preload] throws) is "No network and no cached
+ * config available"; fresh versions use the saved config with no `/config`
  * request; stale ones fetch `/config` and save it with the static flows'
  * pre-rendered pages. Those pages then open from the cache, offline too.
  * With a [path] there is no config: only the version check runs, and
@@ -497,6 +518,17 @@ public class OrcaAppBoot(
  * @param staticFlowManager pre-initialized [StaticFlowManager] (Dart
  * `OrcaApp.staticFlowManager`). Pass the same instance as to [preload]:
  * each page is asked of it before the network. Not used with a [path].
+ * @param savedState where the pages' `persistState` saves and `clearState`
+ * drops saved copies of state keys (Flutter's StateManager `SavedState`):
+ * `local` ones in its store, kept after a restart, `session` ones for the
+ * life of the process. What is saved is restored when its scope is set up:
+ * the app entry over `initialAppState` (with a [path], over the empty app
+ * state) before the first route is resolved, so redirects and the first page
+ * request see it, and each page's entry over the page's declared initials,
+ * from the network or the cache alike. Null: one over [offlineStore], its
+ * entries `orca_saved_*` in `context.filesDir/orca_gateway` beside the
+ * offline cache's. Taken once, with the kept router or boot (one per
+ * OrcaApp, through a rotation).
  */
 @Composable
 public fun OrcaApp(
@@ -519,6 +551,7 @@ public fun OrcaApp(
     locale: Locale? = null,
     preloadedConfig: NavConfig? = null,
     staticFlowManager: StaticFlowManager? = null,
+    savedState: SavedState? = null,
 ) {
     val context = LocalContext.current
     val identified = remember { client.identified(SharedPreferencesKeyValueStore(context)) }
@@ -529,7 +562,8 @@ public fun OrcaApp(
     if (path != null) {
         // A router made now starts at the link, so the host's path is never requested.
         val retained = viewModel(key = "com.orcagateway.sdk.OrcaApp:$site") {
-            Retained(OrcaRouter(identified, path, system = null, coldLink = launch))
+            val saved = savedState ?: SavedState(offlineStore(context))
+            Retained(OrcaRouter(identified, path, system = null, coldLink = launch, savedState = saved))
         }
         val router = retained.value
         AttachHost(router, system, onRouteChanged, onDeeplink)
@@ -550,6 +584,7 @@ public fun OrcaApp(
             OrcaAppBoot(identified).also { boot ->
                 boot.staticFlowManager = cache
                 boot.enableOffline = enableOffline
+                boot.savedState = savedState ?: SavedState(offlineStore(context))
                 launch?.let(boot::handleDeeplink)
             },
         )
@@ -703,6 +738,10 @@ internal class Retained<T : AutoCloseable>(val value: T) : ViewModel(value)
  * Flutter's message and fetches nothing. They are merged once per router,
  * by the first OrcaApp that shows it. Here [enableOffline] runs the version
  * check only: nothing is cached, and pages come from the network.
+ *
+ * Saved state is the router's own [OrcaRouter.savedState], as the host
+ * built it (`savedState = SavedState(offlineStore(context))` saves where
+ * OrcaApp(client) does); a router built without one saves nothing.
  *
  * Deep links are handled as by OrcaApp(client), and reported to the
  * router's own [OrcaRouter.onDeeplink]: the launch Intent's link once, as a
