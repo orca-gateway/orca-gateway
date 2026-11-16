@@ -3,23 +3,22 @@
 ## Front page
 
 ### In one breath
-groups 2-3 of 7 · tasks: 8 green, 0 blocked · RichText, DTS, span lines, progress, ImageIcon
-RichText draws its spans on Flutter's engine base (14, white, no text scaling) on both SDKs.
-DefaultTextStyle replaces the ambient style; a span's custom lines are drawn by range, as Skia.
-Group 4 half in (Swift ImageIcon, progress, Material resets); K-reset, K-select, S-select running.
+groups 4-7 of 7 · tasks: 21 of 21 green, 0 blocked · step 7 done on both SDKs
+SelectableText selects words and ranges and copies (UITextView on iOS); Material hosts reset a DTS.
+Table draws Flutter's one-cell rows with TableBorder.all; both SDKs advertise 89 widgets, one hash.
+Rebased on main 3880607; every suite green; hand checks pass on the iPhone and Android.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-5 auto-decided (minor): IconButton passes a DTS through (Flutter's builder has no Material);
-a justified RichText on iOS; an overline centred on the run's top edge (native SkParagraph);
-Swift Text under a DTS draws a fixed 14 where Flutter scales (known difference);
-an Icon src also loads file://, and a null src draws the glyph (known differences).
+3 auto-decided (minor): a Table under unbounded width is 0 wide, as Flutter (D10 corrected);
+an ImageIcon src also loads file:// and a null src draws the glyph (known differences);
+Android: past the end of a maxLines box the drag scrolls the page (Compose; follow-up).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 4, then 5 (iOS SelectableText, q2 a) and 6 (Table, q1 a). (default: go)
+2. Next: tick A7.1-A7.4 and open the step 7 PR, stacked on PR #50. (default: go)
 
 ## Appendix
 
@@ -125,14 +124,82 @@ decorationLines from getPathForRange. Text's whole-text path unchanged on both. 
 a justified RichText on iOS; Kotlin's run lines clip only on overflow (Flutter), Swift's maxLines path always clips.
 Follow-ups: Text's renderers differ from Skia in small ways (wave end, metrics, Kotlin overline half a stroke low).
 
-### Group 4 (in progress)
-S-media 3858948 (ImageIcon scaleDown at scale 1, empty while loading; both progress painters; review went back once:
-a copied test helper, circular corners, a stronger failed-load check) and S-reset c11c941 (Scaffold, AppBar, Card, the
-buttons, FAB, InkWell reset the DTS; IconButton passes it, as Flutter's builder has no Material; review: pass) are in.
-K-reset and K-select are running; G5's S-select started early (the Swift lane was free).
+### Group 4
+Commits: S-media cb4862f0, S-reset ccae0673, K-reset 580c5157, K-select ace94795 (hashes after the rebase on main
+3880607). Each reviewed (fit and quality in one pass); S-media went back once (a copied test helper, the circular
+corners, a stronger failed-load check). K-dts's `./gradlew --stop` killed a parallel build once; briefs now stop
+daemons only at the very end.
 
-### Test run
-G1 (final files): engine 823/0 · Flutter conformance 280 · `swift test` UI 531, core 639 · Kotlin core 657, sdk 766
-(with K-icon), lint clean.
-G2-G3 (each task's final files): `swift test` UI 571, core 639; iOS scheme UI 727, core 639 · Kotlin sdk 795,
-core 657, lint clean. A full run of the whole tree comes at the end of group 4.
+#### Task S-media · Swift ImageIcon and progress painters
+Files: `Media.swift` · `Progress.swift` (new) · `NodeView.swift` · `ImageIconTests.swift` (new) · `ProgressTests.swift`
+(new). Cases: A7.3 sw and A7.4 sw (ImageIcon) → green, 9 testA7_3* and 8 testA7_4* (36 square and minHeight bar,
+track then arc from twelve, one static indeterminate arc, ellipse in a forced box, 40 % bar, bare track, colours, RTL
+from the left, nothing moves in a window; small image kept centred, big one shrunk, tint on opaque pixels only, the
+foreground tint, size 24, empty while loading, an Icon with src is ImageIcon).
+Changed: IconNodeView's src path is scaleDown at one point per image pixel, centred, srcIn; loading or failed draws
+the empty square (no name glyph). Both indicators draw on a Canvas from ProgressGeometry.
+
+#### Task S-reset / K-reset · the Material hosts reset the DTS
+Files: `Structure` · `Buttons` · `Stack.swift` / `Gesture.kt` · `TextStyleResetTest(s)` (new).
+Cases: A7.2 reset → green, the same 7 on both (Card, the three buttons, FAB, InkWell, AppBar title and actions,
+Scaffold body reset; IconButton passes it through). Changed: each host draws its content under an empty DTS layer,
+as Flutter's Material (MUI material.dart:470-474). Decided: IconButton passes it (Flutter's builder has no Material).
+Follow-ups: Drawer, SliverAppBar (q7).
+
+#### Task K-select · Kotlin SelectableText
+Files: `SelectableText.kt` (new) · `Content.kt` (drawnStyle, lineLimit, DrawnText shared with Text; `layer` → `dts`) ·
+`SelectableTextTest.kt` (new). Cases: A7.2 kt select → green, 6 a7_2_kt_* (a focusable SelectionContainer, a long
+press selects a word, white 14 bold under a DTS, own fields win, maxLines 2 a two-line box that scrolls, maxLines 1
+one line that scrolls sideways). Changed: Text's draw path inside a SelectionContainer in a scrolling box n lines
+tall (minLines ?? maxLines, as Flutter), the 3 dp caret margin.
+
+### Group 5
+Commit: S-select bca709d9 (started early in group 4, the Swift lane was free). Reviewed; went back once (a redraw
+dropped the selection: updateUIView now keeps selectedRange while the string is unchanged, red first).
+#### Task S-select · Swift SelectableText (q2 a)
+Files: `SelectableText.swift` (new) · `TextKit.swift` (attributed(_:paragraph:font:), platformFont(at:)) ·
+`NodeView.swift` · `SelectableTextTests.swift` (new). Cases: A7.2 sw select → green, 7 testA7_2Selectable* (a
+read-only selectable UITextView with the caret margin; styled as a Text without a DTS; white 14 bold under one, own
+fields win; a word and a range selected and copied in a hosted window; maxLines 2 two lines tall, scrolls, no
+ellipsis; keeps its selection while its data is unchanged; macOS draws a Text's pixels with .textSelection).
+Changed: iOS draws a non-editable, selectable UITextView fed the same attributed text as Text (LineTextView sizes it to
+n lines); macOS keeps Text with `.textSelection(.enabled)`.
+
+### Group 6
+Commits: K-table cf66e654, S-table bb42f155. Reviewed: pass. K-table found Flutter's unbounded-width case: 0 wide
+(FlexColumnWidth.maxIntrinsicWidth is 0, rendering/table.dart:212-214, :1123-1129); D10 corrected, decision
+table-unbounded-width.
+#### Task S-table / K-table · one-column Table with border (q1 a)
+Files: `Table.swift` / `.kt` (new) · `NodeView.swift` · `TableTest(s)` (new). Cases: A7.4 table → green, the same 6
+on both (each child a full-width row at its own height; outer lines inside, row lines centred over the cells; an empty
+border black and 1 wide; no border no lines; columnWidths and defaultColumnWidth change nothing; unbounded width 0).
+Follow-ups: the 0-width hairline is untested; Swift repeats TightForLayout.limits.
+
+### Group 7
+Commits: D-rich b7afb069, K-caps 3eacf2c6, S-caps f3a39002, the engine test 67f74a8f. Reviewed: pass. The D-rich
+review found an engine bug for the user: ImageIcon is not exported from the engine barrels (follow-up, own PR).
+#### Task S-caps / K-caps · advertise the seven
+Files: both `capabilities.json` (82 → 89, sorted) · `Generated.swift` / `.kt` (one gen-native-capabilities run) ·
+`CapabilitiesTest(s)` · `StructureWidgetTests.swift` · `WidgetBuilders.kt` (seven registered; ImageIcon → IconWidget) ·
+both READMEs · the DefaultTextStyle doc names its resets. Cases: A7.x caps → green on both (89, the same list and
+caps hash 8d06076b…; Kotlin standard() equals the vector; the Swift switch draws each).
+#### Task D-rich · demo page rich
+Files: `examples/server/parity-a.ts` (page `rich`) · `index.ts` · `engine/test/parity-a-rich.test.ts` (new). Cases:
+A7.x eng → green after the caps tasks (the page holds all seven; each native vector gets it whole, no FallbackPrompt or
+caps banner); red before them.
+
+### Rebase
+On main 3880607 (PR #49, the video player packages): clean, no conflicts. Refs backup/native-parity-s7-pre-rebase-388,
+-s6base-388 (90f88e13, step 6's tip inside this branch), -post-rebase-388.
+
+### Test run (rebased head, before the pipeline commit)
+engine `bun test` 832 pass · Flutter 545 pass, analyze clean · `swift test` UI 578, core 640 · iOS scheme on DA7254F5
+UI 739, core 640 · Kotlin `./gradlew cleanTest :sdk:cleanTestDebugUnitTest build --no-build-cache` core 658, sdk 814,
+lint clean · app-ios and app-android build · the three generators leave no diff · no golden moved in step 7.
+
+### Hand checks (page `rich`, iPhone 16 Pro simulator and Android API 34 emulator)
+A7.1 spans, lines by run, "name = Grace" changes only its span, the white root: pass on both. A7.2 a long press
+selects a word, the handle widens it, Copy then Paste gives the same text (iOS "press or double t", Android "or double
+tap"); the maxLines 2 box scrolls; the DTS look, its yield to an own colour, RichText ignoring it, Card and button
+reset, IconButton "Aa" red: pass on both. A7.3 both indicators static, as Flutter: pass. A7.4 Table rows and border,
+ImageIcon sizes, tint and scaleDown: pass. Notes in the scratchpad s7/hand-checks.md.
