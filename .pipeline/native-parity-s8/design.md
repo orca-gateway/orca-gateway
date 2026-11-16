@@ -51,7 +51,9 @@ Kotlin minSdk 24, Compose BOM 2026.05.01 (material3 1.4.0).
   top, none open is a no-op; a dismiss (barrier, drag, Back) pops the top.
   `SnackbarQueue`: a FIFO of {kind snackbar | toast, message, duration ?? 4000 | 2000} driven by the time passed in:
   idle → entering (250 ms) → showing (its duration, counted once fully in) → leaving (250 ms) → the next; a swipe
-  starts leaving; nothing is dropped or replaced.
+  removes the bar at once and the next enters (the UI slides it off with the drag first: Flutter's Dismissible, then
+  removeCurrentSnackBar with no leave animation, snack_bar.dart:859-871, :865; corrected at S-core / K-core); nothing
+  is dropped or replaced.
   `TooltipPlacement`: given the child's rect, the bubble's size and the overlay's size: x centred on the child,
   clamped 10 from the overlay's edges; y = child centre + 24 below, above (centre − 24 − height) when below does not
   fit; the timing constants (500 ms press, 1.5 s after release, fade 150 / 75 ms).

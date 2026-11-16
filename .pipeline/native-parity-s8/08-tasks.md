@@ -99,8 +99,8 @@ G1 → G2 (G2 needs nothing from G1; a group holds at most four tasks)
 - S-core, K-core, red first on stubs. DialogStack (D4): open resolves the Dialog's children depth-first in order
   (component_renderer.dart:44-54), unknown id or no children opens nothing; h ?? 0.5, NaN or negative → 0.5; close pops
   the top, none open does nothing; a dismiss pops the top; stacked sheets close one per call. SnackbarQueue: FIFO,
-  durations ?? 4000 / 2000; phases entering 250 → showing (counted once fully in) → leaving 250; a swipe starts
-  leaving; nothing dropped or replaced; time passed in.
+  durations ?? 4000 / 2000; phases entering 250 → showing (counted once fully in) → leaving 250; a swipe removes
+  the bar at once (D4 as corrected at S-core / K-core); nothing dropped or replaced; time passed in.
 - S-static: Overlays.swift: BottomSheet = SB:235-249; SnackBar = SB:429-465 (Expanded content, D9); Dialog = a
   zero-size view of its own (not EmptyView: StructureWidgetTests.swift:273-285). ScaffoldView (Structure.swift:22,
   :36-89) draws the slot per D6 (over the body, which keeps its frame, above the bottom bar and footer; #F7F2FA, top
