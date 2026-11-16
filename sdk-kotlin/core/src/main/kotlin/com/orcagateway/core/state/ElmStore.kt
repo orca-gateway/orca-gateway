@@ -156,13 +156,15 @@ public class ElmStore(initial: StoreState = StoreState()) {
 
     /**
      * Replace the state and notify the subscribers whose watched values
-     * changed. Subscribers are notified in subscription order.
+     * changed. Subscribers are notified in subscription order. DevTools
+     * gets a `state_change` per changed key unless
+     * [com.orcagateway.core.debug.OrcaDebugOptions.captureStateChanges] is off.
      */
     public fun commit(next: StoreState) {
         val previous = state
         state = next
         val pageId = pageId
-        if (pageId != null && OrcaDebug.isEnabled) {
+        if (pageId != null && OrcaDebug.isEnabled && OrcaDebug.options.captureStateChanges) {
             for (event in DevToolsEvent.stateChanges(previous, next, pageId)) OrcaDebug.report { event }
         }
         onCommit?.invoke(next)

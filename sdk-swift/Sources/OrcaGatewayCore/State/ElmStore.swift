@@ -116,7 +116,8 @@ public final class ElmStore {
     public var onCommit: ((StoreState) -> Void)?
 
     /// The page this store belongs to. When set and DevTools is on, every
-    /// changed key is reported as a `state_change` (Dart `ElmStore.pageId`).
+    /// changed key is reported as a `state_change` (Dart `ElmStore.pageId`),
+    /// unless `OrcaDebug.options.captureStateChanges` is off.
     public var pageId: String?
 
     public init(_ state: StoreState = StoreState()) {
@@ -166,7 +167,7 @@ public final class ElmStore {
     public func commit(_ next: StoreState) {
         let previous = state
         state = next
-        if let pageId, OrcaDebug.isEnabled {
+        if let pageId, OrcaDebug.isEnabled, OrcaDebug.options.captureStateChanges {
             for event in DevToolsEvent.stateChanges(from: previous, to: next, pageId: pageId) {
                 OrcaDebug.report(event)
             }

@@ -1,0 +1,17 @@
+{
+  "type": "widget_rebuild",
+  "deviceId": "fixture-device",
+  "timestamp": 1793980800000,
+  "payload": {
+    "widgetId": "5",
+    "widgetType": "Text",
+    "watches": ["count"],
+    "propTraces": {
+      "data": [
+        { "op": "state", "in": "count", "out": "1" },
+        { "op": "input", "out": "1" },
+        { "op": "toString", "in": "1", "out": "1" }
+      ]
+    }
+  }
+}

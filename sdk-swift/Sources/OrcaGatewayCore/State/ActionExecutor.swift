@@ -53,6 +53,11 @@ public final class ActionExecutor {
     public var perform: ((ActionEffect) async -> Void)?
     /// A structural change from a server action, for the page's node tree.
     public var onMutation: ((ComponentMutation) -> Void)?
+    /// The page's current nodes in the order the page sent them, set by the
+    /// page that owns the node tree. Asked only while DevTools is on, after
+    /// a setState wrote its value, for the event's `affectedWidgets` (the
+    /// nodes watching its key; Flutter walks its ComponentStore). Nil: none.
+    public var pageNodes: (() -> [ComponentNode])?
 
     private let reducer = ActionReducer()
     private var eventData: [String: JSONValue]?
@@ -138,10 +143,16 @@ public final class ActionExecutor {
         let handler = self.handler(for: action.kind)
         guard handler != nil || Self.kinds.contains(action.kind) else { return }
         // Every action run, nested ones too, is a DevTools `action` event.
+        // A setState fills the two fields for its own event only, as
+        // Flutter clears them around each handler.
         let start = OrcaDebug.isEnabled ? OrcaDebug.now() : nil
+        var transformTrace: [TraceStep] = []
+        var affectedWidgets: [JSONValue] = []
         defer {
             if let start {
-                OrcaDebug.report(.action(action, pageId: store.pageId ?? "", durationMs: OrcaDebug.now() - start))
+                OrcaDebug.report(.action(
+                    action, pageId: store.pageId ?? "", durationMs: OrcaDebug.now() - start,
+                    transformTrace: transformTrace, affectedWidgets: affectedWidgets))
             }
         }
 
@@ -155,7 +166,15 @@ public final class ActionExecutor {
         }
 
         switch action {
-        case .setState, .showSnackbar, .showToast:
+        case .setState(let a):
+            let (next, trace) = reducer.setState(store.state, a, eventData: eventData, traced: start != nil)
+            store.commit(next)
+            if start != nil {
+                transformTrace = trace
+                affectedWidgets = watchers(of: a.key)
+            }
+
+        case .showSnackbar, .showToast:
             let (next, effects) = reducer.reduce(store.state, action, eventData: eventData)
             store.commit(next)
             for effect in effects { await emit(effect) }
@@ -267,6 +286,15 @@ public final class ActionExecutor {
             break
         }
         return ActionEffect("debugLog", payload)
+    }
+
+    /// The page's nodes whose watches hold `key` exactly (no dotted path, any
+    /// scope), as `{id, type, watches}` in the page's order; Flutter leaves
+    /// props out, widget_rebuild carries them.
+    private func watchers(of key: String) -> [JSONValue] {
+        (pageNodes?() ?? []).filter { $0.watches.contains(key) }.map {
+            ["id": .string($0.id), "type": .string($0.type), "watches": .array($0.watches.map(JSONValue.string))]
+        }
     }
 
     /// Report an effect, then hand it to the platform.

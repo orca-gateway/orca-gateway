@@ -17,6 +17,11 @@ import UIKit
 /// seeded. Use it with ORCA_APP_ID=navigation (`examples/server/navigation.ts`);
 /// ORCA_PATH is not read then. The two switches above work in both modes.
 ///
+/// Debug builds start Orca DevTools (ORCA_DEVTOOLS, ORCA_DEVTOOLS_HOST in
+/// `init`). ORCA_OVERLAY=1 draws the load-time chip at the bottom right of
+/// each page (a tap unfolds it), and ORCA_BODIES=1 puts the request and
+/// response bodies in DevTools' network events. Both are off by default.
+///
 /// The app opens `orcacounter://` links (see "Deep links" in the README) and
 /// prints one `OrcaCounter deeplink:` line for each.
 ///
@@ -27,11 +32,14 @@ struct OrcaCounterApp: App {
         #if DEBUG
         // Debug builds show up in Orca DevTools (`t devtools:dev`, port 6363).
         // ORCA_DEVTOOLS=0 turns it off; ORCA_DEVTOOLS_HOST points a device at
-        // the Mac running DevTools.
+        // the Mac running DevTools. ORCA_OVERLAY and ORCA_BODIES turn on
+        // showOverlay and includeBodies.
         OrcaDebug.start(OrcaDebugConfig(
             enabled: Self.setting("ORCA_DEVTOOLS", "1") != "0",
             host: Self.setting("ORCA_DEVTOOLS_HOST", "localhost"),
-            appName: "Orca Counter"))
+            appName: "Orca Counter",
+            showOverlay: Self.isOn("ORCA_OVERLAY"),
+            includeBodies: Self.isOn("ORCA_BODIES")))
         #endif
     }
 

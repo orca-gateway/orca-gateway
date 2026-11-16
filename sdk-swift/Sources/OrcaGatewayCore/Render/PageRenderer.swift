@@ -148,14 +148,38 @@ public struct PageRenderer: Sendable {
 
     /// `animationProgress` is the enclosing AnimatedBuilder's value (0...1),
     /// which `tween` and `tweenSequence` props interpolate by.
+    ///
+    /// While DevTools is on, a node with watches resolves each Value prop
+    /// (a JSON object) with its trace and, when some prop traced a step,
+    /// reports a `widget_rebuild` with those traces: every resolution, the
+    /// first included, as Flutter's WatchBuilder traces every build
+    /// (component_renderer.dart). The props are the same either way.
+    /// `reportsRebuild` false is a read that is not the node's build (a
+    /// parent reading a child's props): untraced and never reported, as
+    /// Flutter reports from the node's own build only.
     public func resolve(_ id: String, state: StoreState,
                         eventData: [String: JSONValue]? = nil,
-                        animationProgress: Double? = nil) -> ResolvedNode? {
+                        animationProgress: Double? = nil,
+                        reportsRebuild: Bool = true) -> ResolvedNode? {
         guard let source = nodes[id], let node = node(id) else { return nil }
         var resolver = state.resolver(eventData: eventData)
         resolver.animationProgress = animationProgress
+        let tracing = reportsRebuild && !node.watches.isEmpty && OrcaDebug.isEnabled
         var props: [String: JSONValue] = [:]
-        for (key, value) in node.props { props[key] = resolver.resolveDeep(value) }
+        var propTraces: [String: [TraceStep]] = [:]
+        for (key, value) in node.props {
+            guard tracing, case .object = value else {
+                props[key] = resolver.resolveDeep(value)
+                continue
+            }
+            let (resolved, trace) = resolver.resolveWithTrace(value)
+            props[key] = resolved
+            if !trace.isEmpty { propTraces[key] = trace }
+        }
+        if !propTraces.isEmpty {
+            OrcaDebug.report(.widgetRebuild(
+                widgetId: node.id, widgetType: node.type, watches: node.watches, propTraces: propTraces))
+        }
 
         var childIds: [String] = []
         var slots: [String: String] = [:]

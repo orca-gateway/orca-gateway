@@ -3,6 +3,7 @@ package com.orcagateway.core.client
 import com.orcagateway.core.capabilities.CapabilityVector
 import com.orcagateway.core.debug.DevToolsEvent
 import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.core.debug.OrcaDebugOptions
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.NavConfig
@@ -262,9 +263,20 @@ public class OrcaClient private constructor(
      * caps_vector_unknown is the expected first step of the handshake, so no
      * error; the refused retry is one, as in Dart (Swift skips it). A
      * cancelled request is not a failure: it goes up with no event at all.
+     *
+     * [OrcaDebugOptions.captureNetworkRequests] off drops the `network`
+     * event, never the `error` one. [OrcaDebugOptions.includeBodies] on adds
+     * [requestBody] (by default the request's JSON body; a page fetch passes
+     * its app state, as Dart does) and the response as [bodyJson] (none when
+     * the transport failed).
      */
-    internal suspend fun send(request: HttpRequest, handshake: Boolean = false): HttpResponse {
+    internal suspend fun send(
+        request: HttpRequest,
+        handshake: Boolean = false,
+        requestBody: () -> JsonValue? = { request.body?.let(::bodyJson) },
+    ): HttpResponse {
         if (!OrcaDebug.isEnabled) return transport.send(request)
+        val options = OrcaDebug.options
         val start = OrcaDebug.now()
         val url = request.url.toString()
         val context = "${request.method} $url"
@@ -275,23 +287,30 @@ public class OrcaClient private constructor(
             throw e
         } catch (e: Exception) {
             val ms = OrcaDebug.now() - start
-            OrcaDebug.report {
-                DevToolsEvent.network(
-                    request.method, url, statusCode = 0, durationMs = ms, requestSizeBytes = request.body?.size,
-                    requestHeaders = requestHeaders, phases = listOf(DevToolsEvent.NetworkPhase("wait", ms)),
-                )
+            if (options.captureNetworkRequests) {
+                OrcaDebug.report {
+                    DevToolsEvent.network(
+                        request.method, url, statusCode = 0, durationMs = ms, requestSizeBytes = request.body?.size,
+                        requestHeaders = requestHeaders, phases = listOf(DevToolsEvent.NetworkPhase("wait", ms)),
+                        requestBody = if (options.includeBodies) requestBody() else null,
+                    )
+                }
             }
             OrcaDebug.report { DevToolsEvent.error(message = "Network request failed: $e", context = context) }
             throw e
         }
         val ms = OrcaDebug.now() - start
-        OrcaDebug.report {
-            DevToolsEvent.network(
-                request.method, url, response.status, ms, requestSizeBytes = request.body?.size,
-                responseSizeBytes = response.body.size, requestHeaders = requestHeaders,
-                responseHeaders = DevToolsEvent.sanitize(response.headers),
-                phases = listOf(DevToolsEvent.NetworkPhase("wait", ms)),
-            )
+        if (options.captureNetworkRequests) {
+            OrcaDebug.report {
+                DevToolsEvent.network(
+                    request.method, url, response.status, ms, requestSizeBytes = request.body?.size,
+                    responseSizeBytes = response.body.size, requestHeaders = requestHeaders,
+                    responseHeaders = DevToolsEvent.sanitize(response.headers),
+                    phases = listOf(DevToolsEvent.NetworkPhase("wait", ms)),
+                    requestBody = if (options.includeBodies) requestBody() else null,
+                    responseBody = if (options.includeBodies) bodyJson(response.body) else null,
+                )
+            }
         }
         val expected = handshake && response.status == 412 && response.errorField == "caps_vector_unknown"
         if (response.status >= 400 && !expected) {
@@ -339,16 +358,29 @@ public class OrcaClient private constructor(
         } else {
             HttpRequest("GET", url, base)
         }
-        val response = send(first, handshake = true)
+        // DevTools shows a page fetch's app state, not its wire body, and none
+        // for an empty one: Flutter's page passes null then (Dart).
+        val sentState: () -> JsonValue? = { state?.let { JsonValue.Object(it) } }
+        val response = send(first, handshake = true, requestBody = sentState)
         if (response.status != 412 || response.errorField != "caps_vector_unknown") return response
 
         // The retry is always a POST: the vector has to travel in the body.
         val body = linkedMapOf("_orcaCapsVector" to JsonValue.encoding(CapabilityVector.serializer(), capabilities))
         if (state != null) body["appState"] = JsonValue.Object(state)
-        return send(HttpRequest("POST", url, json, JsonValue.Object(body).encoded().encodeToByteArray()))
+        return send(
+            HttpRequest("POST", url, json, JsonValue.Object(body).encoded().encodeToByteArray()),
+            requestBody = sentState,
+        )
     }
 
     internal companion object {
+        /** A body as DevTools shows it: its JSON, else its text (Dart `_tryDecodeJson`). */
+        fun bodyJson(bytes: ByteArray): JsonValue = try {
+            JsonValue.parse(bytes)
+        } catch (_: SerializationException) {
+            JsonValue.String(bytes.decodeToString())
+        }
+
         /**
          * The upgrade screen of a 426 (Epic 25b.6): below the app's minimum
          * SDK version the engine answers `{error, minSdkVersion,

@@ -1,0 +1,42 @@
+{
+  "name": "transform-pipeline",
+  "description": "resolveWithTrace over a transform on a page-state ref: add 3, an op the SDK does not know, then toString. The input is resolved first (its `state` step), then one `input` step (no `in`), then one step per known op, `in` the value before it and `out` the value after; the unknown op is skipped and records nothing. The static `by` of add records nothing.",
+  "state": {
+    "page": {
+      "count": 2
+    },
+    "app": {}
+  },
+  "value": {
+    "type": "transform",
+    "input": {
+      "type": "state",
+      "key": "count",
+      "scope": "page"
+    },
+    "by": [
+      {
+        "type": "add",
+        "by": {
+          "type": "static",
+          "value": 3
+        }
+      },
+      {
+        "type": "notARealOp"
+      },
+      {
+        "type": "toString"
+      }
+    ]
+  },
+  "expected": {
+    "value": "5",
+    "trace": [
+      { "op": "state", "in": "count", "out": "2" },
+      { "op": "input", "out": "2" },
+      { "op": "add", "in": "2", "out": "5" },
+      { "op": "toString", "in": "5", "out": "5" }
+    ]
+  }
+}

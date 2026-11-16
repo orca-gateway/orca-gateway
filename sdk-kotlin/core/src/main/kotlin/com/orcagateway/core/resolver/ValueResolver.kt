@@ -1,5 +1,6 @@
 package com.orcagateway.core.resolver
 
+import com.orcagateway.core.debug.TraceStep
 import com.orcagateway.core.json.DartFormat
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.json.SwiftText
@@ -31,6 +32,9 @@ import kotlin.math.min
  * regex `\d`/`\w` are ASCII. Still Swift's: sort order, the whitespace set
  * of `trim`, per-scalar lowercasing, ASCII-only integer parsing, and the
  * Characters of the tween colour test and of `$n` backrefs (SwiftText).
+ *
+ * A resolver is made per call site and used on one thread: [resolveWithTrace]
+ * records into it while it runs.
  */
 public class ValueResolver(
     /** Merged state, app first and page on top, as the Dart SDK builds it. */
@@ -49,6 +53,36 @@ public class ValueResolver(
         app: Map<String, JsonValue>,
         eventData: Map<String, JsonValue>? = null,
     ) : this(state = app + page, eventData = eventData)
+
+    /** Steps of the [resolveWithTrace] call in progress; null otherwise, so [resolve] records nothing. */
+    private var trace: MutableList<TraceStep>? = null
+
+    /** Adds the step [step] builds while tracing; [step] is never called otherwise. */
+    private inline fun record(step: () -> TraceStep) {
+        trace?.add(step())
+    }
+
+    /**
+     * Resolve [raw] deep (as [resolveDeep]) and the steps it took, Dart
+     * `resolveWithTrace` (value_resolver.dart:374-410): `state` {in: key,
+     * out: value} and `event` {in: key, out: value} per ref read; per
+     * transform, after its input, `input` {out} then {op: its type, in: the
+     * value before, out: the value after} per known step. static,
+     * conditional and tweens record nothing themselves (their refs do).
+     * Values are Dart's `'$x'` text; `in` is left out when the input is null.
+     * Not reentrant: a call from inside one (a transform calling back) throws
+     * [IllegalStateException], as Dart's assert.
+     */
+    public fun resolveWithTrace(raw: JsonValue): Pair<JsonValue, List<TraceStep>> {
+        check(trace == null) { "resolveWithTrace is not reentrant" }
+        val steps = ArrayList<TraceStep>()
+        trace = steps
+        try {
+            return resolveDeep(raw) to steps
+        } finally {
+            trace = null
+        }
+    }
 
     // MARK: resolve
 
@@ -96,13 +130,17 @@ public class ValueResolver(
 
     private fun resolveState(map: Map<String, JsonValue>): JsonValue {
         val key = map["key"]?.stringValue ?: return JsonValue.Null
-        return StatePath.lookup(state, key)
+        val value = StatePath.lookup(state, key)
+        record { TraceStep("state", key, DartFormat.string(value)) }
+        return value
     }
 
     private fun resolveEvent(map: Map<String, JsonValue>): JsonValue {
         val key = map["key"]?.stringValue ?: return JsonValue.Null
         val eventData = eventData ?: return JsonValue.Null
-        return eventData[key] ?: JsonValue.Null
+        val value = eventData[key] ?: JsonValue.Null
+        record { TraceStep("event", key, DartFormat.string(value)) }
+        return value
     }
 
     private fun resolveConditional(map: Map<String, JsonValue>): JsonValue {
@@ -122,11 +160,14 @@ public class ValueResolver(
     private fun resolveTransform(map: Map<String, JsonValue>): JsonValue {
         var current = resolve(map["input"] ?: JsonValue.Null)
         val pipeline = map["by"]?.arrayValue ?: return current
+        record { TraceStep("input", null, DartFormat.string(current)) }
         for (step in pipeline) {
             val def = step.objectValue ?: continue
             val type = def["type"]?.stringValue ?: continue
             val op = transforms[type] ?: continue
+            val previous = current
             current = op(def, current, this)
+            record { TraceStep(type, if (previous.isNull) null else DartFormat.string(previous), DartFormat.string(current)) }
         }
         return current
     }
