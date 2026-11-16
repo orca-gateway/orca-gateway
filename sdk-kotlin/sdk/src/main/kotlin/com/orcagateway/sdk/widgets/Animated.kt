@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.RememberObserver
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -17,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -52,8 +54,9 @@ import kotlin.math.roundToInt
  * widget keeps what is on screen until the next frame, where the run begins
  * (`duration` ms, 300; `curve` by name, easeInOut when missing or unknown)
  * from the value on screen, also in the middle of a run; it takes frames
- * only until the run ends. Reduced motion ([orcaReduceMotion]) or a
- * duration of 0: [target] at once, no frame taken.
+ * only until the run ends. Reduced motion ([orcaReduceMotion]), a duration
+ * of 0, or a layer drawn from a snapshot ([LocalOrcaFrozenNodes], where a
+ * run that was live ends there): [target] at once, no frame taken.
  *
  * [target] is [node]'s props with Flutter's defaults filled in, so a prop
  * the page leaves out animates from the default as it does in Flutter.
@@ -70,7 +73,7 @@ private fun sampled(
     animation.durationMs = AnimationDuration.milliseconds(node["duration"])
     animation.curve = node["curve"]?.stringValue
     animation.reduceMotion = orcaReduceMotion()
-    val jumps = animation.reduceMotion || animation.durationMs <= 0
+    val jumps = animation.reduceMotion || animation.durationMs <= 0 || LocalOrcaFrozenNodes.current != null
 
     var onScreen by remember(animation) { mutableStateOf(target) }
     LaunchedEffect(model, animation, target, jumps) {
@@ -211,6 +214,7 @@ internal class SwitcherFade {
         private set
 
     private var shown = false
+    private var prunedAt: Int? = null
     private var startMs: Double? = null
     private var durationMs = 0.0
     private var outgoingFrom = 1.0
@@ -257,6 +261,17 @@ internal class SwitcherFade {
         progress = 0.0
     }
 
+    /**
+     * The page's node tree is at [structureRevision] and the [current] child
+     * has been drawn from it: once per revision, the [recorder] forgets what
+     * that child no longer holds ([OrcaNodeSnapshot.keep]).
+     */
+    fun drawn(structureRevision: Int) {
+        if (prunedAt == structureRevision) return
+        prunedAt = structureRevision
+        recorder.keep(current)
+    }
+
     /** One frame at [now] ms: the first one of a fade is its start. */
     fun frame(now: Double) {
         if (!isFading) return
@@ -282,10 +297,18 @@ internal class SwitcherFade {
  * delete has already taken it off the page: each time the current child is
  * drawn its resolved nodes are recorded ([SwitcherFade.recorder]), and when
  * the id changes the outgoing layer is drawn from that record
- * ([LocalOrcaFrozenNodes]) until the fade ends, when it is dropped. That
- * layer is inert: no pointer input, no action, no lifecycle trigger, no
- * animation controller, nothing read from the page. A switcher that is
- * itself inside such a layer swaps at once.
+ * ([LocalOrcaFrozenNodes]) until the fade ends, when it is dropped. The
+ * record follows the page: after each change to the node tree it keeps only
+ * what the current child still holds ([SwitcherFade.drawn]).
+ *
+ * The outgoing layer is inert: no pointer input, no focus (a field that had
+ * it loses it, so no key reaches the store), no action, no lifecycle
+ * trigger, no animation running (an AnimatedBuilder holds no controller, an
+ * implicit widget is at its target), no node resolved again. One gap
+ * remains: the Scaffold still reads the live page (`model.renderer.node`)
+ * for its drawer's type and its bottom navigation entries, so those of an
+ * outgoing Scaffold the page has dropped are drawn without them. A
+ * switcher that is itself inside such a layer swaps at once.
  */
 @Composable
 internal fun AnimatedSwitcherWidget(
@@ -302,6 +325,9 @@ internal fun AnimatedSwitcherWidget(
     )
     fade.recorder.parent = LocalOrcaNodeRecorder.current
     val current = fade.current
+    // Read here so the prune runs after the recomposition a tree change causes, when the child has been recorded anew.
+    val structure = model.structureRevision
+    SideEffect { fade.drawn(structure) }
     LaunchedEffect(model, fade, current) {
         while (fade.isFading) model.withAnimationFrame { now -> fade.frame(now) }
     }
@@ -317,7 +343,7 @@ internal fun AnimatedSwitcherWidget(
                     LocalOrcaFrozenNodes provides if (leaving) fade.outgoingNodes.orEmpty() else frozen,
                     LocalOrcaNodeRecorder provides if (leaving) null else fade.recorder,
                 ) {
-                    NodeView(id, model, if (leaving) layer.then(NoPointerInput) else layer)
+                    NodeView(id, model, if (leaving) layer.then(NoPointerInput).then(NoFocus) else layer)
                 }
             }
         }
@@ -330,6 +356,9 @@ private val NoPointerInput: Modifier = Modifier.pointerInput(Unit) {
         while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
     }
 }
+
+/** Nothing below it can take or keep focus: an outgoing text field gets no key. */
+private val NoFocus: Modifier = Modifier.focusProperties { canFocus = false }
 
 /** The `tag` of the Hero a node is drawn in (semantics): how a test finds it. */
 internal val OrcaHeroTag: SemanticsPropertyKey<String> = SemanticsPropertyKey("OrcaHeroTag")

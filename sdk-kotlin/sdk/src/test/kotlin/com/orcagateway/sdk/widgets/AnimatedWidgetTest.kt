@@ -1,17 +1,30 @@
 package com.orcagateway.sdk.widgets
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 import com.orcagateway.core.animation.AlignmentBias
@@ -29,6 +42,8 @@ import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.WidgetBuilders
 import com.orcagateway.sdk.support.button
+import com.orcagateway.sdk.support.column
+import com.orcagateway.sdk.support.leaf
 import com.orcagateway.sdk.support.page
 import com.orcagateway.sdk.support.text
 import kotlinx.coroutines.runBlocking
@@ -38,6 +53,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import kotlin.math.abs
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -66,6 +83,12 @@ class AnimatedWidgetTest {
 
     private val fade = SwitcherFade()
 
+    /** The Compose view, to draw it into a bitmap. */
+    private var view: View? = null
+
+    /** How many times a Probe was composed anew, by node id. */
+    private val probes = HashMap<String, Int>()
+
     private fun record(id: String, props: Map<String, JsonValue>) {
         drawn[id] = props
         draws[id] = (draws[id] ?: 0) + 1
@@ -73,7 +96,7 @@ class AnimatedWidgetTest {
 
     private fun model(vararg nodes: ComponentNode, state: Map<String, Any?> = emptyMap()): OrcaPageModel {
         val definitions = state.map { StateDefinition(it.key, StateScope.Page, JsonValue.of(it.value)) }
-        val registry = WidgetRegistry(types = WidgetRegistry.shared.types + ANIMATED + "Dot")
+        val registry = WidgetRegistry(types = WidgetRegistry.shared.types + ANIMATED + setOf("Dot", "Probe", "TextField"))
         return OrcaPageModel(page(*nodes, state = definitions), registry = registry).also { model ->
             model.builders = WidgetBuilders.standard().apply {
                 register("AnimatedContainer") { node, m, modifier ->
@@ -94,7 +117,16 @@ class AnimatedWidgetTest {
                         AlignWidget(sampled, sm, smod)
                     }
                 }
-                register("AnimatedSwitcher") { node, m, modifier -> AnimatedSwitcherWidget(node, m, modifier, fade) }
+                // The switcher "sw" is the one the tests look into; any other keeps its own fade.
+                register("AnimatedSwitcher") { node, m, modifier ->
+                    if (node.id == "sw") AnimatedSwitcherWidget(node, m, modifier, fade) else AnimatedSwitcherWidget(node, m, modifier)
+                }
+                register("TextField") { node, m, modifier -> TextFieldWidget(node, m, modifier) }
+                // Counts each new composition of itself: one per node unless its composition state was dropped.
+                register("Probe") { node, _, modifier ->
+                    remember { probes.merge(node.id, 1, Int::plus) }
+                    Box(modifier.size(10.dp))
+                }
                 // A 20 x 10 box tagged with its node id.
                 register("Dot") { node, _, modifier -> Box(modifier.testTag(node.id).size(20.dp, 10.dp)) }
             }
@@ -118,6 +150,7 @@ class AnimatedWidgetTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             CompositionLocalProvider(LocalOrcaReduceMotion provides reduceMotion) {
+                view = LocalView.current
                 Box(Modifier.size(300.dp, 200.dp)) { NodeView(root, model) }
             }
         }
@@ -521,6 +554,150 @@ class AnimatedWidgetTest {
         val rested = model.animationFrameMs
         compose.mainClock.advanceTimeBy(500)
         assertEquals(rested, model.animationFrameMs, "the repeating builder left with its layer: no frames")
+    }
+
+    /** One pixel of the page drawn in software on white, as BoxTest draws it: red, green, blue. */
+    private fun pixel(x: Int, y: Int): List<Int> {
+        val page = requireNotNull(view)
+        val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(android.graphics.Color.WHITE)
+        page.draw(Canvas(bitmap))
+        val argb = bitmap.getPixel(x, y)
+        return listOf(android.graphics.Color.red(argb), android.graphics.Color.green(argb), android.graphics.Color.blue(argb))
+    }
+
+    private fun assertPixel(expected: List<Double>, x: Int, y: Int) {
+        val actual = pixel(x, y)
+        assertTrue(expected.zip(actual).all { (want, got) -> abs(want - got) <= 4 }, "($x, $y) is $actual, expected $expected")
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun b12_4_k_midFadeBothLayersAreDrawnAtTheirAlphas() {
+        // A 100 x 100 red square replaced by a 20 x 20 blue one, centred on it.
+        val model = model(
+            single("sw", "AnimatedSwitcher", "a", mapOf("duration" to 300)),
+            single("a", "Container", null, mapOf("width" to 100, "height" to 100, "color" to "#FF0000")),
+        )
+        show(model, "sw")
+        assertPixel(listOf(255.0, 0.0, 0.0), 5, 5)
+
+        model.execute(replace("a", single("b", "Container", null, mapOf("width" to 20, "height" to 20, "color" to "#0000FF"))))
+        val start = model.startOfRun()
+        val now = model.runTo(start, 150.0)
+        val t = (now - start) / 300.0
+        assertTrue(t >= 0.5 && t < 0.6, "about half way by the test clock: $t")
+
+        // Outside the new child: red at 1 - t over the white page.
+        val under = listOf(255.0, 255.0 * t, 255.0 * t)
+        assertPixel(under, 5, 5)
+        // On it: blue at t over that.
+        val blue = listOf(0.0, 0.0, 255.0)
+        assertPixel(blue.zip(under).map { (top, below) -> top * t + below * (1 - t) }, 50, 50)
+
+        // After the fade the switcher is its 20 x 20 child alone.
+        compose.mainClock.advanceTimeBy(200)
+        assertPixel(blue, 5, 5)
+        assertPixel(listOf(255.0, 255.0, 255.0), 50, 50)
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun b12_4_k_aFieldThatHeldFocusInTheOutgoingChildWritesNothingToTheStore() {
+        val model = model(
+            single("sw", "AnimatedSwitcher", "a", mapOf("duration" to 300)),
+            leaf("a", "TextField", mapOf("stateKey" to JsonValue.String("name"))),
+            state = mapOf("name" to ""),
+        )
+        show(model, "sw")
+        val field = compose.onNode(hasSetTextAction())
+        field.performClick()
+        compose.mainClock.advanceTimeByFrame()
+        field.assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.A) }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals("a", model.store.value("name").stringValue, "live and focused, a key is an edit")
+
+        model.execute(replace("a", text("b", "New")))
+        compose.mainClock.advanceTimeBy(100)
+        assertTrue(fade.isFading)
+        field.assertExists()
+        field.assertIsNotFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.B) }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals("a", model.store.value("name").stringValue, "the outgoing field takes no key")
+    }
+
+    @Test
+    fun b12_4_k_theRecorderForgetsANodeThatLeftTheCurrentChild() {
+        // "sw" holds a switcher of its own: what "in" draws is also recorded by "sw" through the parent link.
+        val model = model(
+            single("sw", "AnimatedSwitcher", "in", mapOf("duration" to 300)),
+            single("in", "AnimatedSwitcher", "a", mapOf("duration" to 300)),
+            column("a", "x", "y"),
+            text("x", "Kept"),
+            text("y", "Deleted"),
+        )
+        show(model, "sw")
+        assertEquals(setOf("in", "a", "x", "y"), fade.recorder.frozen("in").keys)
+        assertEquals(setOf("y"), fade.recorder.frozen("y").keys)
+
+        model.execute(Action.DeleteComponent("y"))
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithText("Deleted").assertDoesNotExist()
+        assertEquals(emptySet(), fade.recorder.frozen("y").keys, "a node deleted inside the child is forgotten")
+        assertEquals(setOf("in", "a", "x"), fade.recorder.frozen("in").keys)
+
+        // The inner switcher's child is replaced: the outer one forgets the old child and its subtree.
+        model.execute(replace("a", text("b", "New")))
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(emptySet(), fade.recorder.frozen("a").keys)
+        assertEquals(emptySet(), fade.recorder.frozen("x").keys)
+        assertEquals(setOf("in", "b"), fade.recorder.frozen("in").keys)
+    }
+
+    @Test
+    fun b12_4_k_aFrozenImplicitWidgetShowsItsTargetAtOnce() {
+        val model = model(
+            single("sw", "AnimatedSwitcher", "box", mapOf("duration" to 300)),
+            single("box", "AnimatedContainer", null, mapOf("duration" to 2000, "curve" to "linear", "width" to state("w"), "height" to 40)),
+            state = mapOf("w" to 100),
+        )
+        show(model, "sw")
+        val from = assertNotNull(drawn["box"])
+        model.set("w" to 200)
+        val start = model.startOfRun()
+        model.runTo(start, 150.0)
+        val to = from + ("width" to JsonValue.Int(200))
+        val midRun = assertNotNull(drawn["box"]?.get("width")?.doubleValue)
+        assertTrue(midRun > 100 && midRun < 120, "early in its 2000 ms run: $midRun")
+
+        model.execute(replace("box", text("b", "New")))
+        // Every frame of the fade the outgoing container is drawn with its target: its run is over.
+        repeat(6) {
+            compose.mainClock.advanceTimeByFrame()
+            assertTrue(fade.isFading)
+            assertEquals(to, drawn["box"])
+        }
+        assertEquals(200.dp, compose.onNodeWithTag("box").getUnclippedBoundsInRoot().width)
+    }
+
+    @Test
+    fun b12_4_k_aFrozenBuilderKeepsItsChildrensCompositionState() {
+        val model = model(
+            single("sw", "AnimatedSwitcher", "spin", mapOf("duration" to 300)),
+            single("spin", "AnimatedBuilder", "probe", mapOf("duration" to 1000, "repeat" to true)),
+            ComponentNode("probe", "Probe", ComponentNode.Kind.Primitive, ComponentNode.ChildMode.None, emptyMap()),
+        )
+        show(model, "sw")
+        compose.mainClock.advanceTimeBy(64)
+        assertEquals(1, probes["probe"])
+
+        model.execute(replace("spin", text("b", "New")))
+        compose.mainClock.advanceTimeBy(100)
+        assertTrue(fade.isFading)
+        assertEquals(setOf("spin", "probe"), fade.outgoingNodes?.keys)
+        assertEquals(1, probes["probe"], "the child was not composed anew as its builder froze")
     }
 
     @Test

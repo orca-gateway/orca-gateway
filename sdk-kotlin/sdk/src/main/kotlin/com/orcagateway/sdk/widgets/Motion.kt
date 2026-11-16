@@ -25,6 +25,7 @@ import com.orcagateway.core.animation.AnimationController
 import com.orcagateway.core.animation.AnimationDuration
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.LocalOrcaAnimationProgress
+import com.orcagateway.sdk.LocalOrcaFrozenNodes
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.style.Props
@@ -74,6 +75,11 @@ internal fun orcaReduceMotion(): Boolean = LocalOrcaReduceMotion.current ?: reme
  * are read when the builder is first composed: a later update of them does
  * not rebuild the controller, which keeps its value (Flutter builds it in
  * `initState`); they apply to a builder that is composed anew.
+ *
+ * In a layer drawn from a snapshot ([LocalOrcaFrozenNodes]) it is only its
+ * children, which hold the props of the last frame they were live: its
+ * `animationId` is not registered (a builder turning frozen gives it up)
+ * and it takes no frames. The children keep their composition state.
  */
 @Composable
 internal fun AnimatedBuilderWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -84,6 +90,7 @@ internal fun AnimatedBuilderWidget(node: ResolvedNode, model: OrcaPageModel, mod
     val curve = node["curve"]?.stringValue
     val animationId = node["animationId"]?.stringValue
     val reduceMotion = orcaReduceMotion()
+    val frozen = LocalOrcaFrozenNodes.current != null
 
     // Built once, as Flutter's in `initState` and Swift's on appear: it lives as
     // long as the builder is composed, so an update of the props or reduced
@@ -95,12 +102,14 @@ internal fun AnimatedBuilderWidget(node: ResolvedNode, model: OrcaPageModel, mod
 
     // Registered before the clock starts, so an action of the first frame finds it.
     val owner = remember(node.id) { Any() }
-    DisposableEffect(model, owner, animationId, controller) {
-        if (animationId != null) model.animations.register(animationId, owner, controller)
-        onDispose { if (animationId != null) model.animations.unregister(animationId, owner) }
+    val registered = animationId.takeUnless { frozen }
+    DisposableEffect(model, owner, registered, controller) {
+        if (registered != null) model.animations.register(registered, owner, controller)
+        onDispose { if (registered != null) model.animations.unregister(registered, owner) }
     }
 
-    LaunchedEffect(model, controller) {
+    LaunchedEffect(model, controller, frozen) {
+        if (frozen) return@LaunchedEffect
         // One frame: the value to draw in it, then an `onComplete` per run that ended by it.
         suspend fun frame(starting: Boolean = false) {
             val ended = model.withAnimationFrame { now ->

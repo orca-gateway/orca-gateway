@@ -1,6 +1,5 @@
 package com.orcagateway.sdk
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
@@ -42,10 +41,10 @@ internal val LocalOrcaNodeRecorder = compositionLocalOf<OrcaNodeSnapshot?> { nul
  *
  * Under [LocalOrcaFrozenNodes] the node is the snapshot's and inert: it
  * observes nothing, is not resolved again, runs no lifecycle trigger, its
- * actions are [OrcaPageModel.INERT_ACTION], and an AnimatedBuilder is only
- * its children (no controller, no `animationId` registered, no frames):
- * they already hold the props of the last frame they were live. A widget
- * keeps its composition state as it turns from live to frozen.
+ * actions are [OrcaPageModel.INERT_ACTION]. It is drawn by the same
+ * builder at the same place, so a widget keeps its composition state as it
+ * turns from live to frozen; a builder that runs something of its own
+ * (an animation) asks [LocalOrcaFrozenNodes] and stops it.
  */
 @Composable
 public fun NodeView(id: String, model: OrcaPageModel, modifier: Modifier = Modifier) {
@@ -65,15 +64,7 @@ public fun NodeView(id: String, model: OrcaPageModel, modifier: Modifier = Modif
         if (hasLifecycleTriggers(live)) LifecycleTriggers(live, model)
         live
     }
-    if (frozen != null && node.type == "AnimatedBuilder") {
-        if (node.childIds.size == 1) {
-            NodeView(node.childIds[0], model, modifier)
-        } else {
-            Box(modifier) { node.childIds.forEach { NodeView(it, model) } }
-        }
-    } else {
-        WidgetView(node, model, modifier)
-    }
+    WidgetView(node, model, modifier)
 }
 
 /** The registry's builder for the node's type, or nothing (logged once per type). */

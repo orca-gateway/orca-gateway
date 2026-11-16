@@ -357,7 +357,8 @@ public class OrcaPageModel(
  * (`LocalOrcaNodeRecorder`), which costs a map entry holding a reference to
  * the node already resolved for drawing; each also tells its [parent], so
  * an outer switcher's snapshot includes what an inner one draws. [frozen]
- * is the copy to draw from (`LocalOrcaFrozenNodes`). Main thread only.
+ * is the copy to draw from (`LocalOrcaFrozenNodes`); [keep] drops what a
+ * change to the page took out of the subtree. Main thread only.
  */
 internal class OrcaNodeSnapshot {
     /** The recorder around the widget that owns this one, if any. */
@@ -371,18 +372,34 @@ internal class OrcaNodeSnapshot {
     }
 
     /**
+     * Forgets every node that is not in the subtree under [root] as last
+     * drawn (all of them for null): a node a server action deleted or
+     * replaced inside it is not held on. Call it once the subtree has been
+     * drawn from the changed page; the parent prunes itself.
+     */
+    fun keep(root: String?) {
+        val held = if (root == null) emptySet() else reachable(root)
+        nodes.keys.retainAll(held)
+    }
+
+    /**
      * The subtree under [root] as last drawn: the nodes reachable from it
      * through children and slots, each with its triggers made inert
      * ([OrcaPageModel.INERT_ACTION]). Empty when [root] was never drawn.
      */
-    fun frozen(root: String): Map<String, ResolvedNode> {
-        val out = LinkedHashMap<String, ResolvedNode>()
+    fun frozen(root: String): Map<String, ResolvedNode> = reachable(root).associateWithTo(LinkedHashMap()) { id ->
+        val node = nodes.getValue(id)
+        if (node.actions.isEmpty()) node else node.copy(actions = node.actions.mapValues { OrcaPageModel.INERT_ACTION })
+    }
+
+    /** The recorded ids reachable from [root] through children and slots, [root] first. */
+    private fun reachable(root: String): Set<String> {
+        val out = LinkedHashSet<String>()
         val pending = ArrayDeque(listOf(root))
         while (pending.isNotEmpty()) {
             val id = pending.removeFirst()
-            if (id in out) continue
             val node = nodes[id] ?: continue
-            out[id] = if (node.actions.isEmpty()) node else node.copy(actions = node.actions.mapValues { OrcaPageModel.INERT_ACTION })
+            if (!out.add(id)) continue
             pending.addAll(node.childIds)
             pending.addAll(node.slots.values)
         }
