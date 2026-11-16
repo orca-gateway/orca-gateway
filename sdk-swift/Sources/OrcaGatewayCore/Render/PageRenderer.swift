@@ -139,6 +139,16 @@ public struct PageRenderer: Sendable {
         self.rootId = page.components.first?.id
     }
 
+    /// A renderer of `page` in place of this one's, the Flutter
+    /// `ComponentStore.init`: the nodes `keep` names stay unless the page
+    /// sends one of the same id, every other node goes, and the page's first
+    /// node is the root.
+    public func replacing(with page: PageResponse, keep: (String) -> Bool) -> PageRenderer {
+        var next = PageRenderer(page: page, registry: registry)
+        for (id, node) in nodes where keep(id) && next.nodes[id] == nil { next.nodes[id] = node }
+        return next
+    }
+
     /// The node to draw for an id: degraded when its type is unknown, nil
     /// when the page has no such node.
     public func node(_ id: String) -> ComponentNode? {

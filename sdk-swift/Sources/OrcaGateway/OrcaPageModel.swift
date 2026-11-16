@@ -165,6 +165,12 @@ public final class OrcaPageModel: ObservableObject {
             try await self?.updateSubPage(subPageId, pageId: pageId, params: params, mode: mode)
         }
         executor.pageNodes = { [weak self] in self?.nodesInPageOrder() ?? [] }
+        // Flutter's built-in refetchPage awaits `onRefetchPage`. Registered
+        // here, before a plugin host adds its handlers, so a host's own
+        // `refetchPage` replaces it (fixture 47_handler_overrides_builtin).
+        executor.registerHandler("refetchPage") { [weak self] _, _ in
+            try await self?.onRefetchPage?()
+        }
     }
 
     /// An inert page of `snapshot` alone, drawn by the same views as the
@@ -182,6 +188,10 @@ public final class OrcaPageModel: ObservableObject {
         self.executor = ActionExecutor(store: store, client: nil)
         self.frameClock = live.frameClock
     }
+    /// What refetchPage does (Flutter `ActionExecutor.onRefetchPage`): the
+    /// loader that made this page fetches it again and calls `replacePage`.
+    /// Nil, refetchPage does nothing.
+    var onRefetchPage: (@MainActor () async throws -> Void)?
 
     public var page: PageResponse { renderer.page }
 
@@ -436,6 +446,34 @@ public final class OrcaPageModel: ObservableObject {
         for node in components where renderer.nodes[node.id] != nil && listed.insert(node.id).inserted {
             nodeOrder.append(node.id)
         }
+    }
+
+    /// The page fetched again by refetchPage takes this one's place in this
+    /// model (Flutter `OrcaPage.onRefetchPage`: `initPage`, then
+    /// `componentStore.init`), so the view, the executor and the action
+    /// awaiting the refetch stay. Page state goes back to the new page's
+    /// initial values; app state is kept, only its unset keys are seeded.
+    /// `once` keys survive, as the executor does (Flutter forgets them because
+    /// it builds a new executor on every OrcaPage build, not because of the refetch).
+    /// The page, and so its title, becomes the new one (Flutter keeps the first response's title).
+    /// The pages mounted in SubPages stay, their nodes and their state keys,
+    /// as Flutter carries them over; a SubPage whose node did not come back
+    /// is unmounted. In the node order they stay first, the new page's nodes
+    /// follow, as Flutter's node map keeps them.
+    func replacePage(_ page: PageResponse) {
+        let prefixes = subPages.prefixes
+        let mounted = { (id: String) in prefixes.contains { id.hasPrefix($0) } }
+        let carried = store.state.page.filter { mounted($0.key) }
+        renderer = renderer.replacing(with: page, keep: mounted)
+        store.pageId = page.pageId
+        store.seed(page.state)
+        if !carried.isEmpty { store.dispatch(carried) }
+        var seen: Set<String> = []
+        let kept = nodeOrder.filter { mounted($0) && renderer.nodes[$0] != nil && seen.insert($0).inserted }
+        nodeOrder = kept + page.components.map(\.id).filter { seen.insert($0).inserted }
+        sweepSubPages()
+        nodeOrder.removeAll { renderer.nodes[$0] == nil }
+        structureRevision += 1
     }
 }
 
