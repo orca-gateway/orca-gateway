@@ -71,8 +71,9 @@ final class ModelRoundTripTests: XCTestCase {
         // Every advertised kind appears in the fixtures, except the three
         // component kinds: a fixture compares state and effects, not the node
         // tree, so ComponentMutationTests pins them against Dart's
-        // ComponentStore instead.
-        let structural: Set<String> = ["addComponent", "updateComponent", "deleteComponent"]
+        // ComponentStore instead. updateSubPage is the same: it changes the
+        // node tree after a fetch, which schema/fixtures/subpage pins.
+        let structural: Set<String> = ["addComponent", "updateComponent", "deleteComponent", "updateSubPage"]
         XCTAssertTrue(kinds.isSuperset(of: Set(GeneratedCapabilities.actionKinds).subtracting(structural)),
                       "\(kinds)")
     }

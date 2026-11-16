@@ -294,7 +294,8 @@ final class SwitcherDriver: ObservableObject {
         let live = update(node: node, reduceMotion: reduceMotion, at: now)
         recorder.parent = enclosing
         if previous != childId {
-            if let previous, let snapshot = recorder.snapshot(of: previous, state: model.store.state) {
+            if let previous, let snapshot = recorder.snapshot(
+                of: previous, state: model.store.state, subPages: model.subPages) {
                 frozen[previous] = OrcaPageModel(snapshot: snapshot, of: model)
             }
             recorder.reset()

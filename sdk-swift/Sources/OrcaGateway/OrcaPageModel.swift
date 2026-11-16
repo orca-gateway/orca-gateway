@@ -23,6 +23,8 @@ struct NodeSnapshot: Equatable {
     /// The same nodes as the page held them (what layout reads types from).
     let components: [ComponentNode]
     let state: StoreState
+    /// The roots a SubPage of the subtree was drawing, by the SubPage's id.
+    var subPageRoots: [String: [String]] = [:]
 }
 
 /// The resolved nodes last drawn below one point of a page, by id: what an
@@ -56,10 +58,13 @@ final class NodeRecorder {
 
     /// The subtree under `root` as last drawn: the nodes reachable from it
     /// through children and slots, with `state` the page's at this moment.
-    /// Nil when `root` was never drawn.
-    func snapshot(of root: String, state: StoreState) -> NodeSnapshot? {
+    /// Nil when `root` was never drawn. A SubPage's mounted pages hang under
+    /// no node: `subPages` (the page's) names their roots.
+    func snapshot(of root: String, state: StoreState, subPages: SubPageRegistry = SubPageRegistry())
+        -> NodeSnapshot? {
         var found: [String: ResolvedNode] = [:]
         var sources: [ComponentNode] = []
+        var roots: [String: [String]] = [:]
         var pending = [root]
         while let id = pending.popLast() {
             guard found[id] == nil, let node = nodes[id], let source = components[id] else { continue }
@@ -67,9 +72,13 @@ final class NodeRecorder {
             sources.append(source)
             pending += node.childIds
             pending += node.slots.values
+            if let mounted = subPages[id]?.roots {
+                roots[id] = mounted
+                pending += mounted
+            }
         }
         guard found[root] != nil else { return nil }
-        return NodeSnapshot(rootId: root, nodes: found, components: sources, state: state)
+        return NodeSnapshot(rootId: root, nodes: found, components: sources, state: state, subPageRoots: roots)
     }
 }
 
@@ -118,6 +127,14 @@ public final class OrcaPageModel: ObservableObject {
         date.timeIntervalSinceReferenceDate * 1000
     }
 
+    /// The pages mounted in this page's SubPages (their nodes are in
+    /// `renderer`, their state in `store`, both under the pages' prefixes).
+    public private(set) var subPages = SubPageRegistry()
+    /// The SubPage views on screen, by node id: what `updateSubPage` reaches.
+    private var subPageViews: [String: SubPageSeat] = [:]
+    /// On a frozen copy, the roots each SubPage was drawing.
+    let frozenSubPageRoots: [String: [String]]
+
     /// The resolved nodes of a frozen copy (`init(snapshot:of:)`), nil on a
     /// live page.
     private let frozen: [String: ResolvedNode]?
@@ -132,12 +149,17 @@ public final class OrcaPageModel: ObservableObject {
         self.store = store
         self.widgets = widgets
         self.frozen = nil
+        self.frozenSubPageRoots = [:]
         self.executor = ActionExecutor(store: store, client: client)
         store.pageId = page.pageId
         store.seed(page.state)
         executor.onEffect = { [weak self] effect in self?.onEffect?(effect) }
         executor.perform = { [weak self] effect in self?.perform(effect) }
         executor.onMutation = { [weak self] mutation in self?.apply(mutation) }
+        executor.subPagePrefixes = { [weak self] in self?.subPages.prefixes ?? [] }
+        executor.onUpdateSubPage = { [weak self] subPageId, pageId, params, mode in
+            try await self?.updateSubPage(subPageId, pageId: pageId, params: params, mode: mode)
+        }
     }
 
     /// An inert page of `snapshot` alone, drawn by the same views as the
@@ -151,6 +173,7 @@ public final class OrcaPageModel: ObservableObject {
         self.store = ElmStore(snapshot.state)
         self.widgets = live.widgets
         self.frozen = snapshot.nodes
+        self.frozenSubPageRoots = snapshot.subPageRoots
         self.executor = ActionExecutor(store: store, client: nil)
         self.frameClock = live.frameClock
     }
@@ -351,6 +374,75 @@ public final class OrcaPageModel: ObservableObject {
         guard !isInert else { return }
         renderer.apply(mutation)
         structureRevision += 1
+    }
+}
+
+// MARK: - Sub-pages
+
+/// A SubPage view on screen: its controller, and the token its cleanup names
+/// it by once the controller is gone.
+private struct SubPageSeat {
+    let token: UUID
+    weak var controller: SubPageController?
+}
+
+/// A SubPage cannot fetch: the page was built without a client.
+struct SubPageWithoutClient: LocalizedError {
+    var errorDescription: String? { "SubPage requires a page with a client" }
+}
+
+extension OrcaPageModel {
+    /// The view of the SubPage node `key`, while it is on screen.
+    func subPageView(_ key: String) -> SubPageController? {
+        subPageViews[key]?.controller
+    }
+
+    /// The SubPage view of `controller` is on screen: `updateSubPage` reaches it from now on.
+    func subPageAppeared(_ controller: SubPageController) {
+        guard !isInert else { return }
+        subPageViews[controller.key] = SubPageSeat(token: controller.token, controller: controller)
+    }
+
+    /// The SubPage view named by `token` is gone (contract S8): the nodes of
+    /// its pages leave the node store, its state keys stay. A newer view of
+    /// the same SubPage keeps what is mounted.
+    func subPageLeft(_ key: String, token: UUID) {
+        guard subPageViews[key]?.token == token else { return }
+        subPageViews[key] = nil
+        let ids = subPages.unmount(key)
+        guard !ids.isEmpty else { return }
+        renderer.removeNodes(ids)
+        structureRevision += 1
+    }
+
+    /// The fetch of a sub-page (contract S4): the normal page route, with
+    /// the app state posted as on any page fetch.
+    func fetchSubPage(_ request: SubPageRequest) async throws -> PageResponse {
+        guard let client = executor.client else { throw SubPageWithoutClient() }
+        return try await client.fetchPage(request.location, appState: store.state.app)
+    }
+
+    /// Mounts a fetched page in the SubPage `key` through the core's
+    /// reducer, and applies the change: nodes and state keys out, nodes and
+    /// seeds in.
+    func mountSubPage(_ key: String, mode: String, page: PageResponse) throws {
+        guard !isInert else { return }
+        var next = subPages
+        let change = next.mount(
+            key, mode: mode, response: try JSONValue(encoding: page), pageStateKeys: store.state.page.keys)
+        try renderer.apply(change)
+        subPages = next
+        store.commit(store.state.applying(change))
+        structureRevision += 1
+    }
+
+    /// The `updateSubPage` action (contract S7). A `subPageId` that names no
+    /// SubPage on screen does nothing; a fetch that fails throws to the
+    /// action chain.
+    func updateSubPage(_ subPageId: String, pageId: String, params: [String: JSONValue]?, mode: String)
+        async throws {
+        guard !isInert, let view = subPageView(subPageId) else { return }
+        try await view.update(SubPage.request(pageId: pageId, params: params), mode: mode)
     }
 }
 

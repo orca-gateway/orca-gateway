@@ -250,6 +250,45 @@ To see it, run the `reorder` app of the example server in the
 config (`ORCA_APP_ID=reorder ORCA_BOOT=config`): a list whose order lives in page state, moved by
 `onReorder`.
 
+## Sub-pages
+
+A SubPage draws another page inside the page. The SDK fetches it when the SubPage comes on screen,
+draws the SubPage's child (or a spinner) until the first answer, and `SubPage error: <message>` when
+that fetch fails.
+
+- **The prefix rule.** The embedded page is not a page of its own: its nodes go into the host page's
+  node store and its state into the host's page state, each id and each page-state key with a prefix
+  in front. For a SubPage with key `detail` the first page gets `detail:` (node `0` becomes
+  `detail:0`, state `count` becomes `detail:count`), and each joined page gets `detail#1:`,
+  `detail#2:` and so on. Every reference and action inside the embedded page is rewritten the same
+  way when it is mounted, so the page reads and writes its own `count` and never the host's; app
+  state is shared and left alone. A SubPage inside a sub-page composes (`outer:inner:`). The rules
+  are the core's `SubPage` and `SubPageRegistry`, pinned by the monorepo's
+  [`schema/fixtures/subpage`](https://github.com/orca-gateway/orca-gateway/tree/main/schema/fixtures/subpage).
+- **Params are the query.** The fetch is the normal page route for the resolved `pageId`, with the
+  resolved `params` as its query string (keys sorted, percent-encoded, null left out): the page
+  reads them as `V.request("queryParams.userId")`. When the resolved `pageId` or `params` change,
+  the page is fetched again and replaces what is mounted.
+- **Replace and join.** `updateSubPage` fetches another page into a SubPage on screen; the old
+  content stays until the answer comes, and a failed fetch leaves it and fails the action (a
+  lifecycle's `onError` runs). `replace`, the default, removes the mounted pages with their state
+  and mounts the new one; `join` adds it below the others, each page with its own state. The change
+  stays through redraws. A `subPageId` that names no SubPage on screen does nothing.
+- **Server actions inside.** A `serverAction` fired from a node of a sub-page posts that page's
+  state alone, under the keys the page declared (no prefix), and the actions the server returns are
+  rewritten with the prefix before they run: a returned `setState` or component mutation lands in
+  the sub-page. The server code is the same as for a page shown on its own.
+- **Leaving.** When the SubPage node goes away its nodes are removed; its state keys stay until a
+  SubPage with the same key loads again.
+- **Limits.** A SubPage key may not hold `:` or `#` (the engine refuses it). A plugin action's own
+  literal fields that name a state key or a node are not rewritten: inside a sub-page, pass the key
+  as a state Value.
+
+To see it, run the `subpage` app of the example server in the
+[iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios), booted from its
+config (`ORCA_APP_ID=subpage ORCA_BOOT=config`): a host count beside a sub-page's own count, a param
+sent to the sub-page, and two buttons, Replace with B and Join C.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An iOS host does it with

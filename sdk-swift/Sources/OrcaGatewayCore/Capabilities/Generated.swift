@@ -62,6 +62,7 @@ public enum GeneratedCapabilities {
         "SizedBox",
         "Spacer",
         "Stack",
+        "SubPage",
         "Text",
         "TextButton",
         "TextField",
@@ -105,6 +106,7 @@ public enum GeneratedCapabilities {
         "showToast",
         "switchTab",
         "updateComponent",
+        "updateSubPage",
     ]
 
     public static let transformKinds: [String] = [
@@ -158,5 +160,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "16ad3d3f7c375c0612821d267794a91a1446ff68d27715b45439c214ff570280"
+    public static let capsHash = "ebeb5f212d398dea4b660ed16228c47331177ee8917512051203c9ea8e61e87b"
 }

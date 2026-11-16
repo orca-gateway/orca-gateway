@@ -124,6 +124,7 @@ final class ActionHandlerTests: XCTestCase {
             "lifecycle", "navigate", "goBack", "openUrl", "copyToClipboard", "share",
             "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
             "switchTab", "openDrawer", "once", "always", "debugLog", "animateForward", "animateReverse",
+            "updateSubPage",
         ])
     }
 }

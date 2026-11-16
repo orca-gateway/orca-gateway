@@ -45,6 +45,7 @@
     "SizedBox",
     "Spacer",
     "Stack",
+    "SubPage",
     "Text",
     "TextButton",
     "TextField",
@@ -74,6 +75,7 @@
     "showSnackbar",
     "showToast",
     "switchTab",
-    "updateComponent"
+    "updateComponent",
+    "updateSubPage"
   ]
 }

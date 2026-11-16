@@ -36,14 +36,14 @@ final class CapabilitiesTests: XCTestCase {
     }
 
     /// A3.1: native parity step 3's 13 layout wrappers are drawn by SwiftUI,
-    /// so the generated vector advertises them, 50 widgets in all (with step 12's 5 animated ones and step 13's ReorderableListView), each once
+    /// so the generated vector advertises them, 51 widgets in all (with step 12's 5 animated ones and step 13's ReorderableListView and SubPage), each once
     /// and sorted like capabilities.json.
-    func testA3_1TheThirteenLayoutWrappersAreAdvertisedFiftyInAll() throws {
+    func testA3_1TheThirteenLayoutWrappersAreAdvertisedFiftyOneInAll() throws {
         let advertised = Set(GeneratedCapabilities.widgets)
         XCTAssertEqual(Self.a3_1.subtracting(advertised), [], "not advertised")
         XCTAssertTrue(Self.a3_1.isSubset(of: try manifestIOSWidgets()), "a wrapper lacks the ios target")
-        XCTAssertEqual(GeneratedCapabilities.widgets.count, 50)
-        XCTAssertEqual(advertised.count, 50)
+        XCTAssertEqual(GeneratedCapabilities.widgets.count, 51)
+        XCTAssertEqual(advertised.count, 51)
         XCTAssertEqual(GeneratedCapabilities.widgets, GeneratedCapabilities.widgets.sorted())
     }
 
@@ -59,9 +59,10 @@ final class CapabilitiesTests: XCTestCase {
         let listed = Set((implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue))
         XCTAssertEqual(Set(GeneratedCapabilities.actionKinds), listed)
         XCTAssertTrue(listed.isSubset(of: Set(Action.kinds)))
-        XCTAssertEqual(listed.count, 22)
+        XCTAssertEqual(listed.count, 23)
         XCTAssertTrue(listed.isSuperset(of: ["switchTab", "openDrawer"]))
         XCTAssertTrue(listed.isSuperset(of: ["once", "always", "debugLog"]))
+        XCTAssertTrue(listed.contains("updateSubPage"))
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).
         XCTAssertEqual(ActionExecutor.kinds, listed.union(["replaceComponent"]))
