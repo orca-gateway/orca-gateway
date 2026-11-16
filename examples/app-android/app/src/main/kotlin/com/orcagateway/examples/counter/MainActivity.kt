@@ -1,7 +1,9 @@
 package com.orcagateway.examples.counter
 
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -36,6 +38,7 @@ import com.orcagateway.core.client.preload
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.navigation.DeeplinkEvent
 import com.orcagateway.plugins.googlemap.GoogleMapPlugin
+import com.orcagateway.plugins.pushnotification.PushNotificationPlugin
 import com.orcagateway.plugins.videoplayer.VideoPlayerPlugin
 import com.orcagateway.plugins.voicerecorder.VoiceRecorderPlugin
 import com.orcagateway.sdk.OrcaApp
@@ -75,14 +78,16 @@ import java.util.Locale
  * The app opens `orcacounter://` links (see "Deep links" in the README) and
  * logs one `deeplink:` line for each under the tag `OrcaCounter`.
  *
- * Five plugins serve the `custom` app (start it with ORCA_APP_ID `custom`):
+ * Six plugins serve the `custom` app (start it with ORCA_APP_ID `custom`):
  * two of this app's (DemoPlugins.kt) draw the ColoredBadge and run the device
  * actions, the voice recorder's (plugins/orca_voice_recorder/android) draws
  * the VoiceRecorder of its Voice Page and records and plays back, the
  * video player's (plugins/orca_video_player/android) plays the VideoPlayer
- * of its Video Page and runs the page's playback buttons, and the Google
+ * of its Video Page and runs the page's playback buttons, the Google
  * map's (plugins/orca_google_map/android) draws the GoogleMap of its Map Page
- * and runs its moveCamera button.
+ * and runs its moveCamera button, and the push notification's
+ * (plugins/orca_push_notification/android) runs the buttons of its Push Page;
+ * a tap on its notification opens the notification's link ([openNotification]).
  *
  * Five more extras try OrcaApp's shell; without them the app is as before.
  * ORCA_API_KEY is the key sent (default `demo-key`; any other gets the
@@ -112,12 +117,17 @@ class MainActivity : ComponentActivity() {
         val sessions = intent.getBooleanExtra("ORCA_SESSIONS", false)
         // Only with a config: a path has none to preload, and the extra is then ignored.
         val preloadFirst = path == null && intent.getBooleanExtra("ORCA_PRELOAD", false)
+        val push = pushNotifications ?: PushNotificationPlugin(applicationContext).also { pushNotifications = it }
+        // Every onCreate, before the activity starts: a rotation makes a new activity, and the
+        // plugin asks for the permission and hears the taps on the last one it was given.
+        push.initialize(this) { payload -> openNotification(payload) }
         val plugins = listOf(
             BadgePlugin(),
             DeviceActionsPlugin(window.decorView),
             VoiceRecorderPlugin(applicationContext),
             VideoPlayerPlugin(),
             GoogleMapPlugin(),
+            push,
         )
         // No scheme (null): the theme's own, here and in OrcaApp.
         val scheme = when (setting("ORCA_SCHEME")) {
@@ -221,6 +231,20 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * A tap on a notification the push plugin showed: its [payload], a link
+     * (the Push Page's is `orcacounter://open/map`) or a path, comes back to
+     * this activity as the new `ACTION_VIEW` Intent an `orcacounter://` link
+     * would be (singleTop: the running activity gets it), so OrcaApp takes it
+     * down its own deep-link path to the router's handleDeeplink, and
+     * [logDeeplink] logs it. A notification shown without a payload taps as ""
+     * and opens nothing.
+     */
+    private fun openNotification(payload: String?) {
+        if (payload.isNullOrBlank()) return
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(payload), this, MainActivity::class.java))
+    }
+
+    /**
      * One line per `orcacounter://` link the app opened (the intent filter is
      * in the manifest; OrcaApp reads the Intents itself): `adb logcat -s OrcaCounter`.
      */
@@ -277,6 +301,13 @@ class MainActivity : ComponentActivity() {
 
         /** DevTools on that computer, as the emulator sees it. */
         const val DEFAULT_DEVTOOLS_HOST = "10.0.2.2"
+
+        /**
+         * The push plugin, one per process, as its KDoc asks: OrcaApp keeps the
+         * plugins its router was first given through a rotation, so each new
+         * activity initializes the instance that router holds.
+         */
+        var pushNotifications: PushNotificationPlugin? = null
     }
 }
 

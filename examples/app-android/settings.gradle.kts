@@ -16,6 +16,10 @@
 // The Google map plugin the same way: ../../plugins/orca_google_map/android
 // substitutes com.orcagateway:orca-google-map on the same ../../../sdk-kotlin,
 // under its root project's name for the same reason.
+// The push notification plugin the same way too:
+// ../../plugins/orca_push_notification/android substitutes
+// com.orcagateway:orca-push-notification on the same ../../../sdk-kotlin,
+// under its root project's name.
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -42,4 +46,5 @@ includeBuild("../../sdk-kotlin")
 includeBuild("../../plugins/orca_voice_recorder/android")
 includeBuild("../../plugins/orca_video_player/android") { name = "orca-video-player-android" }
 includeBuild("../../plugins/orca_google_map/android") { name = "orca-google-map-android" }
+includeBuild("../../plugins/orca_push_notification/android") { name = "orca-push-notification-android" }
 include(":app")
