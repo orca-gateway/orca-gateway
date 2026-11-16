@@ -55,7 +55,7 @@ public class OrcaToast(
  * actions. Views resolve nodes through it and fire triggers into it.
  *
  * Snackbars and toasts are drawn by the page itself ([toast]), and
- * `animateForward` / `animateReverse` run on its own [animations].
+ * `animateForward` / `animateReverse` run on its own animation controllers.
  * Navigation and system effects go to [effectHandler] (the host's router
  * sets it), and a server action's structural changes edit the node tree here.
  *
@@ -86,9 +86,10 @@ public class OrcaPageModel(
      * AnimationRegistry, one per page): each AnimatedBuilder with an id
      * registers here while it is on screen, and the `animateForward` and
      * `animateReverse` effects drive them. Every time passed to it is a frame
-     * time in milliseconds ([withAnimationFrame]).
+     * time in milliseconds ([withAnimationFrame]). Internal, as that clock
+     * is: a host drives an animation with the two effects.
      */
-    public val animations: AnimationRegistry = AnimationRegistry()
+    internal val animations: AnimationRegistry = AnimationRegistry()
 
     /**
      * The time of the last frame an animated widget of this page took, in

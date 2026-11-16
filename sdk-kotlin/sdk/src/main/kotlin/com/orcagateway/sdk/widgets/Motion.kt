@@ -30,12 +30,12 @@ import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.style.Props
 
 /**
- * Whether animations jump to their end state (D14): true or false when a
- * host or a test provides it, null (the default) to follow the system
- * setting ([rememberSystemReduceMotion]). Every animated widget reads it
- * through [orcaReduceMotion].
+ * Whether animations jump to their end state (D14): null (the default)
+ * follows the system setting ([rememberSystemReduceMotion]); a test provides
+ * true or false. Internal, as Swift's twin: a host has no switch of its own.
+ * Every animated widget reads it through [orcaReduceMotion].
  */
-public val LocalOrcaReduceMotion: ProvidableCompositionLocal<Boolean?> = compositionLocalOf { null }
+internal val LocalOrcaReduceMotion: ProvidableCompositionLocal<Boolean?> = compositionLocalOf { null }
 
 /**
  * The system's "remove animations" setting: the animator duration scale is
@@ -43,7 +43,7 @@ public val LocalOrcaReduceMotion: ProvidableCompositionLocal<Boolean?> = composi
  * so the widgets ask here. Read once per composition.
  */
 @Composable
-public fun rememberSystemReduceMotion(): Boolean {
+internal fun rememberSystemReduceMotion(): Boolean {
     val resolver = LocalContext.current.contentResolver
     return remember(resolver) { Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
 }
@@ -69,6 +69,11 @@ internal fun orcaReduceMotion(): Boolean = LocalOrcaReduceMotion.current ?: reme
  * time a run reaches 1 or reaches 0, never for a cycle of a repeat. It
  * takes frames only while a run is live. Reduced motion ([orcaReduceMotion]):
  * a run ends the moment it starts.
+ *
+ * `duration`, `curve`, `repeat`, `reverse`, `autoStart` and reduced motion
+ * are read when the builder is first composed: a later update of them does
+ * not rebuild the controller, which keeps its value (Flutter builds it in
+ * `initState`); they apply to a builder that is composed anew.
  */
 @Composable
 internal fun AnimatedBuilderWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -80,9 +85,11 @@ internal fun AnimatedBuilderWidget(node: ResolvedNode, model: OrcaPageModel, mod
     val animationId = node["animationId"]?.stringValue
     val reduceMotion = orcaReduceMotion()
 
-    val controller = remember(node.id, durationMs, curve, repeats, reverses, reduceMotion) {
-        AnimationController(durationMs, curve, repeats, reverses, reduceMotion)
-    }
+    // Built once, as Flutter's in `initState` and Swift's on appear: it lives as
+    // long as the builder is composed, so an update of the props or reduced
+    // motion toggling keeps its value and does not replay it.
+    val controller = remember(node.id) { AnimationController(durationMs, curve, repeats, reverses, reduceMotion) }
+    val startsOnAppear = remember(node.id) { autoStart }
     var progress by remember(controller) { mutableDoubleStateOf(0.0) }
     val current by rememberUpdatedState(node)
 
@@ -93,7 +100,7 @@ internal fun AnimatedBuilderWidget(node: ResolvedNode, model: OrcaPageModel, mod
         onDispose { if (animationId != null) model.animations.unregister(animationId, owner) }
     }
 
-    LaunchedEffect(model, controller, autoStart) {
+    LaunchedEffect(model, controller) {
         // One frame: the value to draw in it, then an `onComplete` per run that ended by it.
         suspend fun frame(starting: Boolean = false) {
             val ended = model.withAnimationFrame { now ->
@@ -105,7 +112,7 @@ internal fun AnimatedBuilderWidget(node: ResolvedNode, model: OrcaPageModel, mod
             }
             repeat(ended) { model.fire("onComplete", current) }
         }
-        if (autoStart) frame(starting = true)
+        if (startsOnAppear) frame(starting = true)
         while (true) {
             val seen = model.animationRequestCount
             if (!controller.isRunning(model.animationFrameMs) && !model.hasPendingAnimation) {

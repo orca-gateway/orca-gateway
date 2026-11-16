@@ -4,12 +4,14 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import com.orcagateway.core.animation.AnimationController
 import com.orcagateway.core.animation.Curves
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.render.ComponentMutation
 import com.orcagateway.core.state.ActionEffect
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
@@ -317,6 +319,96 @@ class MotionTest {
         assertEquals(BEGIN, drawn["named"], "the named controller rests at 0")
         assertEquals(BEGIN, drawn["p"])
         assertEquals(BEGIN, drawn["out"])
+    }
+
+    /** Props an update sends to a builder that already has its controller: all four it was built with. */
+    private val newTiming = mapOf(
+        "duration" to JsonValue.Int(900),
+        "curve" to JsonValue.String("linear"),
+        "repeat" to JsonValue.Bool(true),
+        "reverse" to JsonValue.Bool(true),
+    )
+
+    /** Runs [change] and has the composition see it at the next frame, the clock staying manual. */
+    private fun redraw(change: () -> Unit) {
+        compose.runOnIdle {
+            change()
+            Snapshot.sendApplyNotifications()
+        }
+    }
+
+    /** The controller is built once, as Flutter's in `initState`: an update keeps the value and the old props. */
+    @Test
+    fun b12_1_k_anUpdateOfItsPropsKeepsTheControllerAndItsValue() {
+        val model = controlled()
+        show(model)
+        model.send("animateForward")
+        compose.mainClock.advanceTimeBy(600)
+        assertEquals(END, drawn["p"])
+        assertEquals(1, completed["b"])
+        val before = assertNotNull(model.animations.controller("pulse"))
+
+        redraw { model.apply(ComponentMutation.Update("b", newTiming)) }
+        compose.mainClock.advanceTimeBy(1200)
+
+        assertTrue(before === model.animations.controller("pulse"), "the same controller stays registered")
+        assertEquals(400.0, before.durationMs, "built once, with the props it appeared with")
+        assertEquals(1.0, model.raw())
+        assertEquals(END, drawn["p"])
+        assertEquals(1, completed["b"], "no new onComplete")
+    }
+
+    @Test
+    fun b12_1_k_anUpdateOfItsPropsDoesNotReplayAnAutoStartBuilder() {
+        val model = model(builder("b", "p", props = mapOf("duration" to JsonValue.Int(400))), probe("p"))
+        show(model)
+        compose.mainClock.advanceTimeBy(600)
+        assertEquals(END, drawn["p"])
+        assertEquals(1, completed["b"])
+
+        redraw { model.apply(ComponentMutation.Update("b", newTiming)) }
+        compose.mainClock.advanceTimeBy(100)
+        assertEquals(END, drawn["p"], "no replay from 0")
+        assertEquals(1.0, model.raw())
+        compose.mainClock.advanceTimeBy(1100)
+
+        assertEquals(END, drawn["p"])
+        assertEquals(1, completed["b"], "no new onComplete")
+    }
+
+    /** `autoStart` is read when the builder appears (Flutter `initState`): turned on later it starts nothing. */
+    @Test
+    fun b12_1_k_autoStartTurnedOnByAnUpdateStartsNothing() {
+        val model = controlled()
+        show(model)
+
+        redraw { model.apply(ComponentMutation.Update("b", mapOf("autoStart" to JsonValue.Bool(true)))) }
+        compose.mainClock.advanceTimeBy(600)
+
+        assertEquals(BEGIN, drawn["p"])
+        assertEquals(0.0, model.raw())
+        assertNull(completed["b"])
+    }
+
+    @Test
+    fun b12_7_k_reducedMotionTogglingKeepsTheControllerAndItsValue() {
+        val model = model(builder("b", "p", props = mapOf("duration" to JsonValue.Int(400))), probe("p"))
+        var reduce by mutableStateOf(false)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalOrcaReduceMotion provides reduce) { NodeView("b", model) }
+        }
+        compose.mainClock.advanceTimeBy(600)
+        assertEquals(END, drawn["p"])
+        assertEquals(1, completed["b"])
+        val before = assertNotNull(model.animations.controller("pulse"))
+
+        redraw { reduce = true }
+        compose.mainClock.advanceTimeBy(600)
+
+        assertTrue(before === model.animations.controller("pulse"), "the same controller stays registered")
+        assertEquals(END, drawn["p"])
+        assertEquals(1, completed["b"], "no replay, no new onComplete")
     }
 
     @Test
