@@ -1,0 +1,120 @@
+{
+  "name": "animated-builder-controlled",
+  "description": "AnimatedBuilder driven by actions: animationId is a plain string (never a Value), autoStart is false, and onComplete carries an action. The child's opacity is a tween naming that id; tweens are client-only, so it survives encoding and carries no watches. At rest (nothing has run the controller) it resolves to begin.",
+  "input": {
+    "type": "AnimatedBuilder",
+    "key": "pulse_builder",
+    "props": {
+      "animationId": "pulse",
+      "duration": 400,
+      "curve": "easeOut",
+      "autoStart": false
+    },
+    "actions": {
+      "onComplete": {
+        "type": "setState",
+        "scope": "page",
+        "key": "done",
+        "value": {
+          "type": "static",
+          "value": true
+        }
+      }
+    },
+    "children": [
+      {
+        "type": "Opacity",
+        "key": "pulse_fade",
+        "props": {
+          "opacity": {
+            "type": "tween",
+            "begin": 0.25,
+            "end": 1,
+            "animationId": "pulse"
+          }
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "pulse_label",
+            "props": {
+              "data": "Saved"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "done": false
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "pulse_builder",
+      "type": "AnimatedBuilder",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "animationId": "pulse",
+        "duration": 400,
+        "curve": "easeOut",
+        "autoStart": false
+      },
+      "children": [
+        "pulse_fade"
+      ],
+      "watches": [],
+      "actions": {
+        "onComplete": {
+          "type": "setState",
+          "scope": "page",
+          "key": "done",
+          "value": {
+            "type": "static",
+            "value": true
+          }
+        }
+      }
+    },
+    {
+      "id": "pulse_fade",
+      "type": "Opacity",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "opacity": {
+          "type": "tween",
+          "begin": 0.25,
+          "end": 1,
+          "animationId": "pulse"
+        }
+      },
+      "children": [
+        "pulse_label"
+      ],
+      "watches": []
+    },
+    {
+      "id": "pulse_label",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Saved"
+      },
+      "children": [],
+      "watches": []
+    }
+  ],
+  "resolved": {
+    "pulse_fade": {
+      "opacity": 0.25
+    }
+  }
+}
