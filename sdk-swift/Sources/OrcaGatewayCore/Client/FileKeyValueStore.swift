@@ -2,8 +2,9 @@ import Foundation
 
 /// A KeyValueStore kept on disk, one file per key under `directory`, so what
 /// it holds survives a restart (the offline cache's config, flow versions and
-/// pages; Flutter keeps them in SharedPreferences). The SwiftUI layer passes
-/// Application Support/OrcaGateway. Foundation only, so it runs on Linux too.
+/// pages; Flutter keeps them in SharedPreferences). The SwiftUI layer's
+/// `FileKeyValueStore.applicationSupport()` uses Application Support/<bundle
+/// id>/OrcaGateway. Foundation only, so it runs on Linux too.
 ///
 /// A key becomes its file name with every byte outside `[a-z0-9_-]` written
 /// as `%XX` (capitals too, so two keys stay apart on a case-insensitive disk),

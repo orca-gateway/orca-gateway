@@ -319,7 +319,8 @@ OrcaApp(client: client, path: "home", enableOffline: true, enableSessionTracking
 
 - `enableOffline` asks the server's `/version` before the first page. When the answer carries
   `forceUpdate: true`, the app shows "Update required. Please update the app." and loads no page.
-  Any other answer, or none, lets it boot. The offline page cache and `preload()` come later.
+  With a `path`, as here, that is all it does: any other answer, or none, lets it boot. Booting from
+  the config (no `path`), it also keeps the app working offline; see "Offline" below.
 - `enableSessionTracking` sends a session start to `/session` when the app comes to the foreground,
   and an end when it goes to the background. One that cannot reach the server is saved in
   `UserDefaults` and sent to `/session/offline` on the next foreground.
@@ -468,6 +469,44 @@ answer.
 
 The [iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios) has a
 switch for each of these, with the commands to see the error screens, dark mode and a host splash.
+
+## Offline
+
+With `enableOffline` and no `path`, `OrcaApp` keeps the app working with no network, by the
+Flutter SDK's rules:
+
+- The server pre-renders the pages of a static flow (`isStatic` on the flow), dynamic routes aside,
+  into `/config`. The app saves them at boot with the config and the flow versions, in Application
+  Support/<bundle id>/OrcaGateway (`FileKeyValueStore.applicationSupport()`). Any of those pages,
+  visited or not, then opens with no request, also offline and after a restart.
+- Each start asks `/version`. When every flow's version equals the saved one, the saved config is
+  used and `/config` is not asked for. When one moved (or is new), the whole `/config` is fetched
+  and saved again, and the saved pages of a versioned flow that is gone from it are deleted.
+- Offline is any `/version` failure: no network, the server down, an error answer. The app then
+  boots from the saved config. With none saved (no online start yet), it shows "Could not start
+  the app" and "No network and no cached config available", with a retry.
+- Dynamic routes (`isDynamic`) and pages outside static flows are never cached: they always go to
+  the network, so offline they show the page's error. A page from the network is never saved.
+- A flow with no version (0 on the server) gets no saved version, so `/version` finds it moved on
+  every start and `/config` is fetched every time, as in Flutter.
+
+The boot can run in your own splash instead (Dart `OrcaApp.preload`). `preload(client:cache:)`
+does the steps above and returns `.success(config)` or `.forceUpdate`; offline with nothing saved
+it throws `OfflineBootError`. Give `OrcaApp` that config and the same cache: it asks for nothing
+and its first frame is the first page. Over `FileKeyValueStore.applicationSupport()` the cache is
+the one `enableOffline` uses.
+
+```swift
+let cache = StaticFlowManager(store: FileKeyValueStore.applicationSupport())
+let result = try await preload(client: client, cache: cache)
+// .forceUpdate: show your own force-update screen; OrcaApp never sees it.
+if case .success(let config) = result {
+    OrcaApp(client: client, preloadedConfig: config, staticFlowManager: cache)
+}
+```
+
+The [iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios) does
+this behind `ORCA_PRELOAD` (`HostPreload` in `OrcaCounterApp.swift`).
 
 ## Plugins
 
