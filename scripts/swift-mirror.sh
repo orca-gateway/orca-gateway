@@ -49,6 +49,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PACKAGES=(
   "sdk-swift-v|sdk-swift|orca-gateway/orca-gateway-swift|SWIFT_MIRROR_DEPLOY_KEY|"
   "orca_voice_recorder-ios-v|plugins/orca_voice_recorder/ios|orca-gateway/orca-voice-recorder-swift|ORCA_VOICE_RECORDER_SWIFT_DEPLOY_KEY|OrcaVoiceRecorder"
+  "orca_video_player-ios-v|plugins/orca_video_player/ios|orca-gateway/orca-video-player-swift|ORCA_VIDEO_PLAYER_SWIFT_DEPLOY_KEY|OrcaVideoPlayer"
 )
 TAG_PREFIX="" PREFIX="" MIRROR="" SECRET="" LIBRARY=""
 
