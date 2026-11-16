@@ -39,9 +39,9 @@ struct ScaffoldView: View {
         let drawers = ScaffoldDrawers(node: node, model: model, host: drawerHost,
                                       router: page?.router, route: page?.route.id)
         ZStack(alignment: .bottomTrailing) {
-            if let background = Props.color(node["backgroundColor"]) {
-                background.ignoresSafeArea()
-            }
+            // Painted also without a backgroundColor: the light background,
+            // so a dark window never shows behind the light page.
+            (Props.color(node["backgroundColor"]) ?? systemBackground).ignoresSafeArea()
             Group {
                 if let body = node.slots["body"] {
                     NodeView(id: body, model: model)
@@ -281,6 +281,8 @@ private struct AppBarChrome: ViewModifier {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(background ?? Color.clear, for: .navigationBar)
                 .toolbarBackground(background == nil ? .automatic : .visible, for: .navigationBar)
+                // Light as the page under it (ScaffoldView): its material and the status bar.
+                .toolbarColorScheme(.light, for: .navigationBar)
                 #endif
         } else if let appBar {
             content.safeAreaInset(edge: .top, spacing: 0) {
