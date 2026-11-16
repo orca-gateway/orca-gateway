@@ -1,0 +1,78 @@
+{
+  "name": "animated-align",
+  "description": "AnimatedAlign: alignment reads page state (stays a Value, watched); widthFactor and heightFactor are static numbers; duration is static and no curve is sent, so the client uses its default (easeInOut).",
+  "input": {
+    "type": "AnimatedAlign",
+    "key": "dock",
+    "props": {
+      "alignment": {
+        "type": "state",
+        "key": "corner",
+        "scope": "page"
+      },
+      "duration": 300,
+      "widthFactor": 2,
+      "heightFactor": 1.5
+    },
+    "children": [
+      {
+        "type": "Text",
+        "key": "dock_label",
+        "props": {
+          "data": "Badge"
+        }
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "corner": "bottomRight"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "dock",
+      "type": "AnimatedAlign",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "alignment": {
+          "type": "state",
+          "key": "corner",
+          "scope": "page"
+        },
+        "duration": 300,
+        "widthFactor": 2,
+        "heightFactor": 1.5
+      },
+      "children": [
+        "dock_label"
+      ],
+      "watches": [
+        "corner"
+      ]
+    },
+    {
+      "id": "dock_label",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Badge"
+      },
+      "children": [],
+      "watches": []
+    }
+  ],
+  "resolved": {
+    "dock": {
+      "alignment": "bottomRight",
+      "widthFactor": 2,
+      "heightFactor": 1.5
+    }
+  }
+}
