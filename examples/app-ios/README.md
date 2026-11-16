@@ -54,7 +54,7 @@ scheme, or pass them to `simctl launch`:
 | Basic actions | `basic-actions` | `home` | navigation, back, URL, clipboard, share, toasts |
 | Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
 | Todo | `todo` | `home` | add, tick, delete |
-| Custom extensions | `custom` | `home` | a plugin widget and plugin actions (see "Plugins" below) |
+| Custom extensions | `custom` | `home` | a plugin widget, plugin actions and the voice recorder (see "Plugins" below) |
 | Saved state | `saved-state` | `home` | a count saved on the device or for the session (see "Saved state" below) |
 
 ```bash
@@ -133,11 +133,14 @@ the login page while logged out (`wasRedirected=true`).
 
 ## Plugins
 
-The app registers two plugins, the Swift twins of the Flutter example's: `BadgePlugin` draws the
-server's `ColoredBadge` widget in SwiftUI, and `DeviceActionsPlugin` runs the custom actions
-`hapticFeedback`, `showConfetti`, `rateApp` and `processPayment`. Both are in
-`OrcaCounter/OrcaCounterApp.swift`, passed as `OrcaApp(..., plugins: [...])`. To see them, start
-the server (step 1 above) and launch the `custom` app:
+The app registers three plugins. Two are the Swift twins of the Flutter example's: `BadgePlugin`
+draws the server's `ColoredBadge` widget in SwiftUI, and `DeviceActionsPlugin` runs the custom
+actions `hapticFeedback`, `showConfetti`, `rateApp` and `processPayment`. Both are in
+`OrcaCounter/OrcaCounterApp.swift`. The third, `VoiceRecorderPlugin`, is the voice recorder package
+(`plugins/orca_voice_recorder/ios`, product `OrcaVoiceRecorder`), linked through a local path as the
+SDK is, so a change to it shows up on the next build; see "Voice recorder" below. All three are
+passed as `OrcaApp(..., plugins: [...])`. To see them, start the server (step 1 above) and launch
+the `custom` app:
 
 ```bash
 SIMCTL_CHILD_ORCA_APP_ID=custom xcrun simctl launch --console booted com.orcagateway.examples.counter
@@ -154,6 +157,33 @@ shows that the plugin added `ColoredBadge` to the app's capabilities. Then:
   show their snackbars.
 
 The simulator plays no haptics; a device does.
+
+### Voice recorder
+
+On the `custom` app's home page, tap "Go to Voice Page" (or launch straight to it: add
+`SIMCTL_CHILD_ORCA_PATH=voice` to the command above). The page shows the plugin's `VoiceRecorder`
+widget, a grey dot over "Ready", then the buttons Start, Stop and Play, and "Saved to:" and
+"Duration: 0 ms" under them. The simulator records from the Mac's microphone (the input picked in
+Simulator's I/O › Audio Input menu). Then:
+
+1. Tap "Start". The first time, iOS asks whether "Orca Counter" may use the microphone, with the
+   sentence from `Info.plist` (`NSMicrophoneUsageDescription`): tap Allow. The dot turns red, the
+   label reads "Recording", and a green bar under the dot moves with the sound the Mac's microphone
+   picks up. If the Mac asks whether Simulator may use the microphone, allow that too, or the bar
+   stays empty.
+2. Tap "Stop". The dot turns grey and the label reads "Ready"; under the buttons, "Saved to:" shows
+   the recording's path (an `orca_recording_demo_<time>.m4a` in the app's `Library/Caches`) and
+   "Duration:" its length in ms.
+3. Tap "Play": the recording plays back.
+
+After "Don't Allow", Start does nothing, as in Flutter. To be asked again:
+
+```bash
+xcrun simctl privacy <device id> reset microphone com.orcagateway.examples.counter
+```
+
+iOS ends an app that uses the microphone without `NSMicrophoneUsageDescription` in its Info.plist,
+so an app of your own that registers the plugin needs the key too.
 
 ## Version check and sessions
 

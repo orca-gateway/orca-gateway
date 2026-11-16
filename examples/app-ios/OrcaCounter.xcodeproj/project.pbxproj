@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3298DDA8A8DE1744DFB5F5EF /* OrcaVoiceRecorder in Frameworks */ = {isa = PBXBuildFile; productRef = FE5DF8D0B97DA8E15F6E58C4 /* OrcaVoiceRecorder */; };
 		35F924E598070FF95BB5BB23 /* OrcaGateway in Frameworks */ = {isa = PBXBuildFile; productRef = 271ABCF6A7038C97601E5E1D /* OrcaGateway */; };
 /* End PBXBuildFile section */
 
@@ -28,6 +29,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				35F924E598070FF95BB5BB23 /* OrcaGateway in Frameworks */,
+				3298DDA8A8DE1744DFB5F5EF /* OrcaVoiceRecorder in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +73,7 @@
 			name = OrcaCounter;
 			packageProductDependencies = (
 				271ABCF6A7038C97601E5E1D /* OrcaGateway */,
+				FE5DF8D0B97DA8E15F6E58C4 /* OrcaVoiceRecorder */,
 			);
 			productName = OrcaCounter;
 			productReference = 3ABC39466C40CE89310220B0 /* OrcaCounter.app */;
@@ -102,6 +105,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				DD857FFB03C8084BE2B9E1D5 /* XCLocalSwiftPackageReference "../../sdk-swift" */,
+				B2699E0D5109622C6FD16D66 /* XCLocalSwiftPackageReference "../../plugins/orca_voice_recorder/ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3851F61B14A5A344F29BC837 /* Products */;
@@ -259,6 +263,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		B2699E0D5109622C6FD16D66 /* XCLocalSwiftPackageReference "../../plugins/orca_voice_recorder/ios" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../../plugins/orca_voice_recorder/ios";
+		};
 		DD857FFB03C8084BE2B9E1D5 /* XCLocalSwiftPackageReference "../../sdk-swift" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "../../sdk-swift";
@@ -269,6 +277,10 @@
 		271ABCF6A7038C97601E5E1D /* OrcaGateway */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = OrcaGateway;
+		};
+		FE5DF8D0B97DA8E15F6E58C4 /* OrcaVoiceRecorder */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = OrcaVoiceRecorder;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
