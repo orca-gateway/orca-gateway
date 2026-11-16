@@ -172,28 +172,57 @@ final class RefreshTests: XCTestCase {
     /// and refreshes, where UIKit hands a drag past a nested scroll view's
     /// edge to the one around it (`transfersVerticalScrollingToParent`, on by
     /// default; a real pull on the iOS 18.5 simulator moved the outer page
-    /// and never refreshed). Turned off for the refreshed one, of each kind;
-    /// the page's scroll view and a plain nested list keep UIKit's default.
+    /// and never refreshed). Turned off for the refreshed one, of each kind,
+    /// in either direction; the page's scroll view and a plain nested list
+    /// keep UIKit's default.
     func testA5_5ARefreshedScrollViewInsideAnotherKeepsThePullAtItsTop() throws {
         guard #available(iOS 17.4, *) else { throw XCTSkip("transfersVerticalScrollingToParent is iOS 17.4") }
-        for type in Self.kinds {
+        for direction in [LayoutDirection.leftToRight, .rightToLeft] {
+            for type in Self.kinds {
+                let hosted = try HostedPull([
+                    node("outer", "SingleChildScrollView", [:], ["col"]),
+                    node("col", "Column", [:], ["box", "plain", "rest"]),
+                    node("box", "SizedBox", ["width": 100, "height": 80], ["pull"]),
+                    pull(["s"]),
+                    node("plain", "SizedBox", ["width": 100, "height": 80], ["n"]),
+                    node("rest", "SizedBox", ["width": 100, "height": 400]),
+                ] + scrolling(type, "s", horizontal: false) + scrolling("ListView", "n", horizontal: false),
+                    direction: direction)
+                defer { hosted.close() }
+                let views = hosted.scrollViews
+                XCTAssertEqual(views.count, 3, "\(type) \(direction): the page's, the refreshed and the plain one")
+                guard views.count == 3 else { continue }
+                XCTAssertNil(views[0].refreshControl, "\(type) \(direction)")
+                let refreshed = try XCTUnwrap(views.first { $0.refreshControl != nil },
+                                              "no refresh control: \(type) \(direction)")
+                XCTAssertFalse(refreshed.transfersVerticalScrollingToParent, "\(type) \(direction): the refreshed one")
+                for scroll in views where scroll !== refreshed {
+                    XCTAssertTrue(scroll.transfersVerticalScrollingToParent, "\(type) \(direction): one not refreshed")
+                }
+            }
+        }
+    }
+
+    /// A5.5: two refreshed lists side by side in a Row, in the page's scroll
+    /// view, each keep their own pull, in either direction (each finds its
+    /// own scroll view, not its neighbour's).
+    func testA5_5TwoRefreshedListsSideBySideEachKeepTheirPull() throws {
+        guard #available(iOS 17.4, *) else { throw XCTSkip("transfersVerticalScrollingToParent is iOS 17.4") }
+        for direction in [LayoutDirection.leftToRight, .rightToLeft] {
             let hosted = try HostedPull([
-                node("outer", "SingleChildScrollView", [:], ["col"]),
-                node("col", "Column", [:], ["box", "plain", "rest"]),
-                node("box", "SizedBox", ["width": 100, "height": 80], ["pull"]),
-                pull(["s"]),
-                node("plain", "SizedBox", ["width": 100, "height": 80], ["n"]),
-                node("rest", "SizedBox", ["width": 100, "height": 400]),
-            ] + scrolling(type, "s", horizontal: false) + scrolling("ListView", "n", horizontal: false))
+                node("outer", "SingleChildScrollView", [:], ["row"]),
+                node("row", "Row", [:], ["left", "right"]),
+                node("left", "SizedBox", ["width": 50, "height": 80], ["pull"]),
+                pull(["a"]),
+                node("right", "SizedBox", ["width": 50, "height": 80], ["pull2"]),
+                pull(["b"], id: "pull2"),
+            ] + scrolling("ListView", "a", horizontal: false) + scrolling("ListView", "b", horizontal: false),
+                direction: direction)
             defer { hosted.close() }
-            let views = hosted.scrollViews
-            XCTAssertEqual(views.count, 3, "\(type): the page's, the refreshed and the plain one")
-            guard views.count == 3 else { continue }
-            XCTAssertNil(views[0].refreshControl, type)
-            let refreshed = try XCTUnwrap(views.first { $0.refreshControl != nil }, "no refresh control: \(type)")
-            XCTAssertFalse(refreshed.transfersVerticalScrollingToParent, "\(type): the refreshed one")
-            for scroll in views where scroll !== refreshed {
-                XCTAssertTrue(scroll.transfersVerticalScrollingToParent, "\(type): one not refreshed")
+            let refreshed = hosted.scrollViews.filter { $0.refreshControl != nil }
+            XCTAssertEqual(refreshed.count, 2, "\(direction): two refreshed lists")
+            for (index, scroll) in refreshed.enumerated() {
+                XCTAssertFalse(scroll.transfersVerticalScrollingToParent, "\(direction): refreshed list \(index)")
             }
         }
     }
@@ -211,9 +240,9 @@ final class RefreshTests: XCTestCase {
 
     // MARK: pages
 
-    /// A PullToRefresh holding `children` (one), with `onRefresh` when given.
-    func pull(_ children: [String], onRefresh: JSONValue? = nil) -> JSONValue {
-        node("pull", "PullToRefresh", [:], children, actions: onRefresh.map { ["onRefresh": $0] } ?? [:])
+    /// A PullToRefresh `id` holding `children` (one), with `onRefresh` when given.
+    func pull(_ children: [String], onRefresh: JSONValue? = nil, id: String = "pull") -> JSONValue {
+        node(id, "PullToRefresh", [:], children, actions: onRefresh.map { ["onRefresh": $0] } ?? [:])
     }
 
     /// setState `key` to itself plus 1.
@@ -293,19 +322,20 @@ private func pullPage(_ nodes: [JSONValue], keys: [String] = []) throws -> (mode
 }
 
 #if canImport(UIKit)
-/// The first node of `nodes` in a UIKit window of 100 by 100 (page `keys`
-/// at 0), kept on screen until `close`.
+/// The first node of `nodes` in a UIKit window of 100 by 100 laid out in
+/// `direction` (page `keys` at 0), kept on screen until `close`.
 @MainActor
 private final class HostedPull {
     private let window: UIWindow
     let model: OrcaPageModel
 
-    init(_ nodes: [JSONValue], keys: [String] = []) throws {
+    init(_ nodes: [JSONValue], keys: [String] = [], direction: LayoutDirection = .leftToRight) throws {
         let (model, root) = try pullPage(nodes, keys: keys)
         self.model = model
         let frame = CGRect(x: 0, y: 0, width: 100, height: 100)
         let host = UIHostingController(rootView: NodeView(id: root, model: model)
             .frame(width: 100, height: 100, alignment: .topLeading)
+            .environment(\.layoutDirection, direction)
             .ignoresSafeArea())
         window = UIWindow(frame: frame)
         window.rootViewController = host

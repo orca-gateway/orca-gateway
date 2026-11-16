@@ -610,21 +610,15 @@ final class Events {
 }
 
 #if canImport(UIKit)
-/// The pager "pv" of `nodes` in a UIKit window `width` by `height` (light,
-/// scale 1 pixels), driven through its feed, kept on screen until `close`.
+/// `root` in a UIKit window `width` by `height` (light), kept on screen
+/// until `close`.
 @MainActor
-private final class HostedPager {
-    let model: OrcaPageModel
-    let feed: PagerFeed
-    private let holder: NodeHolder
-    private let window: UIWindow
+private class HostedWindow {
+    let window: UIWindow
 
-    init(_ nodes: [JSONValue], width: CGFloat = 200, height: CGFloat = 100, page: Double = 0) throws {
-        model = try PagerTests().model(nodes)
-        feed = PagerFeed(page: page)
-        holder = NodeHolder(try XCTUnwrap(model.resolve("pv"), "no pager"))
+    init<Root: View>(_ root: Root, width: CGFloat, height: CGFloat) {
         let frame = CGRect(x: 0, y: 0, width: width, height: height)
-        let host = UIHostingController(rootView: HeldPager(holder: holder, model: model, feed: feed)
+        let host = UIHostingController(rootView: root
             .frame(width: width, height: height, alignment: .topLeading)
             .ignoresSafeArea())
         window = UIWindow(frame: frame)
@@ -634,6 +628,41 @@ private final class HostedPager {
         host.view.frame = frame
         host.view.layoutIfNeeded()
         pump(0.3)
+    }
+
+    /// Every UIScrollView in the window.
+    var scrollViews: [UIScrollView] {
+        func find(_ view: UIView) -> [UIScrollView] {
+            ((view as? UIScrollView).map { [$0] } ?? []) + view.subviews.flatMap(find)
+        }
+        return find(window)
+    }
+
+    func pump(_ seconds: Double) {
+        RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+    }
+
+    func close() {
+        window.isHidden = true
+    }
+}
+
+/// The pager "pv" of `nodes` in a hosted window `width` by `height` (scale
+/// 1 pixels), driven through its feed.
+@MainActor
+private final class HostedPager: HostedWindow {
+    let model: OrcaPageModel
+    let feed: PagerFeed
+    private let holder: NodeHolder
+
+    init(_ nodes: [JSONValue], width: CGFloat = 200, height: CGFloat = 100, page: Double = 0) throws {
+        let model = try PagerTests().model(nodes)
+        let feed = PagerFeed(page: page)
+        let holder = NodeHolder(try XCTUnwrap(model.resolve("pv"), "no pager"))
+        self.model = model
+        self.feed = feed
+        self.holder = holder
+        super.init(HeldPager(holder: holder, model: model, feed: feed), width: width, height: height)
     }
 
     func value(_ key: String) -> JSONValue { model.store.value(key) }
@@ -661,14 +690,6 @@ private final class HostedPager {
         pump(0.1)
     }
 
-    /// Every UIScrollView in the window.
-    var scrollViews: [UIScrollView] {
-        func find(_ view: UIView) -> [UIScrollView] {
-            ((view as? UIScrollView).map { [$0] } ?? []) + view.subviews.flatMap(find)
-        }
-        return find(window)
-    }
-
     func pixels() throws -> Pixels {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -677,56 +698,20 @@ private final class HostedPager {
         }
         return try Pixels(XCTUnwrap(image.cgImage))
     }
-
-    func pump(_ seconds: Double) {
-        RunLoop.main.run(until: Date().addingTimeInterval(seconds))
-    }
-
-    func close() {
-        window.isHidden = true
-    }
 }
 
-/// The node `root` of `nodes` in a UIKit window `width` by `height`, kept
-/// on screen until `close`.
+/// The node `root` of `nodes` in a hosted window `width` by `height`.
 @MainActor
-private final class HostedPage {
-    private let window: UIWindow
-
+private final class HostedPage: HostedWindow {
     init(_ nodes: [JSONValue], root: String, width: CGFloat = 200, height: CGFloat = 200) throws {
         let model = try PagerTests().model(nodes)
-        let frame = CGRect(x: 0, y: 0, width: width, height: height)
-        let host = UIHostingController(rootView: NodeView(id: root, model: model)
-            .frame(width: width, height: height, alignment: .topLeading)
-            .ignoresSafeArea())
-        window = UIWindow(frame: frame)
-        window.rootViewController = host
-        window.isHidden = false
-        host.view.frame = frame
-        host.view.layoutIfNeeded()
-        pump(0.3)
-    }
-
-    /// Every UIScrollView in the window.
-    var scrollViews: [UIScrollView] {
-        func find(_ view: UIView) -> [UIScrollView] {
-            ((view as? UIScrollView).map { [$0] } ?? []) + view.subviews.flatMap(find)
-        }
-        return find(window)
+        super.init(NodeView(id: root, model: model), width: width, height: height)
     }
 
     /// Takes the page out of the window.
     func remove() {
         window.rootViewController = nil
         pump(0.3)
-    }
-
-    func pump(_ seconds: Double) {
-        RunLoop.main.run(until: Date().addingTimeInterval(seconds))
-    }
-
-    func close() {
-        window.isHidden = true
     }
 }
 

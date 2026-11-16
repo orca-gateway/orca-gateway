@@ -117,15 +117,34 @@ struct RefreshOnPull: ViewModifier {
 /// for a bigger one) that turns the transfer off on it, iOS 17.4 on (no
 /// switch before).
 private struct KeepPull: UIViewRepresentable {
-    func makeUIView(context: Context) -> KeepPullAnchor { KeepPullAnchor() }
+    func makeUIView(context: Context) -> KeepPullAnchor {
+        KeepPullAnchor(rightToLeft: context.environment.layoutDirection == .rightToLeft)
+    }
 
     func updateUIView(_ anchor: KeepPullAnchor, context: Context) {
+        anchor.rightToLeft = context.environment.layoutDirection == .rightToLeft
         anchor.keep()
     }
 }
 
-/// The refreshed scroll view's corner in UIKit, which takes no touch.
+/// The refreshed scroll view's top leading corner in UIKit, which takes no
+/// touch: its top left, or its top right when the layout runs right to left.
 private final class KeepPullAnchor: UIView {
+    var rightToLeft: Bool {
+        didSet { if rightToLeft != oldValue { found = nil } }
+    }
+
+    /// The refreshed scroll view, once found, while it stays in the window.
+    private weak var found: UIScrollView?
+
+    init(rightToLeft: Bool) {
+        self.rightToLeft = rightToLeft
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
 
     override func didMoveToWindow() {
@@ -134,10 +153,13 @@ private final class KeepPullAnchor: UIView {
     }
 
     /// Turns the transfer off on the refreshed scroll view, looking again
-    /// on the next turns of the run loop until SwiftUI has drawn it.
+    /// on the next turns of the run loop until SwiftUI has drawn it; once
+    /// found, it is not looked for again while it stays in the window.
     func keep(tries: Int = 5) {
-        guard #available(iOS 17.4, *), window != nil else { return }
+        guard #available(iOS 17.4, *), let window else { return }
+        if let found, found.window === window { return }
         if let scroll = refreshed {
+            found = scroll
             scroll.transfersVerticalScrollingToParent = false
         } else if tries > 0 {
             DispatchQueue.main.async { [weak self] in self?.keep(tries: tries - 1) }
@@ -153,17 +175,18 @@ private final class KeepPullAnchor: UIView {
         func find(in view: UIView, skipping searched: UIView?) -> UIScrollView? {
             for sub in view.subviews where sub !== searched {
                 if let scroll = sub as? UIScrollView, scroll.refreshControl != nil {
-                    let origin = scroll.convert(scroll.bounds.origin, to: window)
-                    if abs(origin.x - corner.x) < 0.5, abs(origin.y - corner.y) < 0.5 { return scroll }
+                    let frame = scroll.convert(scroll.bounds, to: window)
+                    let leading = rightToLeft ? frame.maxX : frame.minX
+                    if abs(leading - corner.x) < 0.5, abs(frame.minY - corner.y) < 0.5 { return scroll }
                 }
-                if let found = find(in: sub, skipping: nil) { return found }
+                if let match = find(in: sub, skipping: nil) { return match }
             }
             return nil
         }
         var searched: UIView = self
         var around = superview
         while let view = around {
-            if let found = find(in: view, skipping: searched) { return found }
+            if let match = find(in: view, skipping: searched) { return match }
             searched = view
             around = view.superview
         }
