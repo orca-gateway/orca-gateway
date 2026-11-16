@@ -3,11 +3,11 @@
 ## Front page
 
 ### In one breath
-group 3 of 8 · tasks: 6 green, 0 blocked · A5.6 fx green on both SDKs; both advertise 21 kinds
-S-act, K-act: refetchPage is a known kind (no handler: nothing, no effect, as Flutter); one hash.
-Fixture 48 now runs on Swift and Kotlin; the G1 reds are gone. A baseline Swift test that used
-refetchPage as its "not implemented" example now uses animateForward, as its Kotlin twin.
-Ahead of their groups: G4 (S-page, K-page) and K-list (G5) running.
+group 4 of 8 · tasks: 8 green, 0 blocked · A5.4 green on both SDKs (core and UI)
+K-page, S-page: PageView settles by Flutter's PageScrollPhysics through a pure PageSnap core, a
+fling only past both of Flutter's gates (speed and 18 of travel). Swift measures a release with a
+port of Flutter's iOS fling tracker, Kotlin with Android's windowed one, as Flutter per platform.
+Ahead: K-list, S-list (G5), K-bar (G6) committed; S-bar, K-pull (G6-G7) running.
 
 ### New for you
 nothing new
@@ -17,7 +17,7 @@ none
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 4 (PageView), already running. (default: go)
+2. Next: group 5 (ListView, GridView), both committed, Swift in review. (default: go)
 
 ## Appendix
 
@@ -105,6 +105,43 @@ iOS scheme UI 353/353, goldens unchanged (run before the one-line edit). Engine 
 Changed: "refetchPage" in `kinds` and actionKinds; `testImplementsLooksInsideOnceAndAlways` used refetchPage as its
 example of a kind not run, now `.animateForward("fade")` (not in kinds, no handler; Kotlin's twin uses the same).
 Review: self, rework (the baseline assertion above) · pass
+
+### Group 4
+Commits: K-page 7fdb45d, S-page 7135698 then its rework 419d366 (staged by path). Nothing pushed. Both reviewed
+(fit and quality, one reviewer each); each went back once. Group 4 approved under the standing rule.
+
+#### Task K-page · Kotlin PageView pagers and PageSnap
+Files: `sdk-kotlin/core/.../render/PageSnap.kt` (new) · `.../render/PageSnapTest.kt` (new) ·
+`sdk-kotlin/sdk/.../widgets/Pager.kt` (new) · `.../widgets/PagerTest.kt` (new)
+Cases: A5.4 kt → green: 8 core `a5_4_*`, 11 UI `a5_4_kt_*`; `./gradlew build` core 427 / sdk 474, lint clean; baseline
+unchanged. Red first, each against a stub that compiled.
+Changed: PageSnap.target(offset, viewportExtent, velocity, travel, pageCount, pageSnapping, minFlingVelocity,
+minFlingDistance): a fling only past |v| > 50 dp/s (Android) and |travel| > 18 (kTouchSlop), then page ± 0.5 and
+round, clamped; null when snapping is off. Pager.kt: HorizontalPager/VerticalPager (reverseLayout,
+beyondViewportPageCount 0) with an own TargetedFlingBehavior on PageSnap; ReleaseTravel samples the touch on the
+Initial pass (Flutter's Android window: 100 ms, cut at 40 ms gaps, last 20); free mode a LazyRow/LazyColumn of
+viewport-sized items; an unbounded main axis lays every page out eagerly instead of crashing.
+Rework (review): the fling-distance gate was missing; an unused import.
+Not done: free mode keeps Compose's own fling (no Flutter gates); Compose prefetches the next page while scrolling.
+
+#### Task S-page · Swift PageView pager and PageSnap
+Files: `sdk-swift/Sources/OrcaGatewayCore/Render/PageSnap.swift` (new) · `.../PageSnapTests.swift` (new) ·
+`sdk-swift/Sources/OrcaGateway/Widgets/Pager.swift` (new) · `NodeView.swift` · `.../PagerTests.swift` (new)
+Cases: A5.4 sw → green: 13 core `testA5_4…`, 18 UI (12 on macOS, all 18 hosted on iOS); `swift test` UI 306 / core 419;
+iOS scheme on DA7254F5 UI 386 / core 419, goldens unchanged. Red first on a stub each pass.
+Changed: PageSnap.target with the same arguments as Kotlin (iOS 100 pt/s, 18 pt); `IOSFlingTracker`, a port of
+Flutter's IOSScrollViewFlingVelocityTracker (velocity_tracker.dart:295-397: last 20 samples, 0.6/0.35/0.05 of the
+last three pair speeds, travel newest − oldest, 0 after a 40 ms stop); `flingVelocity` caps at 8000. PagerView builds
+the 1-2 pages in sight; PagerFeed samples from touch-down, takes the drag past 18 pt along the axis, follows the finger,
+settles on Flutter's spring and ends exactly on page × extent; keepWithinPages clamps a page past a shrunk count;
+an extent change mid-settle ends the settle on its page. FreePager (pageSnapping false) a ScrollView of a lazy stack.
+Rework (review, checked against Flutter): samples began after the slop, so 18-36 pt swipes never paged; the release
+used Android's windowed tracker where Flutter on iOS uses the iOS one; the page was not clamped when the count shrank
+(refetchPage keeps the view); a settle could be left set when the extent changed.
+Decided (main session): edges stop with no bounce; the drag is simultaneous, so a same-axis scroll view inside a page
+moves with the pager (follow-up); Kotlin keeps its windowed tracker and Compose's own velocity cap (Android's).
+Not done: FreePager copies Layout.swift's private scrollView/phased helpers (follow-up); the nested-scroll case and
+real swipes stay on the hand check (q3).
 
 ### Test run
 engine `bun test` 755/0 · `flutter test` 352 pass · Swift core 397, 2 expected reds · Kotlin core 398, 2 expected reds
