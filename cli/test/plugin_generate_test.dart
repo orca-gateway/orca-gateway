@@ -17,8 +17,13 @@ import 'package:test/test.dart';
 /// The repo's plugins directory (tests run from cli/).
 final _plugins = p.normalize(p.absolute('..', 'plugins'));
 final _googleMap = p.join(_plugins, 'orca_google_map', 'orca_plugin.yaml');
-final _voiceRecorder =
-    p.join(_plugins, 'orca_voice_recorder', 'orca_plugin.yaml');
+
+/// A manifest with no `schema:` section, written by the test that needs one.
+const _noSchema = '''
+name: orca_voice_recorder
+display_name: Voice Recorder
+description: Audio recording with amplitude monitoring, pause/resume, and playback.
+''';
 
 void main() {
   late Directory tempDir;
@@ -191,8 +196,11 @@ dependencies:
 
   test('C16.6 a manifest without schema gives a plugin with only its name',
       () async {
-    await generate(['--lang', 'swift', '--manifest', _voiceRecorder]);
-    await generate(['--lang', 'kotlin', '--manifest', _voiceRecorder]);
+    final manifest = p.join(tempDir.path, 'orca_plugin.yaml');
+    File(manifest).writeAsStringSync(_noSchema);
+
+    await generate(['--lang', 'swift', '--manifest', manifest]);
+    await generate(['--lang', 'kotlin', '--manifest', manifest]);
     final swift = output('OrcaVoiceRecorderPlugin.swift');
     final kotlin = output('OrcaVoiceRecorderPlugin.kt');
 

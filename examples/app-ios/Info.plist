@@ -15,5 +15,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The voice recorder demo records the microphone so it can play the recording back.</string>
 </dict>
 </plist>

@@ -14,6 +14,12 @@ name: SDK Kotlin Publish
 # acceptance) waits on a fresh runner until repo1.maven.org serves both, then
 # builds a scratch consumer against Central alone (scripts/maven-verify.sh).
 #
+# A native plugin's Android package releases here too (step 17): on each
+# <plugin>-android-v<X> tag (e.g. orca_voice_recorder-android-v<X>, also
+# pushed by scripts/release.sh) the same steps sign and release
+# com.orcagateway:<plugin, with dashes> <X> from plugins/<plugin>/android, with
+# the same secrets. The verify job is the SDK's alone and does not run then.
+#
 # Needs four Actions secrets: MAVEN_CENTRAL_USERNAME and MAVEN_CENTRAL_PASSWORD
 # (a Central Portal user token for the com.orcagateway namespace), SIGNING_KEY
 # (the armored PGP key; a whole .asc export is fine) and SIGNING_PASSWORD. See
@@ -22,10 +28,11 @@ on:
   push:
     tags:
       - "sdk-kotlin-v*"
+      - "orca_*-android-v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish again (e.g. sdk-kotlin-v0.1.0-alpha.1); the run checks it out"
+        description: "Release tag to publish again (e.g. sdk-kotlin-v0.1.0-alpha.1, orca_voice_recorder-android-v0.1.0-alpha.1); the run checks it out"
         required: true
 
 permissions:
@@ -46,17 +53,29 @@ jobs:
       tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.tag.outputs.version }}
     steps:
+      # The tag names the package: its directory and the artifacts it releases
+      # (scripts/release.sh's rows: sdk-kotlin, and <plugin>-android).
       - name: Resolve the tag
         id: tag
         env:
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          if ! printf '%s' "$TAG" | grep -Eq '^sdk-kotlin-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
-            echo "::error::not an sdk-kotlin release tag: $TAG"
+          semver='v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'
+          if printf '%s' "$TAG" | grep -Eq "^sdk-kotlin-$semver"; then
+            prefix=sdk-kotlin-v dir=sdk-kotlin artifacts="sdk-core sdk"
+          elif printf '%s' "$TAG" | grep -Eq "^orca_[a-z0-9]+(_[a-z0-9]+)*-android-$semver"; then
+            plugin=${TAG%-android-v*}
+            prefix=$plugin-android-v dir=plugins/$plugin/android artifacts=${plugin//_/-}
+          else
+            echo "::error::not an sdk-kotlin or plugin Android release tag: $TAG"
             exit 1
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#sdk-kotlin-v}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#"$prefix"}"
+            echo "dir=$dir"
+            echo "artifacts=$artifacts"
+          } >> "$GITHUB_OUTPUT"
 
       # The release is the tag's tree, on a push and on a manual run alike.
       - uses: actions/checkout@v4
@@ -67,13 +86,23 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           VERSION: ${{ steps.tag.outputs.version }}
+          DIR: ${{ steps.tag.outputs.dir }}
+          ARTIFACTS: ${{ steps.tag.outputs.artifacts }}
         run: |
-          file_version="$(tr -d '[:space:]' < sdk-kotlin/VERSION)"
-          if [ "$file_version" != "$VERSION" ]; then
-            echo "::error::sdk-kotlin/VERSION at $TAG is '$file_version', not '$VERSION' (scripts/release.sh writes both)"
+          if [ ! -f "$DIR/VERSION" ]; then
+            echo "::error::$TAG names $DIR, which has no VERSION file at that tag"
             exit 1
           fi
-          echo "Releasing com.orcagateway:sdk-core and com.orcagateway:sdk $VERSION"
+          file_version="$(tr -d '[:space:]' < "$DIR/VERSION")"
+          if [ "$file_version" != "$VERSION" ]; then
+            echo "::error::$DIR/VERSION at $TAG is '$file_version', not '$VERSION' (scripts/release.sh writes both)"
+            exit 1
+          fi
+          names=""
+          for artifact in $ARTIFACTS; do
+            names="${names:+$names and }com.orcagateway:$artifact"
+          done
+          echo "Releasing $names $VERSION from $DIR"
 
       # All four are checked, and every missing one named, before anything runs.
       - name: Check the secrets
@@ -94,17 +123,19 @@ jobs:
             exit 1
           fi
 
-      # Central never takes a version twice. Both POMs there: a re-run, the
-      # upload is skipped and the verify job still runs. One of the two: a
-      # half release, or one repo1 has not finished syncing; a human decides.
+      # Central never takes a version twice. Every POM there (the SDK's two, a
+      # plugin's one): a re-run, the upload is skipped and the verify job (the
+      # SDK's) still runs. One of the SDK's two: a half release, or one repo1
+      # has not finished syncing; a human decides.
       - name: Already on Maven Central?
         id: central
         env:
           VERSION: ${{ steps.tag.outputs.version }}
+          ARTIFACTS: ${{ steps.tag.outputs.artifacts }}
         run: |
           base=https://repo1.maven.org/maven2/com/orcagateway
           found="" absent=""
-          for artifact in sdk-core sdk; do
+          for artifact in $ARTIFACTS; do
             if curl -sfI "$base/$artifact/$VERSION/$artifact-$VERSION.pom" > /dev/null; then
               found="${found:+$found, }$artifact"
             else
@@ -112,7 +143,7 @@ jobs:
             fi
           done
           if [ -z "$absent" ]; then
-            echo "::notice::com.orcagateway $VERSION is already on Maven Central, upload skipped"
+            echo "::notice::com.orcagateway $found $VERSION is already on Maven Central, upload skipped"
             echo "upload=false" >> "$GITHUB_OUTPUT"
           elif [ -z "$found" ]; then
             echo "upload=true" >> "$GITHUB_OUTPUT"
@@ -129,14 +160,17 @@ jobs:
       # Caches ~/.gradle and checks the committed wrapper jar against Gradle's checksums.
       - uses: gradle/actions/setup-gradle@v4
 
-      # Gradle signs only when signingInMemoryKey is set (sdk-kotlin/build.gradle.kts)
-      # and reads one armored block, so the step keeps only the PRIVATE KEY
-      # BLOCK of SIGNING_KEY, in its own shell: never in $GITHUB_ENV or a file.
-      # No configuration cache, as the plugin's documentation publishes: the
-      # key is never written into a cached configuration.
-      - name: Sign and upload both artifacts
+      # Gradle signs only when signingInMemoryKey is set (sdk-kotlin/build.gradle.kts,
+      # a plugin's android/<module>/build.gradle.kts) and reads one armored
+      # block, so the step keeps only the PRIVATE KEY BLOCK of SIGNING_KEY, in
+      # its own shell: never in $GITHUB_ENV or a file. No configuration cache,
+      # as the plugin's documentation publishes: the key is never written into
+      # a cached configuration. In a plugin's directory the task runs in the
+      # plugin's build alone: its included build ../../../sdk-kotlin is only
+      # compiled, and the POM names com.orcagateway:sdk at sdk-kotlin/VERSION.
+      - name: Sign and upload
         if: steps.central.outputs.upload == 'true'
-        working-directory: sdk-kotlin
+        working-directory: ${{ steps.tag.outputs.dir }}
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -150,9 +184,12 @@ jobs:
           fi
           ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache --console=plain
 
+  # The scratch consumer (scripts/maven-verify.sh) is the SDK's: it builds
+  # against sdk-core and sdk alone, so a plugin's tag skips this job.
   verify:
     name: Resolve both artifacts from Maven Central
     needs: publish
+    if: startsWith(needs.publish.outputs.tag, 'sdk-kotlin-v')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

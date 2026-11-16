@@ -28,6 +28,7 @@ import {
 } from "../../engine/src/components";
 import { TV } from "../../engine/src/types/value";
 import { GoogleMap, MoveCamera } from "./orca_google_map";
+import { VoiceRecorder, StartRecording, StopRecording, PlayRecording } from "./orca_voice_recorder";
 
 // ── Custom Widget: ColoredBadge ─────────────────────────
 // Defined server-side, rendered by a custom builder on the Flutter side.
@@ -94,6 +95,19 @@ const homePage = PageDefinition.create({
                 }),
                 actions: {
                   onTap: Custom("navigate", { path: "/map" }),
+                },
+              }),
+              TextButton.new({
+                child: Row.new({
+                  mainAxisSize: "min",
+                  children: [
+                    Icon.new({ name: "mic", size: 20 }),
+                    SizedBox.new({ width: 8 }),
+                    Text.new({ data: "Go to Voice Page" }),
+                  ],
+                }),
+                actions: {
+                  onTap: Custom("navigate", { path: "/voice" }),
                 },
               }),
               // ── Section 1: Custom Actions ──────────────
@@ -389,11 +403,75 @@ const mapPage = PageDefinition.create({
     }),
 });
 
+// ── Voice Page ───────────────────────────────────────────
+// The voice recorder plugin through the classes `orca plugin generate` writes
+// from plugins/orca_voice_recorder/orca_plugin.yaml (./orca_voice_recorder).
+// stopRecording writes the file path and the duration in ms into page state;
+// Play plays the saved path.
+
+const RECORDER_ID = "demo";
+
+const voicePage = PageDefinition.create({
+  id: "voice",
+  title: "Voice Page",
+  state: [
+    { key: "voicePath", scope: "page", initial: "" },
+    { key: "voiceDuration", scope: "page", initial: 0 },
+  ],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({
+        title: Text.new({ data: "Voice Recorder" }),
+        centerTitle: true,
+      }),
+      body: Padding.new({
+        padding: EdgeInsets.all(16),
+        child: Column.new({
+          crossAxisAlignment: "center",
+          children: [
+            VoiceRecorder.new({ recorderId: RECORDER_ID }).withKey("recorder"),
+            SizedBox.new({ height: 16 }),
+            Row.new({
+              mainAxisAlignment: "center",
+              children: [
+                ElevatedButton.new({
+                  child: Text.new({ data: "Start" }),
+                  actions: { onTap: StartRecording(RECORDER_ID) },
+                }).withKey("start"),
+                SizedBox.new({ width: 8 }),
+                ElevatedButton.new({
+                  child: Text.new({ data: "Stop" }),
+                  actions: { onTap: StopRecording(RECORDER_ID, "voicePath", "voiceDuration") },
+                }).withKey("stop"),
+                SizedBox.new({ width: 8 }),
+                ElevatedButton.new({
+                  child: Text.new({ data: "Play" }),
+                  actions: { onTap: PlayRecording(V.pageState("voicePath")) },
+                }).withKey("play"),
+              ],
+            }),
+            SizedBox.new({ height: 16 }),
+            Text.new({
+              data: V.transform(V.pageState("voicePath"), [TV.template("Saved to: {{value}}")]),
+            }).withKey("voice-path"),
+            Text.new({
+              data: V.transform(V.pageState("voiceDuration"), [TV.template("Duration: {{value}} ms")]),
+            }).withKey("voice-duration"),
+          ],
+        }),
+      }),
+    }),
+});
+
 // ── App ──────────────────────────────────────────────────
 
 const customFlow = Flow.create({
   name: "custom",
-  routes: [{ path: "home", page: homePage }, { path: "map", page: mapPage }],
+  routes: [
+    { path: "home", page: homePage },
+    { path: "map", page: mapPage },
+    { path: "voice", page: voicePage },
+  ],
 });
 
 export const customApp = App.create({

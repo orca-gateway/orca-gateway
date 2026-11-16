@@ -1,0 +1,133 @@
+name: Native Plugins CI
+
+# The native plugins' own packages (step 17), per PR and on main: each
+# plugin's SwiftPM package (plugins/<plugin>/ios) built and tested on macOS
+# and on an iOS simulator, and its Gradle build (plugins/<plugin>/android) on
+# Linux. Inside the monorepo both build against the SDK beside them
+# (../../../sdk-swift by path, ../../../sdk-kotlin as an included build), so a
+# change to either SDK runs them too. Releases are scripts/release.sh's; the
+# packages ship through sdk-swift-mirror.yml and sdk-kotlin-publish.yml.
+#
+# A new plugin adds its entry to both matrices: the Swift one names the
+# package's module, its xcodebuild scheme.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "plugins/*/ios/**"
+      - "plugins/*/android/**"
+      - "sdk-swift/**"
+      - "sdk-kotlin/**"
+      - ".github/workflows/native-plugins.yml"
+  pull_request:
+    paths:
+      - "plugins/*/ios/**"
+      - "plugins/*/android/**"
+      - "sdk-swift/**"
+      - "sdk-kotlin/**"
+      - ".github/workflows/native-plugins.yml"
+
+jobs:
+  ios:
+    name: ${{ matrix.plugin }} Swift package (macOS, iOS simulator)
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - plugin: orca_voice_recorder
+            module: OrcaVoiceRecorder
+    # The SDK's UI CI's Xcode (sdk-swift-ui.yml), so the plugin builds with
+    # the toolchain the SDK is tested with.
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcrun simctl list runtimes
+
+      - name: Build
+        run: swift build --build-tests
+        working-directory: plugins/${{ matrix.plugin }}/ios
+
+      - name: Test (macOS)
+        run: swift test --skip-build
+        working-directory: plugins/${{ matrix.plugin }}/ios
+
+      # As sdk-swift-ui.yml picks: iOS 18.5 first, else the newest iPhone.
+      - name: Pick a simulator
+        id: sim
+        run: |
+          id=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          phones = []
+          for runtime, items in devices.items():
+              if "iOS" not in runtime:
+                  continue
+              version = tuple(int(p) for p in runtime.split("iOS-")[-1].split("-") if p.isdigit())
+              for d in items:
+                  if d["name"].startswith("iPhone"):
+                      phones.append((version == (18, 5), d["name"] == "iPhone 16 Pro", version, d["udid"], d["name"], runtime))
+          phones.sort(reverse=True)
+          best = phones[0]
+          print(best[3])
+          print(f"picked {best[4]} on {best[5]}", file=sys.stderr)
+          ')
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Test (iOS simulator)
+        working-directory: plugins/${{ matrix.plugin }}/ios
+        run: |
+          xcodebuild test \
+            -scheme ${{ matrix.module }} \
+            -destination "id=${{ steps.sim.outputs.id }}" \
+            -resultBundlePath "$RUNNER_TEMP/${{ matrix.plugin }}-ios.xcresult"
+
+      - name: Keep the test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.plugin }}-ios-xcresult
+          path: ${{ runner.temp }}/${{ matrix.plugin }}-ios.xcresult
+          retention-days: 7
+
+  android:
+    name: ${{ matrix.plugin }} Gradle build (JDK 17, linux)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [orca_voice_recorder]
+    steps:
+      - uses: actions/checkout@v4
+
+      # 17: the SDK's bytecode floor and Gradle 9's minimum (sdk-kotlin.yml).
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Caches ~/.gradle and checks the committed wrapper jar against Gradle's checksums.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Compile with warnings as errors, unit tests under Robolectric, lint.
+      # ./gradlew is the SDK's wrapper; the runner's Android SDK suffices.
+      - name: Build and test the plugin
+        run: ./gradlew build --console=plain
+        working-directory: plugins/${{ matrix.plugin }}/android
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.plugin }}-android-tests
+          path: |
+            plugins/${{ matrix.plugin }}/android/*/build/reports/tests
+            plugins/${{ matrix.plugin }}/android/*/build/reports/lint-results-*.html

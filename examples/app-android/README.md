@@ -5,7 +5,9 @@ same Bun server as the Flutter and iOS examples. The SDK's alpha is on Maven Cen
 `com.orcagateway:sdk`, but this example does not use it: its Gradle build includes
 `../../sdk-kotlin` (`includeBuild` in `settings.gradle.kts`), so it builds the SDK from source and an
 SDK change shows up on the next build. Your own app installs the published artifact instead; see
-"Install" in [`sdk-kotlin/README.md`](../../sdk-kotlin/README.md#install).
+"Install" in [`sdk-kotlin/README.md`](../../sdk-kotlin/README.md#install). The voice recorder plugin
+comes from source the same way: the build also includes `../../plugins/orca_voice_recorder/android`
+(see [Plugins](#plugins)).
 
 ## Run it
 
@@ -153,10 +155,14 @@ the login page while logged out (`wasRedirected=true`).
 
 ## Plugins
 
-The app registers two plugins ([`DemoPlugins.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/DemoPlugins.kt)),
-as the Flutter example does: `BadgePlugin` draws the `ColoredBadge` widget of the example server's
+The app registers three plugins. Two are its own ([`DemoPlugins.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/DemoPlugins.kt)),
+as the Flutter example has them: `BadgePlugin` draws the `ColoredBadge` widget of the example server's
 `custom` app, and `DeviceActionsPlugin` runs its actions `hapticFeedback`, `showConfetti`, `rateApp`
-and `processPayment`. Start the server (step 1 above), then the app on `custom`:
+and `processPayment`. The third is the voice recorder package's `VoiceRecorderPlugin`
+([`plugins/orca_voice_recorder/android`](../../plugins/orca_voice_recorder/android)), which draws the
+`VoiceRecorder` of the same app's Voice Page and records and plays back (see
+[The voice recorder](#the-voice-recorder) below). Start the server (step 1 above), then the app on
+`custom`:
 
 ```bash
 task example:android:run APP=custom PAGE=home
@@ -179,6 +185,32 @@ adb logcat -s OrcaDemoPlugins
 The green badge prints `hapticFeedback light`, "Trigger Haptic" `hapticFeedback heavy`. The example
 has no confetti or store SDK, so the handlers behind "Show Confetti", "Rate This App", "Pay $29.99"
 and the orange badge only log the action they get.
+
+### The voice recorder
+
+`settings.gradle.kts` includes `../../plugins/orca_voice_recorder/android`, so the build substitutes
+`com.orcagateway:orca-voice-recorder` from source, as it does the SDK (that build includes the same
+`sdk-kotlin`, so both use one SDK build). `MainActivity` adds `VoiceRecorderPlugin(applicationContext)`
+to its plugins. The app's own manifest does not name the microphone: `RECORD_AUDIO` comes from the
+library's manifest through the manifest merger, and the recorder asks for it on the first Start.
+
+The emulator's microphone is the Mac's only while "Virtual microphone uses host audio input" is on,
+in the emulator's Extended controls (the `...` button of its toolbar) › Microphone. Turn it on
+before you start.
+
+On the `custom` home page, tap "Go to Voice Page" (or start the app on it directly:
+`adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --es ORCA_APP_ID custom --es ORCA_PATH voice`).
+The "Voice Recorder" page shows a grey dot over "Ready", the buttons Start, Stop and Play, and the
+"Saved to:" and "Duration:" lines under them. Then:
+
+1. **Start.** Android asks once whether Orca Counter may record audio: allow it ("While using the
+   app"). The dot turns red, the label reads "Recording", and a green bar under the dot moves with
+   the Mac's microphone. A refusal records nothing and shows no message, as the Flutter plugin does.
+2. **Stop.** The dot turns grey and the label reads "Ready"; under the buttons, "Saved to:" shows the
+   recording's path (an `orca_recording_demo_<time>.m4a` in the app's cache directory) and
+   "Duration:" its length in ms.
+3. **Play.** The recording plays back. A playback that fails logs a line under the tag
+   `OrcaVoiceRecorder` (`adb logcat -s OrcaVoiceRecorder`).
 
 ## Offline, force update and sessions
 
