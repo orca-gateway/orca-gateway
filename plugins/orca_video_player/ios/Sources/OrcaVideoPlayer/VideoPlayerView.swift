@@ -4,7 +4,11 @@ import SwiftUI
 
 /// The VideoPlayer widget as Flutter draws it (video_player_plugin.dart
 /// :229-286): loading, a 32 pt circle of 0x33000000 in the middle; on error,
-/// "Video failed to load" at 14 pt in the middle; ready, the video at
+/// "Video failed to load" at 14 pt in the middle; each a Flutter Center, as
+/// wide as offered and, in a Column (which leaves the height unbounded), as
+/// tall as its child, so neither fills the height offered: sdk-swift's
+/// Column offers a child what its others leave (a VStack's share); ready,
+/// the video at
 /// aspectRatio (else the video's own), and with showControls a tap plays or
 /// pauses it, with the play mark over it while not playing. Its player lives
 /// from when it comes on screen until it leaves, and its triggers fire while
@@ -37,12 +41,12 @@ struct VideoPlayerView: View {
         if state.hasError {
             Text("Video failed to load")
                 .font(.system(size: 14))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity)
         } else if !state.initialized {
             Circle()
                 .fill(Color(.sRGB, white: 0, opacity: 0x33 / 255))
                 .frame(width: 32, height: 32)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity)
         } else if options.showControls {
             ZStack {
                 video

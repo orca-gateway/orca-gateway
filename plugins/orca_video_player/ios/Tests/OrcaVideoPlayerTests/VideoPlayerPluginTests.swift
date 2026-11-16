@@ -701,6 +701,36 @@ final class VideoPlayerPluginTests: XCTestCase {
                       "a white mark in the middle, 2 pt right of it (4 pt left padding)")
     }
 
+    /// Loading and on error Flutter draws a Center (video_player_plugin.dart
+    /// :231-250), which in a Column, whose height it leaves unbounded, is as
+    /// tall as its disc or its text and as wide as the Column, so what
+    /// follows sits right under it. sdk-swift draws a Column with no flex
+    /// child, as the demo's /video page is, as a VStack, which offers the
+    /// view all the height the other children leave; a Column with an
+    /// Expanded child offers it none (nil).
+    func testC17_2_S_InAColumnTheLoadingAndErrorViewsAreAsTallAsTheirDiscOrTextAndAsWideAsTheColumn() throws {
+        let h = Harness()
+        // A drawing leaving its window disposes the player, so each Column
+        // gets a state of its own.
+        let loading = { VideoPlayerState(players: h.players) }
+        let failed = { () -> VideoPlayerState in
+            let (state, _) = h.appear(self.options())
+            h.made.last?.send(.failed(message: "nope"))
+            return state
+        }
+        let text = try pixels(Text("Video failed to load").font(.system(size: 14)), width: nil, height: nil)
+
+        for (state, height, drawn) in [(loading, 32, "loading"), (failed, text.height, "error")] {
+            for flex in [false, true] {
+                let column = flex ? "a Column with an Expanded child" : "the demo's Column"
+                let placed = try placedInAColumn(state(), flex: flex)
+                XCTAssertEqual(placed.width, 300, "\(drawn) in \(column): as wide as the Column")
+                XCTAssertEqual(placed.height, CGFloat(height), accuracy: 1,
+                               "\(drawn) in \(column): as tall as its \(drawn == "loading" ? "disc" : "text")")
+            }
+        }
+    }
+
     // MARK: Helpers
 
     /// Runs the main run loop until `done`, 3 s at most (as sdk-swift's
@@ -770,6 +800,60 @@ final class VideoPlayerPluginTests: XCTestCase {
             window.orderOut(nil)
             #endif
         }
+    }
+
+    /// A view as it is, keeping the bounds its parent places it in.
+    struct Placed: Layout {
+        final class Bounds {
+            var rect: CGRect?
+        }
+
+        let bounds: Bounds
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            subviews.first?.sizeThatFits(proposal) ?? .zero
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            self.bounds.rect = bounds
+            subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+        }
+    }
+
+    /// Where sdk-swift's Column, drawn 300 x 600 through the real NodeView,
+    /// places the view of `state`: the demo's /video page (the player, a
+    /// 16 pt SizedBox, a Text, crossAxisAlignment center), or with `flex`
+    /// the Text in an Expanded.
+    func placedInAColumn(_ state: VideoPlayerState, flex: Bool) throws -> CGRect {
+        func node(_ id: String, _ type: String, _ props: [String: JSONValue] = [:],
+                  _ children: [String] = []) -> JSONValue {
+            let leaf = ["Text", "VideoPlayer"].contains(type)
+            return [
+                "id": .string(id), "type": .string(type), "kind": leaf ? "primitive" : "layout",
+                "childMode": leaf ? "none" : type == "Column" ? "multi" : "single", "props": .object(props),
+                "children": .array(children.map { .string($0) }), "watches": [],
+            ]
+        }
+        let nodes = [
+            node("column", "Column", ["crossAxisAlignment": "center"], ["player", "gap", flex ? "expanded" : "text"]),
+            node("player", "VideoPlayer", ["url": .string(Self.clip), "playerId": "demo"]),
+            node("gap", "SizedBox", ["height": 16]),
+            node("text", "Text", ["data": "Position: 0 ms"]),
+        ] + (flex ? [node("expanded", "Expanded", [:], ["text"])] : [])
+        let placed = Placed.Bounds()
+        let view = VideoPlayerView(options: options(), state: state, fire: { _ in nil })
+        let builders = WidgetBuilders()
+        builders.register("VideoPlayer") { _, _ in AnyView(Placed(bounds: placed) { view }) }
+        let model = OrcaPageModel(
+            page: try JSONValue.object(["pageId": "video", "title": "Video", "state": [],
+                                        "components": .array(nodes)]).decode(PageResponse.self),
+            registry: WidgetRegistry(types: Set(GeneratedCapabilities.widgets).union(["VideoPlayer"])),
+            widgets: builders)
+        let renderer = ImageRenderer(
+            content: NodeView(id: "column", model: model).frame(width: 300, height: 600, alignment: .topLeading))
+        renderer.scale = 1
+        _ = renderer.cgImage
+        return try XCTUnwrap(placed.rect, "the Column placed no VideoPlayer")
     }
 
     /// The view drawn at scale 1: its size and its sRGB premultiplied
