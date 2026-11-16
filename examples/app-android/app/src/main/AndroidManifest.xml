@@ -3,6 +3,11 @@
     <application
         android:label="Orca Counter"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <!-- The Google map's Maps API key, from GOOGLE_MAPS_ANDROID_API_KEY in
+             local.properties (app/build.gradle.kts); empty without one. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${GOOGLE_MAPS_ANDROID_API_KEY}" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

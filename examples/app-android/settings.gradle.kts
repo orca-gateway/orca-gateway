@@ -13,6 +13,9 @@
 // Its directory is also called android, and Gradle names an included build
 // after its directory, so it takes its root project's name instead: two
 // builds may not share the build path :android.
+// The Google map plugin the same way: ../../plugins/orca_google_map/android
+// substitutes com.orcagateway:orca-google-map on the same ../../../sdk-kotlin,
+// under its root project's name for the same reason.
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -38,4 +41,5 @@ rootProject.name = "orca-counter-android"
 includeBuild("../../sdk-kotlin")
 includeBuild("../../plugins/orca_voice_recorder/android")
 includeBuild("../../plugins/orca_video_player/android") { name = "orca-video-player-android" }
+includeBuild("../../plugins/orca_google_map/android") { name = "orca-google-map-android" }
 include(":app")

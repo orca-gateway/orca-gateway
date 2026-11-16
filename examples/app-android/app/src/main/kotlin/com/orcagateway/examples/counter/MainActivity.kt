@@ -35,6 +35,7 @@ import com.orcagateway.core.client.StaticFlowManager
 import com.orcagateway.core.client.preload
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.navigation.DeeplinkEvent
+import com.orcagateway.plugins.googlemap.GoogleMapPlugin
 import com.orcagateway.plugins.videoplayer.VideoPlayerPlugin
 import com.orcagateway.plugins.voicerecorder.VoiceRecorderPlugin
 import com.orcagateway.sdk.OrcaApp
@@ -74,12 +75,14 @@ import java.util.Locale
  * The app opens `orcacounter://` links (see "Deep links" in the README) and
  * logs one `deeplink:` line for each under the tag `OrcaCounter`.
  *
- * Four plugins serve the `custom` app (start it with ORCA_APP_ID `custom`):
+ * Five plugins serve the `custom` app (start it with ORCA_APP_ID `custom`):
  * two of this app's (DemoPlugins.kt) draw the ColoredBadge and run the device
  * actions, the voice recorder's (plugins/orca_voice_recorder/android) draws
- * the VoiceRecorder of its Voice Page and records and plays back, and the
+ * the VoiceRecorder of its Voice Page and records and plays back, the
  * video player's (plugins/orca_video_player/android) plays the VideoPlayer
- * of its Video Page and runs the page's playback buttons.
+ * of its Video Page and runs the page's playback buttons, and the Google
+ * map's (plugins/orca_google_map/android) draws the GoogleMap of its Map Page
+ * and runs its moveCamera button.
  *
  * Five more extras try OrcaApp's shell; without them the app is as before.
  * ORCA_API_KEY is the key sent (default `demo-key`; any other gets the
@@ -114,6 +117,7 @@ class MainActivity : ComponentActivity() {
             DeviceActionsPlugin(window.decorView),
             VoiceRecorderPlugin(applicationContext),
             VideoPlayerPlugin(),
+            GoogleMapPlugin(),
         )
         // No scheme (null): the theme's own, here and in OrcaApp.
         val scheme = when (setting("ORCA_SCHEME")) {
