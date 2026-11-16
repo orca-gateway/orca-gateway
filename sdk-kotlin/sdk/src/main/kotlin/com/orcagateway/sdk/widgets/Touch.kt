@@ -21,12 +21,13 @@ import com.orcagateway.sdk.OrcaPageModel
  * [AbsorbPointerWidget]: the subtree takes no touches and offers no click
  * actions to accessibility (Flutter's `isBlockingUserActions`). Read by
  * [GestureDetectorWidget], which then adds no pointer input, [ButtonWidget],
- * which draws its button without one, looking the same, and the hit nodes
- * of DecoratedBox and BlurView. Not read yet, so still taking touches under
- * an IgnorePointer and keeping their actions under either wrapper:
- * BasicTextField (Input.kt), the scroll views (Layout.kt `ScrollWidget`),
- * the clickable in Content.kt, Card's hit node, the AppBar IconButtons and
- * NavigationBarItem (Structure.kt).
+ * which draws its button without one, looking the same, the hit nodes of
+ * DecoratedBox and BlurView, and [InteractiveViewerWidget], which then adds
+ * no pointer input, so it neither pans nor zooms. Not read yet, so still
+ * taking touches under an IgnorePointer and keeping their actions under
+ * either wrapper: BasicTextField (Input.kt), the scroll views (Layout.kt
+ * `ScrollWidget`), the clickable in Content.kt, Card's hit node, the AppBar
+ * IconButtons and NavigationBarItem (Structure.kt).
  */
 internal val LocalPointerBlocked = compositionLocalOf { false }
 
