@@ -242,6 +242,61 @@ final class LifecycleTests: XCTestCase {
         XCTAssertEqual(watchers(), [container, text, ["id": "20", "type": "Text", "watches": ["count"]]])
     }
 
+    /// C19.2: after server actions change the tree, the watchers come in
+    /// Flutter's node map order (component_store.dart): an added node goes
+    /// to the end in the order sent, whatever its id or child position; an
+    /// update keeps its place; a replace removes the target's subtree first,
+    /// so a replacement reusing the target's id moves to the end; a deleted
+    /// node drops out.
+    func testC19_2_nodesServerActionsChangedKeepFluttersNodeMapOrder() async throws {
+        let recorder = DevToolsHookTests.Recorder()
+        OrcaDebug.reporter = recorder
+        defer { OrcaDebug.reporter = nil }
+        func node(_ id: String, _ type: String = "Text", _ watches: [String] = ["count"],
+                  children: [String] = []) -> ComponentNode {
+            ComponentNode(id: id, type: type, kind: children.isEmpty ? .primitive : .layout,
+                          childMode: children.isEmpty ? .none : .multi, children: children, watches: watches)
+        }
+        let model = OrcaPageModel(page: PageResponse(
+            pageId: "home", title: "Home", state: [StateDefinition(key: "count", scope: .page, initial: 0)],
+            components: [
+                node("0", "Column", [], children: ["8", "3", "5"]),
+                node("8", "Container", ["count", "theme"]), node("3", "Text", ["theme"]), node("5"),
+            ]))
+        let increment = try Self.count("count").decode(Action.self)
+        func watchers() async -> [JSONValue] {
+            await model.run(increment)
+            let last = recorder.of("action").last { $0.payload["actionType"] == "setState" }
+            return last?.payload["affectedWidgets"]?.arrayValue ?? []
+        }
+        func ids() async -> [String] {
+            await watchers().compactMap { $0["id"].stringValue }
+        }
+
+        // Two adds whose ids sort opposite to their arrival, the second at
+        // child position 0, then one subtree of 11 nodes watching at _2, _10.
+        model.apply(.add(parentId: "0", components: [node("item-42_0")], position: nil))
+        model.apply(.add(parentId: "0", components: [node("item-17_0")], position: 0))
+        let subtree = (1...10).map { "item-9_\($0)" }
+        model.apply(.add(parentId: "0", components: [node("item-9_0", "Column", [], children: subtree)]
+            + subtree.map { node($0, "Text", $0 == "item-9_2" || $0 == "item-9_10" ? ["count"] : ["theme"]) },
+            position: 1))
+        let watching = await ids()
+        XCTAssertEqual(watching, ["8", "5", "item-42_0", "item-17_0", "item-9_2", "item-9_10"])
+
+        model.apply(.update(id: "item-42_0", props: ["data": "updated"]))
+        model.apply(.replace(targetId: "8", components: [node("8")]))
+        let replaced = await watchers()
+        XCTAssertEqual(replaced.compactMap { $0["id"].stringValue },
+                       ["5", "item-42_0", "item-17_0", "item-9_2", "item-9_10", "8"])
+        XCTAssertEqual(replaced.last, ["id": "8", "type": "Text", "watches": ["count"]], "the current node 8")
+
+        model.apply(.delete(id: "5"))
+        model.apply(.delete(id: "item-9_0"))
+        let deleted = await ids()
+        XCTAssertEqual(deleted, ["item-42_0", "item-17_0", "8"])
+    }
+
     // MARK: helpers
 
     /// The node runs `trigger` once on its first build; its own state change

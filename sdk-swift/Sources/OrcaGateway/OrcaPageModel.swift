@@ -49,6 +49,8 @@ public final class OrcaPageModel: ObservableObject {
         self.executor = ActionExecutor(store: store, client: client)
         store.pageId = page.pageId
         store.seed(page.state)
+        var seen: Set<String> = []
+        nodeOrder = page.components.map(\.id).filter { seen.insert($0).inserted }
         executor.onEffect = { [weak self] effect in self?.onEffect?(effect) }
         executor.perform = { [weak self] effect in self?.perform(effect) }
         executor.onMutation = { [weak self] mutation in self?.apply(mutation) }
@@ -57,14 +59,14 @@ public final class OrcaPageModel: ObservableObject {
 
     public var page: PageResponse { renderer.page }
 
-    /// The current nodes in Flutter's node map order: the page's wire order,
-    /// then the nodes a server action added, by id (the renderer's map keeps
-    /// no insertion order).
+    /// The renderer's node ids in Flutter's node map order, which the
+    /// renderer's dictionary does not keep: a Dart map keeps insertion order,
+    /// and setting a key it holds keeps its place. `apply` keeps it in step.
+    private var nodeOrder: [String] = []
+
+    /// The current nodes in Flutter's node map order.
     private func nodesInPageOrder() -> [ComponentNode] {
-        let nodes = renderer.nodes
-        var listed: Set<String> = []
-        let sent = page.components.compactMap { node in listed.insert(node.id).inserted ? nodes[node.id] : nil }
-        return sent + nodes.keys.filter { !listed.contains($0) }.sorted().compactMap { nodes[$0] }
+        nodeOrder.compactMap { renderer.nodes[$0] }
     }
 
     /// A read of a node's props by another view (a Row reading its
@@ -200,9 +202,43 @@ public final class OrcaPageModel: ObservableObject {
         logger.log(level: level, "\(parts.joined(separator: " "), privacy: .public)")
     }
 
+    /// Edit the node tree, and the node order as Flutter's `ComponentStore`
+    /// moves it: an update keeps every place; a delete drops the subtree; an
+    /// add appends its new nodes in the order sent; a replace drops the
+    /// target's subtree first, so a new node reusing an id from it goes to
+    /// the end. An id the map still holds keeps its place.
     func apply(_ mutation: ComponentMutation) {
+        if case .replace(let targetId, let components) = mutation, !components.isEmpty {
+            let removed = subtree(of: targetId)
+            nodeOrder.removeAll { removed.contains($0) }
+        }
         renderer.apply(mutation)
+        nodeOrder.removeAll { renderer.nodes[$0] == nil }
+        if case .add(_, let components, _) = mutation {
+            append(components)
+        } else if case .replace(_, let components) = mutation {
+            append(components)
+        }
         structureRevision += 1
+    }
+
+    /// The ids `removeSubtree` takes out: the node and every node under it.
+    private func subtree(of id: String) -> Set<String> {
+        var ids: Set<String> = []
+        var pending = [id]
+        while let next = pending.popLast() {
+            guard let node = renderer.nodes[next], ids.insert(next).inserted else { continue }
+            pending += node.children
+        }
+        return ids
+    }
+
+    /// Put the nodes the map now holds and the order does not at its end.
+    private func append(_ components: [ComponentNode]) {
+        var listed = Set(nodeOrder)
+        for node in components where renderer.nodes[node.id] != nil && listed.insert(node.id).inserted {
+            nodeOrder.append(node.id)
+        }
     }
 }
 
