@@ -3,21 +3,20 @@
 ## Front page
 
 ### In one breath
-group 4 of 5 · tasks: 3 green, 0 blocked · A3.3, A3.6 green on both SDKs in tests
-K-flow, S-flow: Wrap (WrapRuns in both cores, RTL, RenderWrap intrinsics), Offstage, SafeArea.
-K-shell: the Kotlin tab shell takes its bottom bar's inset, so a tab page never pads it twice.
+group 5 of 5 · tasks: 4 green, 0 blocked · A3.1 green on both SDKs (44 advertised)
+K-caps, S-caps: both SDKs register and advertise the 13; K-tidy: tests use the standard registry.
+S-shell: the Swift Scaffold and tab shell take their bars' insets, so a SafeArea never slides under.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided (minor): Wrap mirrors in RTL and answers RenderWrap's intrinsics (my brief said
-left-to-right, corrected); K-shell and S-shell added as small tasks; two Swift SafeArea and
-IntrinsicWidth-around-Wrap nestings left as follow-ups.
+2 auto-decided (minor): S-shell also takes the shell's top bar edge (a 4th test); route title bars
+drawn by OrcaApp's TitleBar still do not take the top edge (follow-up, outside the task's files).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 5 (both SDKs advertise the 13; S-shell). (default: go)
+2. Next: stage 10, hand checks on Android and iOS, then the step 3 PR. (default: go)
 
 ## Appendix
 
@@ -161,3 +160,46 @@ Review fit: pass · Review quality: finding → pass (each child measured twice 
 unused conformances) · one rework, checked in the file
 Not done: Scaffold/tab shell do not mark their bars' insets → S-shell (group 5); IntrinsicWidth around a horizontal
 Wrap includes spacing, and a true edge inside a false one does not pad (follow-ups, s3-swift-wrap-intrinsic-width).
+
+### Group 5
+Commits: K-caps c61ff6e, K-tidy 0dbdbe5, S-caps 7014bb0, S-shell 8c4b2ee (each staged by path). Nothing pushed. Gate 4
+approved under the standing rule. K-tidy and S-shell are tasks the main session added (the widened-registry clean-up
+the brief asked for; s3-s-shell-taken-insets after S-flow found the bug).
+
+#### Task K-caps · Kotlin registers and advertises the 13
+Files: `sdk-kotlin/capabilities.json` · `.../core/capabilities/Generated.kt` · `.../core/capabilities/CapabilitiesTest.kt` ·
+`sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/WidgetBuilders.kt`
+Cases: A3.1 kt (`a3_1_theThirteenLayoutWrappersAreAdvertisedAndLetThrough`) red (13 not advertised) → green;
+WidgetBuildersTest c2 unchanged and green; `c1_kotlinAdvertisesTheSame44WidgetsAsSwift` waited for S-caps, then green.
+Changed: the 13 builders registered; capabilities.json lists them sorted (31 → 44); Generated.kt regenerated.
+Review fit: pass · Review quality: pass
+
+#### Task K-tidy · Kotlin wrapper tests use the standard registry
+Files: `.../sdk/widgets/SizingTest.kt` · `.../widgets/FlexibleIntrinsicTest.kt` · `.../widgets/FlowTest.kt`
+Cases: A3.1 kt (no widened registry) → green: SizingTest 24, FlexibleIntrinsicTest 18, FlowTest 17; sdk 348/348. No
+red step (a clean-up of passing tests); no expected number, assertion or test name changed.
+Review fit: pass · Review quality: pass (one reviewer, both lenses)
+Not done: other test files still widen their registries with types already advertised (not in the row; harmless).
+
+#### Task S-caps · Swift advertises the 13 wrappers
+Files: `sdk-swift/capabilities.json` · `.../Capabilities/Generated.swift` · `.../CapabilitiesTests.swift` ·
+`.../StructureWidgetTests.swift` · `.../SizingTests.swift` · `.../FlexibleIntrinsicTests.swift` · `.../FlowTests.swift`
+Cases: A3.1 sw (`testA3_1TheThirteenLayoutWrappersAreAdvertisedFortyFourInAll`,
+`testA3_1TheStandardRegistryDrawsTheThirteenLayoutWrappersNotAFallback`) red (31 ≠ 44; the 13 degraded) → green.
+swift test 231 + 368, iOS 267 + 368, 0 warnings, no golden moved; Kotlin c1 green; engine parity-a-layout 2/0.
+Changed: the 13 listed sorted, Generated.swift regenerated (capsHash 03b167f2…); StructureWidgetTests pin 31 → 44
+(renamed) so the every-advertised-type-has-a-branch check covers the 13; the three UI test files use the standard
+registry.
+Review fit: pass · Review quality: pass
+
+#### Task S-shell · The Swift Scaffold and tab shell take the insets their bars use
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Structure.swift` · `.../Navigation/TabShellView.swift` ·
+`sdk-swift/Tests/OrcaGatewayTests/SafeAreaShellTests.swift` (new)
+Cases: A3.6 sw (never twice; false edges stay under the bars) → green: 4 hosted iOS tests, red first (content at y 0
+under a 74 pt bar; past the bottom bar). iOS 271 + 368, macOS 231 + 368, 0 failures, 0 warnings, no golden moved.
+Changed: ScaffoldView adds .top (appBar) and .bottom (footer or bottomNavigationBar) to orcaSafeAreaTaken on its body
+only (scaffold.dart:3027-3031); ShellBar adds .bottom unless the route covers the shell, .top with the drawer top bar.
+Review fit: pass · Review quality: pass (one reviewer; reservations: ShellBar sets rather than unions the inherited set,
+harmless as nothing above sets it; a small helper could be inlined)
+Not done: route title bars drawn by OrcaApp's TitleBar do not take .top (follow-up; OrcaApp.swift is outside the row).
+
