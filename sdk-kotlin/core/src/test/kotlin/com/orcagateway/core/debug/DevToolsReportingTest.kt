@@ -134,7 +134,11 @@ class DevToolsReportingTest {
         assertEquals(1, recorder.of("action").size, "neither the cancelled toast nor its group is reported")
     }
 
-    /** Swift `testAFallbackPromptIsReportedOncePerType`. */
+    /**
+     * Swift `testAFallbackPromptIsReportedOncePerType`, on the made-up
+     * UnregisteredPluginWidget (a plugin widget no app registers, as the
+     * degrade page's), so the default registry never draws it.
+     */
     @Test
     fun e8_aFallbackPromptIsReportedOncePerType() {
         OrcaDebug.reporter = recorder
@@ -142,14 +146,14 @@ class DevToolsReportingTest {
             "p", "P",
             components = listOf(
                 ComponentNode("0", "Column", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Multi, children = listOf("1", "2")),
-                ComponentNode("1", "Checkbox", ComponentNode.Kind.Input, ComponentNode.ChildMode.None),
-                ComponentNode("2", "Checkbox", ComponentNode.Kind.Input, ComponentNode.ChildMode.None),
+                ComponentNode("1", "UnregisteredPluginWidget", ComponentNode.Kind.Primitive, ComponentNode.ChildMode.None),
+                ComponentNode("2", "UnregisteredPluginWidget", ComponentNode.Kind.Primitive, ComponentNode.ChildMode.None),
             ),
         )
         val renderer = PageRenderer(page, WidgetRegistry())
         assertEquals("FallbackPrompt", renderer.resolve("1", StoreState())?.type)
         assertEquals("FallbackPrompt", renderer.resolve("2", StoreState())?.type)
-        assertEquals(listOf(DevToolsEvent.fallbackPrompt("Checkbox")), recorder.events)
+        assertEquals(listOf(DevToolsEvent.fallbackPrompt("UnregisteredPluginWidget")), recorder.events)
     }
 
     /** Swift `testTheClientReportsRequestsAndFailures`. */

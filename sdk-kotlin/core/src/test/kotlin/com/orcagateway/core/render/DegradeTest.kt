@@ -91,6 +91,12 @@ class DegradeTest {
         assertEquals("FallbackPrompt", tree.type)
         assertEquals(j("blocking"), tree.props["severity"])
         assertEquals(j("Update required"), tree.props["title"])
+        // The prompt names the one feature the engine found missing.
+        assertEquals(
+            "This screen needs features that this app version can't render " +
+                "(widget.UnregisteredPluginWidget). Please update from your app store to continue.",
+            tree.props["body"]?.stringValue,
+        )
     }
 
     @Test
