@@ -190,6 +190,39 @@ the router: `router.handleDeeplink(url)` (pass `isColdStart = true` when the lin
 or `router.handleIntent(intent)`, which returns false when the Intent carries no link. Before the
 router exists, `OrcaAppBoot.handleDeeplink(url)` holds the link for it.
 
+## Animation
+
+What the animation step adds, in plain words:
+
+- **Controlled animations.** An AnimatedBuilder that carries an `animationId` can be told to play by a
+  button: the `animateForward` action starts it again from the beginning, `animateReverse` runs it back
+  from where it is. A builder with `autoStart: false` waits for one of them. `onComplete` fires at the end
+  of a forward run and of a reverse run, never for a repeating one. A tween may name the id of the
+  animation it follows.
+- **Implicit animations.** AnimatedContainer, AnimatedOpacity and AnimatedAlign glide to the new value
+  when a prop changes (size, colour, padding, opacity, alignment), over the widget's `duration`. The first
+  frame shows the value as is. All 41 of Flutter's curve names are understood, with Flutter's formulas; a
+  missing or unknown name is `easeInOut`. This is also the default of AnimatedBuilder now (it was linear).
+- **AnimatedSwitcher.** When its child is replaced by another node (a server action swaps it, or the
+  page is fetched again), the old child fades out while the new one fades in. The same node with new
+  props does not fade.
+- **Hero.** On the single stack, two pages that hold a Hero with the same tag share the element: it
+  flies from one to the other when both are on hand as the transition starts (always on going back, and on
+  a push when the page is already loaded). Inside tabs, or with an empty tag, the child is drawn and the
+  push is the plain one.
+- **Route transitions.** Every kind a route can ask for is honoured, also inside tabs: `fade`, `slideUp`
+  (from the bottom), `scale` (from the centre), `slideRight` (in from the right), `slide` (in from the
+  left), with the route's duration and curve. Only the entering page moves, and going back plays it the
+  other way. `none`, or no transition, is the platform's default.
+- **Reduced motion.** With animations turned off in the system settings (animator duration scale 0),
+  every animation above jumps to its end state at once and `onComplete` still fires once.
+
+To see it all, run the `motion` app of the example server in the
+[Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android), booted
+from its config (`ORCA_APP_ID=motion ORCA_BOOT=config`): a menu with one page for the controlled
+animation, one for the three implicit widgets, one for the switcher, a Hero pair, and one page per
+transition kind at 600 ms.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An Android host does it with

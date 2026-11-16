@@ -191,6 +191,38 @@ Minimum: Swift tools 5.9 (Xcode 15+), iOS 16.
 | S4 | Degrade policies and the 426 page, ten more widgets, `OrcaTheme` button styles | done |
 | S5 | `0.1.0-alpha.1` on the read-only `orca-gateway-swift` mirror | this release |
 
+## Animation
+
+What the animation step adds, in plain words:
+
+- **Controlled animations.** An AnimatedBuilder that carries an `animationId` can be told to play by a
+  button: the `animateForward` action starts it again from the beginning, `animateReverse` runs it back
+  from where it is. A builder with `autoStart: false` waits for one of them. `onComplete` fires at the end
+  of a forward run and of a reverse run, never for a repeating one. A tween may name the id of the
+  animation it follows.
+- **Implicit animations.** AnimatedContainer, AnimatedOpacity and AnimatedAlign glide to the new value
+  when a prop changes (size, colour, padding, opacity, alignment), over the widget's `duration`. The first
+  frame shows the value as is. All 41 of Flutter's curve names are understood, with Flutter's formulas; a
+  missing or unknown name is `easeInOut`. This is also the default of AnimatedBuilder now (it was linear).
+- **AnimatedSwitcher.** When its child is replaced by another node (a server action swaps it, or the
+  page is fetched again), the old child fades out while the new one fades in. The same node with new
+  props does not fade.
+- **Hero.** On iOS 18 and later, tapping inside a Hero zooms the pushed page out of it, and back into it
+  on return. The whole page zooms; it is not Flutter's flight of the one widget. On iOS 16 and 17, inside
+  tabs, or with an empty tag, the child is drawn and the push is the plain one.
+- **Route transitions.** A route's `fade` and `slideUp` are honoured: the pushed page's content fades in
+  or rises from the bottom, with the route's duration and curve. It appears over the page background,
+  not over the previous page, and going back is the system pop. Every other kind (`scale`, `slideRight`,
+  `slide`, `none`) keeps the system push.
+- **Reduced motion.** With "Reduce Motion" on in the system settings, every animation above jumps to its
+  end state at once, `onComplete` still fires once, and route transitions fall back to the system push.
+
+To see it all, run the `motion` app of the example server in the
+[iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios), booted from its
+config (`ORCA_APP_ID=motion ORCA_BOOT=config`): a menu with one page for the controlled animation, one
+for the three implicit widgets, one for the switcher, a Hero pair, and one page per transition kind at
+600 ms.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An iOS host does it with
