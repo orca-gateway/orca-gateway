@@ -70,7 +70,7 @@ PB, LB, SB, BH, FW, MUI, ENG, SW, KT as there). Swift deploys to iOS 16 / macOS 
   #E0E0E0; value null → the track only; else a bar of width·clamp(v) from the LEFT (RTL too), color ?? #2196F3.
   Nothing animates (Flutter's indeterminate is static; documented, and listed for the user as a Flutter behaviour).
 - D10 Table (A7.4 a). One column: each child a row the table's width wide (tight width, own height), top-aligned,
-  rows stacked; width = the parent's max, unbounded → the widest child's intrinsic width. border sent → lines of
+  rows stacked; width = the parent's max, unbounded → the min width constraint (0 in a horizontal scroll: FlexColumnWidth's maxIntrinsicWidth is 0, rendering/table.dart:212-214, :1123-1129; corrected at K-table). border sent → lines of
   border.width in border.color ?? black: the outer ones inside the rect, row lines centred on the boundary, painted
   over the cells (no inset). columnWidths and defaultColumnWidth are read by nothing.
 - D11 Demo. Page `rich` on parity-a (after `forms`), one section per row: a RichText with nested spans and a span bound
