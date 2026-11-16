@@ -33,16 +33,29 @@ import {
   OutlinedButton,
   TextButton,
   EdgeInsets,
+  Expanded,
+  Align,
+  AspectRatio,
+  Baseline,
+  ConstrainedBox,
+  FittedBox,
+  Flexible,
+  FractionallySizedBox,
+  IntrinsicHeight,
+  IntrinsicWidth,
+  LimitedBox,
+  Offstage,
+  SafeArea,
+  Wrap,
 } from "../../engine/src/components";
 
 // Native parity, Phase A (pipeline native-parity). One app, one page per plan
 // step, each the "torture" page for the props that step brings to Swift and
 // Kotlin, so the same page can be compared on Flutter, iOS and Android.
-// Pages: polish (step 1), lifecycle (step 2). Later steps add layout, effects,
-// lists, forms, rich and overlays: one page constant each, one entry in `routes`.
-// Images come from picsum.photos; offline they draw "!" in their box. Only
-// widgets all three SDKs draw (no Wrap: the native SDKs lack it and the
-// capability filter would hoist its children into the parent).
+// Pages: polish (step 1), lifecycle (step 2), layout and layout-safe (step 3).
+// Later steps add effects, lists, forms, rich and overlays: one page constant
+// each, one entry in `routes`. Images come from picsum.photos; offline they
+// draw "!" in their box. Only widgets all three SDKs draw.
 
 const red = "#E53935";
 const blue = "#1E88E5";
@@ -77,9 +90,14 @@ function fullWidth(...children: Widget[]): Widget {
 }
 
 function box(label: string, color: string): Widget {
+  return block(label, color, 48, 32);
+}
+
+/** A width × height coloured box with a centred white label. */
+function block(label: string, color: string, width: number, height: number): Widget {
   return Container.new({
-    width: 48,
-    height: 32,
+    width,
+    height,
     alignment: "center",
     color,
     child: Text.new({ data: label, style: { color: "#FFFFFF", fontWeight: "bold" } }),
@@ -580,6 +598,322 @@ const lifecyclePage = PageDefinition.create({
     }),
 });
 
+// ── Step 3 · layout: the 13 layout and sizing wrappers (A3.2-A3.7); SafeArea at
+//    the screen edges on its own page, layout-safe, with no AppBar ───────────
+
+const wrapColors = [red, blue, green, amber];
+
+/** `count` 48×32 boxes numbered from 1, the four colours in turn. */
+function numberedBoxes(count: number): Widget[] {
+  return Array.from({ length: count }, (_, i) => box(String(i + 1), wrapColors[i % wrapColors.length]!));
+}
+
+/** A coloured box with no width of its own: it fills what its parent allows (and its height, when not given). */
+function fill(label: string, color: string, height?: number): Widget {
+  return Container.new({
+    ...(height === undefined ? {} : { height }),
+    alignment: "center",
+    color,
+    child: Text.new({ data: label, style: { color: "#FFFFFF", fontWeight: "bold" } }),
+  });
+}
+
+/** A 200-wide grey box holding a Wrap, so line breaks and margins can be measured against it. */
+function wrapIn200(wrap: Widget): Widget {
+  return Container.new({ width: 200, color: pale, child: wrap });
+}
+
+/** A 100×60 grey box with a FittedBox around the same 160×80 child, the fit named beside it. */
+function fitted(fit: "contain" | "cover" | "scaleDown", expect: string): Widget {
+  return Row.new({
+    children: [
+      Container.new({
+        width: 100,
+        height: 60,
+        color: pale,
+        child: FittedBox.new({ fit, child: block("160 × 80", blue, 160, 80) }),
+      }),
+      SizedBox.new({ width: 24 }),
+      Expanded.new({ child: caption(`${fit}: ${expect}`) }),
+    ],
+  });
+}
+
+const layoutPage = PageDefinition.create({
+  id: "layout",
+  title: "Layout",
+  state: [
+    { key: "offstageHidden", scope: "page", initial: false },
+    { key: "offstageCount", scope: "page", initial: 0 },
+  ],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({ title: Text.new({ data: "Layout (step 3)" }) }),
+      body: SafeArea.new({
+        child: SingleChildScrollView.new({
+          child: Padding.new({
+            padding: EdgeInsets.all(16),
+            child: Column.new({
+              crossAxisAlignment: "start",
+              children: [
+                section(
+                  "A3.2 AspectRatio, FractionallySizedBox, ConstrainedBox, LimitedBox",
+                  caption("AspectRatio 16/9 in a 320-wide box: 320 × 180"),
+                  SizedBox.new({ height: 4 }),
+                  SizedBox.new({
+                    width: 320,
+                    child: AspectRatio.new({ aspectRatio: 16 / 9, child: fill("320 × 180", blue) }),
+                  }),
+                  SizedBox.new({ height: 12 }),
+                  caption("FractionallySizedBox widthFactor 0.5 in a 320 × 48 grey box: the amber half is 160 wide, centred"),
+                  SizedBox.new({ height: 4 }),
+                  Container.new({
+                    width: 320,
+                    height: 48,
+                    color: pale,
+                    child: FractionallySizedBox.new({
+                      widthFactor: 0.5,
+                      child: fill("160", amber),
+                    }),
+                  }),
+                  SizedBox.new({ height: 12 }),
+                  caption("ConstrainedBox min 120 × 40, max 200 × 60 around a box asking 300 × 20: drawn 200 × 40"),
+                  SizedBox.new({ height: 4 }),
+                  ConstrainedBox.new({
+                    constraints: { minWidth: 120, maxWidth: 200, minHeight: 40, maxHeight: 60 },
+                    child: block("asks 300 × 20", blue, 300, 20),
+                  }),
+                  SizedBox.new({ height: 8 }),
+                  caption("ConstrainedBox min 150 × 50 inside a tight 100 × 30 SizedBox: the parent wins, 100 × 30"),
+                  SizedBox.new({ height: 4 }),
+                  SizedBox.new({
+                    width: 100,
+                    height: 30,
+                    child: ConstrainedBox.new({
+                      constraints: { minWidth: 150, minHeight: 50 },
+                      child: fill("100 × 30", red),
+                    }),
+                  }),
+                  SizedBox.new({ height: 12 }),
+                  caption("LimitedBox maxWidth 100 around a box that fills its width, in a horizontal scroll view (unbounded): 100 wide"),
+                  SizedBox.new({ height: 4 }),
+                  SingleChildScrollView.new({
+                    scrollDirection: "horizontal",
+                    child: LimitedBox.new({ maxWidth: 100, child: fill("100", green, 32) }),
+                  }),
+                  SizedBox.new({ height: 8 }),
+                  caption("The same LimitedBox in the page column (bounded): the cap does not apply, full width"),
+                  SizedBox.new({ height: 4 }),
+                  LimitedBox.new({ maxWidth: 100, child: fill("full width", green, 32) }),
+                ),
+                section(
+                  "A3.3 Wrap: full lines break to the next one",
+                  caption("spacing 8, runSpacing 12, 9 boxes in a 200-wide grey box: 3 per line (48+8+48+8+48 = 160), 3 lines 12 apart"),
+                  SizedBox.new({ height: 4 }),
+                  wrapIn200(Wrap.new({ spacing: 8, runSpacing: 12, children: numberedBoxes(9) })),
+                  SizedBox.new({ height: 12 }),
+                  caption("alignment center, 8 boxes: every line centred; the two full lines have 20 grey each side, the last line of 2 boxes 48 each side"),
+                  SizedBox.new({ height: 4 }),
+                  wrapIn200(Wrap.new({ spacing: 8, runSpacing: 12, alignment: "center", children: numberedBoxes(8) })),
+                  SizedBox.new({ height: 12 }),
+                  caption("crossAxisAlignment end, boxes 20, 32 and 44 tall: in each line the boxes share their bottom edge"),
+                  SizedBox.new({ height: 4 }),
+                  wrapIn200(
+                    Wrap.new({
+                      spacing: 8,
+                      runSpacing: 12,
+                      crossAxisAlignment: "end",
+                      children: [20, 32, 44, 20, 32, 44].map((height, i) =>
+                        block(String(i + 1), wrapColors[i % wrapColors.length]!, 48, height),
+                      ),
+                    }),
+                  ),
+                ),
+                section(
+                  "A3.4 Align, Flexible next to Expanded, Baseline",
+                  caption("Align bottomRight in a 200 × 80 grey box: the red box sits in its bottom-right corner"),
+                  SizedBox.new({ height: 4 }),
+                  Container.new({
+                    width: 200,
+                    height: 80,
+                    color: pale,
+                    child: Align.new({ alignment: "bottomRight", child: box("A", red) }),
+                  }),
+                  SizedBox.new({ height: 12 }),
+                  caption("Align topRight, widthFactor 2, heightFactor 1.5 around a 48 × 32 box: the grey area is 96 × 48, the box in its top-right corner"),
+                  SizedBox.new({ height: 4 }),
+                  Container.new({
+                    color: pale,
+                    child: Align.new({ alignment: "topRight", widthFactor: 2, heightFactor: 1.5, child: box("B", blue) }),
+                  }),
+                  SizedBox.new({ height: 12 }),
+                  caption("Row 320 wide, flex 1 each (shares of 160): Flexible (loose) keeps its 60-wide red box, Expanded (tight) fills 160 in blue, the last 100 stay grey"),
+                  SizedBox.new({ height: 4 }),
+                  Container.new({
+                    width: 320,
+                    color: pale,
+                    child: Row.new({
+                      children: [
+                        Flexible.new({ flex: 1, fit: "loose", child: block("60", red, 60, 32) }),
+                        Expanded.new({ flex: 1, child: fill("160", blue, 32) }),
+                      ],
+                    }),
+                  }),
+                  SizedBox.new({ height: 12 }),
+                  caption("Baseline 40 alphabetic around 14 and 32 px text, in a Row aligned to the top: both words stand where the 40-tall red bar ends"),
+                  SizedBox.new({ height: 4 }),
+                  Row.new({
+                    crossAxisAlignment: "start",
+                    children: [
+                      Container.new({ width: 8, height: 40, color: red }),
+                      SizedBox.new({ width: 8 }),
+                      Baseline.new({
+                        baseline: 40,
+                        baselineType: "alphabetic",
+                        child: Text.new({ data: "Small", style: { fontSize: 14 } }),
+                      }),
+                      SizedBox.new({ width: 16 }),
+                      Baseline.new({
+                        baseline: 40,
+                        baselineType: "alphabetic",
+                        child: Text.new({ data: "Large", style: { fontSize: 32 } }),
+                      }),
+                    ],
+                  }),
+                ),
+                section(
+                  "A3.5 IntrinsicHeight and IntrinsicWidth",
+                  caption("IntrinsicHeight around a Row with crossAxisAlignment stretch; the boxes ask 20, 60 and 40 tall: all three are 60 tall"),
+                  SizedBox.new({ height: 4 }),
+                  IntrinsicHeight.new({
+                    child: Row.new({
+                      crossAxisAlignment: "stretch",
+                      gap: 8,
+                      children: [block("20", red, 60, 20), block("60", blue, 60, 60), block("40", green, 60, 40)],
+                    }),
+                  }),
+                  SizedBox.new({ height: 12 }),
+                  caption("IntrinsicWidth stepWidth 50 around a Column with crossAxisAlignment stretch; the boxes ask 70, 130 and 90 wide: all three are 150 wide (130 rounded up to a step of 50), as wide as the grey ruler"),
+                  SizedBox.new({ height: 4 }),
+                  IntrinsicWidth.new({
+                    stepWidth: 50,
+                    child: Column.new({
+                      crossAxisAlignment: "stretch",
+                      gap: 4,
+                      children: [block("70", red, 70, 24), block("130", blue, 130, 24), block("90", green, 90, 24)],
+                    }),
+                  }),
+                  SizedBox.new({ height: 4 }),
+                  Container.new({ width: 150, height: 6, color: grey }),
+                ),
+                section(
+                  "A3.6 Offstage: hide and show; the counter and the typed text survive",
+                  shows("offstage", "offstageHidden"),
+                  SizedBox.new({ height: 8 }),
+                  ElevatedButton.new({
+                    child: Text.new({ data: "Hide / show" }),
+                    actions: {
+                      onTap: SetState("offstageHidden", V.transform(V.pageState("offstageHidden"), [TV.not()])),
+                    },
+                  }),
+                  SizedBox.new({ height: 8 }),
+                  block("above", grey, 120, 24),
+                  Offstage.new({
+                    offstage: V.pageState("offstageHidden"),
+                    child: Container.new({
+                      padding: EdgeInsets.all(8),
+                      color: "#FFF3E0",
+                      child: Column.new({
+                        crossAxisAlignment: "start",
+                        gap: 8,
+                        children: [
+                          shows("counter", "offstageCount"),
+                          ElevatedButton.new({ child: Text.new({ data: "+1" }), actions: { onTap: bump("offstageCount") } }),
+                          TextField.new({ decoration: { hintText: "type here, then hide and show" } }),
+                        ],
+                      }),
+                    }),
+                  }),
+                  block("below", grey, 120, 24),
+                  SizedBox.new({ height: 4 }),
+                  caption("Hidden: nothing drawn and no gap, \"above\" touches \"below\". Shown again: the counter and the text are as you left them"),
+                  SizedBox.new({ height: 12 }),
+                  caption(
+                    "This page's body sits in a SafeArea (all edges): nothing added under the AppBar, which already took the status bar; " +
+                      "scrolled to the end, the last section stops above the home indicator. The edges themselves are on a page with no AppBar",
+                  ),
+                  SizedBox.new({ height: 4 }),
+                  OutlinedButton.new({
+                    child: Text.new({ data: "SafeArea (layout-safe)" }),
+                    actions: { onTap: Navigate("layout-safe") },
+                  }),
+                ),
+                section(
+                  "A3.7 FittedBox on the same 160 × 80 child in 100 × 60 grey boxes, always centred",
+                  fitted("contain", "scaled ×0.625 to 100 × 50, grey bands 5 tall above and below"),
+                  SizedBox.new({ height: 16 }),
+                  fitted("cover", "scaled ×0.75 to 120 × 60, the full height; 10 spills past each side (no clip)"),
+                  SizedBox.new({ height: 16 }),
+                  fitted("scaleDown", "the child is bigger than the box, so the same as contain: 100 × 50"),
+                ),
+              ],
+            }),
+          }),
+        }),
+      }),
+    }),
+});
+
+// Pushed from layout (A3.6): no AppBar, so the status bar and the notch reach
+// the body. Two halves: SafeArea on all edges, and SafeArea with top false.
+const layoutSafePage = PageDefinition.create({
+  id: "layout-safe",
+  title: "SafeArea",
+  render: () =>
+    Scaffold.new({
+      body: Row.new({
+        crossAxisAlignment: "stretch",
+        children: [
+          Expanded.new({
+            child: SafeArea.new({
+              child: Container.new({
+                padding: EdgeInsets.all(12),
+                alignment: "center",
+                color: blue,
+                child: Column.new({
+                  mainAxisSize: "min",
+                  children: [
+                    Text.new({
+                      data: "SafeArea, all edges: this colour stops below the notch",
+                      textAlign: "center",
+                      style: { color: "#FFFFFF" },
+                    }),
+                    SizedBox.new({ height: 16 }),
+                    ElevatedButton.new({ child: Text.new({ data: "Back" }), actions: { onTap: GoBack() } }),
+                  ],
+                }),
+              }),
+            }),
+          }),
+          Expanded.new({
+            child: SafeArea.new({
+              top: false,
+              child: Container.new({
+                padding: EdgeInsets.all(12),
+                alignment: "center",
+                color: amber,
+                child: Text.new({
+                  data: "SafeArea top false: this colour reaches under the status bar",
+                  textAlign: "center",
+                }),
+              }),
+            }),
+          }),
+        ],
+      }),
+    }),
+});
+
 const parityFlow = Flow.create({
   name: "parity",
   routes: [
@@ -587,6 +921,8 @@ const parityFlow = Flow.create({
     { path: "polish-pushed", page: polishPushedPage },
     { path: "polish-no-back", page: polishNoBackPage },
     { path: "lifecycle", page: lifecyclePage },
+    { path: "layout", page: layoutPage },
+    { path: "layout-safe", page: layoutSafePage },
   ],
 });
 

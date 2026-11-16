@@ -101,3 +101,5 @@ console.log("  - tabs:           /api/v1/app/tabs/config");
 console.log("  - tabs-server:    /api/v1/app/tabs-server/config");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/polish");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/lifecycle");
+console.log("  - parity-a:       /api/v1/app/parity-a/page/layout");
+console.log("  - parity-a:       /api/v1/app/parity-a/page/layout-safe");
