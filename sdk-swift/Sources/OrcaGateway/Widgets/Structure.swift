@@ -19,7 +19,8 @@ import AppKit
 /// menu button for it, as Flutter's AppBar does. The bars take their insets
 /// from the body (Flutter removes them from its MediaQuery padding,
 /// scaffold.dart :3027-3031): a SafeArea in it neither adds them nor lets its
-/// content under the bars. Bottom sheets are not drawn yet.
+/// content under the bars. The `bottomSheet` slot lies over the body's
+/// bottom, above the bottom bars, and lifts the FAB (`ScaffoldBottomSheet`).
 ///
 /// Always light: Flutter's `_buildScaffold`
 /// (sdk/lib/src/builders/structure_builders.dart), like its AppBar, Card,
@@ -49,7 +50,10 @@ struct ScaffoldView: View {
             }
             .environment(\.orcaSafeAreaTaken, taken.union(barEdges(appBar: appBar != nil)))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            if let fab = node.slots["floatingActionButton"] {
+            if let sheet = node.slots["bottomSheet"] {
+                ScaffoldBottomSheet(sheet: sheet, fab: node.slots["floatingActionButton"], model: model,
+                                    reachesBottomEdge: !hasBottomBars)
+            } else if let fab = node.slots["floatingActionButton"] {
                 NodeView(id: fab, model: model).padding(16)
             }
         }
@@ -119,6 +123,72 @@ struct ScaffoldView: View {
             }
             .bottomBarBacking(Props.color(node["backgroundColor"]) ?? systemBackground)
         }
+    }
+}
+
+/// A Scaffold's `bottomSheet` slot as MUI's persistent sheet, with the FAB
+/// when there is one. The slot's node is laid on the sheet's Material:
+/// M3's surfaceContainerLow #F7F2FA, top corners 28, elevation 1 with no
+/// shadow and no tint, not clipped (bottom_sheet.dart:350-420,
+/// bottom_sheet_defaults_m3.g.dart:12-40), so a BottomSheet node's own
+/// Container covers it. It sits at the content bottom over the body, which
+/// keeps its frame, above the bottom bars (scaffold.dart:1171-1176,
+/// :1240-1258); with none that is the Scaffold's bottom edge, under the home
+/// indicator, as Flutter takes the bottom padding from the slot
+/// (scaffold.dart:3257-3263). It is as wide as its node, at most 640, centred.
+/// Built fully in (no entrance, scaffold.dart:2511-2563) and not draggable
+/// (`enableDrag` false when persistent, :2690).
+@MainActor
+private struct ScaffoldBottomSheet: View {
+    let sheet: String
+    let fab: String?
+    let model: OrcaPageModel
+    /// No bottom bars: the sheet reaches the Scaffold's bottom edge.
+    let reachesBottomEdge: Bool
+
+    static let surface = Props.color(hex: "#F7F2FA")
+
+    var body: some View {
+        GeometryReader { proxy in
+            SheetAndFabLayout(fabMargin: 16 + proxy.safeAreaInsets.bottom) {
+                NodeView(id: sheet, model: model)
+                    .background(CornersShape(radii: CornerRadii(topLeft: 28, topRight: 28)).fill(Self.surface))
+                    .accessibilityElement(children: .contain)
+                if let fab {
+                    NodeView(id: fab, model: model)
+                }
+            }
+        }
+        .ignoresSafeArea(.container, edges: reachesBottomEdge ? .bottom : [])
+    }
+}
+
+/// MUI `_ScaffoldLayout` for the sheet and the FAB: the sheet at most 640
+/// wide (M3's constraints), bottom-centred, as tall as it is; the FAB
+/// (endFloat) 16 in from the end edge and `fabMargin` above the bottom, or
+/// higher, with its centre on the sheet's top edge, when that is higher
+/// (floating_action_button_location.dart:528-534, :565-586). Painted over
+/// the sheet. SwiftUI mirrors the placements in right-to-left, where the
+/// end edge is the left.
+private struct SheetAndFabLayout: Layout {
+    /// The FAB's gap above the bottom edge with no sheet: 16 above the safe area.
+    var fabMargin: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let sheet = subviews.first else { return }
+        let size = sheet.sizeThatFits(ProposedViewSize(width: min(bounds.width, 640), height: bounds.height))
+        sheet.place(at: CGPoint(x: bounds.midX, y: bounds.maxY), anchor: .bottom, proposal: ProposedViewSize(size))
+        guard subviews.count > 1 else { return }
+        let fab = subviews[1]
+        let fabSize = fab.sizeThatFits(ProposedViewSize(width: max(bounds.width - 32, 0),
+                                                        height: max(bounds.height - 32, 0)))
+        let y = min(bounds.maxY - fabMargin - fabSize.height, bounds.maxY - size.height - fabSize.height / 2)
+        fab.place(at: CGPoint(x: bounds.maxX - 16 - fabSize.width, y: y), anchor: .topLeading,
+                  proposal: ProposedViewSize(fabSize))
     }
 }
 
