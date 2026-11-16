@@ -37,8 +37,11 @@ import androidx.compose.ui.unit.sp
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.ComponentNode
 import com.orcagateway.core.render.ResolvedNode
+import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.core.state.ActionEffect
 import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.OrcaPageView
+import com.orcagateway.sdk.WidgetBuilders
 import com.orcagateway.sdk.style.Props
 import com.orcagateway.sdk.support.kotlinRoot
 import com.orcagateway.sdk.support.page
@@ -50,17 +53,24 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
  * C18.4 (look): UnsupportedWidgetPlaceholder drawn as Flutter's
  * `_buildUnsupportedWidgetPlaceholder` (sdk/lib/src/builders/
- * primitive_builders.dart), at 1 dp per pixel. The composable is called
- * directly with a resolved node: it is not registered nor advertised yet.
- * The card is tagged `card`; text is laid out with real font metrics.
+ * primitive_builders.dart), at 1 dp per pixel. The look tests call the
+ * composable directly with a resolved node; the end to end one sends
+ * fixture 17's node through the standard registry and builders (S18
+ * advertises and registers the type). The card is tagged `card`; text is
+ * laid out with real font metrics.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "mdpi")
@@ -87,11 +97,18 @@ class UnsupportedWidgetPlaceholderTest {
     private fun props(vararg props: Pair<String, String>): Map<String, JsonValue> =
         props.associate { (key, value) -> key to JsonValue.String(value) }
 
+    private val fixture17File = File(kotlinRoot.parentFile, "schema/fixtures/render/17_unsupported_widget_placeholder.json")
+
     /** Fixture 17's resolved props (schema/fixtures/render/17_unsupported_widget_placeholder.json). */
     private fun fixture17(): Map<String, JsonValue> {
-        val file = File(kotlinRoot.parentFile, "schema/fixtures/render/17_unsupported_widget_placeholder.json")
-        val expected = JsonValue.parse(file.readText())["expected"].arrayValue!!.single()
+        val expected = JsonValue.parse(fixture17File.readText())["expected"].arrayValue!!.single()
         return expected["props"].objectValue!!
+    }
+
+    /** Fixture 17's resolved node (`expected[0]`) as the wire sends it. */
+    private fun fixture17Node(): ComponentNode {
+        val expected = Json.parseToJsonElement(fixture17File.readText()).jsonObject["expected"]!!.jsonArray.single()
+        return Json.decodeFromJsonElement(ComponentNode.serializer(), expected)
     }
 
     /** The placeholder in a 320 x 300 box at the top left, an italic inherited text style, URIs recorded. */
@@ -191,6 +208,33 @@ class UnsupportedWidgetPlaceholderTest {
         val iconTop = (rowTop + (rowHeight - 20.dp) / 2).value.roundToInt()
         assertPixel(accent.compositeOver(fill), picture, iconLeft + 5, iconTop + 10, "icon's left panel")
         assertPixel(fill, picture, iconLeft + 10, iconTop + 10, "icon's middle panel")
+    }
+
+    /**
+     * C18.4 end to end: a page whose component is fixture 17's node, with
+     * the standard core registry and Compose builders, resolves undegraded
+     * and draws the placeholder card (its title, reason and "Learn more"),
+     * not FallbackPrompt's "Unsupported content", and no type is missing a
+     * builder.
+     */
+    @Test
+    fun c18_4_fixture17OnAPageIsDrawnByTheStandardRegistryNotDegraded() {
+        val model = OrcaPageModel(page(fixture17Node()))
+        assertSame(WidgetRegistry.shared, model.renderer.registry)
+        assertSame(WidgetBuilders.shared, model.builders)
+
+        val resolved = requireNotNull(model.resolve("root"))
+        assertEquals("UnsupportedWidgetPlaceholder", resolved.type)
+        assertNull(resolved.degradedFrom, "degraded to ${resolved.type}")
+        assertEquals(fixture17(), resolved.props)
+
+        compose.setContent { OrcaPageView(model) }
+        val reason = fixture17().getValue("reason").stringValue!!
+        compose.onNodeWithText("Google Maps").assertIsDisplayed()
+        compose.onNodeWithText(reason).assertIsDisplayed()
+        compose.onNodeWithText("Learn more").assertIsDisplayed()
+        compose.onNodeWithText("Unsupported content").assertDoesNotExist()
+        assertEquals(emptySet(), model.builders.reportedMissing)
     }
 
     /**

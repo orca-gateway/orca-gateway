@@ -62,12 +62,13 @@ class CapabilitiesTest {
      *
      * A4.x: native parity step 4 adds the 11 effect and touch wrappers ([A4]),
      * so the pin moves from 44 to 55; Swift lands the same 11 in the same step.
+     * C18.4: S18 adds UnsupportedWidgetPlaceholder: the pin moves to 56.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame55WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame56WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(55, kotlin.size)
+        assertEquals(56, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -81,6 +82,7 @@ class CapabilitiesTest {
         assertTrue(GeneratedCapabilities.widgets.containsAll(s10), "not advertised: ${s10 - GeneratedCapabilities.widgets.toSet()}")
         assertTrue(kotlin.containsAll(A3_1), "missing: ${A3_1 - kotlin.toSet()}")
         assertTrue(kotlin.containsAll(A4), "missing: ${A4 - kotlin.toSet()}")
+        assertTrue("UnsupportedWidgetPlaceholder" in GeneratedCapabilities.widgets, "S18's UnsupportedWidgetPlaceholder is not advertised")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
