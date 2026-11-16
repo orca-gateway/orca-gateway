@@ -4,9 +4,9 @@
   "idea": "Native parity step 6 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): form controls and extra buttons on both native SDKs: Checkbox, Radio, Switch, Slider, Form, TextFormField, IconButton, FloatingActionButton and InkWell, bound through stateKey and onChange as Flutter's builders do, drawn on iOS too (the user's call reversing Epic 23b's degrade), and advertised in both capability lists. Test cases A6.1-A6.7 in phase-a-tests.md. In sdk-swift and sdk-kotlin, with a render fixture",
   "kind": "feature",
   "created_at": "2026-11-16T10:35:18Z",
-  "updated_at": "2026-11-16T15:34:26Z",
+  "updated_at": "2026-11-16T19:28:16Z",
   "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
-  "current": "10",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -51,27 +51,38 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 round 5's two questions are minor (no blocked task; next is the rebase on main d82ed11, the suites, the rows and the step 6 PR in stage 10, the user merges), defaults"
     },
     "10": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/10-r1.md"
+      "card": "cards/10-r1.md",
+      "approved_at": "2026-11-16T19:27:58Z",
+      "approved_with": "standing rule (2026-11-11): Q2 minor, default; Q3 the user's (cloud Go registry, a follow-up in the PR body); Q1 answered by the user's own action: PR #50 merged by amrebada 2026-11-16T19:14:02Z (merge 06422c1e), 11 of 11 checks green"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-16T19:28:16Z",
+      "approved_with": "standing rule (2026-11-11): gate 12's one question is minor (13-16 skipped, no deploy target), default; all checks green on PR #50 and on main 06422c1e (Native Plugins CI green on the next main commit 2ca21c9e)"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     }
   },
   "gates": {
