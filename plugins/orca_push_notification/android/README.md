@@ -187,8 +187,10 @@ channel `orca_default_channel`, named "Notifications" in the app's notification 
 importance (priority high below API 26, which has no channels). `initialize` makes the channel, and
 so does each notification, so one shown before `initialize` has it too. A notification shows the
 app's icon (`android:icon`) as its small icon, goes away when tapped, and a tap opens the app's
-launch activity with the payload. An app without a launch activity gets notifications that a tap
-does not open.
+launch activity with the payload. An app without an `android:icon` shows none:
+`showLocalNotification` fails with Android's `IllegalArgumentException`, "Invalid notification (no
+valid small icon): …" (Flutter's `initialize` fails instead, without its `@mipmap/ic_launcher`).
+An app without a launch activity gets notifications that a tap does not open.
 
 ## Differences from Flutter
 
