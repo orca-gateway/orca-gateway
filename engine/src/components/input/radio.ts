@@ -15,8 +15,8 @@ export interface RadioProps {
 
 export class Radio extends InputWidget {
   readonly type = "Radio";
-  /** No native iOS counterpart (Epic 23b); SwiftUI degrades it via the caps vector. */
-  static readonly targets = ["flutter", "web", "android"] as const;
+  /** All four platforms: SwiftUI has no radio button on iOS, so the iOS SDK draws Flutter's 20 pt dot. */
+  static readonly targets = ["flutter", "web", "android", "ios"] as const;
   static readonly triggers = ["onChange"] as const;
   private props: Omit<RadioProps, "actions">;
 
