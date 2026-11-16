@@ -13,3 +13,77 @@ platform:
     plist:
       - key: NSMicrophoneUsageDescription
         value: "This app needs microphone access to record audio"
+
+# What the Flutter plugin implements (lib/src/voice_recorder_plugin.dart), for
+# `orca plugin generate` (TypeScript, Swift, Kotlin).
+# cli/test/voice_recorder_schema_test.dart pins it against that source.
+# The CLI reads the names, `type`, `required` and `enum`; `default`,
+# `description` and `event_data` are notes for the native ports.
+schema:
+  widgets:
+    VoiceRecorder:
+      kind: primitive
+      description: "A 16 pt dot (red recording, orange paused, grey idle), the amplitude bar while recording, and the label Recording, Paused or Ready."
+      props:
+        recorderId: { type: string, description: "The id actions address the recorder by. Defaults to the node's id." }
+        showAmplitude: { type: boolean, default: true, description: "Shows the amplitude bar while recording." }
+      triggers: [onAmplitudeChange, onStateChange, onRecordingComplete]
+      # The eventData each trigger fires with.
+      event_data:
+        onAmplitudeChange:
+          description: "While recording, each time the level changes (sampled every 200 ms)."
+          props:
+            amplitude: { type: number, description: "The current level in dBFS." }
+        onStateChange:
+          description: "When the recorder starts, pauses, resumes or stops."
+          props:
+            state: { type: string, enum: [idle, recording, paused] }
+        onRecordingComplete:
+          description: "Declared, never fired: Flutter returns the recording only through stopRecording's pathKey and durationKey."
+
+  actions:
+    startRecording:
+      description: "Records AAC-LC to <tmp>/orca_recording_<recorderId>_<ms>.m4a (no format param: Flutter reads none). Does nothing without microphone permission."
+      params:
+        recorderId: { type: string, required: true, description: "Resolved as a value; empty does nothing." }
+    stopRecording:
+      description: "Stops the recording and writes, by setState, its file path and its duration in ms (wall clock since start)."
+      params:
+        recorderId: { type: string, required: true, description: "Resolved as a value; empty does nothing." }
+        pathKey: { type: string, description: "The state key that gets the file path." }
+        durationKey: { type: string, description: "The state key that gets the duration in ms." }
+        scope: { type: string, enum: [page, app], default: page }
+    pauseRecording:
+      params:
+        recorderId: { type: string, required: true, description: "Resolved as a value; empty does nothing." }
+    resumeRecording:
+      params:
+        recorderId: { type: string, required: true, description: "Resolved as a value; empty does nothing." }
+    playRecording:
+      description: "Plays a file. Writes playing to stateKey once started (error if it fails); at the end 0 to positionKey and stopped to stateKey."
+      params:
+        path: { type: string, required: true, description: "Resolved as a value; empty does nothing." }
+        positionKey: { type: string, description: "The state key that gets the position in ms as it plays." }
+        durationKey: { type: string, description: "The state key that gets the clip's duration in ms." }
+        stateKey: { type: string, description: "The state key that gets playing, stopped or error." }
+        scope: { type: string, enum: [page, app], default: page }
+    stopPlayback:
+      description: "Stops playback; writes 0 to positionKey and stopped to stateKey."
+      params:
+        positionKey: { type: string }
+        stateKey: { type: string }
+        scope: { type: string, enum: [page, app], default: page }
+    pausePlayback:
+      description: "Pauses playback; writes paused to stateKey."
+      params:
+        stateKey: { type: string }
+        scope: { type: string, enum: [page, app], default: page }
+    resumePlayback:
+      description: "Resumes playback; writes playing to stateKey."
+      params:
+        stateKey: { type: string }
+        scope: { type: string, enum: [page, app], default: page }
+    seekPlayback:
+      description: "Seeks the player to position."
+      params:
+        position: { type: number, default: 0, description: "In ms, resolved as a value; anything but a number seeks to 0, a negative number to 0." }

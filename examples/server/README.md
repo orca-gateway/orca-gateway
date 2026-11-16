@@ -52,6 +52,7 @@ The server runs on `http://localhost:8080` by default.
 | `subpage.ts`          | App `subpage`: a host page with a `SubPage` showing `detail/a`. Both have a page state `count` that do not clash, the sub-page shows a param it was sent, a server action inside it answers with a setState, and the host replaces it with `detail/b` or joins `detail/c` below it (`updateSubPage`) |
 | `saved-state.ts`      | App `saved-state`: `PersistState` and `ClearState`. A page-state count saved on the device (kept after a relaunch) or for the session (kept until the app process ends), or forgotten; an app-state visits count saved on the device; a second page to leave to and come back from |
 | `orca_google_map.ts`  | Google Maps integration via the map plugin                    |
+| `orca_voice_recorder.ts` | The voice recorder plugin's widget and actions, generated from its `orca_plugin.yaml`; `custom.ts`'s `/voice` page records, stops into page state and plays |
 | `index.ts`            | Entry point — registers all examples into a single engine     |
 
 ## Settings for trying SDK features
