@@ -98,7 +98,7 @@ console.log("  - capability:     /api/v1/app/capability-demo/page/home");
 console.log("  - capability:     /api/v1/app/capability-demo/page/upgrade");
 console.log("  - capability:     /api/v1/app/capability-demo/page/blocked");
 console.log("  - capability:     /api/v1/app/capability-demo/page/negotiation  (Epic 25b slice 2 live filter)");
-console.log("  - capability:     /api/v1/app/capability-demo/page/degrade  (a Checkbox iOS lacks)");
+console.log("  - capability:     /api/v1/app/capability-demo/page/degrade  (a CustomScrollView the native SDKs lack)");
 console.log("  - capability:     /api/v1/app/capability-demo/page/placeholder  (UnsupportedWidgetPlaceholder cards)");
 console.log("  - native-widgets: /api/v1/app/native-widgets/page/home");
 console.log("  - todo:           /api/v1/app/todo/page/home");

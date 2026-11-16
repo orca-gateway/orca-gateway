@@ -10,7 +10,8 @@ import {
   Padding,
   EdgeInsets,
   Divider,
-  Checkbox,
+  CustomScrollView,
+  SliverToBoxAdapter,
 } from "../../engine/src/components";
 // Not re-exported by components/index.ts; the primitive barrel has it.
 import { UnsupportedWidgetPlaceholder } from "../../engine/src/components/primitive";
@@ -199,12 +200,16 @@ const negotiationPage = PageDefinition.create({
 
 // ── /degrade: a widget one SDK lacks ─────────────────────────
 //
-// Checkbox has no iOS counterpart (its `targets` leave ios out), so the iOS
-// SDK does not advertise it. Flutter draws the checkbox; for iOS the engine
-// applies the fallback policy: `graceful` strips it, `warn` prepends a banner,
-// `require` replaces the page. examples/server/index.ts reads the policy
-// from ORCA_FALLBACK_POLICY, and record-page.ts records each one for the
-// Swift tests (`t sdk-swift:record`).
+// The native SDKs do not draw slivers yet, so neither the iOS nor the
+// Android vector advertises CustomScrollView or SliverToBoxAdapter. Flutter
+// draws the scroll view (shrinkWrap, because it sits in a Column and a bare
+// sliver there throws); for the natives the engine applies the fallback
+// policy: `graceful` strips both and keeps the Text they hold (the filter
+// lifts a dropped node's children into its parent), `warn` prepends a banner
+// naming both widgets, `require` replaces the page. examples/server/index.ts
+// reads the policy from ORCA_FALLBACK_POLICY, and record-page.ts records each
+// one for the Swift and Kotlin tests (`t sdk-swift:record`,
+// `t sdk-kotlin:record`).
 
 const degradePage = PageDefinition.create({
   id: "degrade",
@@ -221,9 +226,12 @@ const degradePage = PageDefinition.create({
         child: Column.new({
           crossAxisAlignment: "stretch",
           children: [
-            Text.new({ data: "Above the checkbox." }),
-            Checkbox.new({ value: true, label: "Only some SDKs draw this" }),
-            Text.new({ data: "Below the checkbox." }),
+            Text.new({ data: "Above the CustomScrollView." }),
+            CustomScrollView.new({
+              shrinkWrap: true,
+              slivers: [SliverToBoxAdapter.new({ child: Text.new({ data: "Inside the CustomScrollView." }) })],
+            }),
+            Text.new({ data: "Below the CustomScrollView." }),
           ],
         }),
       }),
