@@ -4,9 +4,9 @@
   "idea": "Native parity step 13 (Phase B): sliver scrolling, reorderable lists and sub-pages on sdk-swift and sdk-kotlin. SubPage with id and state prefixing, updateSubPage replace and join in both pure cores with fixtures; ReorderableListView with onReorder; CustomScrollView, SliverAppBar, SliverList, SliverGrid, SliverToBoxAdapter once Phase A step 5 is on main. Rows B13.1-B13.5.",
   "kind": "feature",
   "created_at": "2026-11-16T01:21:10Z",
-  "updated_at": "2026-11-16T04:45:45Z",
+  "updated_at": "2026-11-16T09:45:28Z",
   "active_session": "fe23fb0a-f62c-4a83-a51f-655a2e0bf8ff",
-  "current": "12",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -62,19 +62,24 @@
       "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "PR #42 merged to main by the user on 2026-11-16 with all checks green"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     }
   },
   "gates": {
