@@ -106,6 +106,8 @@ struct WidgetView: View {
         case "Offstage": OffstageView(node: node, model: model)
         case "SafeArea": SafeAreaView(node: node, model: model)
         case "Wrap": WrapView(node: node, model: model)
+        // Flutter's Table builder: one column, a row per child (LB:646-666).
+        case "Table": TableView(node: node, model: model)
         case "Padding": PaddingView(node: node, model: model)
         case "SizedBox": SizedBoxView(node: node, model: model)
         case "SingleChildScrollView": scrolling(ScrollNodeView(node: node, model: model))
