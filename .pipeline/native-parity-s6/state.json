@@ -4,7 +4,7 @@
   "idea": "Native parity step 6 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): form controls and extra buttons on both native SDKs: Checkbox, Radio, Switch, Slider, Form, TextFormField, IconButton, FloatingActionButton and InkWell, bound through stateKey and onChange as Flutter's builders do, drawn on iOS too (the user's call reversing Epic 23b's degrade), and advertised in both capability lists. Test cases A6.1-A6.7 in phase-a-tests.md. In sdk-swift and sdk-kotlin, with a render fixture",
   "kind": "feature",
   "created_at": "2026-11-16T10:35:18Z",
-  "updated_at": "2026-11-16T11:01:27Z",
+  "updated_at": "2026-11-16T11:01:49Z",
   "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
   "current": "09",
   "stages": {
@@ -44,7 +44,8 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 08's ten questions are minor (commands as found; commits per task, one gate per group; hand checks after G8; degrade case CustomScrollView; only the four degrade goldens re-recorded; D2 as two engine tasks; forms page with the caps; Android long press at 500 ms; the cloud Go registry a follow-up for the user; rows as corrected), all defaults"
     },
     "09": {
-      "status": "pending"
+      "status": "draft",
+      "rounds": 1
     },
     "10": {
       "status": "pending"
