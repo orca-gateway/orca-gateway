@@ -3,7 +3,7 @@
 ## Front page
 
 ### In one breath
-PR #47 is open on main 941e789 (your merge of #46): the voice recorder as its own Swift and Gradle packages.
+PR #47 is open on main 941e789: the voice recorder as its own Swift and Gradle packages.
 Every suite green; both demo apps build and open the voice page; C17.3 ticked, 31 of 35 each.
 Seen by hand on both devices: the mic prompt, recording, Stop into page state, playback.
 At open: 4 checks pending. The merge is yours; then the mirror repo, its key and secret are yours.
