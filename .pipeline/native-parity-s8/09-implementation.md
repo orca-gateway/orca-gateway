@@ -3,7 +3,7 @@
 ## Front page
 
 ### In one breath
-group 1 of 7 · tasks: 4 green, 0 blocked · fixtures 47 and 52, both dialog kinds known on both SDKs
+group 1 of 7 · tasks: 4 green, 0 blocked · fixtures 47 and 52, both dialog kinds on both SDKs
 F1: fixture 47 (the four overlays and both actions), 52 (no state, no effect), heightFactor in the schema.
 F-pins: both natives run 47 and 52; render pins 57, action pins 33.
 S-act / K-act: openDialog and closeDialog known (26 → 28 kinds); no page handler: nothing happens.
