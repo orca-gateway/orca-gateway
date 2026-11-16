@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 5 of 6 · tasks: 10 green, 0 blocked · A4.5 (InteractiveViewer) green on both SDKs, core + ui
-S-caps (group 6) is in: iOS gets the effects page whole; the iPhone hand check passed all five rows.
+group 6 of 6 · tasks: 12 green, 0 blocked · A4.1-A4.5 green on both SDKs, each advertising 55
+Hand checks pass on iPhone and Android API 34; every suite is green, no generator leaves a diff.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-4 auto-decided (minor), all documented: iOS pinches about a fixed point (SwiftUI gives no live
-one); zoomed in, both natives pan on an up/down drag where Flutter scrolls the page; a zoomed iOS
-text field takes taps past the clip; fling inertia is not ported (as planned).
+none new in group 6. Step 4's known differences (iOS material steps, natives clip the backdrop
+and the filter to the box, Kotlin's blur copy, iOS fixed pinch focal point, zoomed drag in a
+scroll view) are documented in the code and go into the PR body.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: K-caps (running), then suites, the Android hand check, the PR. (default: go)
+2. Next: stage 10, rows A4.1-A4.5 ticked, rebase on main, the step 4 PR. (default: go)
 
 ## Appendix
 
@@ -220,3 +220,45 @@ DecoratedBox (80 x 40 vs Container 92 x 52), A4.3 multiply (olive centre, corner
 and BlurView frosted in their boxes, A4.4 Absorb (front taps move nothing, grey counts behind) and Ignore (true
 counts behind, flipped false counts front), A4.5 (pinch stops at 2.5 and at 1, the pan stops at the grid's edge and
 follows the finger after a 10 pt slop, at scale 1 the page scrolls through the grid): all pass. Android after K-caps.
+
+### Group 6
+Commits: S-caps f2aa9d1, K-caps a2b0bd5 (staged by path). Nothing pushed. Gate 09 group 5 approved under the standing rule.
+
+#### Task S-caps · Swift advertises the 11 wrappers
+Files: `sdk-swift/capabilities.json` · `.../Capabilities/Generated.swift` (regenerated) · `.../CapabilitiesTests.swift` ·
+`.../StructureWidgetTests.swift`
+Cases: A4.x unit sw (caps) → green: `testA4TheElevenEffectAndTouchWrappersAreAdvertised` red first; pins 44 → 55
+(`testA3_1…FiftyFiveInAll`, `test_B10_C_S_fiftyFive…`); `swift test` green; iOS scheme green on the simulator.
+Changed: the 11 in the file's sort order; capsHash 1c4f702a…; Generated.kt left to K-caps.
+Review: self (mechanical: list, generator, pins) · pass
+
+#### Task K-caps · Kotlin registers and advertises the 11
+Files: `sdk-kotlin/capabilities.json` · `.../capabilities/Generated.kt` (regenerated) · `.../CapabilitiesTest.kt` ·
+`sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/WidgetBuilders.kt`
+Cases: A4.x unit kt (caps) → green: `a4_x_theElevenEffectAndTouchWrappersAreAdvertisedAndLetThrough` red first, pins 44
+→ 55 (`c1_kotlinAdvertisesTheSame55WidgetsAsSwift`, `a3_1_…`); `./gradlew build` core 397, sdk 436, lint clean; engine
+`test/parity-a-effects.test.ts` 2/0 (both vectors get the effects page whole), whole engine 754/0.
+Changed: the 11 in standard() as one block after Wrap, doc comment 55; the same list as Swift's (checked by diff).
+Decisions: a4_x checks the list, the vector (once each), the android target and the core registry (as Swift's).
+Review: self (mechanical: list sorted and equal to Swift's, 11 builders, Generated.swift untouched, the three generators
+leave no diff on a rerun) · pass
+
+### Suites at a2b0bd5
+engine `bun test` 754/0 (K-caps run) and `parity-a-effects.test.ts` 2/0 (rerun) · Flutter `flutter test` 350 pass,
+`flutter analyze` clean · `swift test` 0 failures · Kotlin `./gradlew build` core 397, sdk 436, lint clean · the three
+generators (widget registry, sdk capabilities, native capabilities) leave no diff.
+
+### Hand check, Android (API 34 emulator, density 440), after K-caps
+Example app built from a2b0bd5, server 8131, page `effects`; sizes from screenshots with the pixel tool (px / 2.75).
+A4.1 Opacity 0.5 checks show through, 1 opaque; RotatedBox 40 x 120 dp in the 140 frame, label reads downwards. A4.2
+no-clip spill 96 dp, ClipRect 64 square, ClipOval 64 circle; DecoratedBox 80 x 40 vs Container 92.4 x 52.4; foreground
+red border over amber. A4.3 multiply: centre #647F00 (Flutter's s*d), corners #64B5F6, held to 64 x 64; srcIn green
+64 disc, corners clear; BackdropFilter 6 a real blur in the 140 x 60 box only, stripes lined up, still lined up after a
+scroll; BlurView 8 frosted, half white, rounded. A4.4 Absorb: 3 front taps move neither (0/0), 2 grey taps count behind
+(2/0); Ignore true: a front tap counts behind (1/0); flipped false: 2 front taps count front (1/2). A4.5 296 x 200 dp;
+a two-finger pinch out (raw touch events, adb root, undone after) stops at 2.5 (tile 118.5 -> 297 display px),
+centred, clipped to the box; a drag pans 1:1 and the second stops exactly at the grid's right edge (its 8 dp margin =
+55 px at 2.5); pinch in stops at 1 (every tile back at rest); a sideways drag at 1 moves nothing. All pass.
+Not done by hand: an up/down drag at scale 1 scrolling the page (System UI kept hanging on a memory-starved host;
+covered by `a4_5_atRestAVerticalSwipeOnTheViewerScrollsTheColumnAroundIt` and by the iPhone hand check). Android 11 scrim:
+no API 30 image (the user's call); forced in unit tests.
