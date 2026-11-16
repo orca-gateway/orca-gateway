@@ -46,6 +46,7 @@ import com.orcagateway.sdk.widgets.ScrollWidget
 import com.orcagateway.sdk.widgets.SizedBoxWidget
 import com.orcagateway.sdk.widgets.SpacerWidget
 import com.orcagateway.sdk.widgets.StackWidget
+import com.orcagateway.sdk.widgets.SubPageWidget
 import com.orcagateway.sdk.widgets.TextFieldWidget
 import com.orcagateway.sdk.widgets.TextWidget
 import com.orcagateway.sdk.widgets.TransformWidget
@@ -106,14 +107,14 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 50 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 51 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
          * S10's BottomNavigationBar, BottomNavItem and Drawer, S12's
          * AnimatedContainer, AnimatedOpacity, AnimatedAlign, AnimatedSwitcher
          * and Hero, the 13 layout wrappers of native parity step 3
-         * (A3.1), and S13's ReorderableListView. Keep the two lists in
+         * (A3.1), and S13's ReorderableListView and SubPage. Keep the two lists in
          * step: the caps vector advertises what this draws
          * (WidgetBuildersTest checks it).
          */
@@ -155,6 +156,7 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("AnimatedSwitcher") { node, model, modifier -> AnimatedSwitcherWidget(node, model, modifier) }
             register("Hero") { node, model, modifier -> HeroWidget(node, model, modifier) }
             register("ReorderableListView") { node, model, modifier -> ReorderableListWidget(node, model, modifier) }
+            register("SubPage") { node, model, modifier -> SubPageWidget(node, model, modifier) }
             register("Align") { node, model, modifier -> AlignWidget(node, model, modifier) }
             register("AspectRatio") { node, model, modifier -> AspectRatioWidget(node, model, modifier) }
             register("Baseline") { node, model, modifier -> BaselineWidget(node, model, modifier) }

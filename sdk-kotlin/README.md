@@ -246,6 +246,48 @@ To try it, run the `reorder` app of the example server in the
 from its config (`ORCA_APP_ID=reorder ORCA_BOOT=config`): five rows whose order lives in page state, and
 a line showing the last move as `oldIndex → newIndex`.
 
+## Sub-pages
+
+`SubPage` fetches another page and draws it in place; the `updateSubPage` action changes what it holds.
+The rules are shared with Flutter and iOS and pinned by the fixtures in
+[`schema/fixtures/subpage`](https://github.com/orca-gateway/orca-gateway/tree/main/schema/fixtures/subpage).
+
+- **The prefix rule.** A sub-page lives in its host page: its nodes go into the host's node tree and its
+  state into the host's page state, each under a prefix so that nothing clashes. For a SubPage with the key
+  `feed` the prefix is `feed:`: the node `title` becomes `feed:title`, the page-state key `count` becomes
+  `feed:count`, and every reference to them inside the sub-page (state Values, `setState`, watches, slots,
+  animation and component ids) is rewritten the same way. App state is shared and left alone. A SubPage
+  inside a sub-page composes by itself (`feed:inner:`). The sub-page is written as any page: it never sees
+  its prefix.
+- **Params as a query.** The resolved `pageId` is the path of a normal page fetch and the resolved `params`
+  its query string, keys sorted and percent-encoded (`feed?tab=new&user=7`); the app state is posted as on
+  any page fetch. The fetch runs when the SubPage is first drawn, and again when the resolved `pageId` or
+  `params` change.
+- **What is drawn.** While the first fetch runs, the SubPage's child if it has one, else a progress
+  indicator; after a failed fetch, the text `SubPage error: <message>`; then the fetched page.
+- **Replace and join.** `updateSubPage(subPageId, pageId, params, mode)` fetches a page for a SubPage of the
+  current page; an id no SubPage has does nothing. `replace` (the default) removes the mounted pages, their
+  nodes and their state, and puts the new page in their place. `join` adds the new page below the ones
+  already there, under `feed#1:`, `feed#2:` and so on, each with its own state. The old content stays on
+  screen during the fetch; a failed fetch leaves it and fails the action, so a `lifecycle`'s `onError` runs.
+  The change stays until the next `updateSubPage` or until the SubPage's own `pageId` or `params` change.
+- **Server actions inside.** A `serverAction` fired by a node of a sub-page posts, as `pageState`, only that
+  sub-page's keys, without the prefix: the server sees the state the sub-page declared. The actions it
+  answers with are rewritten with the same prefix before they run, so a `setState("count")` or an
+  `updateComponent("title")` lands on the sub-page. A server action of the host page posts the whole page
+  state, as before.
+- **When it leaves.** When the SubPage node is removed from the page its nodes are removed with it; its
+  state keys are left.
+- **Limits.** A SubPage key may not hold `:` or `#` (the engine refuses it): they separate the prefix from
+  what is under it. In a plugin's or a custom action, state Values are rewritten like anywhere else, but a
+  key or an id written as a plain string is not, since the SDK does not know which of its fields are keys;
+  such an action takes the key as a state Value, or is not used inside a sub-page.
+
+To try it, run the `subpage` app of the example server in the
+[Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android), booted
+from its config (`ORCA_APP_ID=subpage ORCA_BOOT=config`): a host page and a sub-page that each count on
+their own, a param sent to the sub-page, and two buttons, Replace with B and Join C.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An Android host does it with

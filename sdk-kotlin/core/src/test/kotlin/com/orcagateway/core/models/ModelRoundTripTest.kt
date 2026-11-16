@@ -115,8 +115,10 @@ class ModelRoundTripTest {
         // Every advertised kind appears in the fixtures, except the three
         // component kinds: a fixture compares state and effects, not the node
         // tree, so ComponentMutationTest pins them against Dart's
-        // ComponentStore instead.
-        val structural = setOf("addComponent", "updateComponent", "deleteComponent")
+        // ComponentStore instead. updateSubPage (B13.5-K) changes the node
+        // tree too, after a page fetch: its fixtures are the `sequence` cases
+        // of schema/fixtures/subpage (SubPageFixtureTest).
+        val structural = setOf("addComponent", "updateComponent", "deleteComponent", "updateSubPage")
         assertTrue(kinds.containsAll(GeneratedCapabilities.actionKinds.toSet() - structural), "$kinds")
     }
 

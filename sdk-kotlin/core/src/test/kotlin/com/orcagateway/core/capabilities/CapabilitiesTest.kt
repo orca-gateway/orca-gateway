@@ -65,12 +65,14 @@ class CapabilitiesTest {
      * pin moves on to 49; Swift lands the same 13 in the same step.
      *
      * B13.3-K: S13 adds ReorderableListView, 49 to 50.
+     *
+     * B13.4-K: S13 adds SubPage, 50 to 51.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame50WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame51WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(50, kotlin.size)
+        assertEquals(51, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -88,13 +90,15 @@ class CapabilitiesTest {
         assertTrue(kotlin.containsAll(A3_1), "missing: ${A3_1 - kotlin.toSet()}")
         assertTrue("ReorderableListView" in kotlin, "missing: ReorderableListView")
         assertTrue("ReorderableListView" in GeneratedCapabilities.widgets, "not advertised: ReorderableListView")
+        assertTrue("SubPage" in kotlin, "missing: SubPage")
+        assertTrue("SubPage" in GeneratedCapabilities.widgets, "not advertised: SubPage")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
 
     /**
      * A3.1: Compose draws the 13 layout wrappers, so the generated vector
-     * advertises them (50 in all, with S12's 5 animated ones and S13's ReorderableListView) and the core registry lets them through
+     * advertises them (51 in all, with S12's 5 animated ones and S13's ReorderableListView and SubPage) and the core registry lets them through
      * instead of degrading them; WidgetBuildersTest pins standard() to the
      * same set.
      */
@@ -102,7 +106,7 @@ class CapabilitiesTest {
     fun a3_1_theThirteenLayoutWrappersAreAdvertisedAndLetThrough() {
         val advertised = GeneratedCapabilities.widgets.toSet()
         assertEquals(emptySet(), A3_1 - advertised, "not advertised")
-        assertEquals(50, GeneratedCapabilities.widgets.size)
+        assertEquals(51, GeneratedCapabilities.widgets.size)
         assertEquals(emptySet(), A3_1 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
@@ -111,13 +115,14 @@ class CapabilitiesTest {
         val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["actionKinds"])
         assertEquals(listed, GeneratedCapabilities.actionKinds.toSet())
         assertTrue(Action.kinds.toSet().containsAll(listed), "not wire kinds: ${listed - Action.kinds.toSet()}")
-        // S12 added animateForward and animateReverse: 20 to 22.
-        assertEquals(22, listed.size)
+        // S12 added animateForward and animateReverse: 20 to 22. B13.5-K: S13 added updateSubPage, 23.
+        assertEquals(23, listed.size)
         assertTrue(listed.containsAll(setOf("animateForward", "animateReverse")))
+        assertTrue("updateSubPage" in listed, "missing: updateSubPage")
         assertTrue(listed.containsAll(setOf("switchTab", "openDrawer")))
         // Step 2 added the fire-mode wrappers and the debugLog effect.
         assertTrue(listed.containsAll(setOf("once", "always", "debugLog")), "missing: ${setOf("once", "always", "debugLog") - listed}")
-        // Swift's twin: the iOS SDK advertises the same 22 kinds.
+        // Swift's twin: the iOS SDK advertises the same 23 kinds.
         assertEquals(strings(json("sdk-swift/capabilities.json").jsonObject["actionKinds"]), listed)
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).

@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import com.orcagateway.core.animation.AnimationRegistry
 import com.orcagateway.core.client.ActionClient
+import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.debug.DevToolsEvent
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
@@ -24,6 +25,9 @@ import com.orcagateway.core.state.ActionExecutor
 import com.orcagateway.core.state.ActionSource
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.OrcaUrlPolicy
+import com.orcagateway.core.subpage.SubPage
+import com.orcagateway.core.subpage.SubPageHost
+import com.orcagateway.core.subpage.SubPageMounts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -128,6 +132,8 @@ public class OrcaPageModel(
         executor.onEffect = { effect -> onEffect?.invoke(effect) }
         executor.perform = { effect -> perform(effect) }
         executor.onMutation = { mutation -> apply(mutation) }
+        executor.subPagePrefixes = { subPages.prefixes }
+        executor.onUpdateSubPage = { id, pageId, params, mode -> updateSubPage(id, pageId, params, mode) }
     }
 
     public val page: PageResponse get() = renderer.page
@@ -320,8 +326,97 @@ public class OrcaPageModel(
 
     internal fun apply(mutation: ComponentMutation) {
         renderer.apply(mutation)
+        // S8: a SubPage node the mutation took out takes its mounted pages with it.
+        subPages.sweep()
+        structureChanged()
+    }
+
+    /** The node tree changed: forget the SubPages that left, then draw every node again. */
+    private fun structureChanged() {
+        val left = subPageSlots.values.filter { !isMounted(it) }
+        for (slot in left) {
+            slot.job?.cancel()
+            subPageSlots.remove(slot.mounts.subPageKey)
+        }
         structureRevision += 1
         for (listener in structureListeners.toList()) listener()
+    }
+
+    // MARK: Sub-pages
+
+    /**
+     * The sub-pages mounted in this page (contract S3, `schema/fixtures/subpage/README.md`): their nodes are
+     * in [renderer] and their state in [store], under a prefix per mounted page.
+     */
+    internal val subPages: SubPageHost = SubPageHost(renderer, store)
+
+    /** What the SubPage widgets of this page hold besides their mounted pages, by node id. */
+    private val subPageSlots = HashMap<String, SubPageSlot>()
+
+    /** The page route, when the client has one: sub-pages are fetched through it. */
+    private val pageClient: OrcaClient? = client as? OrcaClient
+
+    private fun isMounted(slot: SubPageSlot): Boolean = subPages.mounts(slot.mounts.subPageKey) === slot.mounts
+
+    /**
+     * The slot of the SubPage node [id], registered the first time it is drawn. It lives as long as the node
+     * is in the page, not as long as the widget is composed: a page under a pushed one leaves the composition
+     * and keeps its sub-pages.
+     */
+    internal fun subPage(id: String): SubPageSlot {
+        subPageSlots[id]?.takeIf(::isMounted)?.let { return it }
+        return SubPageSlot(subPages.register(id)).also { subPageSlots[id] = it }
+    }
+
+    /**
+     * The SubPage widget's own fetch (S4), a replace: nothing when [location] (`SubPage.request`) is the one
+     * it last asked for. What is mounted stays while it runs; a failure is drawn by the widget
+     * ([SubPageSlot.error]). An answer is dropped when a newer fetch started, an `updateSubPage` overtook it or
+     * the SubPage left the page; the fetch it overtakes is cancelled.
+     */
+    internal fun loadSubPage(slot: SubPageSlot, location: String) {
+        if (slot.location == location) return
+        slot.location = location
+        slot.job?.cancel()
+        val load = ++slot.load
+        slot.job = scope.launch {
+            try {
+                val page = fetchSubPage(location)
+                if (slot.load == load) mount(slot, "replace", page)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (slot.load == load && isMounted(slot)) slot.error = e.message ?: "$e"
+            }
+        }
+    }
+
+    /**
+     * `updateSubPage` (S7). An id no SubPage of the page has: nothing. The old content stays while the fetch
+     * runs; a failed fetch leaves it and is thrown to the action chain. `join` mounts the page after the
+     * others, anything else replaces them.
+     */
+    private suspend fun updateSubPage(id: String, pageId: String, params: Map<String, JsonValue>?, mode: String) {
+        val slot = subPageSlots[id]?.takeIf(::isMounted) ?: return
+        val page = fetchSubPage(SubPage.request(pageId, params).location)
+        // The update wins over a fetch of the widget's own that is still out.
+        slot.load += 1
+        slot.job?.cancel()
+        mount(slot, mode, page)
+    }
+
+    /** S4: the normal page route, with the app state posted as on any page fetch. */
+    private suspend fun fetchSubPage(location: String): PageResponse {
+        val client = pageClient ?: throw IllegalStateException("SubPage needs an OrcaClient to fetch its page")
+        return client.fetchPage(location, store.state.app)
+    }
+
+    /** Mounts a fetched page, unless the SubPage left the page meanwhile, and draws the tree again. */
+    private fun mount(slot: SubPageSlot, mode: String, page: PageResponse) {
+        if (!isMounted(slot)) return
+        subPages.mount(slot.mounts.subPageKey, mode, page)
+        slot.error = null
+        structureChanged()
     }
 
     /**
@@ -346,6 +441,24 @@ public class OrcaPageModel(
          */
         val INERT_ACTION: Action = Action.Unknown(JsonValue.Null)
     }
+}
+
+/**
+ * What one SubPage node holds while it is in its page: its mounted pages ([mounts], the core's) and the state
+ * of its own fetch. Main thread only.
+ */
+internal class SubPageSlot(val mounts: SubPageMounts) {
+    /** The location the widget last asked for; null before its first fetch. */
+    var location: String? = null
+
+    /** Counts the fetches for this SubPage; an answer that is no longer the latest is dropped. */
+    var load: Int = 0
+
+    /** The widget's own fetch, while it runs. */
+    var job: Job? = null
+
+    /** Why the widget's own fetch failed, drawn in the place of the pages; cleared by the next mount (Compose state). */
+    var error: String? by mutableStateOf(null)
 }
 
 /**
