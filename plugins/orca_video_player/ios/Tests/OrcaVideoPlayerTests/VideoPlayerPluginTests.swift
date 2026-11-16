@@ -9,6 +9,9 @@ import UIKit
 #elseif canImport(AppKit)
 import AppKit
 #endif
+#if os(iOS)
+import AVFoundation
+#endif
 
 import OrcaGateway
 @testable import OrcaVideoPlayer
@@ -531,6 +534,77 @@ final class VideoPlayerPluginTests: XCTestCase {
         XCTAssertEqual(h.made.count, 3, "back on screen, a new player")
         XCTAssertFalse(state.initialized)
     }
+
+    #if os(iOS)
+    // MARK: The audio session
+
+    /// The app's audio session (video_player_avfoundation's FVPAVAudioSession),
+    /// scripted: `set` is each category it was set to.
+    @MainActor final class FakeAudioSession: VideoAudioSession {
+        private(set) var category: AVAudioSession.Category
+        private(set) var categoryOptions: AVAudioSession.CategoryOptions
+        var fails = false
+        private(set) var set: [AVAudioSession.Category] = []
+
+        init(_ category: AVAudioSession.Category = .soloAmbient, _ options: AVAudioSession.CategoryOptions = []) {
+            self.category = category
+            categoryOptions = options
+        }
+
+        func setCategory(_ category: AVAudioSession.Category, options: AVAudioSession.CategoryOptions) throws {
+            set.append(category)
+            if fails { throw URLError(.cannotLoadFromNetwork) }
+            self.category = category
+            categoryOptions = options
+        }
+    }
+
+    func players(_ session: FakeAudioSession) -> VideoPlayers {
+        VideoPlayers(makePlayback: { FakePlayback(url: $0) }, audioSession: session)
+    }
+
+    func testC17_2_S_OnIOSTheFirstPlayerToInitializeSetsTheAudioSessionToPlaybackAndNotBefore() throws {
+        let session = FakeAudioSession()
+        let players = self.players(session)
+        _ = VideoPlayerPlugin(players: players).widgets
+        let state = VideoPlayerState(players: players)
+        XCTAssertEqual(session.set, [], "not before a player initializes")
+
+        state.appear(options())
+        XCTAssertEqual(session.set, [.playback], "playback, so the video is heard with the Ring/Silent switch on Silent")
+        XCTAssertEqual(session.categoryOptions, [], "no mixWithOthers: Orca passes video_player no VideoPlayerOptions")
+        XCTAssertEqual((state.controller?.playback as? FakePlayback)?.calls, ["initialize"])
+
+        let second = VideoPlayerState(players: players)
+        second.appear(options(playerId: "second"))
+        state.change(options(url: Self.otherClip))
+        XCTAssertEqual(session.set, [.playback], "once, as video_player inits its platform once")
+
+        let failing = FakeAudioSession()
+        failing.fails = true
+        let quiet = VideoPlayerState(players: self.players(failing))
+        quiet.appear(options())
+        XCTAssertEqual(failing.set, [.playback])
+        try XCTUnwrap(quiet.controller?.playback as? FakePlayback).send(Self.ready)
+        XCTAssertTrue(quiet.initialized, "a session that cannot be set fails no playback")
+        XCTAssertFalse(quiet.hasError)
+    }
+
+    func testC17_2_S_OnIOSTheSessionUpgradeKeepsRecordingAndTheOptionsAndSetsNothingWhenNothingChanges() {
+        for (from, kept, set) in [
+            (.soloAmbient, [], [.playback]),
+            (.ambient, [.duckOthers], [.playback]),
+            (.record, [.allowBluetoothA2DP], [.playAndRecord]),
+            (.playAndRecord, [.defaultToSpeaker], []),
+            (.playback, [.mixWithOthers], []),
+        ] as [(AVAudioSession.Category, AVAudioSession.CategoryOptions, [AVAudioSession.Category])] {
+            let session = FakeAudioSession(from, kept)
+            VideoPlayerState(players: players(session)).appear(options())
+            XCTAssertEqual(session.set, set, "from \(from.rawValue)")
+            XCTAssertEqual(session.categoryOptions, kept, "from \(from.rawValue): the options kept")
+        }
+    }
+    #endif
 
     // MARK: On screen
 

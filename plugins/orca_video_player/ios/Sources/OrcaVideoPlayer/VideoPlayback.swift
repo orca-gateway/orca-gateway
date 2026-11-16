@@ -164,3 +164,32 @@ final class AVVideoPlayback: VideoPlayback {
     }
 }
 #endif
+
+#if os(iOS)
+import AVFoundation
+
+/// What the plugin asks of the app's audio session (iOS only: macOS has
+/// none): `AVAudioSession.sharedInstance()` in an app, a fake in the tests.
+@MainActor
+protocol VideoAudioSession: AnyObject, Sendable {
+    var category: AVAudioSession.Category { get }
+    var categoryOptions: AVAudioSession.CategoryOptions { get }
+    func setCategory(_ category: AVAudioSession.Category, options: AVAudioSession.CategoryOptions) throws
+}
+
+extension AVAudioSession: VideoAudioSession {}
+
+extension VideoAudioSession {
+    /// video_player_avfoundation 2.9.4's upgradeAudioSessionCategory as its
+    /// initialize calls it (FVPVideoPlayerPlugin.m:174-197, 199-205): to
+    /// playback, so the video is heard with the Ring/Silent switch on Silent,
+    /// never taking recording away (record becomes playAndRecord), the
+    /// options as they are, and nothing set when the category is already it.
+    func upgradeToPlayback() throws {
+        let upgraded: AVAudioSession.Category = category == .record || category == .playAndRecord
+            ? .playAndRecord : .playback
+        guard upgraded != category else { return }
+        try setCategory(upgraded, options: categoryOptions)
+    }
+}
+#endif

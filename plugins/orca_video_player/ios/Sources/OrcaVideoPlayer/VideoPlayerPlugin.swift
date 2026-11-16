@@ -1,8 +1,10 @@
 #if canImport(SwiftUI) && canImport(AVFoundation)
+import AVFoundation
 import Combine
 import CoreGraphics
 import Foundation
 import OrcaGateway
+import os
 import SwiftUI
 
 /// Video playback, the Swift port of the Flutter `VideoPlayerPlugin`
@@ -21,9 +23,15 @@ public struct VideoPlayerPlugin: OrcaPlugin {
     /// What the widget and the actions share (Flutter's static map).
     let players: VideoPlayers
 
-    /// Plays with AVPlayer.
+    /// Plays with AVPlayer; on iOS the first player sets the shared audio
+    /// session to playback, as Flutter's video_player does.
     public init() {
+        #if os(iOS)
+        self.init(players: VideoPlayers(
+            makePlayback: { AVVideoPlayback(url: $0) }, audioSession: AVAudioSession.sharedInstance()))
+        #else
         self.init(players: VideoPlayers(makePlayback: { AVVideoPlayback(url: $0) }))
+        #endif
     }
 
     init(players: VideoPlayers) {
@@ -98,9 +106,46 @@ struct VideoPlayerEvent: Equatable {
 final class VideoPlayers {
     private(set) var controllers: [String: VideoController] = [:]
     let makePlayback: @MainActor @Sendable (String) -> VideoPlayback
+    #if os(iOS)
+    private static let log = Logger(subsystem: "com.orcagateway", category: "orca_video_player")
+    /// The audio session the first player to initialize upgrades; nil, so
+    /// left as it is, unless given.
+    private let audioSession: VideoAudioSession?
+    private var audioSessionUpgraded = false
+    #endif
 
     nonisolated init(makePlayback: @escaping @MainActor @Sendable (String) -> VideoPlayback) {
         self.makePlayback = makePlayback
+        #if os(iOS)
+        audioSession = nil
+        #endif
+    }
+
+    #if os(iOS)
+    nonisolated init(
+        makePlayback: @escaping @MainActor @Sendable (String) -> VideoPlayback, audioSession: VideoAudioSession
+    ) {
+        self.makePlayback = makePlayback
+        self.audioSession = audioSession
+    }
+    #endif
+
+    /// What video_player_avfoundation's initialize does to the audio session
+    /// (FVPVideoPlayerPlugin.m:199-205), at the moment Flutter calls it:
+    /// video_player inits its platform once, as its first controller
+    /// initializes, before the player is made (video_player.dart:142-152,
+    /// 588). A failure is logged and the video plays on, as Flutter's (which
+    /// passes no error out).
+    func upgradeAudioSession() {
+        #if os(iOS)
+        guard let audioSession, !audioSessionUpgraded else { return }
+        audioSessionUpgraded = true
+        do {
+            try audioSession.upgradeToPlayback()
+        } catch {
+            Self.log.error("upgradeAudioSessionCategory failed: \(String(describing: error), privacy: .public)")
+        }
+        #endif
     }
 
     /// The node's view, its player made when it comes on screen.
@@ -381,6 +426,7 @@ final class VideoPlayerState: ObservableObject {
 
     private func initController() {
         guard let options else { return }
+        players.upgradeAudioSession()
         let controller = VideoController(playback: players.makePlayback(options.url), looping: options.looping)
         self.controller = controller
         controller.onUpdate = { [weak self, unowned controller] in self?.controllerUpdated(controller.value) }
