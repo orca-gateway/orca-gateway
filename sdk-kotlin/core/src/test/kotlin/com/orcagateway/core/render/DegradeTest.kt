@@ -20,8 +20,9 @@ import kotlin.test.assertNull
 /**
  * S9.2: the three fallback policies and the 426 gate, on pages a real engine
  * produced for the Kotlin caps vector (`examples/server/record-page.ts
- * --sdk kotlin`, the capability-demo `degrade` page with a Checkbox Android
- * lacks). Mirrors Swift's DegradeTests; the engine shapes are pinned by
+ * --sdk kotlin`, the capability-demo `degrade` page with an
+ * UnregisteredPluginWidget, a plugin widget no app registers, so no SDK
+ * advertises it). Mirrors Swift's DegradeTests; the engine shapes are pinned by
  * engine/test/caps-policy-e2e.test.ts, these tests pin what the Kotlin
  * renderer makes of them. The registry is the build's own
  * ([WidgetRegistry]'s default, the caps vector's widgets), as Swift's is.
@@ -46,10 +47,10 @@ class DegradeTest {
     fun d1_gracefulStripsTheNodeAndKeepsItsSiblings() {
         val tree = tree("degrade-graceful")
         assertEquals("Scaffold", tree.type)
-        assertNull(tree.first { it.type == "Checkbox" || it.type == "FallbackPrompt" })
+        assertNull(tree.first { it.type == "UnregisteredPluginWidget" || it.type == "FallbackPrompt" })
         val column = assertNotNull(tree.first { it.type == "Column" })
         assertEquals(
-            listOf("Above the checkbox.", "Below the checkbox."),
+            listOf("Above the plugin widget.", "Below the plugin widget."),
             column.children.map { it.props["data"]?.stringValue },
         )
     }
@@ -64,15 +65,21 @@ class DegradeTest {
         assertEquals("FallbackPrompt", banner.type)
         assertEquals(j("warn"), banner.props["severity"])
         assertEquals(j("Some content needs an update"), banner.props["title"])
-        assertEquals("Scaffold", tree.children[1].type)
-        // warn keeps the authored tree, Checkbox included; the client then
-        // draws it as its own "Unsupported content" prompt, as Flutter does.
-        val checkbox = assertNotNull(tree.first { it.node.degradedFrom == "Checkbox" })
-        assertEquals("FallbackPrompt", checkbox.type)
-        assertEquals(j("Unsupported content"), checkbox.props["title"])
+        // The banner names the one feature the engine found missing.
         assertEquals(
-            listOf("Above the checkbox.", "Below the checkbox."),
-            texts(tree).filter { it.endsWith("checkbox.") },
+            "Parts of this screen use features that your current app version can't fully render " +
+                "(widget.UnregisteredPluginWidget). Please update when convenient for the full experience.",
+            banner.props["body"]?.stringValue,
+        )
+        assertEquals("Scaffold", tree.children[1].type)
+        // warn keeps the authored tree, the plugin widget included; the client
+        // then draws it as its own "Unsupported content" prompt, as Flutter does.
+        val plugin = assertNotNull(tree.first { it.node.degradedFrom == "UnregisteredPluginWidget" })
+        assertEquals("FallbackPrompt", plugin.type)
+        assertEquals(j("Unsupported content"), plugin.props["title"])
+        assertEquals(
+            listOf("Above the plugin widget.", "Below the plugin widget."),
+            texts(tree).filter { it.endsWith("plugin widget.") },
         )
     }
 

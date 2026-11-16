@@ -61,8 +61,8 @@ class GoldenTest {
      * G1 (Swift's T4.1): the warn policy's page pins the orange warn
      * FallbackPrompt banner `__caps_warn_banner__` stretched across the top
      * of the root Column, then the page's Scaffold (the "Degrade" app bar and
-     * its padded Column) under it, with the Checkbox, which Kotlin does not
-     * draw, as its own warn prompt between the two texts.
+     * its padded Column) under it, with the UnregisteredPluginWidget, which no
+     * SDK draws, as its own warn prompt between the two texts.
      */
     @Test
     fun g1_theWarnPolicyPageDrawsItsBannerOverThePage() {
