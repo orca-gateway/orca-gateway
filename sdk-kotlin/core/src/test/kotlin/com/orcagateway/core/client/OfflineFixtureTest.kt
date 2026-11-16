@@ -3,7 +3,6 @@ package com.orcagateway.core.client
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.support.Fixtures
 import com.orcagateway.core.support.runSuspend
-import java.io.File
 import java.net.ConnectException
 import java.net.URI
 import kotlin.test.Test
@@ -63,14 +62,11 @@ private fun text(value: JsonValue): String = value.encoded()
  * Swift twin: OfflineFixtureTests.
  */
 class OfflineFixtureTest {
-    private val dir = File(Fixtures.schema, "fixtures/offline")
-
-    private fun files(): List<File> = dir.listFiles { f -> f.extension == "json" }.orEmpty().sortedBy { it.name }
-
     /** Every case with its label, by file name then case order. */
-    private fun cases(): List<Pair<String, JsonValue>> = files().flatMap { file ->
-        val fixture = JsonValue.parse(file.readText())
-        fixture["cases"].arrayValue.orEmpty().map { "${file.name} · ${it["name"].stringValue}" to it }
+    private fun cases(
+        files: List<Pair<String, JsonValue>> = Fixtures.files("offline"),
+    ): List<Pair<String, JsonValue>> = files.flatMap { (name, fixture) ->
+        fixture["cases"].arrayValue.orEmpty().map { "$name · ${it["name"].stringValue}" to it }
     }
 
     /** Runs the cases of [row] (Flutter's case-to-row table) and returns how many ran. */
@@ -108,15 +104,14 @@ class OfflineFixtureTest {
 
     @Test
     fun c14_everyCaseOfEveryOfflineFixtureFilePasses() {
-        val files = files()
-        assertTrue(files.isNotEmpty(), "no file in $dir")
+        val files = Fixtures.files("offline")
+        assertTrue(files.isNotEmpty(), "no file in schema/fixtures/offline")
         val results = HashSet<String>()
-        for (file in files) {
-            val fixture = JsonValue.parse(file.readText())
-            assertEquals(setOf("name", "description", "cases"), fixture.objectValue?.keys, file.name)
-            assertTrue(fixture["cases"].arrayValue.orEmpty().isNotEmpty(), "${file.name}: no case")
+        for ((name, fixture) in files) {
+            assertEquals(setOf("name", "description", "cases"), fixture.objectValue?.keys, name)
+            assertTrue(fixture["cases"].arrayValue.orEmpty().isNotEmpty(), "$name: no case")
         }
-        for ((label, case) in cases()) {
+        for ((label, case) in cases(files)) {
             assertWellFormed(label, case)
             val result = case["expected"]["result"]
             results.add(result.stringValue ?: result.objectValue!!.keys.single())
