@@ -275,12 +275,13 @@ internal class NodeObserver(private val model: OrcaPageModel, private val id: St
         subscription = if (next.isEmpty()) null else model.store.subscribe(next) { watchedChanged() }
     }
 
-    /** A watched key changed: redraw, and tell DevTools. */
+    /**
+     * A watched key changed: redraw. DevTools hears of it from the core,
+     * whose `PageRenderer.resolve` reports the traced `widget_rebuild` when
+     * the redraw resolves the node.
+     */
     private fun watchedChanged() {
         revision += 1
-        if (!OrcaDebug.isEnabled) return
-        val node = model.renderer.node(id) ?: return
-        OrcaDebug.report { DevToolsEvent.widgetRebuild(widgetId = id, widgetType = node.type, watches = watches) }
     }
 
     private fun structureChanged() {
