@@ -19,19 +19,15 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import com.orcagateway.core.render.PageSnap
 import com.orcagateway.core.render.ResolvedNode
-import com.orcagateway.core.render.ScrollEvent
 import com.orcagateway.core.render.ScrollMetrics
-import com.orcagateway.core.render.ScrollObserver
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.style.Props
@@ -53,9 +49,11 @@ import kotlin.math.abs
  * fling, and a fling only past both of Flutter's gates, 50 dp a second and
  * 18 dp of travel in the last 100 ms, not Compose's 400 dp a second) with
  * Flutter's settling spring. Not snapping, a lazy row (column) of viewport-sized
- * items with the platform's free fling. A node with a scroll trigger gets
+ * items with the platform's free fling. Both report their scrolling
+ * through [LazyScrollReports]: a node with a scroll trigger gets
  * onScrollBegin, onScrolling and onScrollEnd (`wrapScrollNotifier`) with
- * offset = (page + fraction) x page extent and the viewport, in dp.
+ * offset = (page + fraction) x page extent and the viewport, in dp, and a
+ * Scrollbar the PageView sits directly in draws its thumb.
  *
  * On a main axis with no limit (in a Row, Column or scroll view along it)
  * Flutter's viewport asserts and draws nothing useful, and Compose's lazy
@@ -71,7 +69,8 @@ internal fun PageViewWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
     BoxWithConstraints(modifier, propagateMinConstraints = true) {
         val bounded = if (vertical) constraints.hasBoundedHeight else constraints.hasBoundedWidth
         when {
-            !bounded -> EagerPages(pages, model, vertical)
+            // As ListView's: nothing inside reports to a Scrollbar around it.
+            !bounded -> CompositionLocalProvider(LocalScrollbarHost provides null) { EagerPages(pages, model, vertical) }
             Props.bool(node["pageSnapping"]) ?: true -> SnappingPages(node, model, pages, vertical, reverse)
             else -> FreePages(node, model, pages, vertical, reverse)
         }
@@ -112,27 +111,28 @@ private fun SnappingPages(
             }
         }
     }
-    if (node.actions.keys.any { it in ScrollEvent.TRIGGERS }) {
-        PageTriggers(node, model, state) {
-            val page = state.layoutInfo.pageSize / density.toDouble()
-            val viewport = state.layoutInfo.viewportSize.let { if (vertical) it.height else it.width } / density.toDouble()
-            ScrollMetrics(
-                offset = (state.currentPage + state.currentPageOffsetFraction) * page,
-                maxExtent = (state.pageCount - 1).coerceAtLeast(0) * page,
-                viewportDimension = viewport,
-            ) to state.isScrollInProgress
+    val content: @Composable (Int) -> Unit = { index -> pages.getOrNull(index)?.let { Page(it, model, Modifier.fillMaxSize()) } }
+    LazyScrollReports(node, model, state, !vertical, reverse, { state.metrics(it, vertical) }) {
+        if (vertical) {
+            VerticalPager(
+                state, sampling, beyondViewportPageCount = 0, flingBehavior = fling, reverseLayout = reverse,
+            ) { content(it) }
+        } else {
+            HorizontalPager(
+                state, sampling, beyondViewportPageCount = 0, flingBehavior = fling, reverseLayout = reverse,
+            ) { content(it) }
         }
     }
-    val content: @Composable (Int) -> Unit = { index -> pages.getOrNull(index)?.let { Page(it, model, Modifier.fillMaxSize()) } }
-    if (vertical) {
-        VerticalPager(
-            state, sampling, beyondViewportPageCount = 0, flingBehavior = fling, reverseLayout = reverse,
-        ) { content(it) }
-    } else {
-        HorizontalPager(
-            state, sampling, beyondViewportPageCount = 0, flingBehavior = fling, reverseLayout = reverse,
-        ) { content(it) }
-    }
+}
+
+/** Flutter's metrics of a snapping pager in dp: offset (page + fraction) x page extent, [pageCount] - 1 pages to scroll. */
+private fun PagerState.metrics(density: Double, vertical: Boolean): ScrollMetrics {
+    val page = layoutInfo.pageSize / density
+    return ScrollMetrics(
+        offset = (currentPage + currentPageOffsetFraction) * page,
+        maxExtent = (pageCount - 1).coerceAtLeast(0) * page,
+        viewportDimension = layoutInfo.viewportSize.let { if (vertical) it.height else it.width } / density,
+    )
 }
 
 @Composable
@@ -144,24 +144,14 @@ private fun FreePages(
     reverse: Boolean,
 ) {
     val state = rememberLazyListState()
-    val density = LocalDensity.current.density
-    if (node.actions.keys.any { it in ScrollEvent.TRIGGERS }) {
-        PageTriggers(node, model, state) {
-            val info = state.layoutInfo
-            // Every item is the viewport's size.
-            val page = (if (vertical) info.viewportSize.height else info.viewportSize.width).toDouble()
-            ScrollMetrics(
-                offset = (state.firstVisibleItemIndex * page + state.firstVisibleItemScrollOffset) / density,
-                maxExtent = (pages.size - 1).coerceAtLeast(0) * page / density,
-                viewportDimension = page / density,
-            ) to state.isScrollInProgress
-        }
-    }
     val item: @Composable LazyItemScope.(Int) -> Unit = { index -> Page(pages[index], model, Modifier.fillParentMaxSize()) }
-    if (vertical) {
-        LazyColumn(state = state, reverseLayout = reverse) { items(pages.size) { item(it) } }
-    } else {
-        LazyRow(state = state, reverseLayout = reverse) { items(pages.size) { item(it) } }
+    // Every item is the viewport's size, so a list's metrics are exact.
+    LazyScrollReports(node, model, state, !vertical, reverse, { state.metrics(it) }) {
+        if (vertical) {
+            LazyColumn(state = state, reverseLayout = reverse) { items(pages.size) { item(it) } }
+        } else {
+            LazyRow(state = state, reverseLayout = reverse) { items(pages.size) { item(it) } }
+        }
     }
 }
 
@@ -169,23 +159,6 @@ private fun FreePages(
 @Composable
 private fun Page(id: String, model: OrcaPageModel, modifier: Modifier) {
     Box(modifier, propagateMinConstraints = true) { NodeView(id, model) }
-}
-
-/**
- * The scroll triggers of a PageView's node from [sample] (its metrics and
- * whether a scroll is under way) through a [ScrollObserver], as
- * SingleChildScrollView's. It draws nothing.
- */
-@Composable
-private fun PageTriggers(node: ResolvedNode, model: OrcaPageModel, key: Any, sample: () -> Pair<ScrollMetrics, Boolean>) {
-    val current = rememberUpdatedState(node)
-    val latest = rememberUpdatedState(sample)
-    LaunchedEffect(model, key) {
-        val observer = ScrollObserver()
-        snapshotFlow { latest.value() }.collect { (metrics, inProgress) ->
-            for (event in observer.observe(metrics, inProgress)) model.fire(event.trigger, current.value, event.eventData)
-        }
-    }
 }
 
 /**

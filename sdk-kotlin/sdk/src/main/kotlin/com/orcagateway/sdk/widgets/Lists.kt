@@ -23,7 +23,9 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -68,7 +70,7 @@ import com.orcagateway.core.render.GridCells as OrcaGridCells
  * (Flutter's BoxScrollView adds the MediaQuery padding on the scroll axis,
  * widgets/scroll_view.dart:911-944). `primary` has no Android counterpart
  * and `separator` arrives as a raw widget Flutter cannot read: both
- * ignored. A node with a scroll trigger gets [LazyScrollTriggers].
+ * ignored. It reports its scrolling through [LazyScrollReports].
  */
 @Composable
 internal fun ListViewWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -85,19 +87,23 @@ internal fun ListViewWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
         val bounded = if (horizontal) constraints.hasBoundedWidth else constraints.hasBoundedHeight
         if (!bounded) {
             val children = if (reverse) node.childIds.asReversed() else node.childIds
-            if (horizontal) {
-                Row(Modifier.fillMaxHeight().padding(padding)) { for (id in children) NodeView(id, model, item) }
-            } else {
-                Column(Modifier.fillMaxWidth().padding(padding)) { for (id in children) NodeView(id, model, item) }
+            // Not scrolling, but still the scroll view a Scrollbar around it follows: nothing inside reports.
+            CompositionLocalProvider(LocalScrollbarHost provides null) {
+                if (horizontal) {
+                    Row(Modifier.fillMaxHeight().padding(padding)) { for (id in children) NodeView(id, model, item) }
+                } else {
+                    Column(Modifier.fillMaxWidth().padding(padding)) { for (id in children) NodeView(id, model, item) }
+                }
             }
         } else {
             val state = rememberLazyListState()
-            if (hasScrollTriggers(node)) LazyScrollTriggers(node, model, state) { density -> state.metrics(density) }
             val fill = viewSize(horizontal, shrinkWrap)
-            if (horizontal) {
-                LazyRow(fill, state, padding, reverseLayout = reverse) { items(node.childIds) { NodeView(it, model, item) } }
-            } else {
-                LazyColumn(fill, state, padding, reverseLayout = reverse) { items(node.childIds) { NodeView(it, model, item) } }
+            LazyScrollReports(node, model, state, horizontal, reverse, { density -> state.metrics(density) }) {
+                if (horizontal) {
+                    LazyRow(fill, state, padding, reverseLayout = reverse) { items(node.childIds) { NodeView(it, model, item) } }
+                } else {
+                    LazyColumn(fill, state, padding, reverseLayout = reverse) { items(node.childIds) { NodeView(it, model, item) } }
+                }
             }
         }
     }
@@ -118,7 +124,7 @@ internal fun ListViewWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
  * gives empty cells. A null padding adds no safe-area inset (Flutter's
  * BoxScrollView adds the MediaQuery padding on the scroll axis,
  * widgets/scroll_view.dart:911-944). `primary` is ignored; GridView has no
- * `reverse`. A node with a scroll trigger gets [LazyScrollTriggers].
+ * `reverse`. It reports its scrolling through [LazyScrollReports].
  */
 @Composable
 internal fun GridViewWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -137,29 +143,29 @@ internal fun GridViewWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
     )
     BoxWithConstraints(modifier, propagateMinConstraints = true) {
         if (!constraints.hasBoundedWidth || !constraints.hasBoundedHeight) {
-            EagerGrid(node, model, cells)
+            // As ListView's: nothing inside reports to a Scrollbar around it.
+            CompositionLocalProvider(LocalScrollbarHost provides null) { EagerGrid(node, model, cells) }
         } else {
             val cell = cells.frame(0, maxWidth.value.toDouble(), maxHeight.value.toDouble())
             val item = Modifier.size(cell.width.dp, cell.height.dp)
             val state = rememberLazyGridState()
-            if (hasScrollTriggers(node)) {
-                LazyScrollTriggers(node, model, state) { density -> state.metrics(density, cells.crossCount) }
-            }
             val fill = viewSize(horizontal, shrinkWrap)
             val lines = ComposeGridCells.Fixed(cells.crossCount)
             val padding = insets.paddingValues()
-            if (horizontal) {
-                LazyHorizontalGrid(
-                    lines, fill, state, padding,
-                    horizontalArrangement = Arrangement.spacedBy(mainSpacing.dp),
-                    verticalArrangement = Arrangement.spacedBy(crossSpacing.dp),
-                ) { gridItems(node.childIds) { NodeView(it, model, item) } }
-            } else {
-                LazyVerticalGrid(
-                    lines, fill, state, padding,
-                    verticalArrangement = Arrangement.spacedBy(mainSpacing.dp),
-                    horizontalArrangement = Arrangement.spacedBy(crossSpacing.dp),
-                ) { gridItems(node.childIds) { NodeView(it, model, item) } }
+            LazyScrollReports(node, model, state, horizontal, reverse = false, { density -> state.metrics(density, cells.crossCount) }) {
+                if (horizontal) {
+                    LazyHorizontalGrid(
+                        lines, fill, state, padding,
+                        horizontalArrangement = Arrangement.spacedBy(mainSpacing.dp),
+                        verticalArrangement = Arrangement.spacedBy(crossSpacing.dp),
+                    ) { gridItems(node.childIds) { NodeView(it, model, item) } }
+                } else {
+                    LazyVerticalGrid(
+                        lines, fill, state, padding,
+                        verticalArrangement = Arrangement.spacedBy(mainSpacing.dp),
+                        horizontalArrangement = Arrangement.spacedBy(crossSpacing.dp),
+                    ) { gridItems(node.childIds) { NodeView(it, model, item) } }
+                }
             }
         }
     }
@@ -203,30 +209,41 @@ private fun viewSize(horizontal: Boolean, shrinkWrap: Boolean): Modifier = when 
     else -> Modifier.fillMaxWidth()
 }
 
-private fun hasScrollTriggers(node: ResolvedNode): Boolean = node.actions.keys.any { it in ScrollEvent.TRIGGERS }
-
 /**
- * onScrollBegin, onScrolling and onScrollEnd of a lazy list or grid,
- * Flutter `wrapScrollNotifier`, as SingleChildScrollView's (Layout.kt):
- * each change of [metrics] (at the screen's density) or of [state]'s
- * `isScrollInProgress` goes through a [ScrollObserver]. It draws nothing.
+ * What a lazy list, grid or pager tells of its scrolling, from [metrics]
+ * (at the screen's density) and [state]'s `isScrollInProgress`, as
+ * SingleChildScrollView does (Layout.kt): its node's onScrollBegin,
+ * onScrolling and onScrollEnd (Flutter `wrapScrollNotifier`) through a
+ * [ScrollObserver], when it has one, and the Scrollbar it sits directly
+ * in, which draws its thumb ([ReportToScrollbar]: [horizontal], and
+ * [reverse] when offset 0 is at the far end). [content], the view itself,
+ * is built with no Scrollbar to report to.
  */
 @Composable
-private fun LazyScrollTriggers(
+internal fun LazyScrollReports(
     node: ResolvedNode,
     model: OrcaPageModel,
     state: ScrollableState,
+    horizontal: Boolean,
+    reverse: Boolean,
     metrics: (density: Double) -> ScrollMetrics,
+    content: @Composable () -> Unit,
 ) {
-    val current = rememberUpdatedState(node)
     val measure = rememberUpdatedState(metrics)
     val density = LocalDensity.current.density.toDouble()
-    LaunchedEffect(model, state, density) {
-        val observer = ScrollObserver()
-        snapshotFlow { measure.value(density) to state.isScrollInProgress }.collect { (sample, inProgress) ->
-            for (event in observer.observe(sample, inProgress)) model.fire(event.trigger, current.value, event.eventData)
+    if (node.actions.keys.any { it in ScrollEvent.TRIGGERS }) {
+        val current = rememberUpdatedState(node)
+        LaunchedEffect(model, state, density) {
+            val observer = ScrollObserver()
+            snapshotFlow { measure.value(density) to state.isScrollInProgress }.collect { (sample, inProgress) ->
+                for (event in observer.observe(sample, inProgress)) model.fire(event.trigger, current.value, event.eventData)
+            }
         }
     }
+    val source = remember(state, horizontal, reverse, density) {
+        ScrollbarSource(horizontal, reverse, metrics = { measure.value(density) }, inProgress = { state.isScrollInProgress })
+    }
+    ReportToScrollbar(source, content)
 }
 
 /**
@@ -235,7 +252,7 @@ private fun LazyScrollTriggers(
  * length: exact with `itemExtent` or rows of one length, an estimate
  * otherwise.
  */
-private fun LazyListState.metrics(density: Double): ScrollMetrics {
+internal fun LazyListState.metrics(density: Double): ScrollMetrics {
     val info = layoutInfo
     val rows = info.visibleItemsInfo
     val stride = if (rows.isEmpty()) 0.0 else rows.sumOf { it.size }.toDouble() / rows.size + info.mainAxisItemSpacing
