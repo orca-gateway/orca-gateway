@@ -214,6 +214,39 @@ final _grab = _button('grab', {'type': 'grab'});
 double _top(WidgetTester tester, String text) =>
     tester.getTopLeft(find.text(text)).dy;
 
+/// Width of the page root (the nearest Column) that holds [text].
+double _rootWidth(WidgetTester tester, String text) => tester
+    .getSize(
+      find.ancestor(of: find.text(text), matching: find.byType(Column)).first,
+    )
+    .width;
+
+/// A sub-page `detail/a` that holds a nested SubPage `inner` showing `leaf/x`.
+Map<String, dynamic> _outer() => _page(
+  'detail/a',
+  [
+    _node('0', 'Column', children: ['label', 'inner']),
+    _text('label', 'Page a'),
+    _node('inner', 'SubPage', childMode: 'single', props: {'pageId': 'leaf/x'}),
+  ],
+  state: {'count': 5},
+);
+
+/// The nested page: its own `n` (1), shown, and the buttons [buttons].
+Map<String, dynamic> _leaf(List<List<Map<String, dynamic>>> buttons) => _page(
+  'leaf/x',
+  [
+    _node(
+      '0',
+      'Column',
+      children: ['n', for (final b in buttons) b.first['id'] as String],
+    ),
+    _text('n', _pageRef('n'), watches: ['n']),
+    for (final b in buttons) ...b,
+  ],
+  state: {'n': 1},
+);
+
 void main() {
   testWidgets('C-flutter: params reach the request as the query', (
     tester,
@@ -365,6 +398,10 @@ void main() {
         'detail:count': 5,
         'detail#1:count': 50,
       });
+      // Each page root gets the width the host gives the SubPage.
+      final host = tester.getSize(find.byType(OrcaPage)).width;
+      expect(_rootWidth(tester, 'Page a'), host);
+      expect(_rootWidth(tester, 'Page c'), host);
     },
   );
 
@@ -628,6 +665,287 @@ void main() {
       expect(mounted(), isEmpty);
       // S8: the state keys are left where they are.
       expect(h.pageState, {'count': 100, 'detail:count': 5});
+    },
+  );
+
+  testWidgets(
+    'C-flutter: a nested SubPage mounts under outer:inner: and a server '
+    'action inside it posts the inner view',
+    (tester) async {
+      final client = _StubClient(
+        {
+          'host': _host(),
+          'detail/a': _outer(),
+          'leaf/x': _leaf([
+            _button('save', {'type': 'serverAction', 'id': 'save'}),
+          ]),
+        },
+        actions: {
+          'save': [_setPage('n', 9)],
+        },
+      );
+      final h = _Harness(client);
+      await h.pump(tester);
+
+      expect(client.fetched, ['host', 'detail/a', 'leaf/x']);
+      expect(h.pageState, {'count': 100, 'detail:count': 5, 'detail:inner:n': 1});
+
+      await h.tap(tester, 'save');
+
+      expect(client.postedPageStates.single, {'n': 1});
+      expect(h.pageState, {'count': 100, 'detail:count': 5, 'detail:inner:n': 9});
+      expect(find.text('9'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'C-flutter: a replace of the outer page draws its nested SubPage anew, '
+    'against fresh state',
+    (tester) async {
+      final client = _StubClient({
+        'host': _host(
+          extraChildren: ['refresh'],
+          extra: _button('refresh', {
+            'type': 'updateSubPage',
+            'subPageId': 'detail',
+            'pageId': 'detail/a',
+            'mode': 'replace',
+          }),
+        ),
+        'detail/a': _outer(),
+        'leaf/x': _leaf([_button('bump', _setPage('n', 2))]),
+      });
+      final h = _Harness(client);
+      await h.pump(tester);
+
+      await h.tap(tester, 'bump');
+      expect(find.text('2'), findsOneWidget);
+      expect(h.pageState['detail:inner:n'], 2);
+
+      await h.tap(tester, 'refresh');
+
+      expect(tester.takeException(), isNull);
+      expect(client.fetched, [
+        'host',
+        'detail/a',
+        'leaf/x',
+        'detail/a',
+        'leaf/x',
+      ]);
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('bump'), findsOneWidget);
+      expect(h.pageState, {'count': 100, 'detail:count': 5, 'detail:inner:n': 1});
+
+      // The new inner page is the one updateSubPage and the actions reach.
+      await h.tap(tester, 'bump');
+      expect(find.text('2'), findsOneWidget);
+      expect(h.pageState['detail:inner:n'], 2);
+    },
+  );
+
+  testWidgets(
+    'C-flutter: nodes added inside a sub-page leave the store with their page',
+    (tester) async {
+      Map<String, dynamic> detail(String tag) {
+        final page = _detail(tag, 5);
+        (page['components'] as List)
+          ..addAll(_button('add', {'type': 'serverAction', 'id': 'add'}))
+          ..[0]['children'] = ['label', 'count', 'add'];
+        return page;
+      }
+
+      final client = _StubClient(
+        {
+          'host': _host(
+            extraChildren: ['grab', 'replace', 'drop'],
+            extra: [
+              ..._grab,
+              ..._button('replace', {
+                'type': 'updateSubPage',
+                'subPageId': 'detail',
+                'pageId': 'detail/b',
+                'mode': 'replace',
+              }),
+              ..._button('drop', {'type': 'deleteComponent', 'id': 'detail'}),
+            ],
+          ),
+          'detail/a': detail('a'),
+          'detail/b': detail('b'),
+        },
+        actions: {
+          'add': [
+            {
+              'type': 'addComponent',
+              'parentId': '0',
+              'components': [_text('added', 'Added')],
+            },
+          ],
+        },
+      );
+      final h = _Harness(client);
+      await h.pump(tester);
+      await h.tap(tester, 'grab');
+
+      Iterable<String> mounted() =>
+          h.store.nodeMap.keys.where((id) => id.startsWith('detail:'));
+      const own = [
+        'detail:0',
+        'detail:label',
+        'detail:count',
+        'detail:add',
+        'detail:add_label',
+      ];
+
+      await h.tap(tester, 'add');
+      expect(find.text('Added'), findsOneWidget);
+      expect(mounted(), unorderedEquals([...own, 'detail:added']));
+
+      await h.tap(tester, 'replace');
+      expect(find.text('Page b'), findsOneWidget);
+      expect(find.text('Added'), findsNothing);
+      expect(mounted(), unorderedEquals(own));
+
+      await h.tap(tester, 'add');
+      expect(mounted(), unorderedEquals([...own, 'detail:added']));
+
+      await h.tap(tester, 'drop');
+      expect(mounted(), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'C-flutter: a host refetch keeps the sub-page nodes and its state value',
+    (tester) async {
+      final detail = _detail('a', 5);
+      (detail['components'] as List)
+        ..addAll(_button('bump', _setPage('count', 6)))
+        ..[0]['children'] = ['label', 'count', 'bump'];
+      final client = _StubClient({
+        'host': _host(
+          extraChildren: ['grab', 'hostBump', 'refetch'],
+          extra: [
+            ..._grab,
+            ..._button('hostBump', _setPage('count', 101)),
+            ..._button('refetch', {'type': 'refetchPage'}),
+          ],
+        ),
+        'detail/a': detail,
+      });
+      final h = _Harness(client);
+      await h.pump(tester);
+      await h.tap(tester, 'grab');
+      await h.tap(tester, 'bump');
+      await h.tap(tester, 'hostBump');
+      expect(h.pageState, {'count': 101, 'detail:count': 6});
+
+      await h.tap(tester, 'refetch');
+
+      expect(client.fetched, ['host', 'detail/a', 'host']);
+      // The host's own keys start again; the mounted page keeps its value.
+      expect(h.pageState, {'count': 100, 'detail:count': 6});
+      expect(
+        h.store.nodeMap.keys.where((id) => id.startsWith('detail:')),
+        unorderedEquals([
+          'detail:0',
+          'detail:label',
+          'detail:count',
+          'detail:bump',
+          'detail:bump_label',
+        ]),
+      );
+      expect(find.text('Page a'), findsOneWidget);
+      expect(find.text('6'), findsOneWidget);
+    },
+  );
+
+  testWidgets('C-flutter: openDialog shows a Dialog node of the sub-page', (
+    tester,
+  ) async {
+    final client = _StubClient({
+      'host': _host(),
+      'detail/a': _page(
+        'detail/a',
+        [
+          _node('0', 'Column', children: ['label', 'open', 'dlg']),
+          _text('label', 'Page a'),
+          ..._button('open', {'type': 'openDialog', 'dialogId': 'dlg'}),
+          _node(
+            'dlg',
+            'Dialog',
+            kind: 'structure',
+            childMode: 'single',
+            children: ['secret'],
+          ),
+          _text('secret', _pageRef('secret'), watches: ['secret']),
+        ],
+        state: {'secret': 77},
+      ),
+    });
+    final h = _Harness(client);
+    await h.pump(tester);
+    expect(find.text('77'), findsNothing);
+
+    await h.tap(tester, 'open');
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('77'), findsOneWidget);
+  });
+
+  testWidgets(
+    'C-flutter: animateForward reaches an AnimatedBuilder of the sub-page',
+    (tester) async {
+      final client = _StubClient({
+        'host': _host(
+          extraChildren: ['grab', 'refresh'],
+          extra: [
+            ..._grab,
+            ..._button('refresh', {
+              'type': 'updateSubPage',
+              'subPageId': 'detail',
+              'pageId': 'detail/a',
+              'mode': 'replace',
+            }),
+          ],
+        ),
+        'detail/a': _page('detail/a', [
+          _node('0', 'Column', children: ['label', 'go', 'anim']),
+          _text('label', 'Page a'),
+          ..._button('go', {'type': 'animateForward', 'animationId': 'spin'}),
+          _node(
+            'anim',
+            'AnimatedBuilder',
+            childMode: 'single',
+            props: {'animationId': 'spin', 'autoStart': false, 'duration': 100},
+            children: ['animated'],
+          ),
+          _text('animated', 'Animated'),
+        ]),
+      });
+      final h = _Harness(client);
+      await h.pump(tester);
+      await h.tap(tester, 'grab');
+
+      final registry = h.executor!.animationRegistry!;
+      expect(registry.getController('spin'), isNull);
+      final controller = registry.getController('detail:spin');
+      expect(controller, isNotNull);
+      expect(controller!.value, 0.0);
+
+      await h.tap(tester, 'go');
+
+      expect(controller.value, 1.0);
+
+      // The page that replaces it registers its own controller under the id.
+      await h.tap(tester, 'refresh');
+
+      final fresh = registry.getController('detail:spin');
+      expect(fresh, isNotNull);
+      expect(fresh, isNot(same(controller)));
+      expect(fresh!.value, 0.0);
+
+      await h.tap(tester, 'go');
+
+      expect(fresh.value, 1.0);
     },
   );
 }

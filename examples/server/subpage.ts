@@ -1,7 +1,5 @@
 import { App, Flow, PageDefinition, ServerActionDefinition } from "../../engine/src/core";
-import { V, SetState, ServerAction } from "../../engine/src/types";
-// The types barrel does not export this one yet.
-import { UpdateSubPage } from "../../engine/src/types/action";
+import { V, SetState, ServerAction, UpdateSubPage } from "../../engine/src/types";
 import {
   Scaffold,
   AppBar,

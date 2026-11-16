@@ -59,6 +59,11 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
   /// is no longer the latest, or that an updateSubPage overtook, is dropped.
   int _load = 0;
 
+  /// Counts the mounts that are not a join. It is part of the key of each
+  /// drawn page, so a page that replaces another gets fresh elements: nothing
+  /// of the old page (a nested SubPage, a stateful widget) carries over.
+  int _generation = 0;
+
   @override
   void initState() {
     super.initState();
@@ -81,9 +86,12 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
   @override
   void dispose() {
     // S8: the nodes leave the store, the state keys stay.
-    _store?.removeSubPageNodes(_mounts.nodeIds);
-    _store?.setSubPagePrefixes(widget.subPageKey, const []);
-    _store?.unregisterSubPage(widget.subPageKey);
+    // A SubPage with the same key may have taken this one's place already
+    // (its page was replaced): then the registration is no longer ours.
+    _store?.removeSubPagePages(_mounts.prefixes);
+    if (_store?.unregisterSubPage(widget.subPageKey, updateContent) ?? false) {
+      _store?.setSubPagePrefixes(widget.subPageKey, const []);
+    }
     super.dispose();
   }
 
@@ -129,12 +137,18 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
   void _mount(String mode, PageResponse response) {
     final exec = widget.parentContext.actionExecutor;
     final pageStore = exec?.stateManager.getPageStore(exec.pageId);
+    final before = _mounts.prefixes;
     final change = _mounts.apply(
       mode,
       response.toJson(),
       pageStore?.state.keys.toList() ?? const <String>[],
     );
     _store?.removeSubPageNodes(change.removedNodeIds);
+    if (mode != 'join' || before.isEmpty) {
+      // A replace: the nodes added since under the old pages go too.
+      _store?.removeSubPagePages(before);
+      _generation++;
+    }
     pageStore?.removeKeys(change.removedStateKeys);
     _store?.putSubPageNodes(change.nodes.map(ComponentNode.fromJson));
     _store?.setSubPagePrefixes(widget.subPageKey, _mounts.prefixes);
@@ -197,13 +211,13 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
       appStore: parentAppStore,
     );
 
-    // S5: the root of each mounted page, oldest first, one below the other;
-    // one page draws exactly as its root.
+    // S5: the root of each mounted page, oldest first, one below the other
+    // at the width the host gives; one page draws exactly as its root.
     final drawn = <Widget>[
       for (final page in _mounts.pages)
         if (_nodesOf(page) case final nodes when nodes.isNotEmpty)
           KeyedSubtree(
-            key: ValueKey(page.prefix),
+            key: ValueKey('$_generation/${page.prefix}'),
             child: renderer.render(nodes),
           ),
     ];
@@ -211,7 +225,7 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
     if (drawn.length == 1) return drawn.single;
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: drawn,
     );
   }

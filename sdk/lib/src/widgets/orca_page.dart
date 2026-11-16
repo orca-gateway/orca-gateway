@@ -285,8 +285,18 @@ class _OrcaPageState extends State<OrcaPage> {
             if (mounted) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (!mounted) return;
+                // The pages mounted in SubPages stay (their nodes too, see
+                // ComponentStore.init), so their state keys are carried over
+                // to the new page store.
+                final prefixes = _componentStore.subPagePrefixes.toList();
+                final carried = <String, dynamic>{
+                  for (final entry in (_pageStore?.state ?? const {}).entries)
+                    if (prefixes.any(entry.key.startsWith))
+                      entry.key: entry.value,
+                };
                 _stateManager.initPage(freshResponse.pageId, freshResponse.state);
                 _pageStore = _stateManager.getPageStore(freshResponse.pageId);
+                if (carried.isNotEmpty) _pageStore?.dispatch(carried);
                 _componentStore.init(freshResponse.components);
               });
               // Request that frame: when the refetch was triggered by a plain

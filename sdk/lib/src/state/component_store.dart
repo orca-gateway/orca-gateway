@@ -27,9 +27,14 @@ class ComponentStore extends ChangeNotifier {
     _subPageCallbacks[subPageId] = callback;
   }
 
-  /// Unregister a SubPage update callback.
-  void unregisterSubPage(String subPageId) {
-    _subPageCallbacks.remove(subPageId);
+  /// Unregister a SubPage update callback. With [callback], only when it is
+  /// the one registered (another SubPage may have taken the id since).
+  /// Returns whether a registration was removed.
+  bool unregisterSubPage(String subPageId, [SubPageUpdateCallback? callback]) {
+    if (callback != null && _subPageCallbacks[subPageId] != callback) {
+      return false;
+    }
+    return _subPageCallbacks.remove(subPageId) != null;
   }
 
   /// Invoke the update callback for a SubPage. Returns false if not found.
@@ -73,6 +78,15 @@ class ComponentStore extends ChangeNotifier {
     for (final id in ids.toList()) {
       _nodeMap.remove(id);
     }
+  }
+
+  /// Take every node of the pages mounted under [prefixes] out of the store:
+  /// each node whose id starts with one of them, so the nodes added to a page
+  /// after it was mounted go with it. Does not notify.
+  void removeSubPagePages(Iterable<String> prefixes) {
+    final gone = prefixes.toList();
+    if (gone.isEmpty) return;
+    _nodeMap.removeWhere((id, _) => gone.any(id.startsWith));
   }
 
   /// The node [id] and everything under it, the root first; empty when the

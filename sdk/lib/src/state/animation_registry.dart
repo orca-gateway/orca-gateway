@@ -23,8 +23,10 @@ class AnimationRegistry {
     _entries[id] = AnimationEntry(controller, animation);
   }
 
-  /// Remove the entry for [id].
-  void unregister(String id) {
+  /// Remove the entry for [id]. With [controller], only when the entry is
+  /// that controller's: a widget that took the id since keeps it.
+  void unregister(String id, [AnimationController? controller]) {
+    if (controller != null && _entries[id]?.controller != controller) return;
     _entries.remove(id);
   }
 
