@@ -2,6 +2,7 @@ package com.orcagateway.sdk.widgets
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -12,6 +13,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.semantics
@@ -22,7 +25,10 @@ import com.orcagateway.core.animation.ImplicitAnimation
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.ChildView
+import com.orcagateway.sdk.LocalOrcaFrozenNodes
+import com.orcagateway.sdk.LocalOrcaNodeRecorder
 import com.orcagateway.sdk.NodeView
+import com.orcagateway.sdk.OrcaNodeSnapshot
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.WidgetBuilder
 import com.orcagateway.sdk.style.Props
@@ -189,6 +195,17 @@ internal class SwitcherFade {
     var outgoing: String? = null
         private set
 
+    /** Where the [current] child's nodes are recorded as they are drawn: the next [outgoingNodes]. */
+    var recorder: OrcaNodeSnapshot = OrcaNodeSnapshot()
+        private set
+
+    /**
+     * The [outgoing] child as it was last drawn, to draw it from while it
+     * fades (the page may have dropped it); null when no fade is live.
+     */
+    var outgoingNodes: Map<String, ResolvedNode>? = null
+        private set
+
     private var shown = false
     private var startMs: Double? = null
     private var durationMs = 0.0
@@ -221,11 +238,15 @@ internal class SwitcherFade {
             shown = true
             current = id
             outgoing = null
+            outgoingNodes = null
+            recorder = OrcaNodeSnapshot()
             progress = 1.0
             return
         }
         outgoingFrom = incomingAlpha
         outgoing = current
+        outgoingNodes = current?.let { recorder.frozen(it) }
+        recorder = OrcaNodeSnapshot()
         current = id
         startMs = null
         this.durationMs = durationMs
@@ -237,7 +258,10 @@ internal class SwitcherFade {
         if (!isFading) return
         val start = startMs ?: now.also { startMs = it }
         val next = ((now - start) / durationMs).coerceIn(0.0, 1.0)
-        if (next >= 1.0) outgoing = null
+        if (next >= 1.0) {
+            outgoing = null
+            outgoingNodes = null
+        }
         progress = next
     }
 }
@@ -250,9 +274,14 @@ internal class SwitcherFade {
  * same child: no fade. Reduced motion ([orcaReduceMotion]): the swap is
  * immediate.
  *
- * The old child is drawn from the page's nodes while it fades. One that the
- * change removed from the page (a `replaceComponent`) has nothing left to
- * draw, so it is gone at once and only the new child fades in.
+ * The old child fades out from a snapshot, as a `replaceComponent` or a
+ * delete has already taken it off the page: each time the current child is
+ * drawn its resolved nodes are recorded ([SwitcherFade.recorder]), and when
+ * the id changes the outgoing layer is drawn from that record
+ * ([LocalOrcaFrozenNodes]) until the fade ends, when it is dropped. That
+ * layer is inert: no pointer input, no action, no lifecycle trigger, no
+ * animation controller, nothing read from the page. A switcher that is
+ * itself inside such a layer swaps at once.
  */
 @Composable
 internal fun AnimatedSwitcherWidget(
@@ -261,7 +290,13 @@ internal fun AnimatedSwitcherWidget(
     modifier: Modifier,
     fade: SwitcherFade = remember(node.id) { SwitcherFade() },
 ) {
-    fade.show(node.childIds.firstOrNull(), AnimationDuration.milliseconds(node["duration"]), orcaReduceMotion())
+    val frozen = LocalOrcaFrozenNodes.current
+    fade.show(
+        node.childIds.firstOrNull(),
+        AnimationDuration.milliseconds(node["duration"]),
+        jump = orcaReduceMotion() || frozen != null,
+    )
+    fade.recorder.parent = LocalOrcaNodeRecorder.current
     val current = fade.current
     LaunchedEffect(model, fade, current) {
         while (fade.isFading) model.withAnimationFrame { now -> fade.frame(now) }
@@ -271,10 +306,24 @@ internal fun AnimatedSwitcherWidget(
         // One call site keyed by id: a child keeps its composition as it turns from current to outgoing.
         for (id in listOfNotNull(fade.outgoing, current)) {
             key(id) {
-                val alpha = if (id == current) fade.incomingAlpha else fade.outgoingAlpha
-                NodeView(id, model, if (fading) Modifier.alpha(alpha.toFloat()) else Modifier)
+                val leaving = id != current
+                val alpha = if (leaving) fade.outgoingAlpha else fade.incomingAlpha
+                val layer = if (fading) Modifier.alpha(alpha.toFloat()) else Modifier
+                CompositionLocalProvider(
+                    LocalOrcaFrozenNodes provides if (leaving) fade.outgoingNodes.orEmpty() else frozen,
+                    LocalOrcaNodeRecorder provides if (leaving) null else fade.recorder,
+                ) {
+                    NodeView(id, model, if (leaving) layer.then(NoPointerInput) else layer)
+                }
             }
         }
+    }
+}
+
+/** Takes every pointer event before the content below it can: an outgoing child is not clickable. */
+private val NoPointerInput: Modifier = Modifier.pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
     }
 }
 

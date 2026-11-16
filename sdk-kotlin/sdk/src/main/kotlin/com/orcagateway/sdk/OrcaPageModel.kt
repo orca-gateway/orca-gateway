@@ -214,6 +214,8 @@ public class OrcaPageModel(
      */
     public fun fire(trigger: String, on: ResolvedNode, eventData: Map<String, JsonValue>? = null): Job? {
         val action = on.actions[trigger] ?: return null
+        // A node drawn from a snapshot ([OrcaNodeSnapshot.frozen]) runs nothing.
+        if (action === INERT_ACTION) return null
         return scope.launch { run(action, eventData, ActionSource(on.id, trigger)) }
     }
 
@@ -336,6 +338,55 @@ public class OrcaPageModel(
         const val DEFAULT_DURATION_MILLIS: Long = 4000
 
         const val NANOS_PER_MILLI: Double = 1_000_000.0
+
+        /**
+         * What every trigger of a snapshot node holds instead of its action:
+         * the node still looks like one with the trigger set, and [fire]
+         * (which knows this instance) runs nothing for it.
+         */
+        val INERT_ACTION: Action = Action.Unknown(JsonValue.Null)
+    }
+}
+
+/**
+ * The resolved nodes last drawn below one point of a page, by id: what an
+ * AnimatedSwitcher keeps of its child so it can still draw it, fading out,
+ * once a server action has removed it from the page.
+ *
+ * [NodeView] hands every node it resolves to the nearest one
+ * (`LocalOrcaNodeRecorder`), which costs a map entry holding a reference to
+ * the node already resolved for drawing; each also tells its [parent], so
+ * an outer switcher's snapshot includes what an inner one draws. [frozen]
+ * is the copy to draw from (`LocalOrcaFrozenNodes`). Main thread only.
+ */
+internal class OrcaNodeSnapshot {
+    /** The recorder around the widget that owns this one, if any. */
+    var parent: OrcaNodeSnapshot? = null
+
+    private val nodes = HashMap<String, ResolvedNode>()
+
+    fun record(node: ResolvedNode) {
+        nodes[node.id] = node
+        parent?.record(node)
+    }
+
+    /**
+     * The subtree under [root] as last drawn: the nodes reachable from it
+     * through children and slots, each with its triggers made inert
+     * ([OrcaPageModel.INERT_ACTION]). Empty when [root] was never drawn.
+     */
+    fun frozen(root: String): Map<String, ResolvedNode> {
+        val out = LinkedHashMap<String, ResolvedNode>()
+        val pending = ArrayDeque(listOf(root))
+        while (pending.isNotEmpty()) {
+            val id = pending.removeFirst()
+            if (id in out) continue
+            val node = nodes[id] ?: continue
+            out[id] = if (node.actions.isEmpty()) node else node.copy(actions = node.actions.mapValues { OrcaPageModel.INERT_ACTION })
+            pending.addAll(node.childIds)
+            pending.addAll(node.slots.values)
+        }
+        return out
     }
 }
 

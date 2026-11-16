@@ -11,6 +11,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 import com.orcagateway.core.animation.AlignmentBias
@@ -18,6 +19,7 @@ import com.orcagateway.core.animation.AnimationMix
 import com.orcagateway.core.animation.Curves
 import com.orcagateway.core.animation.ImplicitAnimation
 import com.orcagateway.core.json.JsonValue
+import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
 import com.orcagateway.core.models.StateDefinition
 import com.orcagateway.core.models.StateScope
@@ -26,8 +28,11 @@ import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.WidgetBuilders
+import com.orcagateway.sdk.support.button
 import com.orcagateway.sdk.support.page
 import com.orcagateway.sdk.support.text
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -414,20 +419,125 @@ class AnimatedWidgetTest {
         assertEquals(0.0, model.animationFrameMs, "no fade, so no frames")
     }
 
-    @Test
-    fun b12_4_k_aReplacedChildIsGoneFromThePageSoOnlyTheNewOneFadesIn() {
-        val model = switcher()
-        show(model, "sw")
+    /** Runs [actions] through the page's executor, as a server action's answer does, in one go. */
+    private fun OrcaPageModel.execute(vararg actions: Action) {
+        change { runBlocking { actions.forEach { run(it) } } }
+    }
 
-        change { model.apply(ComponentMutation.Replace("a", listOf(text("b", "New")))) }
+    private fun replace(target: String, vararg nodes: ComponentNode): Action {
+        val components = nodes.joinToString(",") { Json.encodeToString(ComponentNode.serializer(), it) }
+        return Json.decodeFromString(
+            Action.serializer(),
+            """{"type":"replaceComponent","targetId":"$target","components":[$components]}""",
+        )
+    }
+
+    private fun add(parent: String, vararg nodes: ComponentNode): Action {
+        val components = nodes.joinToString(",") { Json.encodeToString(ComponentNode.serializer(), it) }
+        return Json.decodeFromString(
+            Action.serializer(),
+            """{"type":"addComponent","parentId":"$parent","components":[$components],"position":0}""",
+        )
+    }
+
+    /** Mid-fade both children are on screen with complementary alphas; after it only the new one, the snapshot dropped. */
+    private fun crossFades(model: OrcaPageModel, vararg actions: Action) {
+        show(model, "sw")
+        compose.onNodeWithText("Old").assertExists()
+        assertNull(fade.outgoingNodes)
+
+        model.execute(*actions)
+        assertNull(model.resolve("a"), "the old child has left the page")
         val start = model.startOfRun()
         val now = model.runTo(start, 150.0)
+        val t = (now - start) / 300.0
+
+        // The old child's content is still drawn, from the snapshot.
+        compose.onNodeWithText("Old").assertExists()
+        compose.onNodeWithText("New").assertExists()
+        assertEquals("a", fade.outgoing)
+        assertEquals("b", fade.current)
+        assertEquals(setOf("a"), fade.outgoingNodes?.keys)
+        assertEquals(t, fade.incomingAlpha, 1e-9)
+        assertEquals(1.0 - t, fade.outgoingAlpha, 1e-9)
+
+        compose.mainClock.advanceTimeBy(200)
+        compose.onNodeWithText("New").assertExists()
+        compose.onNodeWithText("Old").assertDoesNotExist()
+        assertNull(fade.outgoing)
+        assertNull(fade.outgoingNodes, "the snapshot is released with the fade")
+        assertEquals(1.0, fade.incomingAlpha)
+        val rested = model.animationFrameMs
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(rested, model.animationFrameMs, "no frames once the fade is over")
+    }
+
+    @Test
+    fun b12_4_k_aReplacedChildFadesOutFromItsSnapshotWhileTheNewOneFadesIn() {
+        crossFades(switcher(), replace("a", text("b", "New")))
+    }
+
+    @Test
+    fun b12_4_k_aDeletedChildFadesOutFromItsSnapshotWhileTheAddedOneFadesIn() {
+        crossFades(switcher(), Action.DeleteComponent("a"), add("sw", text("b", "New")))
+    }
+
+    @Test
+    fun b12_4_k_theOutgoingLayerIsInert() {
+        val tap = Action.SetState("taps", StateScope.Page, JsonValue.of(mapOf("type" to "state", "key" to "next", "scope" to "page")))
+        val model = model(
+            single("sw", "AnimatedSwitcher", "a", mapOf("duration" to 300)),
+            button("a", "ElevatedButton", "spin", mapOf("onTap" to tap)),
+            single("spin", "AnimatedBuilder", "old", mapOf("animationId" to "spin", "duration" to 1000, "repeat" to true)),
+            text("old", "Old"),
+            state = mapOf("taps" to 0, "next" to 1),
+        )
+        show(model, "sw")
+        compose.mainClock.advanceTimeByFrame()
+        assertNotNull(model.animations.controller("spin"), "registered while its builder is live")
+        compose.onNodeWithText("Old").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(1L, model.store.state.merged["taps"]?.intValue, "live, the button fires")
+        model.set("next" to 2)
+
+        model.execute(replace("a", text("b", "New")))
+        compose.mainClock.advanceTimeBy(100)
+        assertTrue(fade.isFading)
+        compose.onNodeWithText("Old").assertExists()
+        compose.onNodeWithText("New").assertExists()
+        assertNull(model.animations.controller("spin"), "the outgoing builder holds no controller")
+
+        compose.onNodeWithText("Old").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(1L, model.store.state.merged["taps"]?.intValue, "the outgoing button fires nothing")
+        val frozen = assertNotNull(fade.outgoingNodes?.get("a"))
+        assertEquals(setOf("onTap"), frozen.actions.keys)
+        assertNull(model.fire("onTap", frozen), "a snapshot node's action does not run")
+        assertEquals(setOf("a", "spin", "old"), fade.outgoingNodes?.keys)
+
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithText("Old").assertDoesNotExist()
+        assertNull(fade.outgoingNodes)
+        val rested = model.animationFrameMs
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(rested, model.animationFrameMs, "the repeating builder left with its layer: no frames")
+    }
+
+    @Test
+    fun b12_4_k_reducedMotionSwapsAReplacedChildAtOnceWithNoOutgoingLayer() {
+        val model = switcher()
+        show(model, "sw", reduceMotion = true)
+
+        model.execute(replace("a", text("b", "New")))
+        compose.mainClock.advanceTimeByFrame()
 
         compose.onNodeWithText("New").assertExists()
         compose.onNodeWithText("Old").assertDoesNotExist()
-        assertEquals((now - start) / 300.0, fade.incomingAlpha, 1e-9)
-        compose.mainClock.advanceTimeBy(200)
+        assertNull(fade.outgoing)
+        assertNull(fade.outgoingNodes)
         assertEquals(1.0, fade.incomingAlpha)
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(0.0, model.animationFrameMs, "no fade, so no frames")
     }
 
     // MARK: reduced motion (B12.7)
