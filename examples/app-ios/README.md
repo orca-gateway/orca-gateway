@@ -198,6 +198,38 @@ and show up as "Orca Counter": network requests, page timing, state changes, act
 errors. Set `ORCA_DEVTOOLS=0` to turn it off, or `ORCA_DEVTOOLS_HOST` to the Mac's address when the
 app runs on a device.
 
+Two more switches, both off by default, are set the same way as the ones under "Version check and
+sessions" (the scheme's environment variables, or `SIMCTL_CHILD_*` for `simctl launch`). `1` or
+`true` turns each on:
+
+| Setting | Turns on |
+|---|---|
+| `ORCA_OVERLAY` | `showOverlay`: a chip at the bottom right of each page with its load time |
+| `ORCA_BODIES` | `includeBodies`: the request and response bodies in DevTools' network events |
+
+**Overlay.**
+
+```bash
+SIMCTL_CHILD_ORCA_OVERLAY=1 xcrun simctl launch booted com.orcagateway.examples.counter
+```
+
+Each page shows a black chip 8 points in from its bottom right corner with the page's load time in
+green, such as `42ms` (request start to render complete). Tap it for `Load: 42.3ms`,
+`Components: <n>` and `Cache: -`; tap again to fold it. The chip needs DevTools on in the app, not
+the DevTools window: it shows without `task devtools:dev` running, and `ORCA_DEVTOOLS=0` hides it.
+
+**Bodies.**
+
+```bash
+SIMCTL_CHILD_ORCA_BODIES=1 xcrun simctl launch booted com.orcagateway.examples.counter
+```
+
+In DevTools, open Network, pick a request and its Body tab: it shows the response, for a page
+request the page's JSON. The event also carries the request body (for a page request, the app
+state the app sent). Without the switch the tab says "Bodies are not captured by default." The
+`authorization`, `cookie`, `set-cookie`, `x-api-key` and `proxy-authorization` headers show as
+`<redacted>` either way.
+
 ## What it shows
 
 `+` and `-` change the count; `Reset` sets it to 0 and shows a snackbar. The page, the state and the
