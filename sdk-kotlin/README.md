@@ -223,6 +223,29 @@ from its config (`ORCA_APP_ID=motion ORCA_BOOT=config`): a menu with one page fo
 animation, one for the three implicit widgets, one for the switcher, a Hero pair, and one page per
 transition kind at 600 ms.
 
+## Reorderable list
+
+`ReorderableListView` draws its children in a scrolling list, a column by default or a row with
+`scrollDirection: "horizontal"`, with `padding` inside the scrolled content.
+
+- **Dragging.** A long press picks a row up. It follows the finger, the rows it passes make room, and
+  holding it past the top or bottom edge scrolls the list.
+- **What fires.** Letting go fires the list's `onReorder` once, with the event `{oldIndex, newIndex}`,
+  read with `V.event("oldIndex")` and `V.event("newIndex")`. A row dropped where it was fires nothing.
+  `onScrollBegin`, `onScrolling` and `onScrollEnd` fire as on a SingleChildScrollView.
+- **The raw `newIndex`.** `newIndex` is Flutter's value: the position to insert at, counted before the
+  dragged row is taken out. The first of three rows dropped at the end gives `newIndex: 3`, not 2; dropped
+  below the second row it gives 2; the last row dropped at the top gives 0. A server that moves the row
+  subtracts one when `newIndex > oldIndex`.
+- **The order comes from the page.** The SDK never reorders by itself. After the drop every row is back
+  where the page has it; the `onReorder` action changes the order (page state, or a server action that
+  answers with the new order), and the list then draws that.
+
+To try it, run the `reorder` app of the example server in the
+[Android example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android), booted
+from its config (`ORCA_APP_ID=reorder ORCA_BOOT=config`): five rows whose order lives in page state, and
+a line showing the last move as `oldIndex → newIndex`.
+
 ## Styling buttons
 
 A Flutter host styles an Orca page's buttons through its `ThemeData`. An Android host does it with

@@ -87,9 +87,9 @@ class ActionFixtureTest {
     private suspend fun runFixture(file: String) = runFixture(file, Fixtures.json("schema/fixtures/actions/$file"))
 
     @Test
-    fun allTwentySixActionFixturesPass() = runSuspend {
+    fun allTwentySevenActionFixturesPass() = runSuspend {
         val files = Fixtures.files("actions")
-        assertEquals(26, files.size)
+        assertEquals(27, files.size)
         for ((name, fx) in files) runFixture(name, fx)
     }
 
@@ -104,6 +104,10 @@ class ActionFixtureTest {
 
     @Test
     fun a2_4_scrollTriggersReadOffsetAndExtentThroughTheEvent() = runSuspend { runFixture("19_scroll_event_values.json") }
+
+    /** B13.3-K: onReorder's {oldIndex, newIndex} goes through `V.event` into state and a serverAction's params. */
+    @Test
+    fun b13_3_onReorderReadsOldIndexAndNewIndexThroughTheEvent() = runSuspend { runFixture("34_reorder_event.json") }
 
     // MARK: source and once
 

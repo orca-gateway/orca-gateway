@@ -28,6 +28,7 @@ import com.orcagateway.sdk.widgets.IconWidget
 import com.orcagateway.sdk.widgets.ImageWidget
 import com.orcagateway.sdk.widgets.PaddingWidget
 import com.orcagateway.sdk.widgets.PositionedWidget
+import com.orcagateway.sdk.widgets.ReorderableListWidget
 import com.orcagateway.sdk.widgets.ScaffoldWidget
 import com.orcagateway.sdk.widgets.ScrollWidget
 import com.orcagateway.sdk.widgets.SizedBoxWidget
@@ -92,13 +93,13 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 36 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 37 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
          * S10's BottomNavigationBar, BottomNavItem and Drawer, and S12's
          * AnimatedContainer, AnimatedOpacity, AnimatedAlign, AnimatedSwitcher
-         * and Hero. Keep the two
+         * and Hero, and S13's ReorderableListView. Keep the two
          * lists in step: the caps vector advertises what this draws
          * (WidgetBuildersTest checks it).
          */
@@ -139,6 +140,7 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("AnimatedAlign") { node, model, modifier -> AnimatedAlignWidget(node, model, modifier) }
             register("AnimatedSwitcher") { node, model, modifier -> AnimatedSwitcherWidget(node, model, modifier) }
             register("Hero") { node, model, modifier -> HeroWidget(node, model, modifier) }
+            register("ReorderableListView") { node, model, modifier -> ReorderableListWidget(node, model, modifier) }
         }
     }
 }

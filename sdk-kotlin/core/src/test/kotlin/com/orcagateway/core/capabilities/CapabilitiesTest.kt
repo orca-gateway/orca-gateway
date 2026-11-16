@@ -59,12 +59,14 @@ class CapabilitiesTest {
      * B12.2-K to B12.5-K: S12 adds AnimatedContainer, AnimatedOpacity,
      * AnimatedAlign, AnimatedSwitcher and Hero, so the pin moves from 31 to
      * 36 (again to the new truth).
+     *
+     * B13.3-K: S13 adds ReorderableListView, 36 to 37.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame36WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame37WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(36, kotlin.size)
+        assertEquals(37, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -79,6 +81,8 @@ class CapabilitiesTest {
         val s12 = setOf("AnimatedAlign", "AnimatedContainer", "AnimatedOpacity", "AnimatedSwitcher", "Hero")
         assertTrue(kotlin.containsAll(s12), "missing: ${s12 - kotlin.toSet()}")
         assertTrue(GeneratedCapabilities.widgets.containsAll(s12), "not advertised: ${s12 - GeneratedCapabilities.widgets.toSet()}")
+        assertTrue("ReorderableListView" in kotlin, "missing: ReorderableListView")
+        assertTrue("ReorderableListView" in GeneratedCapabilities.widgets, "not advertised: ReorderableListView")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }

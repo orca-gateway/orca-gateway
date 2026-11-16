@@ -10,8 +10,8 @@ import kotlin.test.assertTrue
 class FixturePathsTest {
     @Test
     fun theConformanceFixturesAreReachable() {
-        assertEquals(49, Fixtures.renderFiles().size)
-        assertEquals(26, Fixtures.actionFiles().size)
+        assertEquals(50, Fixtures.renderFiles().size)
+        assertEquals(27, Fixtures.actionFiles().size)
     }
 
     /** B9.1-CK: the navigation fixture family is reachable, all 15 files of it (11 of cases, 3 of sessions, 1 of links). */
