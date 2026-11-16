@@ -539,9 +539,10 @@ final class VideoPlayerPluginTests: XCTestCase {
     // MARK: The audio session
 
     /// The app's audio session (video_player_avfoundation's FVPAVAudioSession),
-    /// scripted: `set` is each category it was set to.
+    /// scripted: `set` is each category it was set to; `category` is
+    /// settable, as an app sets its own outside the plugin.
     @MainActor final class FakeAudioSession: VideoAudioSession {
-        private(set) var category: AVAudioSession.Category
+        var category: AVAudioSession.Category
         private(set) var categoryOptions: AVAudioSession.CategoryOptions
         var fails = false
         private(set) var set: [AVAudioSession.Category] = []
@@ -575,6 +576,7 @@ final class VideoPlayerPluginTests: XCTestCase {
         XCTAssertEqual(session.categoryOptions, [], "no mixWithOthers: Orca passes video_player no VideoPlayerOptions")
         XCTAssertEqual((state.controller?.playback as? FakePlayback)?.calls, ["initialize"])
 
+        session.category = .ambient // as an app sets its own after the first player
         let second = VideoPlayerState(players: players)
         second.appear(options(playerId: "second"))
         state.change(options(url: Self.otherClip))
