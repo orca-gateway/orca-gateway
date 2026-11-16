@@ -147,17 +147,34 @@ class CapabilitiesTest {
         assertEquals(listed, GeneratedCapabilities.actionKinds.toSet())
         assertTrue(Action.kinds.toSet().containsAll(listed), "not wire kinds: ${listed - Action.kinds.toSet()}")
         // S12 added animateForward and animateReverse: 20 to 22. B13.5-K: S13 added updateSubPage, 23.
-        assertEquals(23, listed.size)
+        // Step 5 added refetchPage (A5.6): 24.
+        assertEquals(24, listed.size)
         assertTrue(listed.containsAll(setOf("animateForward", "animateReverse")))
         assertTrue("updateSubPage" in listed, "missing: updateSubPage")
+        assertTrue("refetchPage" in listed, "missing: refetchPage")
         assertTrue(listed.containsAll(setOf("switchTab", "openDrawer")))
         // Step 2 added the fire-mode wrappers and the debugLog effect.
         assertTrue(listed.containsAll(setOf("once", "always", "debugLog")), "missing: ${setOf("once", "always", "debugLog") - listed}")
-        // Swift's twin: the iOS SDK advertises the same 23 kinds.
+        // Swift's twin: the iOS SDK advertises the same 24 kinds.
         assertEquals(strings(json("sdk-swift/capabilities.json").jsonObject["actionKinds"]), listed)
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).
         assertEquals(listed + "replaceComponent", ActionExecutor.kinds)
+    }
+
+    /**
+     * A5.6: the executor runs refetchPage (a no-op on its own, the page
+     * loader's handler reloads, as Flutter's onRefetchPage), so the vector
+     * advertises it once and the engine stops dropping nodes that carry it.
+     */
+    @Test
+    fun a5_6_refetchPageIsAdvertisedAndRunByTheExecutor() {
+        val listed = json("sdk-kotlin/capabilities.json").jsonObject["actionKinds"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertTrue("refetchPage" in listed, "not in capabilities.json")
+        assertEquals(listed.sorted(), listed, "capabilities.json keeps its action kinds sorted")
+        assertEquals(1, GeneratedCapabilities.actionKinds.count { it == "refetchPage" }, "not advertised exactly once")
+        assertTrue("refetchPage" in ActionExecutor.kinds, "not an executor kind")
+        assertTrue(ActionExecutor.implements(Action.RefetchPage), "not implemented")
     }
 
     @Test

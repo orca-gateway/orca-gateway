@@ -81,6 +81,7 @@
     "once",
     "openDrawer",
     "openUrl",
+    "refetchPage",
     "serverAction",
     "setState",
     "share",
