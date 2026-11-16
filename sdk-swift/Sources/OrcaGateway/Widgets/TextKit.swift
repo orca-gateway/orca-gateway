@@ -70,10 +70,20 @@ extension TextStyleProps {
     @available(iOS 18, macOS 15, *)
     var lineRenderer: DecorationRenderer? {
         guard rendersLines else { return nil }
+        return decorationLine(color: decorationColor ?? color)
+    }
+
+    /// The style's line (an overline, underline or line-through) as
+    /// DecorationRenderer draws it: placed and as thick as `platformFont`
+    /// says (no `decorationThickness`), in `color` (nil: the foreground).
+    /// Nil when the style has no line.
+    @available(iOS 18, macOS 15, *)
+    func decorationLine(color: Color?) -> DecorationRenderer? {
+        guard overline || underline || strikethrough else { return nil }
         let font = platformFont as CTFont
         let size = CTFontGetSize(font)
         let thickness = CTFontGetUnderlineThickness(font)
-        let shading: GraphicsContext.Shading = (decorationColor ?? color).map { .color($0) } ?? .foreground
+        let shading: GraphicsContext.Shading = color.map { .color($0) } ?? .foreground
         return DecorationRenderer(
             baselineOffset: overline ? nil : underline ? -CTFontGetUnderlinePosition(font) : -CTFontGetXHeight(font) / 2,
             thickness: thickness > 0 ? thickness : size / 14, unit: size / 14, style: decorationStyle,
@@ -106,28 +116,83 @@ struct DecorationRenderer: TextRenderer {
     func draw(layout: Text.Layout, in ctx: inout GraphicsContext) {
         for line in layout {
             ctx.draw(line)
-            let bounds = line.typographicBounds
-            let y = baselineOffset.map { bounds.origin.y + $0 } ?? bounds.origin.y - bounds.ascent
-            let start = bounds.rect.minX, end = bounds.rect.maxX
-            var path = Path()
-            path.move(to: CGPoint(x: start, y: y))
-            if style == .wavy {
-                var x = start, up = true
-                while x + thickness * 2 <= end {
-                    path.addQuadCurve(to: CGPoint(x: x + thickness * 2, y: y),
-                                      control: CGPoint(x: x + thickness, y: up ? y - thickness : y + thickness))
-                    x += thickness * 2
-                    up.toggle()
-                }
-            } else {
-                path.addLine(to: CGPoint(x: end, y: y))
-                if style == .double {
-                    path.move(to: CGPoint(x: start, y: y + 3))
-                    path.addLine(to: CGPoint(x: end, y: y + 3))
+            stroke(line.typographicBounds, in: &ctx)
+        }
+    }
+
+    /// The line across `bounds` (a text line's, or a run's for
+    /// `RunLinesRenderer`): from its baseline (`origin.y`) and ascent, over
+    /// its whole width.
+    func stroke(_ bounds: Text.Layout.TypographicBounds, in ctx: inout GraphicsContext) {
+        let y = baselineOffset.map { bounds.origin.y + $0 } ?? bounds.origin.y - bounds.ascent
+        let start = bounds.rect.minX, end = bounds.rect.maxX
+        var path = Path()
+        path.move(to: CGPoint(x: start, y: y))
+        if style == .wavy {
+            var x = start, up = true
+            while x + thickness * 2 <= end {
+                path.addQuadCurve(to: CGPoint(x: x + thickness * 2, y: y),
+                                  control: CGPoint(x: x + thickness, y: up ? y - thickness : y + thickness))
+                x += thickness * 2
+                up.toggle()
+            }
+        } else {
+            path.addLine(to: CGPoint(x: end, y: y))
+            if style == .double {
+                path.move(to: CGPoint(x: start, y: y + 3))
+                path.addLine(to: CGPoint(x: end, y: y + 3))
+            }
+        }
+        let dash: [CGFloat] = style == .dashed ? [4 * unit, 2 * unit] : style == .dotted ? [unit, 1.5 * unit] : []
+        ctx.stroke(path, with: shading, style: StrokeStyle(lineWidth: thickness, dash: dash))
+    }
+}
+
+/// DecorationRenderer's range form, for a RichText: a run of the text
+/// tagged `Tag(index)` gets `lines[index]` under (an overline: over) its
+/// own glyphs alone, from that run's baseline and ascent, on each line it
+/// wraps onto, as Flutter's paragraph paints a decoration per style run.
+/// An overline is centred on the run's top edge, half of it above, for
+/// every style (SkParagraph Decorations.cpp: calculatePosition's
+/// `-ascent`, 0 without a height or a baseline shift, from the clip's
+/// top). Layout runs of one tag side by side on a line share one stroke,
+/// so a wave or a dash runs on across them. Untagged runs get no line.
+@available(iOS 18, macOS 15, *)
+struct RunLinesRenderer: TextRenderer {
+    /// Which of `lines` a run draws.
+    struct Tag: TextAttribute {
+        let index: Int
+    }
+
+    let lines: [DecorationRenderer]
+
+    /// The most room any of the lines needs.
+    var displayPadding: EdgeInsets {
+        lines.reduce(into: EdgeInsets()) { room, line in
+            room.top = max(room.top, line.displayPadding.top)
+            room.bottom = max(room.bottom, line.displayPadding.bottom)
+        }
+    }
+
+    func draw(layout: Text.Layout, in ctx: inout GraphicsContext) {
+        for line in layout {
+            ctx.draw(line)
+            var tag: Tag?
+            var span = Text.Layout.TypographicBounds()
+            for run in line {
+                let bounds = run.typographicBounds
+                if let current = tag, run[Tag.self] == current {
+                    let start = min(span.rect.minX, bounds.rect.minX), end = max(span.rect.maxX, bounds.rect.maxX)
+                    span.origin.x = start
+                    span.width = end - start
+                    span.ascent = max(span.ascent, bounds.ascent)
+                } else {
+                    if let tag { lines[tag.index].stroke(span, in: &ctx) }
+                    tag = run[Tag.self]
+                    span = bounds
                 }
             }
-            let dash: [CGFloat] = style == .dashed ? [4 * unit, 2 * unit] : style == .dotted ? [unit, 1.5 * unit] : []
-            ctx.stroke(path, with: shading, style: StrokeStyle(lineWidth: thickness, dash: dash))
+            if let tag { lines[tag.index].stroke(span, in: &ctx) }
         }
     }
 }
@@ -205,13 +270,18 @@ struct FadeMask: View {
 /// and word spacing, line spacing, and an underline or line-through (dotted,
 /// dashed, double; wavy is solid); no overline (UIKit has none). `lines` 0
 /// is unlimited; past it the text is cut, with an ellipsis for `ellipsis`
-/// (fade and visible cut as clip). macOS draws a `start` aligned Text.
+/// (fade and visible cut as clip). A Text's string in its one style, or a
+/// RichText's runs (`init(runs:lines:ellipsis:)`). macOS draws a `start`
+/// aligned Text.
 struct JustifiedText: UIViewRepresentable {
     let style: TextStyleProps
     let data: String
     let lines: Int
     let ellipsis: Bool
     let lineSpacing: CGFloat
+    /// A RichText's runs, drawn in place of `data` in `style` (see
+    /// `init(runs:lines:ellipsis:)`); nil for a Text.
+    var runs: [TextStyles.Run]?
 
     func makeUIView(context: Context) -> UILabel {
         let label = UILabel()
@@ -240,6 +310,22 @@ struct JustifiedText: UIViewRepresentable {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .justified
         paragraph.lineSpacing = lineSpacing
+        guard let runs else { return Self.attributed(data, style, paragraph: paragraph) }
+        return runs.reduce(into: NSMutableAttributedString()) { text, run in
+            let style = TextStyleProps(run.style).onEngineBase
+            let piece = Self.attributed(run.text, style, paragraph: paragraph)
+            if let background = style.background {
+                piece.addAttribute(.backgroundColor, value: UIColor(background),
+                                   range: NSRange(location: 0, length: piece.length))
+            }
+            text.append(piece)
+        }
+    }
+
+    /// `string` in `style`: its font (italic through the descriptor), colour,
+    /// letter and word spacing, and its underline or line-through.
+    static func attributed(_ string: String, _ style: TextStyleProps,
+                           paragraph: NSParagraphStyle) -> NSMutableAttributedString {
         var font = style.platformFont
         if style.italic, let italic = font.fontDescriptor.withSymbolicTraits(.traitItalic) {
             font = UIFont(descriptor: italic, size: 0)
@@ -262,14 +348,25 @@ struct JustifiedText: UIViewRepresentable {
             attributes[.strikethroughStyle] = pattern.rawValue
             attributes[.strikethroughColor] = lineColor
         }
-        let text = NSMutableAttributedString(string: data, attributes: attributes)
+        let text = NSMutableAttributedString(string: string, attributes: attributes)
         if let wordSpacing = style.wordSpacing {
-            for (offset, unit) in data.utf16.enumerated() where unit == 0x20 {
+            for (offset, unit) in string.utf16.enumerated() where unit == 0x20 {
                 text.addAttribute(.kern, value: (style.letterSpacing ?? 0) + wordSpacing,
                                   range: NSRange(location: offset, length: 1))
             }
         }
         return text
+    }
+}
+
+extension JustifiedText {
+    /// A RichText's runs, justified: each in its merged style on the
+    /// engine base (`TextStyleProps.engineRun`'s: 14 points at a fixed
+    /// size, white, regular) with its background, and the lines a justified
+    /// Text draws (dotted, dashed, double, decorationColor; wavy solid; no
+    /// overline). No line spacing: a span's `height` is not drawn.
+    init(runs: [TextStyles.Run], lines: Int, ellipsis: Bool) {
+        self.init(style: TextStyleProps(nil), data: "", lines: lines, ellipsis: ellipsis, lineSpacing: 0, runs: runs)
     }
 }
 #endif
