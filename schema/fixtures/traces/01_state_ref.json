@@ -1,0 +1,31 @@
+{
+  "name": "state-ref",
+  "description": "resolveWithTrace over a page-state ref and an app-state ref (in a list, so the order is fixed). Each ref records one `state` step: `in` is the key, `out` the value as Dart's '$x' text. Format of every file in this folder: `state` {page, app} is merged app first, page over it; `event` (optional) is the trigger's event data; `value` is the raw wire value; `expected.value` is the resolved value and `expected.trace` the steps, each {op, in (only when the input is not null), out}.",
+  "state": {
+    "page": {
+      "count": 3
+    },
+    "app": {
+      "theme": "dark"
+    }
+  },
+  "value": [
+    {
+      "type": "state",
+      "key": "count",
+      "scope": "page"
+    },
+    {
+      "type": "state",
+      "key": "theme",
+      "scope": "app"
+    }
+  ],
+  "expected": {
+    "value": [3, "dark"],
+    "trace": [
+      { "op": "state", "in": "count", "out": "3" },
+      { "op": "state", "in": "theme", "out": "dark" }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "event-ref",
+  "description": "resolveWithTrace over an event ref with the trigger's event data set (a text field's onChange). It records one `event` step: `in` is the key, `out` the event value.",
+  "state": {
+    "page": {},
+    "app": {}
+  },
+  "event": {
+    "value": "hello"
+  },
+  "value": {
+    "type": "event",
+    "key": "value"
+  },
+  "expected": {
+    "value": "hello",
+    "trace": [
+      { "op": "event", "in": "value", "out": "hello" }
+    ]
+  }
+}
