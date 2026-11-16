@@ -3,23 +3,23 @@
 ## Front page
 
 ### In one breath
-group 3 of 5 · tasks: 5 green, 0 blocked · cases: 12 of 20 green · engine bun test: 833 pass
-T7 Swift plugin: five actions, taps to the host, foreground pushes; 22 tests, 21 on the simulator.
-T8 Kotlin plugin: five actions, the permission, the FCM service; 32 tests with Robolectric.
-T9 release.sh rows 17 and 18 for push's iOS and Android packages; a stubbed release test.
-T10 the Swift mirror's push line and LICENSE; the split rehearsed with the plugin, 13 of 13.
-T11 both CI matrices gain push. Seven review findings, all fixed; T7 needed two retries.
+group 4 of 5 · tasks: 4 green, 0 blocked · cases: 16 of 20 green · engine bun test: 843 pass
+T13 Android demo: the push build, taps through its own deep-link path, Firebase file optional.
+T14 Android README: install, register, the five actions, Firebase as the app's; the server row.
+T16 Swift token and topics on Firebase Messaging from 12.17.0; the APNs token handed on arrival.
+T19 the yaml now says a tap without a payload hands "", as Flutter does.
+Rebased onto main 4a7f389 (PR #52), no conflict. Two review findings (T16), both fixed.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-16 auto-decided (minor, your standing rule): the appendix's decisions under each digest.
+10 auto-decided (minor, your standing rule); one is the parent session's: Firebase iOS 12.17.0+,
+its deprecation warning accepted.
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 4 of 5, T13 Android demo and T14 Android README; T16 waits on 3? (default: go)
-3. Still open from gate 08: iOS A Firebase Messaging or B APNs only. (default: A; T16+ wait)
+2. Next: group 5 of 5, T12 iOS demo, T15 walkthroughs, T17 iOS plist, T18 iOS README? (default: go)
 
 ## Appendix
 
@@ -155,6 +155,56 @@ Decisions: entries last, in release-row order · header unchanged · checked wit
 on the PR (all minor, auto-decided)
 Review fit: pass · Review quality: pass
 
+### Group 4
+The branch was rebased twice in this group, onto main 2ca21c9 (PR #51), then 4a7f389 (PR #52), with no conflict;
+the ids below are current, groups 1-3's are mapped under ### Rebases.
+#### T13 · Android demo routes taps, needs: google-services (a89d1fe7)
+Files: AND/settings.gradle.kts · AND/app/build.gradle.kts · AND/app/…/MainActivity.kt · AND/.gitignore · AND/README.md
+Cases: C17.4/hand-K, P-firebase/K → green (`:app:assembleDebug`, warnings as errors, without the file, with a dummy
+google-services.json, and after deleting it; red first "Unresolved reference 'PushNotificationPlugin'"; on the emulator
+no crash without Firebase; an adb tap intent with orcacounter://open/map opened /map, a blank payload nothing)
+Changed: the push build as orca-push-notification-android; the library at its VERSION; google-services Gradle plugin
+4.6.0 (Apache 2.0) applied only when the git-ignored app/google-services.json exists; one
+PushNotificationPlugin(applicationContext), initialize(this) in every onCreate; README "### Push notifications", untried
+Decisions: the tap re-enters the singleTop activity as an ACTION_VIEW intent, OrcaApp's own deep-link path · a blank
+payload opens nothing · the README links Firebase's setup page (all minor, auto-decided)
+Review fit: pass · Review quality: pass
+#### T14 · Android README, server README row (0579a9f7; 7ceee33f rework)
+Files: PN/android/README.md (new) · examples/server/README.md (one row)
+Cases: P-readme/K → green (facts check 177 of 177 against the yaml, the sources, the SDK, release.sh, the workflow,
+custom.ts, firebase-messaging's POM; red first 99 of 152; six mutations each red; the snippet compiles)
+Changed: Maven Central with the SDK and firebase-messaging 25.0.2; one PushNotificationPlugin(applicationContext),
+initialize(this) in every onCreate of a singleTop ComponentActivity; the five actions, the permission, both failure
+messages; Firebase files as the app's; foreground messages; the channel; differences; tests, releases, LICENSE · the
+server README's orca_push_notification.ts row
+Decisions: the snippet routes links with router.handleDeeplink · system-shown and cold-start taps never reach
+onNotificationTap, said as Flutter's behaviour (both minor, auto-decided)
+Review fit: pass · Review quality: a cold-start tap listed under Differences though it matches Flutter, fixed
+Not done: needs: the yaml's payload description said null; T19 fixed it (90f3dd5f)
+#### T16 · Swift token and topics through Firebase Messaging (be119c47; b419d4e6, 0837fbc4 reworks)
+Files: SW/FirebaseMessagingAdapter.swift (new) · SWT/PushMessagingTests.swift (new) · PN/ios/Package.swift · the hook
+only: SW/PushMessaging.swift, SW/PushNotificationPlugin.swift
+Cases: C17.4/S-token → green (`swift test` 32 = 22 + 10, clean build; `xcodebuild test` on the simulator 30; red first
+the missing adapter, the on-arrival test, the 12.18.0 bound; rehearsal 13 of 13; own files: one warning, the accepted
+deprecation of token(completion:) with 12.19.3)
+Changed: firebase-ios-sdk `from: "12.17.0"` (Apache 2.0), FirebaseMessaging, both branches, the header says why · the
+internal adapter: FirebaseApp.app() first, else "Firebase is not configured: the app calls FirebaseApp.configure() at
+launch, …"; the APNs token to Messaging in didRegister and before each call; topics on Firebase's async API · public init()
+Decisions: from 12.17.0, the warning accepted (the parent's call) · the hook a PushMessaging method, no-op default · the
+token keeps a continuation (Firebase's async token() is non-optional) (all minor, auto-decided)
+Review fit: the token reached Messaging only at the next action, fixed · Review quality: continuations for topics, fixed
+#### T19 · The yaml says a tap without a payload hands "" (90f3dd5f)
+Files: PN/orca_plugin.yaml · SWT/PushNotificationParamsTests.swift · cli/test/push_notification_schema_test.dart
+Cases: C17.5 (yaml) → green (cli `dart test` 56 → 57, red first on "Absent, the tap hands null."; push `swift test` 31;
+the drift tests and the pub dry run as before)
+Changed: showLocalNotification's payload description ends `Absent, the tap hands "" (an empty string).`
+(flutter_local_notifications 18.0.1's `payload ?? ''`, both native plugins) · the Swift test's message at :90 · a new
+schema test pins the wording; no generated file carries descriptions
+Decisions: a new test, not an edit of a baseline one · the test pins the wording, not the package's source, which is
+not in the repo (both minor, auto-decided)
+Review fit: pass · Review quality: pass
+Added at group 4 from T14's needs: line.
+
 ### Test run
 Group 1, after T1-T3 (SC/s17p/g1run), on 45b32680: cli `dart test` 54 pass (51 + T1's 3), `dart analyze` no issues ·
 engine `bun test` 828 pass, 0 fail · push android `./gradlew build --continue` BUILD SUCCESSFUL · map, video, voice
@@ -174,11 +224,31 @@ sdk-swift 604 pass · push ios `swift test` 22, `xcodebuild test` on the iOS 18.
 no diff · T10's rehearsal with T7's sources 13 of 13. After T7's last rework 6ab9db64: push ios from a clean build 22,
 0 warnings, xcodebuild 21. After T8's rework 0e1bd458: push android BUILD SUCCESSFUL, PushNotificationPluginTest 26, PushNotificationParamsTest 6. Failures: none.
 
+Group 4, after T13, T14, T16, T19 (SC/s17p/g4run), on b419d4e6, the branch rebased onto main 4a7f389 (PR #52): cli
+`dart test` 57 pass (56 + T19's 1), `dart analyze` no issues · engine `bun test` 843 pass, 0 fail ·
+push, map, video, voice android BUILD SUCCESSFUL (push: PushNotificationPluginTest 26, PushNotificationParamsTest 6) ·
+the Android demo `:app:assembleDebug` BUILD SUCCESSFUL, warnings as errors · sdk-kotlin BUILD SUCCESSFUL · sdk-swift
+640 pass (with main's PR #52 tests) · push ios from a clean build `swift test` 32 with firebase-ios-sdk 12.19.3 resolved, its one
+warning the accepted deprecation of token(completion:) (FirebaseMessagingAdapter.swift:123), `xcodebuild test` on the
+iOS 18.5 simulator 30, TEST SUCCEEDED · map ios 28, video ios 26, voice ios 24 · release.sh and swift-mirror.sh
+`bash -n`, both workflows parse · the generators leave no diff · T16's rehearsal g4-firebase-from 13 of 13. Failures: none.
+After T16's quality rework 0837fbc4 (the adapter only): push ios `swift test` 32, the one accepted warning, `xcodebuild test`
+30, TEST SUCCEEDED.
+
 ### Blocked
-none (T7 was blocked twice, once per lens; each one retry passed: its review lines)
+none (group 3: T7 was blocked twice, once per lens; each one retry passed: its review lines. Group 4: none)
 
 ### Not done
 none
+
+### Rebases
+Groups 1-3's commits, original → current (main 4a7f389):
+T1 cdb8d703→0b4f96dd · T2 0e775cbf→c1b76588 · T3 45b32680→2b7f1da1 · T3 gate change 31050c84→e84a71aa
+T4 b106a5a8→e1ace137 · T4 rework ba44435d→b923c3ab · T5 4c84d828→fb176b6c · T6 edd49a80→a646b8f5
+T7 1c72e189→dad13465 · T7 rework eb89fbd8→dbb9ca62 · T7 retry f8fd71ef→0cd1bc12
+T7 quality rework 8bdae715→0a9cb581 · T7 quality retry 6ab9db64→18573da0 · T8 a9c94038→9ef2b628
+T8 quality rework 0e1bd458→146f53c5 · T9 9d99991e→c266449e · T10 f9317bf3→8e676798 · T10 rework e84304f4→eded4945
+T11 9bd3c1ad→8f303983
 
 ### For ship (stage 10) to know
 - firebase-messaging is the first Firebase library; it brings play-services and androidx.fragment 1.1.0, so T8 registers
@@ -191,3 +261,12 @@ none
   service shows foreground messages even before initialize; T18 (iOS) says the host's own notification delegate is
   replaced and the app delegate forwards the APNs token.
 - CI: native-plugins.yml now queues 4 macOS and 4 Linux plugin jobs; the first PR run confirms CI's Xcode 16.4.
+- Firebase iOS: the push package takes firebase-ios-sdk `from: "12.17.0"`, so a fresh resolve gets the newest 12.x
+  (12.19.3 today) and the build shows one deprecation warning, token(completion:) in FirebaseMessagingAdapter.swift,
+  accepted (the token call works while the installation-ID registration stays opt-in); CI's Swift steps do not treat
+  warnings as errors. 13.x needs Xcode 26.2. The PR body and T18's README say so. Follow-up: register(completion:) once
+  it is no longer opt-in.
+- The iOS demo (T12) configures Firebase only when its git-ignored GoogleService-Info.plist exists, as the Android demo
+  applies google-services only with its file; without them the token and topic actions fail, local notifications work.
+- The :8094 example server predates /push (T13 saw a 404): restart it before the hand checks.
+- The Android walk in examples/app-android/README.md is marked untried until the stage 10 hand check runs it.

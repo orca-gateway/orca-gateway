@@ -4,3 +4,4 @@
 {"ts":"2026-11-16T19:11:27Z","stage":"09","round":4,"template":null,"text":"orchestrator correction: the card counted six review findings; there were seven (T10 1, T7 3 fit and 2 quality, T8 1)"}
 {"ts":"2026-11-16T19:11:36Z","stage":"09","round":5,"template":null,"text":"group 3 approved (standing rule: minor and patch approved with defaults): 1 none blocked; 2 go, group 4 T13 and T14 now, T16 waits on 3; 3 stays open for the user (major)"}
 {"ts":"2026-11-16T19:17:37Z","stage":"09","round":6,"template":null,"text":"gate 08 question 5 answered by the user (relayed by the parent session): \"PR 50 and 51 merged, go with your recommendation\" = A, Firebase Messaging on iOS; T16, T12, T15, T17, T18 unblocked"}
+{"ts":"2026-11-16T20:21:29Z","stage":"09","round":6,"template":null,"text":"group 4 approved (standing rule: minor and patch approved with defaults): 1 none blocked; 2 go, group 5 T12, T15, T17, T18"}
