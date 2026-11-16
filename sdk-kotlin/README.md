@@ -398,10 +398,10 @@ files under `context.filesDir/orca_gateway`:
 - A static flow (`isStatic` on the server) comes in `/config` with its pages pre-rendered. They
   are saved at boot with the config, and then served with no request: any static page, visited or
   not, also offline and after a restart.
-- `/version` is asked with the flow versions saved. When every flow's version equals the saved
-  one, the saved config is used and `/config` is not asked. When one differs (a missing one too),
-  the whole `/config` is fetched and saved again, and the saved pages of a versioned flow it no
-  longer has are deleted.
+- `/version` is asked, and the flow versions in its answer are compared with the ones saved. When
+  every flow's version equals the saved one, the saved config is used and `/config` is not asked.
+  When one differs (a missing one too), the whole `/config` is fetched and saved again, and the
+  saved pages of a versioned flow it no longer has are deleted.
 - Offline is any `/version` failure (no connectivity monitor): the app boots from the saved
   config. With none saved, the error view says "No network and no cached config available".
 - Dynamic routes (`isDynamic`) and pages outside static flows are never cached: they are always

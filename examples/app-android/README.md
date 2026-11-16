@@ -201,13 +201,13 @@ adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
   --ez ORCA_OFFLINE true --es ORCA_APP_ID static-flows --es ORCA_BOOT config
 ```
 
-The app shows a spinner, then "Home (Static)". At boot the SDK asks `/version` with the flow
-versions it saved (none yet), fetches `/config` and saves it with the pages of `home` and `about`
-(files in the app's `files/orca_gateway`). Those two pages then open with no request, `about` too
-though it was never visited; `profile` is asked of the server each time. The server's console
-shows it: `request_start` lines for `"path":"/version"` and `"path":"/config"`, none for
-`/page/home`. Launch again with the same command: only `/version` this time. The versions match,
-so the saved config is used and `/config` is not asked.
+The app shows a spinner, then "Home (Static)". At boot the SDK asks `/version` and compares the flow
+versions in the answer with the ones it saved (none yet), then fetches `/config` and saves it with
+the pages of `home` and `about` (files in the app's `files/orca_gateway`). Those two pages then open
+with no request, `about` too though it was never visited; `profile` is asked of the server each
+time. The server's console shows it: `request_start` lines for `"path":"/version"` and
+`"path":"/config"`, none for `/page/home`. Launch again with the same command: only `/version` this
+time. The versions match, so the saved config is used and `/config` is not asked.
 
 To check it offline:
 
