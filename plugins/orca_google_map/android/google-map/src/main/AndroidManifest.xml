@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merged into the host app: the map shows the device's location
+     (myLocationEnabled) only while the app holds one of these, granted at
+     run time. The plugin never asks for them, as google_maps_flutter does
+     not: the app does. The Maps API key is the app's, not this library's. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+</manifest>
