@@ -214,7 +214,41 @@ final class FlexibleIntrinsicTests: XCTestCase {
         assertFrame(pixels.bounds(of: Self.isBlue), CGRect(x: 0, y: 10, width: 10, height: 10))
     }
 
+    /// A3.5: the Row's stretch forces the tallest height (60) on children
+    /// with a set height of 20, 60 and 40 (Flutter's `enforce`: a tight
+    /// parent wins over a set size); the marker below starts at 60.
+    func testA3_5IntrinsicHeightStretchesSetHeightContainersToTheTallest() throws {
+        let pixels = try draw([
+            node("col", "Column", ["crossAxisAlignment": "start"], ["intrinsic", "marker"]),
+            node("intrinsic", "IntrinsicHeight", [:], ["row"]),
+            node("row", "Row", ["crossAxisAlignment": "stretch"], ["red", "green", "blue"]),
+            box("red", "#FF0000", 60, 20), box("green", "#00FF00", 60, 60), box("blue", "#0000FF", 60, 40),
+            box("marker", "#FF00FF", 10, 10),
+        ], width: 300, height: 200)
+        assertFrame(pixels.bounds(of: Pixels.isRed), CGRect(x: 0, y: 0, width: 60, height: 60))
+        assertFrame(pixels.bounds(of: Self.isGreen), CGRect(x: 60, y: 0, width: 60, height: 60))
+        assertFrame(pixels.bounds(of: Self.isBlue), CGRect(x: 120, y: 0, width: 60, height: 60))
+        assertFrame(pixels.bounds(of: Self.isMagenta), CGRect(x: 0, y: 60, width: 10, height: 10))
+    }
+
     // MARK: A3.5 IntrinsicWidth
+
+    /// A3.5: IntrinsicWidth (stepWidth 50) around a Column with `stretch`
+    /// of children set 70, 130 and 90 wide makes all three 150 (130 rounded
+    /// up), the marker beside it at 150.
+    func testA3_5IntrinsicWidthStretchesSetWidthContainersToTheStep() throws {
+        let pixels = try draw([
+            node("row", "Row", ["crossAxisAlignment": "start"], ["intrinsic", "marker"]),
+            node("intrinsic", "IntrinsicWidth", ["stepWidth": 50], ["col"]),
+            node("col", "Column", ["crossAxisAlignment": "stretch"], ["red", "green", "blue"]),
+            box("red", "#FF0000", 70, 20), box("green", "#00FF00", 130, 20), box("blue", "#0000FF", 90, 20),
+            box("marker", "#FF00FF", 10, 10),
+        ], width: 300, height: 200)
+        assertFrame(pixels.bounds(of: Pixels.isRed), CGRect(x: 0, y: 0, width: 150, height: 20))
+        assertFrame(pixels.bounds(of: Self.isGreen), CGRect(x: 0, y: 20, width: 150, height: 20))
+        assertFrame(pixels.bounds(of: Self.isBlue), CGRect(x: 0, y: 40, width: 150, height: 20))
+        assertFrame(pixels.bounds(of: Self.isMagenta), CGRect(x: 150, y: 0, width: 10, height: 10))
+    }
 
     /// A3.5: IntrinsicWidth around a Column with `stretch` makes every child
     /// as wide as the widest (80), and is 80 wide itself (the marker beside

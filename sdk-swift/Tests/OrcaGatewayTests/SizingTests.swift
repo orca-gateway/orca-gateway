@@ -115,6 +115,101 @@ final class SizingTests: XCTestCase {
         assertFrame(forced.bounds(of: Pixels.isRed), CGRect(x: 0, y: 0, width: 200, height: 100))
     }
 
+    // MARK: A3.2 A set width or height within the parent's limits
+
+    // A Container or SizedBox with a set width or height is Flutter's
+    // ConstrainedBox(tightFor(width, height)), laid out with `enforce`: the
+    // set size is kept within the incoming min and max (container.dart:284,
+    // proxy_box.dart:303-313).
+
+    /// A3.2: a set 300 by 20 under min 120 by 40 and max 200 by 60 is 200 by 40.
+    func testA3_2ConstrainedBoxHoldsASetSizeContainerWithinItsMinAndMax() throws {
+        let pixels = try draw([
+            node("box", "ConstrainedBox",
+                 ["constraints": ["minWidth": 120, "minHeight": 40, "maxWidth": 200, "maxHeight": 60]], ["red"]),
+            box("red", "#FF0000", 300, 20),
+        ], width: 320, height: 200)
+        assertFrame(pixels.bounds(of: Pixels.isRed), CGRect(x: 0, y: 0, width: 200, height: 40))
+    }
+
+    /// A3.2: a min of 100 by 40 raises a set 20 by 20 child to it.
+    func testA3_2ConstrainedBoxMinRaisesASmallerSetSizeContainer() throws {
+        let pixels = try draw([
+            node("box", "ConstrainedBox", ["constraints": ["minWidth": 100, "minHeight": 40]], ["red"]),
+            box("red", "#FF0000", 20, 20),
+        ], width: 320, height: 200)
+        assertFrame(pixels.bounds(of: Pixels.isRed), CGRect(x: 0, y: 0, width: 100, height: 40))
+    }
+
+    /// A3.2: the min reaches the box's own child only: under a Center, which
+    /// loosens it, the 20 by 20 child keeps its size, centred.
+    func testA3_2ConstrainedBoxMinDoesNotReachAGrandchild() throws {
+        let pixels = try draw([
+            node("box", "ConstrainedBox", ["constraints": ["minWidth": 100, "minHeight": 40]], ["center"]),
+            node("center", "Center", [:], ["red"]),
+            box("red", "#FF0000", 20, 20),
+        ], width: 320, height: 200)
+        assertFrame(pixels.bounds(of: Pixels.isRed), CGRect(x: 150, y: 90, width: 20, height: 20))
+    }
+
+    /// A3.2: in a 320 Row a Flexible's loose share (160) caps its set 300
+    /// wide child; the Expanded one fills the other 160, in either order.
+    func testA3_2AFlexiblesShareCapsItsSetWidthContainer() throws {
+        for order in [["flexible", "expanded"], ["expanded", "flexible"]] {
+            let pixels = try draw([
+                node("sized", "SizedBox", ["width": 320], ["row"]),
+                node("row", "Row", [:], order),
+                node("flexible", "Flexible", [:], ["red"]),
+                box("red", "#FF0000", 300, 20),
+                node("expanded", "Expanded", [:], ["green"]),
+                node("green", "Container", ["color": "#00FF00", "height": 20]),
+            ], width: 400, height: 100)
+            let redX: CGFloat = order[0] == "flexible" ? 0 : 160
+            assertFrame(pixels.bounds(of: Pixels.isRed), CGRect(x: redX, y: 0, width: 160, height: 20))
+            assertFrame(pixels.bounds(of: Self.isGreen), CGRect(x: 160 - redX, y: 0, width: 160, height: 20))
+        }
+    }
+
+    /// A3.2: a stretched Column forces its width on a set 100 wide child
+    /// (320); a Column at start leaves it 100.
+    func testA3_2AStretchedColumnForcesItsWidthOnASetWidthContainer() throws {
+        for (cross, width) in [("stretch", 320), ("start", 100)] as [(String, CGFloat)] {
+            let pixels = try draw([
+                node("col", "Column", ["crossAxisAlignment": .string(cross)], ["red"]),
+                box("red", "#FF0000", 100, 20),
+            ], width: 320, height: 200)
+            assertFrame(pixels.bounds(of: Pixels.isRed), CGRect(x: 0, y: 0, width: width, height: 20))
+        }
+    }
+
+    /// A3.2: a plain Row (no flex child, an HStack) leaves its children's
+    /// width unbounded, as Flutter's does, so the HStack's share is no max:
+    /// a set 48 wide box beside a Text keeps 48, and a set 250 wide one
+    /// keeps 250 beside a Text that wants more than the 70 left.
+    func testA3_2APlainRowKeepsASetWidthContainersWidth() throws {
+        for (width, text) in [(48.0, "Hello"), (250.0, "Hello there, this is a long label")] {
+            let pixels = try draw([
+                node("row", "Row", ["crossAxisAlignment": "start"], ["red", "text"]),
+                box("red", "#FF0000", width, 20),
+                node("text", "Text", ["data": .string(text)]),
+            ], width: 320, height: 100)
+            assertFrame(pixels.bounds(of: Pixels.isRed), CGRect(x: 0, y: 0, width: width, height: 20))
+        }
+    }
+
+    /// A3.2: an AspectRatio in a plain Row bounds what is below it, even past
+    /// a Center: it is 200 by 200 (from the page's 200 height), the Center
+    /// loosens that to a max of 200, so a set 300 wide child is 200, centred.
+    func testA3_2AnAspectRatioInAPlainRowBoundsASetWidthContainerBelowACenter() throws {
+        let pixels = try draw([
+            node("row", "Row", [:], ["ratio"]),
+            node("ratio", "AspectRatio", ["aspectRatio": 1], ["center"]),
+            node("center", "Center", [:], ["red"]),
+            box("red", "#FF0000", 300, 20),
+        ], width: 320, height: 200)
+        assertFrame(pixels.bounds(of: Pixels.isRed), CGRect(x: 0, y: 90, width: 200, height: 20))
+    }
+
     // MARK: A3.2 LimitedBox
 
     /// A3.2: under a bounded parent LimitedBox does nothing.

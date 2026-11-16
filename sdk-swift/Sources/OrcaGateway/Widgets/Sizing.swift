@@ -73,6 +73,112 @@ struct BoxLimits: Equatable {
     }
 }
 
+/// A ConstrainedBox's min for its own child (`id`): SwiftUI proposes a
+/// maximum only, so Flutter's incoming minimum travels here. Only that child
+/// reads it; a grandchild (under a Padding, a Center, a Row) never sees it.
+struct ChildMinimum: Equatable {
+    var id: String
+    var size: CGSize
+}
+
+private struct ChildMinimumKey: EnvironmentKey {
+    static let defaultValue: ChildMinimum? = nil
+}
+
+private struct UnboundedAxesKey: EnvironmentKey {
+    static let defaultValue: TightAxes = []
+}
+
+extension EnvironmentValues {
+    /// The min a ConstrainedBox sets for its child (see ChildMinimum).
+    var orcaMinimum: ChildMinimum? {
+        get { self[ChildMinimumKey.self] }
+        set { self[ChildMinimumKey.self] = newValue }
+    }
+
+    /// The axes on which the offer is a Row's or Column's share of its main
+    /// axis (an HStack or VStack), which Flutter leaves unbounded (RenderFlex
+    /// lays a non-flex child out with no main-axis max, flex.dart
+    /// `_computeSizes`): there the offer is no maximum. A Row or Column adds
+    /// its main axis (FlexLayout takes it out: a flex child's share is its
+    /// maximum); a set size, a forced axis or a ConstrainedBox max takes the
+    /// axis out (AddTight, Bound).
+    var orcaUnbounded: TightAxes {
+        get { self[UnboundedAxesKey.self] }
+        set { self[UnboundedAxesKey.self] = newValue }
+    }
+}
+
+/// Flutter `ConstrainedBox(BoxConstraints.tightFor(width:height:))`, what a
+/// Container (container.dart:284) or SizedBox with a set width or height
+/// is, laid out with `enforce` (proxy_box.dart:303-313): a set axis is that
+/// size kept within the incoming limits (a forced axis wins, a smaller max
+/// caps it, a larger min raises it) and its child is offered it; an unset
+/// axis is the child's size, at least the incoming min. The limits are
+/// BoxLimits from the offer and the forced axes, with no maximum on an
+/// `unbounded` axis and at least `minimum` (a ConstrainedBox's min).
+struct TightForLayout: Layout {
+    var width: CGFloat?
+    var height: CGFloat?
+    var tight: TightAxes
+    var unbounded: TightAxes
+    var minimum: CGSize
+
+    private func limits(_ proposal: ProposedViewSize) -> BoxLimits {
+        var outer = BoxLimits(proposal, tight: tight)
+        if unbounded.contains(.horizontal), !tight.contains(.horizontal) { outer.maxWidth = .infinity }
+        if unbounded.contains(.vertical), !tight.contains(.vertical) { outer.maxHeight = .infinity }
+        return BoxLimits(minWidth: minimum.width, minHeight: minimum.height).enforced(in: outer)
+    }
+
+    /// The set axes within the limits (`tighten`), the offer on the others.
+    private func offer(_ proposal: ProposedViewSize) -> ProposedViewSize {
+        let set = limits(proposal).tightened(width: width, height: height)
+        return ProposedViewSize(width: width != nil ? set.maxWidth : proposal.width,
+                                height: height != nil ? set.maxHeight : proposal.height)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let limits = limits(proposal)
+        let offer = offer(proposal)
+        let child = subviews.first?.sizeThatFits(offer) ?? .zero
+        return CGSize(width: width != nil ? offer.width ?? 0 : max(child.width, limits.minWidth),
+                      height: height != nil ? offer.height ?? 0 : max(child.height, limits.minHeight))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(
+            width: width != nil ? bounds.width : proposal.width, height: height != nil ? bounds.height : proposal.height))
+    }
+}
+
+/// TightForLayout around the content when a size is set or a min applies;
+/// otherwise the content as it is.
+struct TightFor: ViewModifier {
+    var width: CGFloat?
+    var height: CGFloat?
+    var minimum: CGSize = .zero
+    @Environment(\.orcaTight) private var tight
+    @Environment(\.orcaUnbounded) private var unbounded
+
+    func body(content: Content) -> some View {
+        if width == nil && height == nil && minimum == .zero {
+            content
+        } else {
+            TightForLayout(width: width, height: height, tight: tight, unbounded: unbounded, minimum: minimum) {
+                content
+            }
+        }
+    }
+}
+
+extension ChildMinimum? {
+    /// The min for the node `id`: zero unless its parent set it for it.
+    func size(for id: String) -> CGSize {
+        self.flatMap { $0.id == id ? $0.size : nil } ?? .zero
+    }
+}
+
 extension Props {
     /// Flutter `parseAlignment` as an absolute point: SwiftUI mirrors a
     /// layout's placements in right-to-left, so it is mirrored first and
@@ -120,7 +226,7 @@ struct AspectRatioView: View {
 
     var body: some View {
         AspectRatioLayout(ratio: Props.number(node["aspectRatio"]) ?? 1, tight: tight) {
-            ChildView(node: node, model: model).environment(\.orcaTight, [.horizontal, .vertical])
+            ChildView(node: node, model: model).modifier(AddTight(axes: [.horizontal, .vertical]))
         }
     }
 }
@@ -162,10 +268,11 @@ struct AspectRatioLayout: Layout {
 /// inside the parent's (`enforce`), and the box is its size. An axis the
 /// parent forces, or whose min is its max, forces the child.
 ///
-/// Known limit: the box always keeps its min and max, but a child that
-/// hugs its content (a Text, a button) is not stretched up to the min
-/// unless that axis is forced; Flutter (and the Kotlin SDK) raise it. The
-/// child then sits at the box's top leading corner.
+/// The min reaches the child as `orcaMinimum`: a Container or SizedBox
+/// child keeps to it (TightForLayout). Known limit: a child that hugs its
+/// content (a Text, a button) is not stretched up to the min unless that
+/// axis is forced; Flutter (and the Kotlin SDK) raise it. The child then
+/// sits at the box's top leading corner.
 @MainActor
 struct ConstrainedBoxView: View {
     let node: ResolvedNode
@@ -180,6 +287,11 @@ struct ConstrainedBoxView: View {
                                    maxHeight: Props.number(constraints?["maxHeight"]) ?? .infinity)
         ConstrainedLayout(additional: additional, tight: tight) {
             ChildView(node: node, model: model).environment(\.orcaTight, tight.union(additional.tightAxes))
+                .modifier(Bound(axes: [additional.maxWidth.isFinite ? .horizontal : [],
+                                       additional.maxHeight.isFinite ? .vertical : []]))
+                .environment(\.orcaMinimum, node.childIds.first.map {
+                    ChildMinimum(id: $0, size: CGSize(width: additional.minWidth, height: additional.minHeight))
+                })
         }
     }
 }
@@ -262,8 +374,7 @@ struct FractionallySizedBoxView: View {
         FractionalLayout(widthFactor: widthFactor, heightFactor: heightFactor,
                          alignment: Props.absoluteAlignment(node["alignment"], direction: direction), tight: tight) {
             ChildView(node: node, model: model)
-                .environment(\.orcaTight, tight.union([widthFactor != nil ? .horizontal : [],
-                                                       heightFactor != nil ? .vertical : []]))
+                .modifier(AddTight(axes: [widthFactor != nil ? .horizontal : [], heightFactor != nil ? .vertical : []]))
         }
     }
 }

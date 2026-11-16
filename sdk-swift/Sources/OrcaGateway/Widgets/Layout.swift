@@ -23,6 +23,7 @@ struct FlexView: View {
     let model: OrcaPageModel
     let axis: Axis
     @Environment(\.layoutDirection) private var ambient
+    @Environment(\.orcaUnbounded) private var unbounded
 
     var body: some View {
         let laid = content
@@ -61,6 +62,7 @@ struct FlexView: View {
                 }
             }
             .environment(\.orcaFlexAxis, axis)
+            .environment(\.orcaUnbounded, unbounded.subtracting(TightAxes(axis)))
         } else {
             stacked
         }
@@ -117,6 +119,7 @@ struct FlexView: View {
             if trail { Spacer(minLength: 0) }
         }
         .environment(\.orcaFlexAxis, axis)
+        .environment(\.orcaUnbounded, unbounded.union(TightAxes(axis)))
     }
 
     @ViewBuilder
@@ -232,22 +235,27 @@ struct PaddingView: View {
     }
 }
 
-/// A fixed size on the axes it names; with no child, an empty box of that
-/// size (0 on an axis it leaves out).
+/// Flutter `SizedBox` (widgets/basic.dart), a RenderConstrainedBox with
+/// `tightFor(width, height)`: a fixed size on the axes it names, kept
+/// within the parent's limits as `enforce` keeps it (TightForLayout); with
+/// no child, an empty box of that size (0, or the parent's min, on an axis
+/// it leaves out).
 @MainActor
 struct SizedBoxView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
+    @Environment(\.orcaMinimum) private var minimum
 
     var body: some View {
         let width = Props.number(node["width"])
         let height = Props.number(node["height"])
         if node.childIds.isEmpty {
-            Color.clear.frame(width: width ?? 0, height: height ?? 0)
+            Color.clear
+                .modifier(TightFor(width: width ?? 0, height: height ?? 0, minimum: minimum.size(for: node.id)))
         } else {
             ChildView(node: node, model: model)
                 .modifier(AddTight(axes: [width != nil ? .horizontal : [], height != nil ? .vertical : []]))
-                .frame(width: width, height: height)
+                .modifier(TightFor(width: width, height: height, minimum: minimum.size(for: node.id)))
         }
     }
 }
@@ -543,13 +551,25 @@ struct HugLayout: Layout {
         subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
-/// Adds axes to the tight set the children see.
+/// Adds axes to the tight set the children see (and so takes them out of
+/// the unbounded set: a forced axis is bounded).
 struct AddTight: ViewModifier {
     let axes: TightAxes
     @Environment(\.orcaTight) private var tight
 
     func body(content: Content) -> some View {
-        content.environment(\.orcaTight, tight.union(axes))
+        content.environment(\.orcaTight, tight.union(axes)).modifier(Bound(axes: axes))
+    }
+}
+
+/// Takes axes out of the unbounded set the children see (`orcaUnbounded`):
+/// a set size or a max there bounds them.
+struct Bound: ViewModifier {
+    let axes: TightAxes
+    @Environment(\.orcaUnbounded) private var unbounded
+
+    func body(content: Content) -> some View {
+        content.environment(\.orcaUnbounded, unbounded.subtracting(axes))
     }
 }
 #endif
