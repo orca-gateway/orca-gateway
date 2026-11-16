@@ -1,0 +1,8 @@
+# Swift package (ios/)
+.build/
+.swiftpm/
+Package.resolved
+# Gradle build (android/); build/ is ignored by the repo's root .gitignore
+.gradle/
+.kotlin/
+local.properties
