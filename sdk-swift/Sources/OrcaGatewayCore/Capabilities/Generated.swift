@@ -18,19 +18,26 @@ public enum GeneratedCapabilities {
     public static let sdkSemver = "0.1.0-alpha.1"
 
     public static let widgets: [String] = [
+        "AbsorbPointer",
         "Align",
         "AnimatedBuilder",
         "AppBar",
         "AspectRatio",
+        "BackdropFilter",
         "Baseline",
+        "BlurView",
         "BottomNavItem",
         "BottomNavigationBar",
         "Card",
         "Center",
+        "ClipOval",
         "ClipRRect",
+        "ClipRect",
+        "ColorFiltered",
         "Column",
         "ConstrainedBox",
         "Container",
+        "DecoratedBox",
         "Divider",
         "Drawer",
         "ElevatedButton",
@@ -41,14 +48,18 @@ public enum GeneratedCapabilities {
         "FractionallySizedBox",
         "GestureDetector",
         "Icon",
+        "IgnorePointer",
         "Image",
+        "InteractiveViewer",
         "IntrinsicHeight",
         "IntrinsicWidth",
         "LimitedBox",
         "Offstage",
+        "Opacity",
         "OutlinedButton",
         "Padding",
         "Positioned",
+        "RotatedBox",
         "Row",
         "SafeArea",
         "Scaffold",
@@ -150,5 +161,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "03b167f272318a29ae4b90843aaaaa1103fbd338b2b956a95cfd0fcc6258017b"
+    public static let capsHash = "1c4f702adc2748e8b0f2adcfaee453f48e108cc07894310bbb3c5d3f7adaf865"
 }
