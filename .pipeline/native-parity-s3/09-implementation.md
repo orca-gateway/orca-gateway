@@ -3,20 +3,21 @@
 ## Front page
 
 ### In one breath
-group 3 of 5 · tasks: 2 green, 0 blocked · A3.4 (Flexible, Baseline), A3.5 green on both SDKs
-K-flex, S-flex: Flexible loose in a Row or Column; IntrinsicHeight, IntrinsicWidth, Baseline.
-Both Baselines report their child's intrinsic size, so IntrinsicHeight around one matches Flutter.
+group 4 of 5 · tasks: 3 green, 0 blocked · A3.3, A3.6 green on both SDKs in tests
+K-flow, S-flow: Wrap (WrapRuns in both cores, RTL, RenderWrap intrinsics), Offstage, SafeArea.
+K-shell: the Kotlin tab shell takes its bottom bar's inset, so a tab page never pads it twice.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided (minor): Kotlin baseline-aligned Row in IntrinsicHeight uses the tallest child
-(follow-up); Swift marks intrinsic measuring with an environment flag (orcaIntrinsicHeight).
+3 auto-decided (minor): Wrap mirrors in RTL and answers RenderWrap's intrinsics (my brief said
+left-to-right, corrected); K-shell and S-shell added as small tasks; two Swift SafeArea and
+IntrinsicWidth-around-Wrap nestings left as follow-ups.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 4 (Wrap, Offstage, SafeArea; K-shell added). (default: go)
+2. Next: group 5 (both SDKs advertise the 13; S-shell). (default: go)
 
 ## Appendix
 
@@ -116,3 +117,47 @@ flag (s3-swift-intrinsic-flag). Known limits outside the files, follow-ups: colo
 IntrinsicWidth at their own widths.
 Review fit: pass · Review quality: finding → pass (tightened repeated enforced's clamp; now one enforced expression)
 Not done: advertising (S-caps, group 5).
+
+### Group 4
+Commits: K-flow 8daa66c, K-shell 1f05f2d, S-flow 47425a3 (each staged by path). Nothing pushed. Gate 3 approved under
+the standing rule. D1 (group 4 in the plan) landed in group 2. K-shell is a task the main session added after K-flow
+found the bug (s3-k-shell-bottom-inset). common-flow.md was corrected mid-group (RTL, intrinsics) before S-flow began.
+
+#### Task K-flow · Kotlin Wrap, Offstage, SafeArea
+Files: `sdk-kotlin/core/src/main/kotlin/com/orcagateway/core/render/WrapRuns.kt` (new) · `.../core/render/WrapRunsTest.kt`
+(new) · `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Flow.kt` (new) · `.../widgets/FlowTest.kt` (new)
+Cases: A3.3 kt (core + ui), A3.6 kt → green (WrapRunsTest 17, FlowTest 17; `./gradlew build` core 368, sdk 347, lint
+clean, no golden moved). Red first: all (compile), then the 4 rework cases each red for its bug.
+Changed: pure WrapRuns.layout (RenderWrap: 1e-10 break, _distributeSpace, cross factor, size within limits, smallest
+when empty); WrapMeasurePolicy measures loose, mirrors in RTL, answers RenderWrap's four intrinsics; OffstageWidget one
+Layout (offstage: measure, place nothing, min size); SafeAreaWidget windowInsetsPadding(safeDrawing.only(flags)).
+Decisions: Offstage out of accessibility checked as "not displayed" (SemanticsOwner skips unplaced nodes); WrapRuns in
+px, spacing × density once; intrinsics per RenderWrap with child sizes from their intrinsics (no dry layout).
+Review fit: finding → pass (no RTL mirror; digest misdescribed) · Review quality: finding → pass (default intrinsics
+summed every child) · one rework, re-review passed both lenses
+Not done: registration (K-caps). The tab-shell bottom inset → K-shell.
+
+#### Task K-shell · The Kotlin tab shell takes its bottom bar's inset
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/navigation/TabShellScreen.kt` · `.../navigation/TabShellScreenTest.kt`
+Cases: A3.6 kt (never twice) → green (`a3_6_aSafeAreaInATabPageDoesNotPadTheBottomInsetTheTabBarTook`, red first: a 48 dp
+gap = the bottom inset; TabShellScreenTest 17 + RouterTest 34; `./gradlew build` sdk 348, core 368).
+Changed: ShellScaffold consumes all the Scaffold padding it applied (Flutter scaffold.dart:3027-3031); a covered shell
+has no tab bar, so a page over it still pads the inset.
+Review fit: pass · Review quality: pass (one reviewer, both lenses)
+Not done: RouteFrame's TopAppBar over the shell does not consume the status-bar inset (follow-up).
+
+#### Task S-flow · Swift Wrap, Offstage, SafeArea
+Files: `sdk-swift/Sources/OrcaGatewayCore/Render/WrapRuns.swift` (new) · `.../OrcaGatewayCoreTests/WrapRunsTests.swift` (new)
+· `sdk-swift/Sources/OrcaGateway/Widgets/Flow.swift` (new) · `.../NodeView.swift` · `.../OrcaGatewayTests/FlowTests.swift` (new)
+Cases: A3.3 sw (17 core + 8 UI), A3.6 sw (8 UI) → green (swift test core 367, UI 230; iOS 266 + 367; 0 warnings; no
+golden moved). Red first: all but the default-Offstage test (an unknown type also draws nothing), guarded by the
+keeps-mounted test.
+Changed: WrapRuns same shape and cases as Kotlin's; WrapView Layout (loose proposals, RTL by SwiftUI, IntrinsicHeight
+answered from the measured sizes); OffstageView (same identity, opacity 0, no hits, accessibilityHidden, smallest size);
+SafeAreaView (false edges ignoresSafeArea(.container), left/right absolute, orcaSafeAreaTaken so nothing reopens).
+Decisions: A3.6 state = an onInit counter + the same UITextField instance (typed text cannot reach the binding in the
+test window); SafeArea by SwiftUI's geometric safe area (D4); only the .container region ignored (keyboard still lifts).
+Review fit: pass · Review quality: finding → pass (each child measured twice in the vertical intrinsic branch; two
+unused conformances) · one rework, checked in the file
+Not done: Scaffold/tab shell do not mark their bars' insets → S-shell (group 5); IntrinsicWidth around a horizontal
+Wrap includes spacing, and a true edge inside a false one does not pad (follow-ups, s3-swift-wrap-intrinsic-width).
