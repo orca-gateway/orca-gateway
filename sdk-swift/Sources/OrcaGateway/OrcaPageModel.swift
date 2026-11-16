@@ -135,9 +135,12 @@ public final class OrcaPageModel: ObservableObject {
         self.executor = ActionExecutor(store: store, client: client)
         store.pageId = page.pageId
         store.seed(page.state)
+        var seen: Set<String> = []
+        nodeOrder = page.components.map(\.id).filter { seen.insert($0).inserted }
         executor.onEffect = { [weak self] effect in self?.onEffect?(effect) }
         executor.perform = { [weak self] effect in self?.perform(effect) }
         executor.onMutation = { [weak self] mutation in self?.apply(mutation) }
+        executor.pageNodes = { [weak self] in self?.nodesInPageOrder() ?? [] }
     }
 
     /// An inert page of `snapshot` alone, drawn by the same views as the
@@ -157,16 +160,36 @@ public final class OrcaPageModel: ObservableObject {
 
     public var page: PageResponse { renderer.page }
 
-    public func resolve(_ id: String) -> ResolvedNode? {
-        resolve(id, animationProgress: nil)
+    /// The renderer's node ids in Flutter's node map order, which the
+    /// renderer's dictionary does not keep: a Dart map keeps insertion order,
+    /// and setting a key it holds keeps its place. `apply` keeps it in step.
+    private var nodeOrder: [String] = []
+
+    /// The current nodes in Flutter's node map order.
+    private func nodesInPageOrder() -> [ComponentNode] {
+        nodeOrder.compactMap { renderer.nodes[$0] }
     }
 
-    /// Resolve under an AnimatedBuilder: `tween` props take `animationProgress`.
+    /// A read of a node's props by another view (a Row reading its
+    /// Flexible's flex, an AppBar its title's text): never reported to
+    /// DevTools, which hears a node's own build only (Flutter's WatchBuilder).
+    public func resolve(_ id: String) -> ResolvedNode? {
+        resolve(id, animationProgress: nil, reportsRebuild: false)
+    }
+
+    /// The node's own build (NodeView's body; a slot drawn without one): a
+    /// watching node reports its `widget_rebuild` while DevTools is on.
+    /// Under an AnimatedBuilder `tween` props take `animationProgress`.
     /// A tween naming an `animationId` takes that controller's curved
     /// progress from the page's registry instead, 0 for an unknown id.
     public func resolve(_ id: String, animationProgress: Double?) -> ResolvedNode? {
+        resolve(id, animationProgress: animationProgress, reportsRebuild: true)
+    }
+
+    private func resolve(_ id: String, animationProgress: Double?, reportsRebuild: Bool) -> ResolvedNode? {
         if let frozen { return frozen[id] }
-        guard var node = renderer.resolve(id, state: store.state, animationProgress: animationProgress)
+        guard var node = renderer.resolve(id, state: store.state, animationProgress: animationProgress,
+                                          reportsRebuild: reportsRebuild)
         else { return nil }
         // The renderer builds its resolver without the id lookup, so the
         // props holding a targeted tween are resolved again with it.
@@ -347,10 +370,44 @@ public final class OrcaPageModel: ObservableObject {
         logger.log(level: level, "\(parts.joined(separator: " "), privacy: .public)")
     }
 
+    /// Edit the node tree, and the node order as Flutter's `ComponentStore`
+    /// moves it: an update keeps every place; a delete drops the subtree; an
+    /// add appends its new nodes in the order sent; a replace drops the
+    /// target's subtree first, so a new node reusing an id from it goes to
+    /// the end. An id the map still holds keeps its place.
     func apply(_ mutation: ComponentMutation) {
         guard !isInert else { return }
+        if case .replace(let targetId, let components) = mutation, !components.isEmpty {
+            let removed = subtree(of: targetId)
+            nodeOrder.removeAll { removed.contains($0) }
+        }
         renderer.apply(mutation)
+        nodeOrder.removeAll { renderer.nodes[$0] == nil }
+        if case .add(_, let components, _) = mutation {
+            append(components)
+        } else if case .replace(_, let components) = mutation {
+            append(components)
+        }
         structureRevision += 1
+    }
+
+    /// The ids `removeSubtree` takes out: the node and every node under it.
+    private func subtree(of id: String) -> Set<String> {
+        var ids: Set<String> = []
+        var pending = [id]
+        while let next = pending.popLast() {
+            guard let node = renderer.nodes[next], ids.insert(next).inserted else { continue }
+            pending += node.children
+        }
+        return ids
+    }
+
+    /// Put the nodes the map now holds and the order does not at its end.
+    private func append(_ components: [ComponentNode]) {
+        var listed = Set(nodeOrder)
+        for node in components where renderer.nodes[node.id] != nil && listed.insert(node.id).inserted {
+            nodeOrder.append(node.id)
+        }
     }
 }
 
@@ -410,11 +467,10 @@ final class NodeObserver: ObservableObject {
         }
     }
 
-    /// A watched key changed: redraw, and tell DevTools.
+    /// A watched key changed: redraw. The redraw resolves the node again,
+    /// and that resolution tells DevTools, with the traces (PageRenderer).
     private func watchedChanged() {
         revision += 1
-        guard OrcaDebug.isEnabled, let node = model?.renderer.node(id) else { return }
-        OrcaDebug.report(.widgetRebuild(widgetId: id, widgetType: node.type, watches: watches))
     }
 
     private func structureChanged() {

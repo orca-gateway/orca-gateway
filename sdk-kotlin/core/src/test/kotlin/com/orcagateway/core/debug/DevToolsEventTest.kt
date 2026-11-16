@@ -32,7 +32,11 @@ class DevToolsEventTest {
     /** Swift `testSwiftBuildsEveryFixture`. */
     @Test
     fun e1_everyFixtureIsRebuilt() {
-        val action = Fixtures.json("schema/fixtures/devtools/action.json")["payload"]["data"].decode(Action.serializer())
+        fun action(file: String): Action =
+            Fixtures.json("schema/fixtures/devtools/$file.json")["payload"]["data"].decode(Action.serializer())
+        // Flutter's traces (ValueResolver.resolveWithTrace) of the fixtures' values.
+        val countPlusOne = listOf(TraceStep("state", "count", "0"), TraceStep("input", null, "0"), TraceStep("add", "0", "1"))
+        val countText = listOf(TraceStep("state", "count", "1"), TraceStep("input", null, "1"), TraceStep("toString", "1", "1"))
         val built: Map<String, DevToolsEvent> = mapOf(
             "device_info" to DevToolsEvent.deviceInfo(platform = "iOS", deviceModel = "iPhone17,1", appName = "Orca Counter"),
             "timing" to DevToolsEvent.timing(
@@ -57,7 +61,17 @@ class DevToolsEventTest {
                 ),
             ),
             "state_change" to DevToolsEvent.stateChange(StateScope.Page, "home", "count", j(0), j(1)),
-            "action" to DevToolsEvent.action(action, pageId = "home", durationMs = 0.75),
+            "action" to DevToolsEvent.action(action("action"), pageId = "home", durationMs = 0.75),
+            "action-traced" to DevToolsEvent.action(
+                action("action-traced"),
+                pageId = "home",
+                durationMs = 1.25,
+                transformTrace = countPlusOne,
+                affectedWidgets = listOf(
+                    obj("id" to "5", "type" to "Text", "watches" to listOf("count")),
+                    obj("id" to "8", "type" to "Container", "watches" to listOf("count", "theme")),
+                ),
+            ),
             "network" to DevToolsEvent.network(
                 method = "GET",
                 url = "http://localhost:8080/api/v1/app/counter/page/home",
@@ -68,11 +82,57 @@ class DevToolsEventTest {
                 responseHeaders = mapOf("content-type" to "application/json"),
                 phases = listOf(DevToolsEvent.NetworkPhase("wait", 12.5)),
             ),
+            "network-bodies" to DevToolsEvent.network(
+                method = "POST",
+                url = "http://localhost:8080/api/v1/app/counter/page/home",
+                statusCode = 200,
+                durationMs = 14.25,
+                responseSizeBytes = 316,
+                requestHeaders = DevToolsEvent.sanitize(
+                    linkedMapOf(
+                        "accept" to "application/json", "authorization" to "Bearer k", "cookie" to "a=1",
+                        "proxy-authorization" to "p", "x-api-key" to "demo-key",
+                    ),
+                ),
+                responseHeaders = DevToolsEvent.sanitize(
+                    linkedMapOf("content-type" to "application/json", "set-cookie" to "s=1"),
+                ),
+                phases = listOf(DevToolsEvent.NetworkPhase("wait", 14.25)),
+                requestBody = obj("theme" to "dark", "cartCount" to 2),
+                responseBody = obj(
+                    "pageId" to "home",
+                    "title" to "Home",
+                    "state" to listOf(mapOf("key" to "count", "scope" to "page", "initial" to 0)),
+                    "components" to listOf(
+                        mapOf(
+                            "id" to "5",
+                            "type" to "Text",
+                            "kind" to "primitive",
+                            "childMode" to "none",
+                            "props" to mapOf(
+                                "data" to mapOf(
+                                    "type" to "transform",
+                                    "input" to mapOf("type" to "state", "key" to "count", "scope" to "page"),
+                                    "by" to listOf(mapOf("type" to "toString")),
+                                ),
+                            ),
+                            "children" to emptyList<String>(),
+                            "watches" to listOf("count"),
+                        ),
+                    ),
+                ),
+            ),
             "widget_rebuild" to DevToolsEvent.widgetRebuild(
                 widgetId = "5",
                 widgetType = "Text",
                 watches = listOf("count"),
-                propTraces = mapOf("data" to listOf(obj("op" to "toString", "in" to "1", "out" to "1"))),
+                propTraces = mapOf("data" to listOf(TraceStep("toString", "1", "1"))),
+            ),
+            "widget_rebuild-traced" to DevToolsEvent.widgetRebuild(
+                widgetId = "5",
+                widgetType = "Text",
+                watches = listOf("count"),
+                propTraces = mapOf("data" to countText),
             ),
             "error" to DevToolsEvent.error(
                 message = "HTTP 500 /api/v1/app/counter/page/home",
@@ -89,6 +149,32 @@ class DevToolsEventTest {
             val sent = JsonValue.parse(event.envelope(deviceId = "fixture-device", timestamp = 1_793_980_800_000L).encoded())
             assertJsonEqual(sent, fixture, name)
         }
+    }
+
+    /**
+     * C19.7: what Dart's toJson leaves out is left out: an empty trace or
+     * widget list, a body that is null (a JSON null too, which Dart reads as
+     * null), a step's `in` when it has none.
+     */
+    @Test
+    fun c19_7_emptyTracesNullBodiesAndMissingInAreLeftOut() {
+        val setState = Action.SetState("count", StateScope.Page, j(1))
+        val bare = DevToolsEvent.action(setState, pageId = "home", durationMs = 0.5)
+        val empty = DevToolsEvent.action(
+            setState,
+            pageId = "home",
+            durationMs = 0.5,
+            transformTrace = emptyList(),
+            affectedWidgets = emptyList(),
+        )
+        assertEquals(bare, empty)
+        assertEquals(setOf("actionType", "family", "pageId", "data", "durationMs"), empty.payload.keys)
+
+        val network = DevToolsEvent.network("GET", "http://x", 0, 1.0, requestBody = JsonValue.Null, responseBody = null)
+        assertEquals(setOf("method", "url", "statusCode", "durationMs"), network.payload.keys)
+
+        val rebuild = DevToolsEvent.widgetRebuild("1", "Text", listOf("k"), mapOf("data" to listOf(TraceStep("input", null, "x"))))
+        assertEquals(obj("data" to listOf(mapOf("op" to "input", "out" to "x"))), rebuild.payload["propTraces"])
     }
 
     /** Swift `testActionFamiliesFollowDart`. */

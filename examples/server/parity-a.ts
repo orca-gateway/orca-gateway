@@ -47,15 +47,27 @@ import {
   Offstage,
   SafeArea,
   Wrap,
+  GestureDetector,
+  Opacity,
+  RotatedBox,
+  ClipRect,
+  ClipOval,
+  DecoratedBox,
+  ColorFiltered,
+  BackdropFilter,
+  BlurView,
+  AbsorbPointer,
+  IgnorePointer,
+  InteractiveViewer,
 } from "../../engine/src/components";
 
 // Native parity, Phase A (pipeline native-parity). One app, one page per plan
 // step, each the "torture" page for the props that step brings to Swift and
 // Kotlin, so the same page can be compared on Flutter, iOS and Android.
-// Pages: polish (step 1), lifecycle (step 2), layout and layout-safe (step 3).
-// Later steps add effects, lists, forms, rich and overlays: one page constant
-// each, one entry in `routes`. Images come from picsum.photos; offline they
-// draw "!" in their box. Only widgets all three SDKs draw.
+// Pages: polish (step 1), lifecycle (step 2), layout and layout-safe (step 3),
+// effects (step 4). Later steps add lists, forms, rich and overlays: one page
+// constant each, one entry in `routes`. Images come from picsum.photos; offline
+// they draw "!" in their box. Only widgets all three SDKs draw.
 
 const red = "#E53935";
 const blue = "#1E88E5";
@@ -914,6 +926,243 @@ const layoutSafePage = PageDefinition.create({
     }),
 });
 
+// ── Step 4 · effects: the 11 visual effect and touch wrappers (A4.1-A4.5) ─────
+
+/** A `columns` × `rows` board of `size` squares, grey and white in turn. */
+function checks(columns: number, rows: number, size: number): Widget {
+  return Column.new({
+    mainAxisSize: "min",
+    children: Array.from({ length: rows }, (_, r) =>
+      Row.new({
+        mainAxisSize: "min",
+        children: Array.from({ length: columns }, (_, c) =>
+          Container.new({ width: size, height: size, color: (r + c) % 2 === 0 ? grey : "#FFFFFF" }),
+        ),
+      }),
+    ),
+  });
+}
+
+/** `count` upright stripes, each `width` × `height`, the four colours in turn. */
+function stripes(count: number, width: number, height: number): Widget {
+  return Row.new({
+    mainAxisSize: "min",
+    children: Array.from({ length: count }, (_, i) =>
+      Container.new({ width, height, color: wrapColors[i % wrapColors.length]! }),
+    ),
+  });
+}
+
+/** A 64 × 64 Stack whose 96 × 96 stripes spill 16 past each edge (a Stack does not clip), handed to `wrap`. */
+function spill(wrap: (stack: Widget) => Widget): Widget {
+  return Padding.new({
+    padding: EdgeInsets.all(16),
+    child: SizedBox.new({
+      width: 64,
+      height: 64,
+      child: wrap(
+        Stack.new({
+          children: [
+            SizedBox.new({ width: 64, height: 64 }),
+            Positioned.new({ left: -16, top: -16, child: stripes(6, 16, 96) }),
+          ],
+        }),
+      ),
+    }),
+  });
+}
+
+/** A width × height box with a centred label (bold when asked) and nothing drawn: what is behind it shows. */
+function clearBox(label: string, width: number, height: number, bold = false): Widget {
+  return SizedBox.new({
+    width,
+    height,
+    child: Center.new({ child: Text.new({ data: label, ...(bold ? { style: { fontWeight: "bold" } } : {}) }) }),
+  });
+}
+
+/** A 64 × 64 ring, two colours: an amber disc inside a 10-wide blue rim, the corners clear. */
+function ring(): Widget {
+  return Container.new({
+    width: 64,
+    height: 64,
+    decoration: { color: amber, borderRadius: 32, border: { width: 10, color: blue } },
+  });
+}
+
+/** Behind: a 240 × 120 grey tap area counting into `behindKey`. In front, centred: a button counting into `frontKey`, handed to `wrap`. */
+function overlap(behindKey: string, frontKey: string, wrap: (button: Widget) => Widget): Widget {
+  return Stack.new({
+    alignment: "center",
+    children: [
+      GestureDetector.new({
+        actions: { onTap: bump(behindKey) },
+        child: Container.new({
+          width: 240,
+          height: 120,
+          alignment: "topLeft",
+          padding: EdgeInsets.all(8),
+          color: pale,
+          child: Text.new({ data: "behind: tap the grey" }),
+        }),
+      }),
+      wrap(ElevatedButton.new({ child: Text.new({ data: "front" }), actions: { onTap: bump(frontKey) } })),
+    ],
+  });
+}
+
+const effectsPage = PageDefinition.create({
+  id: "effects",
+  title: "Effects",
+  state: [
+    { key: "absorbBehind", scope: "page", initial: 0 },
+    { key: "absorbFront", scope: "page", initial: 0 },
+    { key: "ignoreBehind", scope: "page", initial: 0 },
+    { key: "ignoreFront", scope: "page", initial: 0 },
+    { key: "ignoring", scope: "page", initial: true },
+  ],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({ title: Text.new({ data: "Effects (step 4)" }) }),
+      body: SingleChildScrollView.new({
+        child: Padding.new({
+          padding: EdgeInsets.all(16),
+          child: Column.new({
+            crossAxisAlignment: "start",
+            children: [
+              section(
+                "A4.1 Opacity 0.5, RotatedBox one quarter turn",
+                caption("Opacity 0.5 (left) and 1 (right), the same blue box over the checks: they show through the left one only"),
+                SizedBox.new({ height: 4 }),
+                Stack.new({
+                  alignment: "center",
+                  children: [
+                    checks(10, 4, 20),
+                    Row.new({
+                      mainAxisSize: "min",
+                      gap: 16,
+                      children: [Opacity.new({ opacity: 0.5, child: block("0.5", blue, 80, 40) }), block("1", blue, 80, 40)],
+                    }),
+                  ],
+                }),
+                SizedBox.new({ height: 12 }),
+                caption("RotatedBox quarterTurns 1 around a 120 × 40 box, top-left in a 140 × 140 grey box: it takes 40 × 120, the label reads downwards, 100 grey to its right and 20 below it"),
+                SizedBox.new({ height: 4 }),
+                Container.new({
+                  width: 140,
+                  height: 140,
+                  alignment: "topLeft",
+                  color: pale,
+                  child: RotatedBox.new({ quarterTurns: 1, child: block("120 × 40", green, 120, 40) }),
+                }),
+              ),
+              section(
+                "A4.2 ClipRect, ClipOval, DecoratedBox",
+                caption("The same 64 × 64 box with stripes spilling 16 past each edge: no clip, ClipRect (a 64 × 64 square), ClipOval (a 64 circle)"),
+                SizedBox.new({ height: 4 }),
+                Row.new({
+                  mainAxisSize: "min",
+                  gap: 8,
+                  children: [
+                    spill((stack) => stack),
+                    spill((stack) => ClipRect.new({ child: stack })),
+                    spill((stack) => ClipOval.new({ child: stack })),
+                  ],
+                }),
+                SizedBox.new({ height: 12 }),
+                caption("A 6 blue border on grey: DecoratedBox stays 80 × 40, the border under its label; a Container with the same decoration grows to 92 × 52, the label inset. Last, DecoratedBox foreground: a 6 red border over the amber box, still 80 × 40"),
+                SizedBox.new({ height: 4 }),
+                Row.new({
+                  mainAxisSize: "min",
+                  crossAxisAlignment: "start",
+                  gap: 16,
+                  children: [
+                    DecoratedBox.new({ decoration: { color: pale, border: { width: 6, color: blue } }, child: clearBox("80 × 40", 80, 40) }),
+                    Container.new({ decoration: { color: pale, border: { width: 6, color: blue } }, child: clearBox("80 × 40", 80, 40) }),
+                    DecoratedBox.new({
+                      position: "foreground",
+                      decoration: { border: { width: 6, color: red } },
+                      child: block("80 × 40", amber, 80, 40),
+                    }),
+                  ],
+                }),
+              ),
+              section(
+                "A4.3 ColorFiltered, BackdropFilter, BlurView",
+                caption("The two-colour ring as is; ColorFiltered multiply #64B5F6: the ring's two colours darken and the clear corners take #64B5F6, kept to the 64 × 64 box by a ClipRect (Flutter's filter reaches the nearest clip, the natives stop at the box); srcIn green: a green disc, the corners stay clear"),
+                SizedBox.new({ height: 4 }),
+                Row.new({
+                  mainAxisSize: "min",
+                  gap: 16,
+                  children: [
+                    ring(),
+                    ClipRect.new({ child: ColorFiltered.new({ color: "#64B5F6", blendMode: "multiply", child: ring() }) }),
+                    ColorFiltered.new({ color: green, blendMode: "srcIn", child: ring() }),
+                  ],
+                }),
+                SizedBox.new({ height: 12 }),
+                caption("BackdropFilter sigma 6 on the stripes: blurred inside the 140 × 60 box only, sharp around it (the ClipRect keeps Flutter's blur to the box, as the natives do)"),
+                SizedBox.new({ height: 4 }),
+                Stack.new({
+                  alignment: "center",
+                  children: [
+                    stripes(12, 20, 100),
+                    ClipRect.new({ child: BackdropFilter.new({ blurX: 6, blurY: 6, child: clearBox("sigma 6", 140, 60, true) }) }),
+                  ],
+                }),
+                SizedBox.new({ height: 12 }),
+                caption("BlurView sigma 8, overlay #FFFFFF80, radius 12: frosted, half white, round corners"),
+                SizedBox.new({ height: 4 }),
+                Stack.new({
+                  alignment: "center",
+                  children: [
+                    stripes(12, 20, 100),
+                    BlurView.new({ blurX: 8, blurY: 8, overlayColor: "#FFFFFF80", borderRadius: 12, child: clearBox("BlurView 8", 140, 60, true) }),
+                  ],
+                }),
+              ),
+              section(
+                "A4.4 AbsorbPointer, IgnorePointer",
+                caption("AbsorbPointer around the front button: a tap on it moves neither count; a tap on the grey around it counts behind"),
+                shows("behind", "absorbBehind"),
+                shows("front", "absorbFront"),
+                SizedBox.new({ height: 4 }),
+                overlap("absorbBehind", "absorbFront", (button) => AbsorbPointer.new({ child: button })),
+                SizedBox.new({ height: 12 }),
+                caption("IgnorePointer around the front button: ignoring true, a tap on it counts behind; flipped to false, it counts front"),
+                shows("ignoring", "ignoring"),
+                shows("behind", "ignoreBehind"),
+                shows("front", "ignoreFront"),
+                SizedBox.new({ height: 4 }),
+                OutlinedButton.new({
+                  child: Text.new({ data: "Flip ignoring" }),
+                  actions: { onTap: SetState("ignoring", V.transform(V.pageState("ignoring"), [TV.not()])) },
+                }),
+                SizedBox.new({ height: 8 }),
+                overlap("ignoreBehind", "ignoreFront", (button) =>
+                  IgnorePointer.new({ ignoring: V.pageState("ignoring"), child: button }),
+                ),
+              ),
+              section(
+                "A4.5 InteractiveViewer (defaults) around a 5 × 5 numbered grid in a 296 × 200 box",
+                caption("Pinch to zoom: in up to 2.5, never out below 1 (the grid fills the box, whatever minScale 0.8 says). Then drag sideways to pan: it stops at the grid's edges; at scale 1 nothing pans. An up/down drag scrolls the page. Nothing draws outside the box"),
+                SizedBox.new({ height: 4 }),
+                Container.new({
+                  width: 296,
+                  height: 200,
+                  color: pale,
+                  child: InteractiveViewer.new({
+                    child: Wrap.new({ spacing: 12, runSpacing: 10, children: numberedBoxes(25) }),
+                  }),
+                }),
+              ),
+            ],
+          }),
+        }),
+      }),
+    }),
+});
+
 const parityFlow = Flow.create({
   name: "parity",
   routes: [
@@ -923,6 +1172,7 @@ const parityFlow = Flow.create({
     { path: "lifecycle", page: lifecyclePage },
     { path: "layout", page: layoutPage },
     { path: "layout-safe", page: layoutSafePage },
+    { path: "effects", page: effectsPage },
   ],
 });
 

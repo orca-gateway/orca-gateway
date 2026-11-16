@@ -45,6 +45,13 @@ final class DevToolsEventTests: XCTestCase {
 
     func testSwiftBuildsEveryFixture() throws {
         let action = try Fixtures.json("schema/fixtures/devtools/action.json")["payload"]["data"].decode(Action.self)
+        let increment = try Fixtures.json("schema/fixtures/devtools/action-traced.json")["payload"]["data"]
+            .decode(Action.self)
+        // A Text's `data` prop: `count` through toString.
+        let countText: JSONValue = [
+            "type": "transform", "input": ["type": "state", "key": "count", "scope": "page"],
+            "by": [["type": "toString"]],
+        ]
         let built: [String: DevToolsEvent] = [
             "device_info": .deviceInfo(platform: "iOS", deviceModel: "iPhone17,1", appName: "Orca Counter"),
             "timing": .timing(
@@ -59,14 +66,52 @@ final class DevToolsEventTests: XCTestCase {
                               renderCompleteMs: 20.75, firstFrameMs: 21.5)),
             "state_change": .stateChange(scope: .page, pageId: "home", key: "count", oldValue: 0, newValue: 1),
             "action": .action(action, pageId: "home", durationMs: 0.75),
+            // Flutter's trace of `count + 1` at count 0, and the page's nodes
+            // watching `count`, props left out.
+            "action-traced": .action(
+                increment, pageId: "home", durationMs: 1.25,
+                transformTrace: [
+                    TraceStep(op: "state", in: "count", out: "0"), TraceStep(op: "input", out: "0"),
+                    TraceStep(op: "add", in: "0", out: "1"),
+                ],
+                affectedWidgets: [
+                    ["id": "5", "type": "Text", "watches": ["count"]],
+                    ["id": "8", "type": "Container", "watches": ["count", "theme"]],
+                ]),
             "network": .network(
                 method: "GET", url: "http://localhost:8080/api/v1/app/counter/page/home",
                 statusCode: 200, durationMs: 12.5, responseSizeBytes: 2048,
                 requestHeaders: DevToolsEvent.sanitize(["accept": "application/json", "x-api-key": "demo-key"]),
                 responseHeaders: ["content-type": "application/json"], phases: [.init("wait", 12.5)]),
+            // A page fetch with bodies on: the appState it posted, the page it got.
+            "network-bodies": .network(
+                method: "POST", url: "http://localhost:8080/api/v1/app/counter/page/home",
+                statusCode: 200, durationMs: 14.25, responseSizeBytes: 316,
+                requestHeaders: DevToolsEvent.sanitize([
+                    "accept": "application/json", "authorization": "Bearer k", "cookie": "a=1",
+                    "proxy-authorization": "Basic p", "x-api-key": "demo-key",
+                ]),
+                responseHeaders: DevToolsEvent.sanitize(["content-type": "application/json", "set-cookie": "s=1"]),
+                phases: [.init("wait", 14.25)],
+                requestBody: ["theme": "dark", "cartCount": 2],
+                responseBody: [
+                    "pageId": "home", "title": "Home",
+                    "state": [["key": "count", "scope": "page", "initial": 0]],
+                    "components": [
+                        ["id": "5", "type": "Text", "kind": "primitive", "childMode": "none",
+                         "props": ["data": countText], "children": [], "watches": ["count"]],
+                    ],
+                ]),
             "widget_rebuild": .widgetRebuild(
                 widgetId: "5", widgetType: "Text", watches: ["count"],
-                propTraces: ["data": [["op": "toString", "in": "1", "out": "1"]]]),
+                propTraces: ["data": [TraceStep(op: "toString", in: "1", out: "1")]]),
+            // Flutter's trace of `countText` at count 1.
+            "widget_rebuild-traced": .widgetRebuild(
+                widgetId: "5", widgetType: "Text", watches: ["count"],
+                propTraces: ["data": [
+                    TraceStep(op: "state", in: "count", out: "1"), TraceStep(op: "input", out: "1"),
+                    TraceStep(op: "toString", in: "1", out: "1"),
+                ]]),
             "error": .error(
                 message: "HTTP 500 /api/v1/app/counter/page/home", stackTrace: #"{"error":"boom"}"#,
                 context: "GET http://localhost:8080/api/v1/app/counter/page/home"),
@@ -83,6 +128,34 @@ final class DevToolsEventTests: XCTestCase {
                 event.envelope(deviceId: "fixture-device", timestamp: 1_793_980_800_000).encoded())
             assertJSONEqual(sent, fixture, name)
         }
+    }
+
+    /// C19.7: the new fields are left out when there is nothing in them, as
+    /// Dart's toJson does (`!= null`, `isNotEmpty`), so every older event
+    /// stays as it was.
+    func testC19_7_EmptyTracesAndMissingBodiesAreLeftOut() throws {
+        let set = Action.setState(.init(key: "n", value: 1))
+        XCTAssertEqual(.action(set, pageId: "p", durationMs: 1, transformTrace: [], affectedWidgets: []),
+                       DevToolsEvent.action(set, pageId: "p", durationMs: 1))
+        XCTAssertEqual(DevToolsEvent.action(set, pageId: "p", durationMs: 1).payload.keys.sorted(),
+                       ["actionType", "data", "durationMs", "family", "pageId"])
+
+        let plain = DevToolsEvent.network(method: "GET", url: "u", statusCode: 200, durationMs: 1)
+        XCTAssertEqual(plain.payload.keys.sorted(), ["durationMs", "method", "statusCode", "url"])
+        XCTAssertEqual(.network(method: "GET", url: "u", statusCode: 200, durationMs: 1,
+                                requestBody: .null, responseBody: .null), plain,
+                       "a JSON null body is no body, as Dart's null")
+        let failed = DevToolsEvent.network(method: "POST", url: "u", statusCode: 0, durationMs: 1,
+                                           requestBody: ["appState": [:]])
+        XCTAssertEqual(failed.payload["requestBody"], ["appState": [:]])
+        XCTAssertNil(failed.payload["responseBody"])
+        XCTAssertEqual(DevToolsEvent.network(method: "GET", url: "u", statusCode: 500, durationMs: 1,
+                                             responseBody: "boom").payload["responseBody"], "boom")
+
+        XCTAssertEqual(TraceStep(op: "input", out: "0").json, ["op": "input", "out": "0"])
+        XCTAssertEqual(TraceStep(op: "add", in: "0", out: "1").json, ["op": "add", "in": "0", "out": "1"])
+        XCTAssertEqual(DevToolsEvent.widgetRebuild(widgetId: "1", widgetType: "Text", watches: []).payload["propTraces"],
+                       .object([:]))
     }
 
     func testActionFamiliesFollowDart() {

@@ -9,6 +9,7 @@ import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.debug.DevToolsEvent
 import com.orcagateway.core.debug.DevToolsReporter
 import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.core.debug.TraceStep
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.PageResponse
@@ -72,18 +73,29 @@ class DevToolsUiReportingTest {
         OrcaDebug.reporter = null
     }
 
-    /** Swift `testAWatchingNodeReportsItsRebuild`. */
+    /**
+     * Swift `testAWatchingNodeReportsItsRebuild`. Pin moved to the new truth
+     * (C19.1/K): the event comes from the core when the node is resolved, on
+     * the first render and on each redraw, with Flutter's traces of its props;
+     * the observer's redraw alone no longer sends one with empty propTraces.
+     */
     @Test
-    fun c6_aWatchingNodeReportsItsRebuild() = runBlocking {
+    fun c6_c19_1_k_aWatchingNodeReportsItsTracedRebuild() = runBlocking {
+        fun traced(count: String) = DevToolsEvent.widgetRebuild(
+            widgetId = "5", widgetType = "Text", watches = listOf("count"),
+            propTraces = mapOf(
+                "data" to listOf(TraceStep("state", "count", count), TraceStep("input", null, count), TraceStep("toString", count, count)),
+            ),
+        )
         val model = OrcaPageModel(recordedPage("counter-home"))
         val count = NodeObserver(model, "5")
         OrcaDebug.reporter = recorder
+        model.resolve("5") // the first render, as NodeView draws it
         model.fire("onTap", on = assertNotNull(model.resolve("11")))?.join()
         assertEquals(1, count.revision)
-        assertEquals(
-            listOf(DevToolsEvent.widgetRebuild(widgetId = "5", widgetType = "Text", watches = listOf("count"))),
-            recorder.of("widget_rebuild"),
-        )
+        assertEquals(listOf(traced("0")), recorder.of("widget_rebuild"), "the redraw itself reports nothing")
+        model.resolve("5") // the redraw the new revision asks for
+        assertEquals(listOf(traced("0"), traced("1")), recorder.of("widget_rebuild"))
         assertEquals(
             listOf(DevToolsEvent.stateChange(StateScope.Page, "home", "count", JsonValue.Int(0), JsonValue.Int(1))),
             recorder.of("state_change"),

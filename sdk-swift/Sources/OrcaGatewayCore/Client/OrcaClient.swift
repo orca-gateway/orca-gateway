@@ -174,24 +174,40 @@ public struct OrcaClient: @unchecked Sendable {
         return try (json["actions"].arrayValue ?? []).map { try $0.decode(Action.self) }
     }
 
-    /// The transport, plus a DevTools `network` event per request and an
-    /// `error` event for one that failed or was refused (Dart
-    /// `_reportFailedRequest` and `_reportHttpErrorResponse`). The 412 of the
-    /// capability handshake is expected, so it is no error.
-    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+    /// The transport, plus a DevTools `network` event per request (unless
+    /// `captureNetworkRequests` is off) and an `error` event for one that
+    /// failed or was refused (Dart `_reportFailedRequest` and
+    /// `_reportHttpErrorResponse`). The 412 of the capability handshake is
+    /// expected, so it is no error.
+    ///
+    /// With `includeBodies` on, the event shows `requestBody`: the given one,
+    /// else the request's own JSON body (a page fetch gives its app state, or
+    /// JSON null for none, as Flutter shows it); and `responseBody`: the
+    /// response as JSON, else its text (Dart `_tryDecodeJson`), none when the
+    /// transport failed.
+    func send(_ request: HTTPRequest, requestBody: JSONValue? = nil) async throws -> HTTPResponse {
         guard OrcaDebug.isEnabled else { return try await transport.send(request) }
+        let options = OrcaDebug.options
         let start = OrcaDebug.now()
         let url = request.url.absoluteString
         let context = "\(request.method) \(url)"
         let requestHeaders = DevToolsEvent.sanitize(request.headers)
+        let shownBody = options.includeBodies
+            ? requestBody ?? request.body.flatMap { try? JSONValue.decode($0) } : nil
         do {
             let response = try await transport.send(request)
             let ms = OrcaDebug.now() - start
-            OrcaDebug.report(.network(
-                method: request.method, url: url, statusCode: response.status, durationMs: ms,
-                requestSizeBytes: request.body?.count, responseSizeBytes: response.body.count,
-                requestHeaders: requestHeaders, responseHeaders: DevToolsEvent.sanitize(response.headers),
-                phases: [.init("wait", ms)]))
+            if options.captureNetworkRequests {
+                OrcaDebug.report(.network(
+                    method: request.method, url: url, statusCode: response.status, durationMs: ms,
+                    requestSizeBytes: request.body?.count, responseSizeBytes: response.body.count,
+                    requestHeaders: requestHeaders, responseHeaders: DevToolsEvent.sanitize(response.headers),
+                    phases: [.init("wait", ms)], requestBody: shownBody,
+                    responseBody: options.includeBodies
+                        ? (try? JSONValue.decode(response.body))
+                            ?? .string(String(decoding: response.body, as: UTF8.self))
+                        : nil))
+            }
             let handshake = response.status == 412 && response.errorField == "caps_vector_unknown"
             if response.status >= 400, !handshake {
                 OrcaDebug.report(.error(
@@ -201,10 +217,12 @@ public struct OrcaClient: @unchecked Sendable {
             return response
         } catch {
             let ms = OrcaDebug.now() - start
-            OrcaDebug.report(.network(
-                method: request.method, url: url, statusCode: 0, durationMs: ms,
-                requestSizeBytes: request.body?.count, requestHeaders: requestHeaders,
-                phases: [.init("wait", ms)]))
+            if options.captureNetworkRequests {
+                OrcaDebug.report(.network(
+                    method: request.method, url: url, statusCode: 0, durationMs: ms,
+                    requestSizeBytes: request.body?.count, requestHeaders: requestHeaders,
+                    phases: [.init("wait", ms)], requestBody: shownBody))
+            }
             OrcaDebug.report(.error(message: "Network request failed: \(error)", context: context))
             throw error
         }
@@ -233,6 +251,9 @@ public struct OrcaClient: @unchecked Sendable {
         var base = headers
         base["x-orca-caps-hash"] = capsHash
         let state = (appState?.isEmpty ?? true) ? nil : appState
+        // What DevTools shows as the body of both attempts: the app state,
+        // never the vector (Flutter's `includeBodies ? appState : null`).
+        let shown = state.map(JSONValue.object) ?? .null
         var json = base
         json["Content-Type"] = "application/json"
 
@@ -244,7 +265,7 @@ public struct OrcaClient: @unchecked Sendable {
         } else {
             first = HTTPRequest(method: "GET", url: url, headers: base)
         }
-        let response = try await send(first)
+        let response = try await send(first, requestBody: shown)
         guard response.status == 412, response.errorField == "caps_vector_unknown" else {
             return response
         }
@@ -253,7 +274,8 @@ public struct OrcaClient: @unchecked Sendable {
         var body: [String: JSONValue] = ["_orcaCapsVector": try JSONValue(encoding: capabilities)]
         if let state { body["appState"] = .object(state) }
         return try await send(HTTPRequest(
-            method: "POST", url: url, headers: json, body: try JSONValue.object(body).encoded()))
+            method: "POST", url: url, headers: json, body: try JSONValue.object(body).encoded()),
+            requestBody: shown)
     }
 }
 

@@ -29,6 +29,10 @@ import java.net.URI
  * The boolean extras ORCA_OFFLINE and ORCA_SESSIONS turn on OrcaApp's
  * version check and session tracking; both are off by default.
  *
+ * While DevTools is on, the boolean extras ORCA_OVERLAY and ORCA_BODIES turn
+ * on the load chip over each page and the request and response bodies in
+ * DevTools' network events; both are off by default.
+ *
  * An app with a navigation config (app id `navigation`) boots from it with
  * the extra ORCA_BOOT set to `config`: the server's config says where the
  * app starts, and ORCA_PATH is not used.
@@ -87,9 +91,10 @@ class MainActivity : ComponentActivity() {
      * Debug builds show up in Orca DevTools (`task devtools:dev`, port 6363
      * on the Mac). The boolean extra ORCA_DEVTOOLS turns it on or off;
      * ORCA_DEVTOOLS_HOST points a device at the Mac running DevTools.
+     * ORCA_OVERLAY and ORCA_BODIES set showOverlay and includeBodies.
      *
-     * Once per process: a rotation makes a new activity, not a second
-     * connection.
+     * Once per process: while DevTools is on, a new activity (a rotation)
+     * neither opens a second connection nor reads these extras again.
      */
     private fun startDevTools() {
         if (OrcaDebug.isEnabled) return
@@ -100,6 +105,8 @@ class MainActivity : ComponentActivity() {
                 host = setting("ORCA_DEVTOOLS_HOST", DEFAULT_DEVTOOLS_HOST),
                 appName = applicationInfo.loadLabel(packageManager).toString(),
                 appVersion = versionName(),
+                showOverlay = intent.getBooleanExtra("ORCA_OVERLAY", false),
+                includeBodies = intent.getBooleanExtra("ORCA_BODIES", false),
             ),
         )
     }

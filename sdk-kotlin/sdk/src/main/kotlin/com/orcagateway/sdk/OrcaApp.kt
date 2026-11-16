@@ -3,6 +3,7 @@ package com.orcagateway.sdk
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -49,6 +50,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -77,6 +79,7 @@ import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.StoreState
 import com.orcagateway.sdk.client.current
+import com.orcagateway.sdk.debug.PageDebugOverlay
 import com.orcagateway.sdk.navigation.LocalOrcaNavigation
 import com.orcagateway.sdk.navigation.OrcaNavigation
 import com.orcagateway.sdk.navigation.OrcaRoute
@@ -114,7 +117,10 @@ public class OrcaPageLoader(
     public sealed interface Phase {
         public data object Loading : Phase
 
-        public class Loaded(public val model: OrcaPageModel) : Phase
+        public class Loaded(public val model: OrcaPageModel) : Phase {
+            /** Request start to render complete, in ms (the `timing` event's), for the debug overlay. */
+            internal var renderCompleteMs: Double? = null
+        }
 
         public data class Failed(public val message: String) : Phase
     }
@@ -147,11 +153,15 @@ public class OrcaPageLoader(
             plugins?.install(model)
             router?.attach(model)
             val renderComplete = timing.elapsed()
-            // The DevTools `timing` event waits for the first frame.
+            // The DevTools `timing` event waits for the first frame; logTimings also
+            // writes Flutter's line (orca_debug.dart reportTiming).
             model.onFirstAppear = {
-                OrcaDebug.report { timing.event(page.pageId, path, renderStart, renderComplete, firstFrameMs = timing.elapsed()) }
+                if (OrcaDebug.isEnabled) {
+                    OrcaDebug.report { timing.event(page.pageId, path, renderStart, renderComplete, firstFrameMs = timing.elapsed()) }
+                    if (OrcaDebug.options.logTimings) Log.i(WidgetBuilders.LOG_TAG, "[OrcaDebug] Timing: ${page.pageId} - $path")
+                }
             }
-            Phase.Loaded(model)
+            Phase.Loaded(model).also { it.renderCompleteMs = renderComplete }
         } catch (e: CancellationException) {
             started = false
             throw e
@@ -764,7 +774,10 @@ private fun RouteBody(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoad
 
     when (val phase = loader.phase) {
         OrcaPageLoader.Phase.Loading -> LoadingView()
-        is OrcaPageLoader.Phase.Loaded -> OrcaPageView(phase.model)
+        is OrcaPageLoader.Phase.Loaded -> Box {
+            OrcaPageView(phase.model)
+            PageDebugOverlay(phase.model, phase.renderCompleteMs, Modifier.align(AbsoluteAlignment.BottomRight))
+        }
         is OrcaPageLoader.Phase.Failed -> ErrorView("Could not load this page", phase.message) {
             scope.launch { loader.reload(context) }
         }

@@ -1,15 +1,31 @@
 #if canImport(SwiftUI)
 import SwiftUI
 
-/// One page with its snackbar and toast overlay. Put it inside a
+/// One page with its snackbar and toast overlay, and the debug overlay
+/// while DevTools runs with `showOverlay` on. Put it inside a
 /// NavigationStack (OrcaApp does) so a Scaffold's AppBar becomes the
 /// navigation bar.
 @MainActor
 public struct OrcaPageView: View {
     @ObservedObject var model: OrcaPageModel
+    /// The page's load, request start to render complete in ms, from the
+    /// loader that fetched it; nil for a page drawn without one.
+    let loadTimeMs: Double?
 
     public init(model: OrcaPageModel) {
+        self.init(model: model, loadTimeMs: nil)
+    }
+
+    init(model: OrcaPageModel, loadTimeMs: Double?) {
         self.model = model
+        self.loadTimeMs = loadTimeMs
+    }
+
+    /// The debug overlay this page draws, nil while it is off (Flutter
+    /// orca_page.dart:396-403).
+    var debugOverlay: DebugOverlay? {
+        guard DebugOverlay.isShown else { return nil }
+        return DebugOverlay(loadMs: loadTimeMs, components: model.renderer.nodes.count)
     }
 
     public var body: some View {
@@ -20,6 +36,7 @@ public struct OrcaPageView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear { model.appeared() }
+        .overlay(alignment: .bottomTrailing) { debugOverlay }
         .overlay(alignment: .bottom) { ToastView(model: model) }
         .animation(.easeInOut(duration: 0.2), value: model.toast)
     }
@@ -67,6 +84,9 @@ public final class OrcaPageLoader: ObservableObject {
     @Published public private(set) var phase: Phase = .loading
     public let client: OrcaClient
     public let path: String
+    /// The loaded page's request start to render complete, in ms (its
+    /// timing event's `renderCompleteMs`), for the debug overlay.
+    private(set) var loadTimeMs: Double?
     private weak var router: OrcaRouter?
     private var started = false
 
@@ -85,6 +105,7 @@ public final class OrcaPageLoader: ObservableObject {
     public func reload() async {
         started = true
         phase = .loading
+        loadTimeMs = nil
         var client = self.client
         if client.device == DeviceInfo() { client.device = .current() }
         let app = router?.appState ?? [:]
@@ -100,7 +121,11 @@ public final class OrcaPageLoader: ObservableObject {
                 OrcaDebug.report(timing.event(
                     pageId: page.pageId, path: path, renderStartMs: renderStart,
                     renderCompleteMs: renderComplete, firstFrameMs: timing.elapsed()))
+                if OrcaDebug.isEnabled && OrcaDebug.options.logTimings {
+                    OrcaDebug.logTiming(pageId: page.pageId, path: path)
+                }
             }
+            loadTimeMs = renderComplete
             phase = .loaded(model)
         } catch OrcaClientError.http(let status, let body) {
             phase = .failed("HTTP \(status): \(body.prefix(200))")
@@ -553,7 +578,7 @@ private struct LoadedRoutePage: View {
             case .loading:
                 ProgressView()
             case .loaded(let model):
-                OrcaPageView(model: model)
+                OrcaPageView(model: model, loadTimeMs: loader.loadTimeMs)
             case .failed(let message):
                 LoadError(title: "Could not load this page", message: message) {
                     Task { await loader.reload() }

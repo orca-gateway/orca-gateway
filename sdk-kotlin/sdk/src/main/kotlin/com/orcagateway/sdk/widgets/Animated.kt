@@ -129,19 +129,6 @@ internal fun AnimatedOpacityWidget(
 }
 
 /**
- * Flutter `Opacity`: the child drawn with `opacity` (0 to 1; an elastic
- * curve's overshoot is cut off), laid out as if it were not there. With no
- * child it is an empty box of the size its parent forces.
- */
-@Composable
-internal fun OpacityWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
-    val opacity = (Props.number(node["opacity"]) ?: 1.0).coerceIn(0.0, 1.0).toFloat()
-    Box(modifier.alpha(opacity), propagateMinConstraints = true) {
-        ChildView(node, model)
-    }
-}
-
-/**
  * Flutter `AnimatedAlign`: `alignment` (center when missing), `widthFactor`
  * and `heightFactor` move to their new value over `duration` through
  * `curve`; [draw] is [AlignWidget] with the sampled props. Between two

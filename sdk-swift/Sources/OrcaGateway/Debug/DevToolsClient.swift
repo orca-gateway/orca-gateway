@@ -1,37 +1,67 @@
 #if canImport(SwiftUI)
 import Foundation
+import os
 #if canImport(UIKit)
 import UIKit
 #endif
 
-/// Whether and where the SDK sends DevTools events (Flutter
-/// `OrcaDebugConfig`). Off unless `enabled`; the simulator and the Mac reach
-/// DevTools at localhost, a device needs the Mac's address in `host`.
+/// Whether and where the SDK sends DevTools events, and what it captures
+/// (Flutter `OrcaDebugConfig`, sdk/lib/src/debug/orca_debug.dart, with its
+/// defaults). Off unless `enabled`; the simulator and the Mac reach DevTools
+/// at localhost, a device needs the Mac's address in `host`.
 public struct OrcaDebugConfig: Equatable, Sendable {
     public var enabled: Bool
     public var host: String
     public var port: Int
     /// Shown in DevTools' device list.
     public var appName: String?
+    /// Draw the load-time chip at the bottom right of each page.
+    public var showOverlay: Bool
+    /// Also write each page's `timing` event to the system log.
+    public var logTimings: Bool
+    /// Off: no `state_change` events.
+    public var captureStateChanges: Bool
+    /// Off: no `network` events.
+    public var captureNetworkRequests: Bool
+    /// On: `network` events carry the request and response bodies. Off by
+    /// default, since bodies can hold tokens and personal data.
+    public var includeBodies: Bool
 
-    public init(enabled: Bool = false, host: String = "localhost", port: Int = 6363, appName: String? = nil) {
+    public init(enabled: Bool = false, host: String = "localhost", port: Int = 6363, appName: String? = nil,
+                showOverlay: Bool = false, logTimings: Bool = false, captureStateChanges: Bool = true,
+                captureNetworkRequests: Bool = true, includeBodies: Bool = false) {
         self.enabled = enabled
         self.host = host
         self.port = port
         self.appName = appName
+        self.showOverlay = showOverlay
+        self.logTimings = logTimings
+        self.captureStateChanges = captureStateChanges
+        self.captureNetworkRequests = captureNetworkRequests
+        self.includeBodies = includeBodies
     }
 
     public var url: URL? { URL(string: "ws://\(host):\(port)") }
+
+    /// The four switches the core reads.
+    var options: OrcaDebugOptions {
+        OrcaDebugOptions(captureStateChanges: captureStateChanges, captureNetworkRequests: captureNetworkRequests,
+                         includeBodies: includeBodies, logTimings: logTimings)
+    }
 }
 
 extension OrcaDebug {
     /// Connect to DevTools when `config.enabled` (Flutter `OrcaDebug.init`):
     /// any earlier client is disconnected first, and a disabled config just
-    /// stops. Returns the client that now receives the SDK's events.
+    /// stops. The config's capture switches become `options` and its
+    /// `showOverlay` the pages' overlay switch. Returns the client that now
+    /// receives the SDK's events.
     @discardableResult
     public static func start(_ config: OrcaDebugConfig) -> DevToolsClient? {
         stop()
         guard config.enabled, let url = config.url else { return nil }
+        options = config.options
+        showOverlay = config.showOverlay
         let client = DevToolsClient(url: url, handshake: .deviceInfo(
             platform: DevToolsClient.platform, deviceModel: DevToolsClient.deviceModel,
             appVersion: DevToolsClient.appVersion, appName: config.appName))
@@ -40,10 +70,21 @@ extension OrcaDebug {
         return client
     }
 
-    /// Disconnect and stop sending events.
+    /// Disconnect and stop sending events; the options go back to their
+    /// defaults and the overlay off.
     public static func stop() {
         (reporter as? DevToolsClient)?.disconnect()
         reporter = nil
+        options = OrcaDebugOptions()
+        showOverlay = false
+    }
+
+    /// Flutter's `logTimings` line (`debugPrint`, orca_debug.dart:60-62),
+    /// to the system log as the SDK's other lines: subsystem
+    /// com.orcagateway, category OrcaDebug.
+    static func logTiming(pageId: String, path: String) {
+        Logger(subsystem: "com.orcagateway", category: "OrcaDebug")
+            .log("[OrcaDebug] Timing: \(pageId, privacy: .public) - \(path, privacy: .public)")
     }
 }
 

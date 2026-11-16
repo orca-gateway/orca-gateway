@@ -4,6 +4,7 @@ import android.os.Build
 import com.orcagateway.core.debug.DevToolsEvent
 import com.orcagateway.core.debug.DevToolsReporter
 import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.core.debug.OrcaDebugOptions
 import kotlinx.serialization.SerializationException
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -34,6 +35,19 @@ public data class OrcaDebugConfig(
     public val appName: String? = null,
     /** Sent in `device_info`; pass the app's version name. */
     public val appVersion: String = "1.0.0",
+    /** Draw the load chip over each server page (Flutter's OrcaDebugOverlay). */
+    public val showOverlay: Boolean = false,
+    /** Also write each `timing` event to logcat: `[OrcaDebug] Timing: <pageId> - <path>`. */
+    public val logTimings: Boolean = false,
+    /** Off: no `state_change` events. */
+    public val captureStateChanges: Boolean = true,
+    /** Off: no `network` events (their `error` events still go). */
+    public val captureNetworkRequests: Boolean = true,
+    /**
+     * On: `network` events carry the request and response bodies. Off by
+     * default, as bodies can hold tokens or user data.
+     */
+    public val includeBodies: Boolean = false,
 ) {
     /** `ws://host:port`, or null when that is not a valid address. */
     public val url: String?
@@ -43,12 +57,20 @@ public data class OrcaDebugConfig(
 /**
  * Connect to DevTools when [config] is enabled (Flutter `OrcaDebug.init`):
  * any earlier client is disconnected first, and a disabled config just
- * stops. Returns the client that now receives the SDK's events.
+ * stops. Its options are the SDK's until [stop]: the capture switches,
+ * includeBodies and logTimings go to [OrcaDebug.options], showOverlay to the
+ * pages. Returns the client that now receives the SDK's events.
  */
 public fun OrcaDebug.start(config: OrcaDebugConfig): DevToolsClient? {
     stop()
     val url = config.url
     if (!config.enabled || url == null) return null
+    options = OrcaDebugOptions(
+        captureStateChanges = config.captureStateChanges,
+        captureNetworkRequests = config.captureNetworkRequests,
+        includeBodies = config.includeBodies,
+        logTimings = config.logTimings,
+    )
     val client = DevToolsClient(
         url,
         DevToolsEvent.deviceInfo(
@@ -59,14 +81,17 @@ public fun OrcaDebug.start(config: OrcaDebugConfig): DevToolsClient? {
         ),
     )
     reporter = client
+    DebugOverlaySwitch.showOverlay = config.showOverlay
     client.connect()
     return client
 }
 
-/** Disconnect and stop sending events. */
+/** Disconnect and stop sending events; the debug options go back to their defaults. */
 public fun OrcaDebug.stop() {
     (reporter as? DevToolsClient)?.disconnect()
     reporter = null
+    options = OrcaDebugOptions()
+    DebugOverlaySwitch.showOverlay = false
 }
 
 /**

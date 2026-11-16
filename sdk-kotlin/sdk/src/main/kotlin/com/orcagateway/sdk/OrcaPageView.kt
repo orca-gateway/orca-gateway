@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.orcagateway.sdk.widgets.BackdropRecording
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -36,6 +37,9 @@ internal val LocalOrcaSnackbars = compositionLocalOf<SnackbarHostState?> { null 
  *
  * Text without a style of its own is Material 3 `bodyMedium`, as Flutter's
  * default text style; the host's `MaterialTheme`, if any, applies.
+ *
+ * The page root records what it draws for the page's BackdropFilters and
+ * BlurViews, only while there is one ([BackdropRecording]).
  */
 @Composable
 public fun OrcaPageView(model: OrcaPageModel, modifier: Modifier = Modifier) {
@@ -71,7 +75,7 @@ public fun OrcaPageView(model: OrcaPageModel, modifier: Modifier = Modifier) {
     ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
         CompositionLocalProvider(LocalOrcaSnackbars provides if (rootIsScaffold) snackbars else null) {
             Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                if (root != null) NodeView(root, model)
+                if (root != null) BackdropRecording { rootModifier -> NodeView(root, model, rootModifier) }
                 if (!rootIsScaffold) SnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter))
             }
         }

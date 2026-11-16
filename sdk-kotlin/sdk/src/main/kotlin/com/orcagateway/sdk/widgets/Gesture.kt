@@ -25,7 +25,9 @@ import com.orcagateway.sdk.OrcaPageModel
  *
  * Accessibility sees what Flutter's GestureDetector exposes: `onTap` as a
  * click action and `onLongPress` as a long-click action, so TalkBack can
- * activate them; `onDoubleTap` has no accessibility action.
+ * activate them; `onDoubleTap` has no accessibility action. Under
+ * [LocalPointerBlocked] it keeps its box but takes no touches and offers
+ * no actions.
  */
 @Composable
 internal fun GestureDetectorWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -49,5 +51,7 @@ internal fun GestureDetectorWidget(node: ResolvedNode, model: OrcaPageModel, mod
         if (tap) onClick { fire.value("onTap"); true }
         if (longPress) onLongClick { fire.value("onLongPress"); true }
     }
-    Box(gestures, propagateMinConstraints = true) { ChildView(node, model) }
+    // Under an IgnorePointer or AbsorbPointer: the same box, untouchable.
+    val box = if (LocalPointerBlocked.current) modifier else gestures
+    Box(box, propagateMinConstraints = true) { ChildView(node, model) }
 }

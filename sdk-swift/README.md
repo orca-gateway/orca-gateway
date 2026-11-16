@@ -284,6 +284,58 @@ draw (once per type per process).
 OrcaTelemetry.onEvent = { name, payload in print(name, payload) }
 ```
 
+## DevTools
+
+Off until you start it. Start it once, before the first page, for example in your `App`'s `init`:
+
+```swift
+init() {
+    #if DEBUG
+    OrcaDebug.start(OrcaDebugConfig(
+        enabled: true,
+        host: "localhost",      // on a device: the Mac running DevTools
+        appName: "My Shop",
+        showOverlay: true,
+        includeBodies: true))
+    #endif
+}
+```
+
+The SDK then sends Orca DevTools (`ws://<host>:6363`, `port` changes it) its network requests, page
+timing, state changes, actions, rebuilds and errors, and reconnects when DevTools restarts (up to
+10 tries in a row). A second `start` replaces the connection; `OrcaDebug.stop()` ends it and puts
+the options below back to their defaults. The simulator reaches DevTools at `localhost`.
+
+The five options of Flutter's `OrcaDebugConfig`, with its defaults:
+
+| Option | Default | What it does |
+|---|---|---|
+| `showOverlay` | `false` | A chip 8 points in from the bottom right of each page with its load time (request start to render complete). A tap shows `Load`, `Components` (the page's node count) and `Cache` (`-`); the next folds it. |
+| `logTimings` | `false` | Also writes `[OrcaDebug] Timing: <pageId> - <path>` to the system log for each page's `timing` event (subsystem `com.orcagateway`, category `OrcaDebug`). |
+| `captureStateChanges` | `true` | Off: no `state_change` events. |
+| `captureNetworkRequests` | `true` | Off: no `network` events. A failed request still sends its `error` event. |
+| `includeBodies` | `false` | `network` events carry `requestBody` (for a page request, the app state it sent) and `responseBody` (the response's JSON, else its raw text). |
+
+Actions, rebuilds, page timing and errors are always sent while DevTools is on; no option turns them
+off. Bodies can hold tokens and personal data, so `includeBodies` stays off unless you ask for it.
+With or without bodies, the `authorization`, `cookie`, `set-cookie`, `x-api-key` and
+`proxy-authorization` headers are sent as `<redacted>`.
+
+DevTools also shows how a value was worked out:
+
+- A widget that watches state sends a `widget_rebuild` each time it is built, the first time
+  included, with the trace of each prop: `state` (the key read and its value), `input` (a
+  transform's input), then one step per transform with what went in and what came out. A prop
+  with no step (a static value) is left out, and a widget with none sends nothing. In DevTools: an
+  action's Widgets tab, then a widget, "Prop pipelines".
+- A `setState` whose value is a transform carries that value's trace (the action's Transform tab)
+  and the page's widgets that watch the key (its Widgets tab).
+- A `debugLog` action shows as an action of family `custom`, and its line goes to the system log
+  (subsystem `com.orcagateway`, category the action's tag).
+
+The [iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios) starts
+it in debug builds and turns the overlay and bodies on from two switches.
+
 ## Plugins
 
 A plugin brings widget types and custom actions the SDK does not have, as a Flutter `OrcaPlugin`

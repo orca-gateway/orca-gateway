@@ -1,6 +1,7 @@
 package com.orcagateway.sdk.style
 
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.CacheDrawScope
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.CornerRadius
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpOffset
@@ -186,24 +188,47 @@ internal fun Modifier.boxDecoration(decoration: BoxDecorationProps): Modifier {
     return decoration.shadows
         .fold(this) { modifier, shadow -> modifier.dropShadow(shape, shadow.toShadow()) }
         .drawWithCache {
-            val radii = decoration.radii ?: CornerRadii.Zero
-            val outer = radii.roundRect(size.toRect(), this)
-            val body = Path().apply { addRoundRect(outer) }
-            val fill = decoration.gradient?.brush(size) ?: decoration.color?.let(::SolidColor)
-            val border = decoration.border
-            val ring = border?.let {
-                val inner = radii.roundRect(size.toRect(), this, deflate = Props.lengthOf(it.width).toPx())
-                Path().apply {
-                    fillType = PathFillType.EvenOdd
-                    addRoundRect(outer)
-                    if (inner.width > 0f && inner.height > 0f) addRoundRect(inner)
-                }
-            }
-            onDrawBehind {
-                if (fill != null) drawPath(body, fill)
-                if (ring != null) drawPath(ring, border.color)
-            }
+            val surface = decoration.surface(this)
+            onDrawBehind { surface() }
         }
+}
+
+/**
+ * Paints [decoration] over the content, all of it after the content as
+ * Flutter's `DecorationPosition.foreground` does: the shadows, the fill and
+ * the border, in [boxDecoration]'s order, so a shadow falls on the content
+ * too where the fill does not cover it.
+ */
+internal fun Modifier.foregroundDecoration(decoration: BoxDecorationProps): Modifier = drawWithCache {
+    val shape = decoration.shape
+    val shadows = decoration.shadows.map { obtainShadowContext().createDropShadowPainter(shape, it.toShadow()) }
+    val surface = decoration.surface(this)
+    onDrawWithContent {
+        drawContent()
+        for (shadow in shadows) with(shadow) { draw(size) }
+        surface()
+    }
+}
+
+/** The fill (the gradient, else the colour) and then the border inside the edge, at [scope]'s size. */
+private fun BoxDecorationProps.surface(scope: CacheDrawScope): DrawScope.() -> Unit {
+    val radii = radii ?: CornerRadii.Zero
+    val outer = radii.roundRect(scope.size.toRect(), scope)
+    val body = Path().apply { addRoundRect(outer) }
+    val fill = gradient?.brush(scope.size) ?: color?.let(::SolidColor)
+    val border = border
+    val ring = border?.let {
+        val inner = radii.roundRect(scope.size.toRect(), scope, deflate = with(scope) { Props.lengthOf(it.width).toPx() })
+        Path().apply {
+            fillType = PathFillType.EvenOdd
+            addRoundRect(outer)
+            if (inner.width > 0f && inner.height > 0f) addRoundRect(inner)
+        }
+    }
+    return {
+        if (fill != null) drawPath(body, fill)
+        if (ring != null) drawPath(ring, border.color)
+    }
 }
 
 /**

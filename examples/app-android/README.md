@@ -230,21 +230,48 @@ force update fetches neither the config nor a page.
 
 Debug builds connect to Orca DevTools on port 6363 of the Mac (start it with `task devtools:dev`)
 and show up as "Orca Counter": network requests, page timing, state changes, actions, rebuilds and
-errors. The emulator reaches the Mac at `10.0.2.2`, so nothing else is needed. Two intent extras
+errors. The emulator reaches the Mac at `10.0.2.2`, so nothing else is needed. Four intent extras
 change that:
 
 | Extra | Type | Default | What |
 |---|---|---|---|
 | `ORCA_DEVTOOLS` | boolean | on in debug builds, off in release builds | connect to DevTools or not |
 | `ORCA_DEVTOOLS_HOST` | string | `10.0.2.2` | the Mac's address; on a device, its address on your network |
+| `ORCA_OVERLAY` | boolean | off | draw the load chip at the bottom right of each page |
+| `ORCA_BODIES` | boolean | off | send request and response bodies in DevTools' network events |
 
-To turn DevTools off, restart the app with the extra. `-S` stops the running app first: the app
-connects once per process, so a running app keeps its connection (a rotation does not open a
-second one).
+`ORCA_OVERLAY` and `ORCA_BODIES` do nothing while DevTools is off.
+
+To change any of them, restart the app with the extra. `-S` stops the running app first, and it
+matters: the app starts DevTools once per process. Without `-S`, `am start` hands the intent to
+the running activity (it is `singleTop`), which keeps the settings it started with; and while
+DevTools is on, a new activity in the same process (after a rotation, or Back and a relaunch)
+neither opens a second connection nor reads these extras again.
 
 ```bash
 adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --ez ORCA_DEVTOOLS false
 ```
+
+**The load chip.** Start the app with the overlay on:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --ez ORCA_OVERLAY true
+```
+
+Each page shows a small black chip 8 dp in from its bottom right corner with the page's load time
+in green, for example `84ms` (from the request start to the render). Tap it: it shows
+`Load: 84.3ms`, `Components: <the page's node count>` and `Cache: -`. Tap again to fold it.
+
+**Bodies.** Start the app with bodies on:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --ez ORCA_BODIES true
+```
+
+In DevTools, open Network, pick a request and its Body tab: a page request shows the page JSON the
+server sent back. Its event also carries the app state the app sent (`requestBody`); the Body tab
+shows the request body only for a request that got no answer. Without the extra, the Body tab says
+bodies are not captured. The `Authorization` header (the app's API key) shows as `<redacted>` either way.
 
 Add `--es ORCA_APP_ID server-actions --es ORCA_PATH shop` (or another app) as the run task does.
 On a device, pass the Mac's address the same way (`--es ORCA_DEVTOOLS_HOST 192.168.1.20`), or run

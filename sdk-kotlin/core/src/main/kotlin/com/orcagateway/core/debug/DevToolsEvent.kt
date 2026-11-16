@@ -8,6 +8,23 @@ import com.orcagateway.core.state.StoreState
 import java.util.Locale
 
 /**
+ * One step of a value's resolution (the schema's `TraceStep`; Dart
+ * `TransformTrace.toJson`): [op] what ran (`state`, `event`, `input`, or a
+ * transform type), [input] what it read, left out of the JSON as `in` when
+ * there is none, [output] what it gave as `out`. Both values are Dart's
+ * text of them.
+ */
+public data class TraceStep(public val op: String, public val input: String?, public val output: String) {
+    internal val json: JsonValue
+        get() {
+            val step = linkedMapOf<String, JsonValue>("op" to JsonValue.String(op))
+            if (input != null) step["in"] = JsonValue.String(input)
+            step["out"] = JsonValue.String(output)
+            return JsonValue.Object(step)
+        }
+}
+
+/**
  * One message for Orca DevTools (schema/devtools-events.schema.json): a type
  * and its payload. [envelope] adds the device id and the time, as the
  * WebSocket client sends it. Each builder below makes the same payload as
@@ -130,17 +147,32 @@ public data class DevToolsEvent(public val type: String, public val payload: Map
             return events
         }
 
-        /** One action ran: the action as sent on the wire, and how long it took. */
-        public fun action(action: Action, pageId: String, durationMs: Double): DevToolsEvent = DevToolsEvent(
-            "action",
-            linkedMapOf(
+        /**
+         * One action ran: the action as sent on the wire, and how long it
+         * took. [transformTrace] is the trace of a setState's transform
+         * value; [affectedWidgets] the page's nodes watching its key, each
+         * `{id, type, watches}`. Each is left out when empty, as Dart does.
+         */
+        public fun action(
+            action: Action,
+            pageId: String,
+            durationMs: Double,
+            transformTrace: List<TraceStep> = emptyList(),
+            affectedWidgets: List<JsonValue> = emptyList(),
+        ): DevToolsEvent {
+            val p = linkedMapOf(
                 "actionType" to JsonValue.String(action.kind),
                 "family" to JsonValue.String(family(action.kind)),
                 "pageId" to JsonValue.String(pageId),
                 "data" to action.json,
                 "durationMs" to JsonValue.Double(durationMs),
-            ),
-        )
+            )
+            if (transformTrace.isNotEmpty()) p["transformTrace"] = trace(transformTrace)
+            if (affectedWidgets.isNotEmpty()) p["affectedWidgets"] = JsonValue.Array(affectedWidgets)
+            return DevToolsEvent("action", p)
+        }
+
+        private fun trace(steps: List<TraceStep>): JsonValue = JsonValue.Array(steps.map { it.json })
 
         private val exactFamilies: Map<String, String> = mapOf(
             "setState" to "state", "navigate" to "navigation", "goBack" to "navigation",
@@ -169,8 +201,10 @@ public data class DevToolsEvent(public val type: String, public val payload: Map
 
         /**
          * One HTTP request; [statusCode] 0 when the transport failed. Pass
-         * headers through [sanitize] first. Empty and missing fields are left
-         * out, as Dart does.
+         * headers through [sanitize] first. [requestBody] and [responseBody]
+         * only when the host opts into bodies. Empty and missing fields are
+         * left out, as Dart does; a body that is JSON null too, as Dart reads
+         * it as null.
          */
         public fun network(
             method: String,
@@ -182,6 +216,8 @@ public data class DevToolsEvent(public val type: String, public val payload: Map
             requestHeaders: Map<String, String> = emptyMap(),
             responseHeaders: Map<String, String> = emptyMap(),
             phases: List<NetworkPhase> = emptyList(),
+            requestBody: JsonValue? = null,
+            responseBody: JsonValue? = null,
         ): DevToolsEvent {
             val p = linkedMapOf<String, JsonValue>(
                 "method" to JsonValue.String(method),
@@ -205,6 +241,8 @@ public data class DevToolsEvent(public val type: String, public val payload: Map
                     },
                 )
             }
+            if (requestBody != null && requestBody != JsonValue.Null) p["requestBody"] = requestBody
+            if (responseBody != null && responseBody != JsonValue.Null) p["responseBody"] = responseBody
             return DevToolsEvent("network", p)
         }
 
@@ -222,21 +260,20 @@ public data class DevToolsEvent(public val type: String, public val payload: Map
 
         /**
          * A node redrew because a key it watches changed. [propTraces] maps a
-         * prop to its transform steps (`{op, in?, out}`); the Kotlin resolver,
-         * like the Swift one, does not trace, so the SDK sends it empty.
+         * prop to the steps of its resolution; the schema allows it empty.
          */
         public fun widgetRebuild(
             widgetId: String,
             widgetType: String,
             watches: List<String>,
-            propTraces: Map<String, List<JsonValue>> = emptyMap(),
+            propTraces: Map<String, List<TraceStep>> = emptyMap(),
         ): DevToolsEvent = DevToolsEvent(
             "widget_rebuild",
             linkedMapOf(
                 "widgetId" to JsonValue.String(widgetId),
                 "widgetType" to JsonValue.String(widgetType),
                 "watches" to JsonValue.Array(watches.map { JsonValue.String(it) }),
-                "propTraces" to JsonValue.Object(propTraces.mapValues { JsonValue.Array(it.value) }),
+                "propTraces" to JsonValue.Object(propTraces.mapValues { trace(it.value) }),
             ),
         )
 

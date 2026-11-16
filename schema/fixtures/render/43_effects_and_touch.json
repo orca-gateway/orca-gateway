@@ -1,0 +1,600 @@
+{
+  "name": "effects-and-touch",
+  "description": "Column holding the 11 visual effect and touch wrappers with every prop each can carry on the wire: Opacity 0.5, RotatedBox one quarter turn, ClipOval and ClipRect (no props), DecoratedBox in the foreground with a colour, a border radius of 8, a 2 px solid border and one box shadow, ColorFiltered red with blend mode multiply, BackdropFilter blurX 4 and blurY 6, BlurView blur 8 x 8 with a half-white overlay (#RRGGBBAA) and a border radius of 12, AbsorbPointer with absorbing false, IgnorePointer with ignoring bound to pageState `ignore` (true), and InteractiveViewer with minScale 0.5, maxScale 4, panEnabled false and scaleEnabled true; each wraps one Text. Every static prop reaches the wire unchanged, the IgnorePointer binding stays a state Value with `ignore` in its watches, and every client resolver resolves each prop to the listed value.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "props": {},
+    "children": [
+      {
+        "type": "Opacity",
+        "key": "opacity",
+        "props": {
+          "opacity": 0.5
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "opacityText",
+            "props": {
+              "data": "Opacity"
+            }
+          }
+        ]
+      },
+      {
+        "type": "RotatedBox",
+        "key": "rotatedBox",
+        "props": {
+          "quarterTurns": 1
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "rotatedBoxText",
+            "props": {
+              "data": "RotatedBox"
+            }
+          }
+        ]
+      },
+      {
+        "type": "ClipOval",
+        "key": "clipOval",
+        "props": {},
+        "children": [
+          {
+            "type": "Text",
+            "key": "clipOvalText",
+            "props": {
+              "data": "ClipOval"
+            }
+          }
+        ]
+      },
+      {
+        "type": "ClipRect",
+        "key": "clipRect",
+        "props": {},
+        "children": [
+          {
+            "type": "Text",
+            "key": "clipRectText",
+            "props": {
+              "data": "ClipRect"
+            }
+          }
+        ]
+      },
+      {
+        "type": "DecoratedBox",
+        "key": "decoratedBox",
+        "props": {
+          "decoration": {
+            "color": "#E3F2FD",
+            "borderRadius": 8,
+            "border": {
+              "width": 2,
+              "color": "#1565C0",
+              "style": "solid"
+            },
+            "boxShadow": [
+              {
+                "color": "#00000033",
+                "blurRadius": 4,
+                "spreadRadius": 1,
+                "offset": {
+                  "dx": 0,
+                  "dy": 2
+                }
+              }
+            ]
+          },
+          "position": "foreground"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "decoratedBoxText",
+            "props": {
+              "data": "DecoratedBox"
+            }
+          }
+        ]
+      },
+      {
+        "type": "ColorFiltered",
+        "key": "colorFiltered",
+        "props": {
+          "color": "#FF0000",
+          "blendMode": "multiply"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "colorFilteredText",
+            "props": {
+              "data": "ColorFiltered"
+            }
+          }
+        ]
+      },
+      {
+        "type": "BackdropFilter",
+        "key": "backdropFilter",
+        "props": {
+          "blurX": 4,
+          "blurY": 6
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "backdropFilterText",
+            "props": {
+              "data": "BackdropFilter"
+            }
+          }
+        ]
+      },
+      {
+        "type": "BlurView",
+        "key": "blurView",
+        "props": {
+          "blurX": 8,
+          "blurY": 8,
+          "overlayColor": "#FFFFFF80",
+          "borderRadius": 12
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "blurViewText",
+            "props": {
+              "data": "BlurView"
+            }
+          }
+        ]
+      },
+      {
+        "type": "AbsorbPointer",
+        "key": "absorbPointer",
+        "props": {
+          "absorbing": false
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "absorbPointerText",
+            "props": {
+              "data": "AbsorbPointer"
+            }
+          }
+        ]
+      },
+      {
+        "type": "IgnorePointer",
+        "key": "ignorePointer",
+        "props": {
+          "ignoring": {
+            "type": "state",
+            "scope": "page",
+            "key": "ignore"
+          }
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "ignorePointerText",
+            "props": {
+              "data": "IgnorePointer"
+            }
+          }
+        ]
+      },
+      {
+        "type": "InteractiveViewer",
+        "key": "interactiveViewer",
+        "props": {
+          "minScale": 0.5,
+          "maxScale": 4,
+          "panEnabled": false,
+          "scaleEnabled": true
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "interactiveViewerText",
+            "props": {
+              "data": "InteractiveViewer"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "ignore": true
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "opacity",
+        "rotatedBox",
+        "clipOval",
+        "clipRect",
+        "decoratedBox",
+        "colorFiltered",
+        "backdropFilter",
+        "blurView",
+        "absorbPointer",
+        "ignorePointer",
+        "interactiveViewer"
+      ],
+      "watches": []
+    },
+    {
+      "id": "interactiveViewer",
+      "type": "InteractiveViewer",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "minScale": 0.5,
+        "maxScale": 4,
+        "panEnabled": false,
+        "scaleEnabled": true
+      },
+      "children": [
+        "interactiveViewerText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "interactiveViewerText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "InteractiveViewer"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "ignorePointer",
+      "type": "IgnorePointer",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "ignoring": {
+          "type": "state",
+          "scope": "page",
+          "key": "ignore"
+        }
+      },
+      "children": [
+        "ignorePointerText"
+      ],
+      "watches": [
+        "ignore"
+      ]
+    },
+    {
+      "id": "ignorePointerText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "IgnorePointer"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "absorbPointer",
+      "type": "AbsorbPointer",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "absorbing": false
+      },
+      "children": [
+        "absorbPointerText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "absorbPointerText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "AbsorbPointer"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "blurView",
+      "type": "BlurView",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "blurX": 8,
+        "blurY": 8,
+        "overlayColor": "#FFFFFF80",
+        "borderRadius": 12
+      },
+      "children": [
+        "blurViewText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "blurViewText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "BlurView"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "backdropFilter",
+      "type": "BackdropFilter",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "blurX": 4,
+        "blurY": 6
+      },
+      "children": [
+        "backdropFilterText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "backdropFilterText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "BackdropFilter"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "colorFiltered",
+      "type": "ColorFiltered",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "color": "#FF0000",
+        "blendMode": "multiply"
+      },
+      "children": [
+        "colorFilteredText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "colorFilteredText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "ColorFiltered"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "decoratedBox",
+      "type": "DecoratedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "decoration": {
+          "color": "#E3F2FD",
+          "borderRadius": 8,
+          "border": {
+            "width": 2,
+            "color": "#1565C0",
+            "style": "solid"
+          },
+          "boxShadow": [
+            {
+              "color": "#00000033",
+              "blurRadius": 4,
+              "spreadRadius": 1,
+              "offset": {
+                "dx": 0,
+                "dy": 2
+              }
+            }
+          ]
+        },
+        "position": "foreground"
+      },
+      "children": [
+        "decoratedBoxText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "decoratedBoxText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "DecoratedBox"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "clipRect",
+      "type": "ClipRect",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "clipRectText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "clipRectText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "ClipRect"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "clipOval",
+      "type": "ClipOval",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "clipOvalText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "clipOvalText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "ClipOval"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "rotatedBox",
+      "type": "RotatedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "quarterTurns": 1
+      },
+      "children": [
+        "rotatedBoxText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "rotatedBoxText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "RotatedBox"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "opacity",
+      "type": "Opacity",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "opacity": 0.5
+      },
+      "children": [
+        "opacityText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "opacityText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Opacity"
+      },
+      "children": [],
+      "watches": []
+    }
+  ],
+  "resolved": {
+    "opacity": {
+      "opacity": 0.5
+    },
+    "rotatedBox": {
+      "quarterTurns": 1
+    },
+    "clipOval": {},
+    "clipRect": {},
+    "decoratedBox": {
+      "decoration": {
+        "color": "#E3F2FD",
+        "borderRadius": 8,
+        "border": {
+          "width": 2,
+          "color": "#1565C0",
+          "style": "solid"
+        },
+        "boxShadow": [
+          {
+            "color": "#00000033",
+            "blurRadius": 4,
+            "spreadRadius": 1,
+            "offset": {
+              "dx": 0,
+              "dy": 2
+            }
+          }
+        ]
+      },
+      "position": "foreground"
+    },
+    "colorFiltered": {
+      "color": "#FF0000",
+      "blendMode": "multiply"
+    },
+    "backdropFilter": {
+      "blurX": 4,
+      "blurY": 6
+    },
+    "blurView": {
+      "blurX": 8,
+      "blurY": 8,
+      "overlayColor": "#FFFFFF80",
+      "borderRadius": 12
+    },
+    "absorbPointer": {
+      "absorbing": false
+    },
+    "ignorePointer": {
+      "ignoring": true
+    },
+    "interactiveViewer": {
+      "minScale": 0.5,
+      "maxScale": 4,
+      "panEnabled": false,
+      "scaleEnabled": true
+    }
+  }
+}
