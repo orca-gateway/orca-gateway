@@ -4,9 +4,9 @@
   "idea": "Native parity step 4 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): visual effects and touch wrappers on both native SDKs: Opacity, RotatedBox, ClipOval, ClipRect, DecoratedBox, ColorFiltered, BackdropFilter, BlurView, AbsorbPointer, IgnorePointer, InteractiveViewer, drawn and hit-tested as Flutter does and advertised in both capability lists. Test cases A4.1-A4.5 in phase-a-tests.md. In sdk-swift and sdk-kotlin, with render fixtures",
   "kind": "feature",
   "created_at": "2026-11-16T02:52:46Z",
-  "updated_at": "2026-11-16T05:51:31Z",
+  "updated_at": "2026-11-16T08:32:57Z",
   "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
-  "current": "10",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -51,27 +51,38 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 6's two questions are minor (no blocked task; next is stage 10: rows ticked, rebase on main, the step 4 PR)"
     },
     "10": {
-      "status": "draft",
+      "status": "approved",
       "rounds": 2,
-      "card": "cards/10-r1.md"
+      "card": "cards/10-r2.md",
+      "approved_at": "2026-11-16T08:32:49Z",
+      "approved_with": "standing rule (2026-11-11): Q2 minor, default; Q1 answered by the user's own action: PR #44 merged by amrebada 2026-11-16T08:22:53Z (merge 992652c); relayed by the parent session: \"the user merged PR #44 (your step 4, 992652c)\""
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-16T08:32:57Z",
+      "approved_with": "standing rule (2026-11-11): gate 12's one question is minor (13-16 skipped, no deploy target), default; all checks green on PR #44 and on main 992652c"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     }
   },
   "gates": {
