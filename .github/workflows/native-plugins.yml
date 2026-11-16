@@ -43,6 +43,8 @@ jobs:
             module: OrcaVideoPlayer
           - plugin: orca_google_map
             module: OrcaGoogleMap
+          - plugin: orca_push_notification
+            module: OrcaPushNotification
     # The SDK's UI CI's Xcode (sdk-swift-ui.yml), so the plugin builds with
     # the toolchain the SDK is tested with.
     env:
@@ -108,7 +110,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        plugin: [orca_voice_recorder, orca_video_player, orca_google_map]
+        plugin: [orca_voice_recorder, orca_video_player, orca_google_map, orca_push_notification]
     steps:
       - uses: actions/checkout@v4
 
