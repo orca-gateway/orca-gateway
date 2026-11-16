@@ -29,7 +29,7 @@ class ModelRoundTripTest {
     @Test
     fun allRenderFixturesRoundTrip() {
         val files = Fixtures.files("render")
-        assertEquals(52, files.size, "render fixtures 01-43, 60-68")
+        assertEquals(53, files.size, "render fixtures 01-44, 60-68")
         var nodes = 0
         for ((name, fixture) in files) {
             val expected = fixture["expected"]
@@ -76,7 +76,7 @@ class ModelRoundTripTest {
     @Test
     fun allActionFixturesRoundTrip() {
         val files = Fixtures.files("actions")
-        assertEquals(28, files.size, "action fixtures 01-19, 30-35 and 45-47")
+        assertEquals(29, files.size, "action fixtures 01-19, 30-35 and 45-48")
         val kinds = HashSet<String>()
         for ((name, fixture) in files) {
             // Plugin action names a fixture registers handlers for (45-47).
