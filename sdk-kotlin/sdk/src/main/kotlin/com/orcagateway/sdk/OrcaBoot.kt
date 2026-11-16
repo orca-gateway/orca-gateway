@@ -18,12 +18,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import com.orcagateway.core.client.DeviceIdentity
+import com.orcagateway.core.client.FileKeyValueStore
 import com.orcagateway.core.client.KeyValueStore
 import com.orcagateway.core.client.OfflineSessionStore
 import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.client.OrcaErrorInfo
 import com.orcagateway.core.client.VersionCheckResult
 import com.orcagateway.core.client.VersionChecker
+import java.io.File
 
 /**
  * A [KeyValueStore] over the app's SharedPreferences named [name], where
@@ -49,6 +51,25 @@ public class SharedPreferencesKeyValueStore(context: Context, name: String = "or
 }
 
 /**
+ * The store OrcaApp keeps its offline cache in with `enableOffline` (and no
+ * `staticFlowManager`): files in `context.filesDir/orca_gateway`, as
+ * Flutter's `StaticFlowManager()` default is the store its OrcaApp uses
+ * (sdk/lib/src/widgets/orca_app.dart). A host that awaits
+ * [preload][com.orcagateway.core.client.preload] in its own splash builds
+ * its manager over it, so the preload and OrcaApp share one cache:
+ *
+ *     val manager = StaticFlowManager(offlineStore(context))
+ *     when (val result = preload(client, manager)) {
+ *         PreloadResult.ForceUpdate -> showUpdateScreen() // yours: OrcaApp never sees it
+ *         is PreloadResult.Success ->
+ *             OrcaApp(client, preloadedConfig = result.config, staticFlowManager = manager)
+ *     }
+ *
+ * Swift twin: the store in Application Support/OrcaGateway.
+ */
+public fun offlineStore(context: Context): FileKeyValueStore = FileKeyValueStore(File(context.filesDir, "orca_gateway"))
+
+/**
  * This client with a device id: its own when it has one, else the one saved
  * in [store] (made on first run), as `_resolveDeviceId` in
  * sdk/lib/src/widgets/orca_app.dart gives the client an id whether or not
@@ -58,10 +79,12 @@ internal fun OrcaClient.identified(store: KeyValueStore): OrcaClient =
     if (deviceId.isNullOrEmpty()) copy(deviceId = DeviceIdentity.resolve(store)) else this
 
 /**
- * What OrcaApp does before its first page, the part of `_OrcaAppState`'s
- * boot in sdk/lib/src/widgets/orca_app.dart the natives have so far: with
- * `enableOffline`, the version check of `OrcaApp.preload`; a forceUpdate
- * answer blocks the app, any other answer boots it. Without it the app is
+ * What OrcaApp does before its first page when it caches nothing (a host
+ * `path`, or OrcaApp(router)), the part of `_OrcaAppState`'s boot in
+ * sdk/lib/src/widgets/orca_app.dart they have: with `enableOffline`, the
+ * version check of `OrcaApp.preload`; a forceUpdate answer blocks the app,
+ * any other answer boots it. The config boot runs the whole `preload` in
+ * [OrcaAppBoot] instead, and passes false here. Without it the app is
  * ready at once and asks nothing. First of all [prepare] runs (OrcaApp's
  * plugin merge): an [IllegalArgumentException] from it fails the boot, as
  * Flutter's `_initialize` lands a throw in its boot error, and nothing is
@@ -102,8 +125,8 @@ internal class OrcaBoot(private val client: OrcaClient, enableOffline: Boolean, 
     }
 
     /**
-     * Runs the version check once, with no local versions yet (the static
-     * flow cache arrives with plan step 14). Does nothing unless checking.
+     * Runs the version check once, with no local versions: without a config
+     * nothing is cached to compare. Does nothing unless checking.
      */
     suspend fun start() {
         if (phase != Phase.Checking) return
@@ -172,9 +195,13 @@ internal fun HostView(modifier: Modifier, view: @Composable () -> Unit) {
     Box(modifier.fillMaxSize()) { view() }
 }
 
-/** Flutter's default force-update screen (`_buildForceUpdate` in sdk/lib/src/widgets/orca_app.dart): one centred line. */
+/**
+ * Flutter's default force-update screen (`_buildForceUpdate` in
+ * sdk/lib/src/widgets/orca_app.dart): one centred line. The gate shows it,
+ * and so does the config boot when [preload][com.orcagateway.core.client.preload] says so.
+ */
 @Composable
-private fun ForceUpdateScreen(modifier: Modifier) {
+internal fun ForceUpdateScreen(modifier: Modifier) {
     Box(modifier.fillMaxSize().testTag("orca.forceUpdate"), contentAlignment = Alignment.Center) {
         Text("Update required. Please update the app.", textAlign = TextAlign.Center)
     }

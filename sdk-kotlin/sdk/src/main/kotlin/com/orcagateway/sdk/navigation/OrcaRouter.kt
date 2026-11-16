@@ -6,8 +6,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.orcagateway.core.client.OrcaClient
+import com.orcagateway.core.client.StaticFlowManager
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.NavConfig
+import com.orcagateway.core.models.NavFlow
 import com.orcagateway.core.models.RouteTransitionDef
 import com.orcagateway.core.models.TabDef
 import com.orcagateway.core.navigation.DeepLink
@@ -177,6 +179,9 @@ public class OrcaRouter private constructor(
     // The event of the link that opened the app, until deliverColdLink hands it over.
     private var coldEvent: DeeplinkEvent? = null
 
+    // The first location's event when nobody listened yet, until deliverFirstRoute hands it over or the location moves.
+    private var firstEvent: RouteChangeEvent? = null
+
     /** The shared app scope, as the latest page or [setAppState] left it. */
     public var appState: Map<String, JsonValue> = table?.config?.initialAppState.orEmpty()
         // Named apart from the host's `setAppState(Map)`.
@@ -275,6 +280,16 @@ public class OrcaRouter private constructor(
     /** What OrcaApp's plugins give each page loaded from here; OrcaApp sets it before the first request. */
     internal var plugins: OrcaPluginHost? = null
 
+    /**
+     * The offline cache each page is asked of first (Flutter hands its
+     * `StaticFlowManager` to every OrcaPage); OrcaApp's boot sets it before
+     * the first page loads. Null: every page comes from the network.
+     */
+    internal var staticFlowManager: StaticFlowManager? = null
+
+    /** The flows of the config, where [staticFlowManager] looks a page up; empty without a config. */
+    internal val flows: List<NavFlow> get() = table?.config?.flows.orEmpty()
+
     private val loaders = HashMap<UUID, OrcaPageLoader>()
 
     // With a config, every navigation goes through the shell; its entries are the routes.
@@ -304,7 +319,11 @@ public class OrcaRouter private constructor(
             pathResolution(begin)
         }
         shownLocation = top.location
-        if (table != null) onRouteChanged?.invoke(RouteChangeEvent(shownLocation, null, RouteChangeType.Push))
+        if (table != null) {
+            val first = RouteChangeEvent(shownLocation, null, RouteChangeType.Push)
+            val listener = onRouteChanged
+            if (listener != null) listener(first) else firstEvent = first
+        }
         if (coldLink != null) coldEvent = DeepLink.event(coldLink, resolution, coldStart = true)
     }
 
@@ -357,6 +376,18 @@ public class OrcaRouter private constructor(
         val event = coldEvent ?: return
         coldEvent = null
         onDeeplink?.invoke(event)
+    }
+
+    /**
+     * Hand the first location's event to [onRouteChanged], once, when the
+     * router was made before anyone listened (OrcaApp's preloaded boot makes
+     * it while composing) and the location has not moved since; OrcaApp calls
+     * it when it shows the router.
+     */
+    internal fun deliverFirstRoute() {
+        val event = firstEvent ?: return
+        firstEvent = null
+        onRouteChanged?.invoke(event)
     }
 
     /** The loader of a route, made the first time it is asked for. */
@@ -572,6 +603,7 @@ public class OrcaRouter private constructor(
         if (location == shownLocation) return
         val previous = shownLocation
         shownLocation = location
+        firstEvent = null
         isDrawerOpen = false
         onRouteChanged?.invoke(RouteChangeEvent(location, previous, type))
     }

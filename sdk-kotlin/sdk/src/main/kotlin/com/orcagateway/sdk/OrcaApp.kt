@@ -89,7 +89,11 @@ import com.orcagateway.core.client.DeviceInfo
 import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.client.OrcaClientException
 import com.orcagateway.core.client.OrcaErrorInfo
+import com.orcagateway.core.client.PreloadResult
+import com.orcagateway.core.client.StaticFlowManager
+import com.orcagateway.core.client.preload
 import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.core.models.NavConfig
 import com.orcagateway.core.navigation.DeeplinkEvent
 import com.orcagateway.core.navigation.RouteChangeEvent
 import com.orcagateway.core.navigation.TransitionKind
@@ -113,7 +117,9 @@ import com.orcagateway.sdk.widgets.OrcaHeroStage
 import com.orcagateway.sdk.widgets.PageDrawerHost
 import com.orcagateway.sdk.widgets.orcaReduceMotion
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 /**
@@ -125,6 +131,12 @@ import java.util.Locale
  * OrcaApp was given. Use it from the main thread; [phase] is Compose state.
  * With DevTools on, a loaded page sends its `timing` once, on its first frame.
  * A page's `refetchPage` action fetches it again into the same model, in place.
+ *
+ * Under a router with an offline cache (OrcaApp's `staticFlowManager`, or
+ * `enableOffline`) the page is asked of the cache first, off the main
+ * thread, as Flutter's `OrcaPage` does: a static page saved at boot is
+ * used with no request and sends no `timing`; any other goes to the
+ * network, and what the network answers is never saved.
  *
  * A load cancelled mid-fetch (its page left the screen) leaves [phase] at
  * `Loading` and runs again on the next [loadIfNeeded]. After [close] it
@@ -167,10 +179,14 @@ public class OrcaPageLoader(
         phase = Phase.Loading
         val client = if (client.device == DeviceInfo()) client.copy(device = DeviceInfo.current(context)) else client
         val app = router?.appState ?: emptyMap()
+        val cache = router?.staticFlowManager
+        val flows = router?.flows.orEmpty()
         phase = try {
-            val (page, timing) = client.fetchPageTimed(path, app)
+            // The cache first (Flutter's `OrcaPage._fetchPage`); a hit has no timing to send.
+            val cached = cache?.let { withContext(Dispatchers.IO) { it.getCachedPage(path, flows) } }
+            val (page, timing) = if (cached != null) cached to null else client.fetchPageTimed(path, app)
             if (closed) return
-            val renderStart = timing.elapsed()
+            val renderStart = timing?.elapsed()
             val plugins = router?.plugins
             val registry = plugins?.registry ?: WidgetRegistry.shared
             val model = OrcaPageModel(page, store = ElmStore(StoreState(app = app)), registry = registry, client = client)
@@ -178,13 +194,17 @@ public class OrcaPageLoader(
             model.executor.registerHandler("refetchPage") { _, _ -> refetch(model, client) }
             plugins?.install(model)
             router?.attach(model)
-            val renderComplete = timing.elapsed()
-            // The DevTools `timing` event waits for the first frame; logTimings also
-            // writes Flutter's line (orca_debug.dart reportTiming).
-            model.onFirstAppear = {
-                if (OrcaDebug.isEnabled) {
-                    OrcaDebug.report { timing.event(page.pageId, path, renderStart, renderComplete, firstFrameMs = timing.elapsed()) }
-                    if (OrcaDebug.options.logTimings) Log.i(WidgetBuilders.LOG_TAG, "[OrcaDebug] Timing: ${page.pageId} - $path")
+            // A cache hit has no timing: no DevTools `timing` event and no load time on the
+            // overlay, as Flutter's OrcaPage (its collector is null for a cached page).
+            val renderComplete = timing?.elapsed()
+            if (timing != null && renderStart != null && renderComplete != null) {
+                // The DevTools `timing` event waits for the first frame; logTimings also
+                // writes Flutter's line (orca_debug.dart reportTiming).
+                model.onFirstAppear = {
+                    if (OrcaDebug.isEnabled) {
+                        OrcaDebug.report { timing.event(page.pageId, path, renderStart, renderComplete, firstFrameMs = timing.elapsed()) }
+                        if (OrcaDebug.options.logTimings) Log.i(WidgetBuilders.LOG_TAG, "[OrcaDebug] Timing: ${page.pageId} - $path")
+                    }
                 }
             }
             Phase.Loaded(model).also { it.renderCompleteMs = renderComplete }
@@ -255,8 +275,33 @@ public class OrcaAppBoot(
     public var phase: Phase by mutableStateOf(Phase.Loading)
         private set
 
+    /**
+     * [preload] said the server demands an update: OrcaApp shows the
+     * force-update screen, no router is made and nothing else is fetched.
+     * Compose state. Swift twin `updateRequired`.
+     */
+    internal var updateRequired: Boolean by mutableStateOf(false)
+        private set
+
     /** What OrcaApp's plugins give each router made here; OrcaApp sets it before the config is fetched. */
     internal var plugins: OrcaPluginHost? = null
+
+    /**
+     * The offline cache (Dart `OrcaApp.staticFlowManager`); OrcaApp sets it
+     * before the boot starts. A router made here asks it for each page
+     * first, never for a dynamic route. Null: every page from the network.
+     */
+    internal var staticFlowManager: StaticFlowManager? = null
+
+    /**
+     * With a [staticFlowManager], the boot is Flutter's offline one: [preload]
+     * instead of `GET /config`, its file work off the main thread. A
+     * forceUpdate answer leaves [phase] at `Loading` and sets
+     * [updateRequired]; offline with no saved config, the boot fails with
+     * "No network and no cached config available"; a failed `/config` fails
+     * it as without. OrcaApp sets it before the boot starts.
+     */
+    internal var enableOffline: Boolean = false
 
     private var started = false
     private var closed = false
@@ -282,18 +327,38 @@ public class OrcaAppBoot(
         reload(context)
     }
 
-    /** Fetch the config and start again from it, with a new router. */
+    /**
+     * Start from a config the host already has (OrcaApp's `preloadedConfig`):
+     * the router at once, with no request. Nothing once the boot started.
+     */
+    internal fun start(config: NavConfig) {
+        if (started) return
+        started = true
+        phase = Phase.Ready(router(client, config))
+    }
+
+    /** Fetch the config (or [preload] it) and start again from it, with a new router. */
     public suspend fun reload(context: Context) {
         started = true
         (phase as? Phase.Ready)?.router?.close()
         phase = Phase.Loading
         val client = if (client.device == DeviceInfo()) client.copy(device = DeviceInfo.current(context)) else client
+        val cache = staticFlowManager
         phase = try {
-            val config = client.fetchConfig()
+            val result = if (enableOffline && cache != null) {
+                withContext(Dispatchers.IO) { preload(client, cache) }
+            } else {
+                PreloadResult.Success(client.fetchConfig())
+            }
             if (closed) return
-            val link = pendingLink
-            pendingLink = null
-            Phase.Ready(OrcaRouter(client, config, system, onRouteChanged, link).also { it.plugins = plugins })
+            when (result) {
+                PreloadResult.ForceUpdate -> {
+                    // [phase] stays at Loading: the public phases are the ones of before.
+                    updateRequired = true
+                    return
+                }
+                is PreloadResult.Success -> Phase.Ready(router(client, result.config))
+            }
         } catch (e: CancellationException) {
             started = false
             throw e
@@ -301,6 +366,17 @@ public class OrcaAppBoot(
             Phase.Failed("HTTP ${e.status}: ${e.body.take(200)}", e)
         } catch (e: Exception) {
             Phase.Failed(e.message ?: e.toString(), e)
+        }
+    }
+
+    /** A router for [config] (Dart `_initRouter`), at the held link if any, with the plugins and the cache. */
+    private fun router(client: OrcaClient, config: NavConfig): OrcaRouter {
+        val link = pendingLink
+        pendingLink = null
+        staticFlowManager?.initDynamicPaths(config.flows)
+        return OrcaRouter(client, config, system, onRouteChanged, link).also {
+            it.plugins = plugins
+            it.staticFlowManager = staticFlowManager
         }
     }
 
@@ -363,10 +439,19 @@ public class OrcaAppBoot(
  * made on first run, as Flutter does whether or not sessions are tracked;
  * `/config` is asked with it too.
  *
- * @param enableOffline runs the version check at boot, before anything else
- * is asked: a forceUpdate answer shows the force-update screen and neither
- * the config nor a page is fetched. The static-flow cache, saved config and
- * `preload()` arrive with plan step 14.
+ * @param enableOffline boots offline-first, as Flutter's OrcaApp: a
+ * [StaticFlowManager] over [offlineStore], files in
+ * `context.filesDir/orca_gateway` (unless [staticFlowManager] is given), and
+ * [preload] at boot under the spinner:
+ * the version check against the saved flow versions, before anything else
+ * is asked. A forceUpdate answer shows the force-update screen and fetches
+ * nothing more; offline (any `/version` failure) the saved config is used,
+ * and with none saved the error view says "No network and no cached config
+ * available"; fresh versions use the saved config with no `/config`
+ * request; stale ones fetch `/config` and save it with the static flows'
+ * pre-rendered pages. Those pages then open from the cache, offline too.
+ * With a [path] there is no config: only the version check runs, and
+ * nothing is cached.
  * @param enableSessionTracking posts a session start when the app comes to
  * the foreground and an end when it leaves, queued offline when unsent.
  * @param plugins widgets, actions and triggers that belong together (Dart
@@ -404,6 +489,14 @@ public class OrcaAppBoot(
  * [LocalConfiguration] (Flutter's MaterialApp `locale`), the layout direction
  * kept: Flutter's default localizations are left to right. Nothing is sent:
  * `x-orca-locale` stays the device's, as in Flutter.
+ * @param preloadedConfig pre-loaded NavConfig (Dart `OrcaApp.preloadedConfig`).
+ * When provided, skips the config fetch entirely: the app is on screen from
+ * the first frame, and no version check runs. Use [preload] to obtain this
+ * before calling OrcaApp; its forceUpdate answer is yours to show. Not used
+ * with a [path].
+ * @param staticFlowManager pre-initialized [StaticFlowManager] (Dart
+ * `OrcaApp.staticFlowManager`). Pass the same instance as to [preload]:
+ * each page is asked of it before the network. Not used with a [path].
  */
 @Composable
 public fun OrcaApp(
@@ -424,6 +517,8 @@ public fun OrcaApp(
     forceUpdate: (@Composable () -> Unit)? = null,
     colorScheme: ColorScheme? = null,
     locale: Locale? = null,
+    preloadedConfig: NavConfig? = null,
+    staticFlowManager: StaticFlowManager? = null,
 ) {
     val context = LocalContext.current
     val identified = remember { client.identified(SharedPreferencesKeyValueStore(context)) }
@@ -449,18 +544,28 @@ public fun OrcaApp(
     // boot, as for the path above: an OrcaApp that left the composition and came back reads the
     // launch Intent again, and that is not a new link.
     val retained = viewModel(key = "com.orcagateway.sdk.OrcaAppBoot:$site") {
-        Retained(OrcaAppBoot(identified).also { boot -> launch?.let(boot::handleDeeplink) })
+        // Dart `staticFlowManager ?? (enableOffline ? StaticFlowManager() : null)`, over files.
+        val cache = staticFlowManager ?: if (enableOffline) StaticFlowManager(offlineStore(context)) else null
+        Retained(
+            OrcaAppBoot(identified).also { boot ->
+                boot.staticFlowManager = cache
+                boot.enableOffline = enableOffline
+                launch?.let(boot::handleDeeplink)
+            },
+        )
     }
     val boot = retained.value
     NewIntentLinks { boot.handleDeeplink(it) }
     // The plugins are merged first, so the config is asked with their names; once per kept boot.
+    // A preloaded config then gives the router at once, while composing: the first frame is the app.
     val prepare = {
         if (boot.plugins == null) boot.plugins = OrcaPluginHost.merge(boot.client, plugins, customActions, widgets)
+        if (preloadedConfig != null) boot.start(preloadedConfig)
     }
     val bootSplash = splash ?: loading
     WithSchemeAndLocale(colorScheme, locale) {
-        // The version check comes first: the config is asked only once the app may run.
-        OrcaBootView(identified, enableOffline, enableSessionTracking, modifier, prepare, bootSplash, error, forceUpdate) {
+        // No version check in the gate: the boot's preload runs it, and a preloaded config has none.
+        OrcaBootView(identified, enableOffline = false, enableSessionTracking, modifier, prepare, bootSplash, error, forceUpdate) {
             val scope = rememberCoroutineScope()
             // Before the load starts, so the router it makes gets them.
             DisposableEffect(boot, system, onRouteChanged) {
@@ -472,18 +577,23 @@ public fun OrcaApp(
                 }
             }
             LaunchedEffect(boot) { boot.loadIfNeeded(context) }
-            when (val phase = boot.phase) {
-                OrcaAppBoot.Phase.Loading -> if (bootSplash != null) HostView(modifier, bootSplash) else LoadingView(modifier)
-                is OrcaAppBoot.Phase.Ready -> {
-                    AttachHost(phase.router, system, onRouteChanged, onDeeplink)
-                    OrcaNavHost(phase.router, modifier)
-                }
-                is OrcaAppBoot.Phase.Failed -> {
-                    val thrown = phase.error ?: RuntimeException(phase.message)
-                    if (error != null) {
-                        HostView(modifier) { error(thrown) }
-                    } else {
-                        OrcaErrorView(thrown, modifier) { scope.launch { boot.reload(context) } }
+            // The boot's preload said forceUpdate (Swift twin `updateRequired`); its phase stays Loading.
+            if (boot.updateRequired) {
+                if (forceUpdate != null) HostView(modifier, forceUpdate) else ForceUpdateScreen(modifier)
+            } else {
+                when (val phase = boot.phase) {
+                    OrcaAppBoot.Phase.Loading -> if (bootSplash != null) HostView(modifier, bootSplash) else LoadingView(modifier)
+                    is OrcaAppBoot.Phase.Ready -> {
+                        AttachHost(phase.router, system, onRouteChanged, onDeeplink)
+                        OrcaNavHost(phase.router, modifier)
+                    }
+                    is OrcaAppBoot.Phase.Failed -> {
+                        val thrown = phase.error ?: RuntimeException(phase.message)
+                        if (error != null) {
+                            HostView(modifier) { error(thrown) }
+                        } else {
+                            OrcaErrorView(thrown, modifier) { scope.launch { boot.reload(context) } }
+                        }
                     }
                 }
             }
@@ -494,7 +604,8 @@ public fun OrcaApp(
 /**
  * While shown, the host's latest [system], [onRouteChanged] and [onDeeplink]
  * are the router's (OrcaApp(client) keeps the router, not the activity they
- * belong to). The link that opened the app is reported here, once.
+ * belong to). The link that opened the app is reported here, once, after
+ * the first location of a router made before anyone listened.
  */
 @Composable
 private fun AttachHost(
@@ -509,6 +620,7 @@ private fun AttachHost(
     }
     DisposableEffect(router, onRouteChanged) {
         router.onRouteChanged = onRouteChanged
+        router.deliverFirstRoute()
         onDispose { if (router.onRouteChanged === onRouteChanged) router.onRouteChanged = null }
     }
     DisposableEffect(router, onDeeplink) {
@@ -589,7 +701,8 @@ internal class Retained<T : AutoCloseable>(val value: T) : ViewModel(value)
  * `customActions` and `registry`, sdk/lib/src/widgets/orca_app.dart): the
  * router's pages get them, and a plugin conflict shows the error view with
  * Flutter's message and fetches nothing. They are merged once per router,
- * by the first OrcaApp that shows it.
+ * by the first OrcaApp that shows it. Here [enableOffline] runs the version
+ * check only: nothing is cached, and pages come from the network.
  *
  * Deep links are handled as by OrcaApp(client), and reported to the
  * router's own [OrcaRouter.onDeeplink]: the launch Intent's link once, as a
