@@ -136,7 +136,7 @@ final class ActionFixtureTests: XCTestCase {
         try await executor.execute(.closeDialog)
         XCTAssertEqual(store.state, state)
         XCTAssertEqual(seen, [])
-        XCTAssertFalse(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .refetchPage]))))
+        XCTAssertFalse(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .closeDialog]))))
         XCTAssertTrue(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .setState(.init(key: "a", value: 1))]))))
     }
 
