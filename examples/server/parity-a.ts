@@ -9,7 +9,9 @@ import {
   DebugLog,
   Once,
   Always,
+  RefetchPage,
   type Action,
+  type ActionMap,
   type Widget,
 } from "../../engine/src/types";
 import {
@@ -59,15 +61,21 @@ import {
   AbsorbPointer,
   IgnorePointer,
   InteractiveViewer,
+  ListView,
+  GridView,
+  PageView,
+  PullToRefresh,
+  Scrollbar,
 } from "../../engine/src/components";
 
 // Native parity, Phase A (pipeline native-parity). One app, one page per plan
 // step, each the "torture" page for the props that step brings to Swift and
 // Kotlin, so the same page can be compared on Flutter, iOS and Android.
 // Pages: polish (step 1), lifecycle (step 2), layout and layout-safe (step 3),
-// effects (step 4). Later steps add lists, forms, rich and overlays: one page
-// constant each, one entry in `routes`. Images come from picsum.photos; offline
-// they draw "!" in their box. Only widgets all three SDKs draw.
+// effects (step 4), lists (step 5). Later steps add forms, rich and overlays:
+// one page constant each, one entry in `routes`. Images come from
+// picsum.photos; offline they draw "!" in their box. Only widgets all three
+// SDKs draw.
 
 const red = "#E53935";
 const blue = "#1E88E5";
@@ -1163,6 +1171,192 @@ const effectsPage = PageDefinition.create({
     }),
 });
 
+// ── Step 5 · lists: ListView, GridView, PageView, PullToRefresh, Scrollbar and
+//    the refetchPage action (A5.1-A5.7); each list, grid and pager in a box
+//    with a set height, since the page body scrolls ─────────────────────────
+
+/** Fetches of the lists page since the server started, counted in getInfoData (cachePolicy "none": every fetch renders). */
+let listsFetches = 0;
+
+/** A full-width box `height` high with a grey border, holding a list, grid or pager. */
+function tall(height: number, child: Widget): Widget {
+  return fullWidth(Container.new({ height, decoration: { border: { width: 1, color: grey } }, child }));
+}
+
+/** A 40-high row "Row i", grey and white in turn; `actions` ride on it. */
+function listRow(i: number, actions?: ActionMap): Widget {
+  return Container.new({
+    height: 40,
+    alignment: "centerLeft",
+    padding: EdgeInsets.symmetric({ horizontal: 12 }),
+    color: i % 2 === 0 ? pale : "#FFFFFF",
+    child: Text.new({ data: `Row ${i}` }),
+    ...(actions ? { actions } : {}),
+  });
+}
+
+function listRows(count: number): Widget[] {
+  return Array.from({ length: count }, (_, i) => listRow(i));
+}
+
+/** A coloured cell filling its slot, numbered from 1, the four colours in turn. */
+function cell(i: number): Widget {
+  return fill(String(i + 1), wrapColors[i % wrapColors.length]!);
+}
+
+/** Three pages filling the pager, "Page 1" to "Page 3" on red, blue and green. */
+function pages(): Widget[] {
+  return [red, blue, green].map((color, i) =>
+    Container.new({
+      alignment: "center",
+      color,
+      child: Text.new({ data: `Page ${i + 1}`, style: { color: "#FFFFFF", fontSize: 20, fontWeight: "bold" } }),
+    }),
+  );
+}
+
+const listsPage = PageDefinition.create({
+  id: "lists",
+  title: "Lists",
+  state: [
+    { key: "rowsBuilt", scope: "page", initial: 0 },
+    { key: "pageEndOffset", scope: "page", initial: 0 },
+    { key: "pageViewport", scope: "page", initial: 0 },
+    { key: "pageCount", scope: "page", initial: 0 },
+    { key: "appCount", scope: "app", initial: 0 },
+  ],
+  getInfoData: () => ({ fetches: ++listsFetches }),
+  render: (_ctx, info) =>
+    Scaffold.new({
+      appBar: AppBar.new({ title: Text.new({ data: "Lists (step 5)" }) }),
+      body: SingleChildScrollView.new({
+        child: Padding.new({
+          padding: EdgeInsets.all(16),
+          child: Column.new({
+            crossAxisAlignment: "start",
+            children: [
+              section(
+                "A5.1 A ListView of 1,000 rows builds only the rows near the box",
+                caption("Each row counts itself once built (onInit): about a dozen on open (6 rows show), never 1,000; the count grows as you scroll"),
+                shows("rows built", "rowsBuilt"),
+                SizedBox.new({ height: 4 }),
+                tall(
+                  240,
+                  ListView.new({
+                    children: Array.from({ length: 1000 }, (_, i) => listRow(i, { onInit: bump("rowsBuilt") })),
+                  }),
+                ),
+              ),
+              section(
+                "A5.2 ListView horizontal with padding, and reverse",
+                caption("Horizontal, padding 8: 20 numbered 64 × 48 boxes 8 in from each edge of the box, scrolling sideways"),
+                SizedBox.new({ height: 4 }),
+                tall(
+                  66,
+                  ListView.new({
+                    scrollDirection: "horizontal",
+                    padding: EdgeInsets.all(8),
+                    children: Array.from({ length: 20 }, (_, i) =>
+                      block(String(i + 1), wrapColors[i % wrapColors.length]!, 64, 48),
+                    ),
+                  }),
+                ),
+                SizedBox.new({ height: 12 }),
+                caption("reverse true: Row 0 sits at the bottom of the box and the list scrolls upwards"),
+                SizedBox.new({ height: 4 }),
+                tall(160, ListView.new({ reverse: true, children: listRows(20) })),
+              ),
+              section(
+                "A5.3 GridView: 2 columns, spacing 8, childAspectRatio 1.5",
+                caption("Two columns 8 apart, rows 8 apart, each cell 1.5 times as wide as it is tall; scroll for cells 1 to 12"),
+                SizedBox.new({ height: 4 }),
+                tall(
+                  240,
+                  GridView.new({
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    childAspectRatio: 1.5,
+                    children: Array.from({ length: 12 }, (_, i) => cell(i)),
+                  }),
+                ),
+              ),
+              section(
+                "A5.4 PageView: one page per swipe, vertical, pageSnapping false",
+                caption("Swipe sideways: one page per swipe, even on a fast fling. onScrollEnd's offset is the page index × the viewport: 0 on Page 1, the viewport on Page 2, twice it on Page 3"),
+                shows("onScrollEnd offset", "pageEndOffset", 1),
+                shows("viewport", "pageViewport", 1),
+                SizedBox.new({ height: 4 }),
+                tall(
+                  160,
+                  PageView.new({
+                    actions: {
+                      onScrollEnd: Sequential(
+                        SetState("pageEndOffset", V.event("offset")),
+                        SetState("pageViewport", V.event("viewportDimension")),
+                      ),
+                    },
+                    children: pages(),
+                  }),
+                ),
+                SizedBox.new({ height: 12 }),
+                caption("Vertical: swipe up for the next page"),
+                SizedBox.new({ height: 4 }),
+                tall(160, PageView.new({ scrollDirection: "vertical", children: pages() })),
+                SizedBox.new({ height: 12 }),
+                caption("pageSnapping false: it stops wherever the swipe leaves it, between two pages"),
+                SizedBox.new({ height: 4 }),
+                tall(160, PageView.new({ pageSnapping: false, children: pages() })),
+              ),
+              section(
+                "A5.5 / A5.6 PullToRefresh whose onRefresh is refetchPage",
+                caption("Pull the list down from its top: the spinner stays until the page is fetched again and server fetches goes up by one. A pull from further down only scrolls the list. Refetch page does the same without a spinner"),
+                caption("After a refetch, no loading screen: the app counter keeps its value, the page counter and rows built go back to their initial values"),
+                SizedBox.new({ height: 4 }),
+                Text.new({ data: `server fetches: ${(info as { fetches: number }).fetches}`, style: { fontSize: 16 } }),
+                Text.new({ data: V.transform(V.appState("appCount"), [TV.template("app counter: {{value}}")]) }),
+                shows("page counter", "pageCount"),
+                SizedBox.new({ height: 4 }),
+                Wrap.new({
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.new({
+                      child: Text.new({ data: "+1 app" }),
+                      actions: { onTap: SetState("appCount", V.transform(V.appState("appCount"), [TV.add(V.static(1))]), "app") },
+                    }),
+                    OutlinedButton.new({
+                      child: Text.new({ data: "+1 page" }),
+                      actions: { onTap: bump("pageCount") },
+                    }),
+                    ElevatedButton.new({
+                      child: Text.new({ data: "Refetch page" }),
+                      actions: { onTap: RefetchPage() },
+                    }),
+                  ],
+                }),
+                SizedBox.new({ height: 8 }),
+                tall(200, PullToRefresh.new({ actions: { onRefresh: RefetchPage() }, child: ListView.new({ children: listRows(20) }) })),
+              ),
+              section(
+                "A5.7 Scrollbar with thumbVisibility true, beside a list without one",
+                caption("Left, in a Scrollbar: its thumb shows at rest and while scrolling. Right, no Scrollbar: no indicator, even while scrolling (as Flutter on a phone)"),
+                SizedBox.new({ height: 4 }),
+                Row.new({
+                  gap: 8,
+                  children: [
+                    Expanded.new({ child: tall(160, Scrollbar.new({ thumbVisibility: true, child: ListView.new({ children: listRows(30) }) })) }),
+                    Expanded.new({ child: tall(160, ListView.new({ children: listRows(30) })) }),
+                  ],
+                }),
+              ),
+            ],
+          }),
+        }),
+      }),
+    }),
+});
+
 const parityFlow = Flow.create({
   name: "parity",
   routes: [
@@ -1173,6 +1367,7 @@ const parityFlow = Flow.create({
     { path: "layout", page: layoutPage },
     { path: "layout-safe", page: layoutSafePage },
     { path: "effects", page: effectsPage },
+    { path: "lists", page: listsPage },
   ],
 });
 
