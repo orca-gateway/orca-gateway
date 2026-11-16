@@ -17,10 +17,12 @@ object Fixtures {
     val render: File = File(schema, "fixtures/render")
     val actions: File = File(schema, "fixtures/actions")
     val navigation: File = File(schema, "fixtures/navigation")
+    val subpage: File = File(schema, "fixtures/subpage")
 
     fun renderFiles(): List<File> = render.listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
     fun actionFiles(): List<File> = actions.listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
     fun navigationFiles(): List<File> = navigation.listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
+    fun subpageFiles(): List<File> = subpage.listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
 
     /** A file under open-source/, as text. */
     fun text(relative: String): String = File(repoRoot, relative).readText()

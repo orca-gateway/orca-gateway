@@ -20,6 +20,12 @@ class FixturePathsTest {
         assertEquals(15, Fixtures.navigationFiles().size)
     }
 
+    /** B13.4-K: the SubPage fixture family is reachable, all 12 files of it. */
+    @Test
+    fun b13_4_theSubPageFixturesAreReachable() {
+        assertEquals(12, Fixtures.subpageFiles().size)
+    }
+
     /** B9.1-CK: the `config` of every navigation fixture is a real /config body and decodes. */
     @Test
     fun b9_1_ck_everyNavigationFixtureConfigDecodesIntoNavConfig() {
