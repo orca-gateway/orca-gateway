@@ -226,6 +226,104 @@ Not there yet: `ORCA_OFFLINE` runs only the version check. The offline cache of 
 Both extras work with `ORCA_BOOT config` too: the version check then comes before `/config`, and a
 force update fetches neither the config nor a page.
 
+## Error screens, dark mode, locale and splash
+
+Five more extras try what `OrcaApp` draws around the pages. Without them the app is as before. As
+above, install it once with `task example:android:run`, then start it with `adb shell am start`.
+
+| Extra | Type | Default | What |
+|---|---|---|---|
+| `ORCA_API_KEY` | string | `demo-key` | the API key the app sends; the server answers any other 401 |
+| `ORCA_SCHEME` | string | unset: the app's light theme | `dark` or `light`: the Material 3 colours of the app and of `OrcaApp` |
+| `ORCA_LOCALE` | string | unset: the device's | a language tag (`ar`, `fr-FR`), `OrcaApp`'s `locale` |
+| `ORCA_SPLASH` | boolean | off | the app's own splash in place of the SDK's spinner while `OrcaApp` boots |
+| `ORCA_TIMEOUT` | string | `30` | how long one request may take, in seconds |
+
+**Error screens.** A page that fails to load shows the SDK's error screen, Flutter's: an icon, a
+title, a line saying why, and "Try again". Start the counter on a page the server does not have,
+with a wrong key, and with no server:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --es ORCA_PATH missing
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --es ORCA_API_KEY wrong
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
+  --es ORCA_SERVER_URL http://10.0.2.2:9
+```
+
+The first shows "Not Found" under a magnifier with a cross, the second "Unauthorized" under a
+padlock, the third "Connection Failed" under a crossed-out Wi-Fi sign: nothing listens on port 9.
+Stopping the server does the same; start it again and tap "Try again": the page loads.
+
+**Dark mode.** `ORCA_SCHEME` puts the app and `OrcaApp` on Material 3's dark (or light) colours:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --es ORCA_SCHEME dark \
+  --es ORCA_SERVER_URL http://10.0.2.2:9
+```
+
+The spinner and then "Connection Failed" are drawn light on dark: the SDK's own screens follow the
+scheme. A server page does not: without the URL extra the counter page stays light, as Flutter draws
+a page's Scaffold in its default light theme.
+
+**Locale.** `--es ORCA_LOCALE ar` (or `fr-FR`) gives `OrcaApp` that locale: its screens and pages
+read it from `LocalConfiguration`, and so does the app's splash (`ORCA_SPLASH`, below), whose
+caption ends with it. Against the example server the splash is a blink, so give the app a server
+that takes the request and never answers. In a second terminal:
+
+```bash
+nc -l 8099
+```
+
+Then:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --ez ORCA_SPLASH true \
+  --es ORCA_LOCALE fr-FR --es ORCA_BOOT config --es ORCA_TIMEOUT 5 \
+  --es ORCA_SERVER_URL http://10.0.2.2:8099
+```
+
+`nc` prints the config request. The blue splash reads "host splash · fr-FR" under "Orca Counter":
+the locale `OrcaApp` hands the views under it; without the extra it is the device's. Five seconds
+later the request times out, "Connection Failed" shows and `nc` stops; start it again before the
+next launch. The example pages have nothing that changes with the locale, so they look the same;
+the layout stays left to right, as Flutter's default localizations are, and the server still gets
+the device's locale in `x-orca-locale`.
+
+**Splash.** With `ORCA_SPLASH` the app draws its own splash, "Orca Counter" in white on blue with
+"host splash" and the locale under it, where the SDK shows its spinner while it boots: during the
+version check (`ORCA_OFFLINE`) and while `/config` is fetched (`ORCA_BOOT config`). A page opened
+at a path skips the `/config` fetch, so start the navigation app from its config with the check on:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --ez ORCA_SPLASH true \
+  --ez ORCA_OFFLINE true --es ORCA_APP_ID navigation --es ORCA_BOOT config
+```
+
+The blue splash shows, then the Welcome page. From a server on your computer this takes a moment
+only. Pages that load later, and a page's own reload, keep the SDK's spinner.
+
+**Timeout.** The server's `addToCart` action on the `shop` page waits three seconds before it
+answers. Give the app two:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --es ORCA_TIMEOUT 2 \
+  --es ORCA_APP_ID server-actions --es ORCA_PATH shop
+```
+
+Tap "Add to Cart": after two seconds the snackbar says "Failed to add to cart. Try again." Without
+the extra a request may take 30 seconds, and the same tap ends three seconds later with "Added 1x
+Orca Gateway Pro License to cart!". A page request that runs out of time shows "Connection Failed".
+
+**Placeholder.** The `placeholder` page of the capability demo shows two UnsupportedWidgetPlaceholder
+cards, the grey card for a widget an app knows but cannot run on its platform. The first sets every
+prop ("Google Maps", a map icon, a reason and "Learn more"); the second only the widget type, so
+the SDK's defaults show:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity \
+  --es ORCA_APP_ID capability-demo --es ORCA_PATH placeholder
+```
+
 ## DevTools
 
 Debug builds connect to Orca DevTools on port 6363 of the Mac (start it with `task devtools:dev`)

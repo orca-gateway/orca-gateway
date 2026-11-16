@@ -295,7 +295,7 @@ class OrcaAppPluginTest {
         val message = "Widget type \"X\" from plugin \"b\" conflicts with plugin \"a\"."
         waitForText(message)
         compose.onNodeWithText(message).assertIsDisplayed()
-        compose.onNodeWithText("Could not load this page").assertIsDisplayed()
+        compose.onNodeWithText("Something Went Wrong").assertIsDisplayed()
         compose.waitForIdle()
 
         // Not even the version check: nothing is fetched, nothing advertised.

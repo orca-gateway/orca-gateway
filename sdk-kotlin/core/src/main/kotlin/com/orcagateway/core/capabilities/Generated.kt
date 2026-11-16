@@ -78,6 +78,7 @@ public object GeneratedCapabilities {
         "TextButton",
         "TextField",
         "Transform",
+        "UnsupportedWidgetPlaceholder",
         "Video",
         "Wrap",
     )
@@ -170,5 +171,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "4c9a5ede1f615145826c32b42d38e94a11191415f7029f82f8b7cea0e1766a26"
+    public const val capsHash: String = "cf9ba6e7ee1700363842a68b9e52fe3f13f7213e6bffed339ac801a0937f8bca"
 }

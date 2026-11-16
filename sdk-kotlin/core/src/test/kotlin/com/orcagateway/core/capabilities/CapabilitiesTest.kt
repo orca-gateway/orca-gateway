@@ -66,12 +66,13 @@ class CapabilitiesTest {
      *
      * A4.x: native parity step 4 adds the 11 effect and touch wrappers ([A4]),
      * so the pin moves from 49 to 60; Swift lands the same 11 in the same step.
+     * C18.4: S18 adds UnsupportedWidgetPlaceholder: the pin moves to 61.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame60WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame61WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(60, kotlin.size)
+        assertEquals(61, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -88,6 +89,7 @@ class CapabilitiesTest {
         assertTrue(GeneratedCapabilities.widgets.containsAll(s12), "not advertised: ${s12 - GeneratedCapabilities.widgets.toSet()}")
         assertTrue(kotlin.containsAll(A3_1), "missing: ${A3_1 - kotlin.toSet()}")
         assertTrue(kotlin.containsAll(A4), "missing: ${A4 - kotlin.toSet()}")
+        assertTrue("UnsupportedWidgetPlaceholder" in GeneratedCapabilities.widgets, "S18's UnsupportedWidgetPlaceholder is not advertised")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
@@ -96,14 +98,15 @@ class CapabilitiesTest {
      * A3.1: Compose draws the 13 layout wrappers, so the generated vector
      * advertises them and the core registry lets them through instead of
      * degrading them; WidgetBuildersTest pins standard() to the same set.
-     * The pin is 60: with S12's 5 animated ones (49), then native parity
-     * step 4's 11 effect and touch wrappers (A4.x).
+     * The pin is 61: with S12's 5 animated ones (49), then native parity
+     * step 4's 11 effect and touch wrappers (A4.x, 60), then S18's
+     * UnsupportedWidgetPlaceholder.
      */
     @Test
     fun a3_1_theThirteenLayoutWrappersAreAdvertisedAndLetThrough() {
         val advertised = GeneratedCapabilities.widgets.toSet()
         assertEquals(emptySet(), A3_1 - advertised, "not advertised")
-        assertEquals(60, GeneratedCapabilities.widgets.size)
+        assertEquals(61, GeneratedCapabilities.widgets.size)
         assertEquals(emptySet(), A3_1 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 

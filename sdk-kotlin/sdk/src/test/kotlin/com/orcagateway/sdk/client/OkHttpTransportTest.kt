@@ -1,15 +1,21 @@
 package com.orcagateway.sdk.client
 
 import com.orcagateway.core.client.HttpRequest
+import com.orcagateway.core.client.OrcaErrorInfo
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.test.runTest
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InterruptedIOException
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.URI
+import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPOutputStream
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -101,5 +107,35 @@ class OkHttpTransportTest {
             OkHttpTransport().send(HttpRequest("GET", URI("http://127.0.0.1:$port/")))
         }
         start()
+    }
+
+    // MARK: C18.5 the request timeout, applied per call
+
+    /** A MockWebServer on 127.0.0.1 that answers 200 "ok" after [delayMillis]. */
+    private fun slowServer(delayMillis: Long): MockWebServer = MockWebServer().apply {
+        enqueue(MockResponse().setBody("ok").setHeadersDelay(delayMillis, TimeUnit.MILLISECONDS))
+        start(InetAddress.getByName("127.0.0.1"), 0)
+    }
+
+    /** OkHttp's call timeout fires: "timeout", which OrcaErrorInfo shows as Connection Failed. */
+    @Test
+    fun c18_5_anAnswerSlowerThanTheTimeoutThrowsATimeout() = runTest {
+        slowServer(delayMillis = 1_000).use { slow ->
+            val error = assertFailsWith<InterruptedIOException> {
+                OkHttpTransport().send(HttpRequest("GET", slow.url("/page").toUri(), timeoutMillis = 100))
+            }
+            assertEquals("timeout", error.message)
+            assertEquals(OrcaErrorInfo.Kind.Connection, OrcaErrorInfo.from(error).kind)
+            assertEquals("Connection Failed", OrcaErrorInfo.from(error).title)
+        }
+    }
+
+    @Test
+    fun c18_5_anAnswerWithinTheTimeoutSucceeds() = runTest {
+        slowServer(delayMillis = 50).use { slow ->
+            val response = OkHttpTransport().send(HttpRequest("GET", slow.url("/page").toUri(), timeoutMillis = 5_000))
+            assertEquals(200, response.status)
+            assertEquals("ok", response.body.decodeToString())
+        }
     }
 }
