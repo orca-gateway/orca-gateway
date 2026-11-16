@@ -7,7 +7,7 @@ import OrcaGateway
 /// `SystemNotifications` on UNUserNotificationCenter in an app, a fake in the
 /// tests.
 @MainActor
-public protocol Notifications: Sendable {
+protocol Notifications: Sendable {
     /// Asks the user for alert, badge and sound permission (once; later calls
     /// answer at once): whether notifications are authorized.
     func requestAuthorization() async throws -> Bool
@@ -26,32 +26,19 @@ public protocol Notifications: Sendable {
 
 /// A notification the plugin shows: its request's identifier, content and
 /// userInfo.
-public struct LocalNotification: Equatable, Sendable {
-    public var id: Int
-    public var title: String
-    public var body: String
-    public var userInfo: [String: JSONValue]
-
-    public init(id: Int, title: String, body: String, userInfo: [String: JSONValue]) {
-        self.id = id
-        self.title = title
-        self.body = body
-        self.userInfo = userInfo
-    }
+struct LocalNotification: Equatable, Sendable {
+    var id: Int
+    var title: String
+    var body: String
+    var userInfo: [String: JSONValue]
 }
 
 /// A notification the center hands its delegate: its request's identifier,
 /// whether APNs sent it, and its userInfo as JSON.
-public struct DeliveredNotification: Equatable, Sendable {
-    public var identifier: String
-    public var isRemote: Bool
-    public var userInfo: [String: JSONValue]
-
-    public init(identifier: String, isRemote: Bool, userInfo: [String: JSONValue]) {
-        self.identifier = identifier
-        self.isRemote = isRemote
-        self.userInfo = userInfo
-    }
+struct DeliveredNotification: Equatable, Sendable {
+    var identifier: String
+    var isRemote: Bool
+    var userInfo: [String: JSONValue]
 }
 
 #if canImport(UserNotifications)

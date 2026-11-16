@@ -6,7 +6,7 @@ import Foundation
 /// whichever the app's adapter speaks; a fake in the tests. Named so it does
 /// not clash with Firebase's `Messaging`.
 @MainActor
-public protocol PushMessaging: Sendable {
+protocol PushMessaging: Sendable {
     /// The device's push token, nil when there is none; throws when the
     /// service is not set up, which fails the action, as `getToken()` does.
     func token() async throws -> String?

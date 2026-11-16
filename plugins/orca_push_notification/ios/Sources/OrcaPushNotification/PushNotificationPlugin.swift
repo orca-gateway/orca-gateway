@@ -26,7 +26,7 @@ public struct PushNotificationPlugin: OrcaPlugin {
     /// The plugin on its seams: `notifications` the notification center,
     /// `messaging` the push service, `registration` where the APNs token the
     /// host hands over is kept for the messaging to read.
-    public init(
+    init(
         notifications: Notifications, messaging: PushMessaging,
         registration: RemoteNotificationRegistration = RemoteNotificationRegistration()
     ) {
@@ -75,11 +75,11 @@ public struct PushNotificationPlugin: OrcaPlugin {
 /// The host's APNs registration as its app delegate hands it over: the device
 /// token, or why there is none. The messaging reads it.
 @MainActor
-public final class RemoteNotificationRegistration {
-    public internal(set) var deviceToken: Data?
-    public internal(set) var error: Error?
+final class RemoteNotificationRegistration {
+    var deviceToken: Data?
+    var error: Error?
 
-    public nonisolated init() {}
+    nonisolated init() {}
 }
 
 /// The five actions, initialize and the notification center's delegate, line
