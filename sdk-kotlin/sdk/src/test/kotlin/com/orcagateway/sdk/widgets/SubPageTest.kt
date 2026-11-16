@@ -7,12 +7,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasProgressBarRangeInfo
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -37,6 +39,7 @@ import com.orcagateway.sdk.OrcaNodeSnapshot
 import com.orcagateway.sdk.NodeObserver
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.WidgetBuilders
 import com.orcagateway.sdk.support.button
 import com.orcagateway.sdk.support.column
 import com.orcagateway.sdk.support.text
@@ -155,8 +158,9 @@ class SubPageTest {
         state = mapOf("count" to 7) + state,
     )
 
-    private fun show(engine: Engine, page: PageResponse, app: Map<String, JsonValue> = emptyMap()): OrcaPageModel {
+    private fun show(engine: Engine, page: PageResponse, app: Map<String, JsonValue> = emptyMap(), builders: WidgetBuilders? = null): OrcaPageModel {
         val model = OrcaPageModel(page, store = ElmStore(StoreState(app = app)), client = engine.client)
+        builders?.let { model.builders = it }
         compose.setContent {
             Box(Modifier.size(300.dp, 600.dp)) { NodeView("root", model) }
         }
@@ -440,12 +444,22 @@ class SubPageTest {
     @Test
     fun b13_5_joinDrawsBothTreesInOrderWithSeparateState() {
         val engine = Engine(counter("a", 1), counter("c", 30))
-        val model = show(engine, host(subPage("sp", "a")))
+        // Every Column carries its node id as a test tag, so the two roots can be measured.
+        val tagged = WidgetBuilders.standard().apply {
+            register("Column") { node, m, modifier -> FlexWidget(node, m, modifier.testTag(node.id), vertical = true) }
+        }
+        val model = show(engine, host(subPage("sp", "a")), builders = tagged)
 
         run(model, update("c", "join"))
         shown("Page a")
         shown("Page c")
         assertTrue(top("Page a") < top("Page c"))
+        // S5: each joined root takes the width the host gives (Flutter stretches), not its own.
+        for (root in listOf("sp:r", "sp#1:r")) {
+            val bounds = compose.onNodeWithTag(root).getUnclippedBoundsInRoot()
+            assertEquals(0.dp, bounds.left, "left edge of $root")
+            assertEquals(300.dp, bounds.right - bounds.left, "width of $root")
+        }
         assertEquals(listOf("sp:", "sp#1:"), model.subPages.prefixes)
         assertEquals(
             mapOf("count" to JsonValue.Int(7), "sp:count" to JsonValue.Int(1), "sp#1:count" to JsonValue.Int(30)),
@@ -458,6 +472,116 @@ class SubPageTest {
         assertEquals(JsonValue.Int(1), model.store.value("sp:count"))
         shown("31")
         shown("1")
+    }
+
+    /**
+     * S7: a page that replaces another gets fresh UI state, even with the same node ids: nothing a composable of
+     * the old page remembered carries over. The AnimatedBuilder of the new page registers its own controller
+     * under the id, and the old one leaving does not take that registration away.
+     */
+    @Test
+    fun b13_5_aReplacedPageGetsFreshUiState() {
+        fun animated(name: String): PageResponse = pageOf(
+            name,
+            column("r", "label", "anim"),
+            text("label", "Page $name"),
+            ComponentNode(
+                "anim", "AnimatedBuilder", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single,
+                mapOf("animationId" to JsonValue.String("spin"), "autoStart" to JsonValue.Bool(false), "duration" to JsonValue.Int(100)),
+                listOf("animated"),
+            ),
+            text("animated", "Animated"),
+        )
+        val engine = Engine(animated("a"), animated("b"))
+        val model = show(engine, host(subPage("sp", "a")))
+        assertNull(model.animations.controller("spin"))
+        val first = assertNotNull(model.animations.controller("sp:spin"))
+
+        run(model, Action.AnimateForward("sp:spin"))
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(1.0, first.value(model.animationFrameMs))
+
+        // The same page again: every id is the same.
+        run(model, update("a"))
+        val second = assertNotNull(model.animations.controller("sp:spin"), "the new builder holds the id")
+        assertTrue(second !== first, "a controller of its own")
+        assertEquals(0.0, second.value(model.animationFrameMs))
+
+        run(model, Action.AnimateForward("sp:spin"))
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(1.0, second.value(model.animationFrameMs))
+
+        // A join keeps what is drawn.
+        run(model, update("b", "join"))
+        shown("Page b")
+        assertTrue(model.animations.controller("sp:spin") === second, "a join does not rebuild the first page")
+        assertNotNull(model.animations.controller("sp#1:spin"))
+        assertEquals(listOf("a", "a", "b"), engine.locations)
+    }
+
+    /** A page replaced by one with the same nested SubPage: the nested one is mounted anew, once. */
+    @Test
+    fun b13_5_aNestedSubPageOfAReplacedPageIsMountedAnew() {
+        val outer = pageOf("outer", column("r", "label", "inner"), text("label", "Page outer"), subPage("inner", "a"))
+        val engine = Engine(outer, counter("a", 1))
+        val model = show(engine, host(subPage("sp", "outer")))
+        compose.onNodeWithText("Add a").performClick()
+        compose.waitForIdle()
+        assertEquals(JsonValue.Int(2), model.store.value("sp:inner:count"))
+        val before = model.subPages.mounts("sp:inner")
+
+        run(model, update("outer"))
+        shown("Page outer")
+        shown("Page a")
+        assertEquals(listOf("outer", "a", "outer", "a"), engine.locations)
+        assertEquals(listOf("sp:", "sp:inner:"), model.subPages.prefixes)
+        assertTrue(model.subPages.mounts("sp:inner") !== before)
+        assertEquals(JsonValue.Int(1), model.store.value("sp:inner:count"))
+        assertTrue(model.renderer.nodes.keys.containsAll(setOf("sp:inner", "sp:inner:r", "sp:inner:value")))
+    }
+
+    /** A node added to the sub-page after the mount (addComponent) leaves with the page: on a replace and on unmount. */
+    @Test
+    fun b13_5_aNodeAddedInsideLeavesWithItsPage() {
+        val engine = Engine(counter("a", 1), counter("b", 20))
+        val model = show(engine, host(subPage("sp", "a")))
+        fun addNote() {
+            compose.runOnIdle { model.apply(ComponentMutation.Add("sp:r", listOf(text("sp:new", "Added note")))) }
+            compose.waitForIdle()
+        }
+        addNote()
+        shown("Added note")
+
+        run(model, update("b"))
+        gone("Added note")
+        assertEquals(setOf("root", "hostValue", "sp", "sp:r", "sp:label", "sp:value", "sp:add", "sp:addLabel"), model.renderer.nodes.keys)
+
+        addNote()
+        compose.runOnIdle { model.apply(ComponentMutation.Delete("sp")) }
+        compose.waitForIdle()
+        assertEquals(setOf("root", "hostValue"), model.renderer.nodes.keys)
+    }
+
+    /** S7: an updateSubPage during the first fetch wins; the late first answer is dropped. */
+    @Test
+    fun b13_5_anUpdateDuringTheFirstFetchWinsAndTheLateFirstAnswerIsDropped() {
+        val engine = Engine(counter("a", 1), counter("b", 20))
+        val gate = CompletableDeferred<Unit>().also { engine.gates["a"] = it }
+        val model = show(engine, host(subPage("sp", "a", child = "wait"), text("wait", "Loading feed")))
+        shown("Loading feed")
+
+        run(model, update("b"))
+        shown("Page b")
+        gone("Loading feed")
+        assertEquals(JsonValue.Int(20), model.store.value("sp:count"))
+
+        compose.runOnIdle { gate.complete(Unit) }
+        compose.waitForIdle()
+        shown("Page b")
+        gone("Page a")
+        assertEquals(mapOf("count" to JsonValue.Int(7), "sp:count" to JsonValue.Int(20)), model.store.state.page)
+        assertEquals(listOf("a", "b"), engine.locations)
+        assertEquals(listOf("sp:"), model.subPages.prefixes)
     }
 
     /** S7: the old content stays on screen while the new page is fetched. */

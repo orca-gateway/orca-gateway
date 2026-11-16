@@ -79,8 +79,8 @@ class SubPageHostTest {
         assertEquals(setOf("root", "feed", "other", "feed:t", "feed#1:t"), host.ids)
         assertEquals(props("count" to 7, "feed:n" to 1, "feed#1:n" to 3), host.store.state.page)
         assertEquals(listOf("feed:", "feed#1:"), host.subPages.prefixes)
-        assertEquals("feed#1:", host.subPages.prefixOf("feed#1:t"))
-        assertNull(host.subPages.prefixOf("root"))
+        assertEquals("feed#1:", SubPage.prefixOf(host.subPages.prefixes, "feed#1:t"))
+        assertNull(SubPage.prefixOf(host.subPages.prefixes, "root"))
 
         host.subPages.mount("feed", "replace", page("b", text("u", "m"), state = mapOf("m" to 2)))
         assertEquals(setOf("root", "feed", "other", "feed:u"), host.ids)
@@ -121,12 +121,60 @@ class SubPageHostTest {
         host.subPages.mount("feed:inner", "replace", page("b", text("t", "n"), state = mapOf("n" to 5)))
         assertEquals(setOf("root", "feed", "other", "feed:r", "feed:inner", "feed:inner:t"), host.ids)
         assertEquals(JsonValue.Int(5), host.store.value("feed:inner:n"))
-        assertEquals("feed:inner:", host.subPages.prefixOf("feed:inner:t"), "the longest prefix wins")
+        assertEquals("feed:inner:", SubPage.prefixOf(host.subPages.prefixes, "feed:inner:t"), "the longest prefix wins")
 
         host.subPages.mount("feed", "replace", page("c", text("z")))
         assertEquals(setOf("root", "feed", "other", "feed:z"), host.ids)
         assertNull(host.subPages.mounts("feed:inner"))
         assertEquals(props("count" to 7), host.store.state.page)
+    }
+
+    private fun add(parent: String, vararg nodes: JsonValue): ComponentMutation =
+        ComponentMutation.Add(parent, nodes.map { it.decode() })
+
+    /** A node added to a mounted page after the mount (addComponent) is under its prefix, and leaves with the page. */
+    @Test
+    fun b13_5_replaceRemovesTheNodesAddedSinceUnderTheOldPages() {
+        val host = Host(hostPage)
+        host.subPages.register("feed")
+        host.subPages.mount("feed", "replace", page("a", column("r", "t"), text("t")))
+        host.subPages.mount("feed", "join", page("c", column("r")))
+        host.renderer.apply(add("feed:r", text("feed:new"), subPage("feed:late")))
+        host.renderer.apply(add("feed#1:r", text("feed#1:new")))
+        host.subPages.register("feed:late")
+        host.subPages.mount("feed:late", "replace", page("d", text("t", "n"), state = mapOf("n" to 4)))
+        assertEquals(
+            setOf("root", "feed", "other", "feed:r", "feed:t", "feed:new", "feed:late", "feed:late:t", "feed#1:r", "feed#1:new"),
+            host.ids,
+        )
+
+        // A join removes nothing.
+        host.subPages.mount("feed", "join", page("e", text("z")))
+        assertEquals(true, host.ids.containsAll(setOf("feed:new", "feed:late:t", "feed#1:new", "feed#2:z")))
+
+        host.subPages.mount("feed", "replace", page("b", text("u")))
+        assertEquals(setOf("root", "feed", "other", "feed:u"), host.ids)
+        assertNull(host.subPages.mounts("feed:late"), "the SubPage added since is unmounted with its page")
+        assertEquals(listOf("feed:"), host.subPages.prefixes)
+    }
+
+    @Test
+    fun b13_4_aSubPageWhoseNodeLeftTakesTheNodesAddedSinceWithIt() {
+        val host = Host(hostPage)
+        host.subPages.register("feed")
+        host.subPages.mount("feed", "replace", page("a", column("r", "t"), text("t")))
+        host.subPages.mount("feed", "replace", page("b", column("r")))
+        host.renderer.apply(add("feed:r", text("feed:new"), subPage("feed:late")))
+        host.subPages.register("feed:late")
+        host.subPages.mount("feed:late", "replace", page("d", text("t")))
+        // Cut from its parent, so nothing but the prefix ties it to the page.
+        host.renderer.apply(ComponentMutation.Update("feed:r", emptyMap()))
+        host.renderer.nodes = host.renderer.nodes + ("feed:orphan" to host.renderer.nodes.getValue("feed:new").copy(id = "feed:orphan"))
+
+        host.renderer.apply(ComponentMutation.Delete("feed"))
+        assertEquals(listOf("feed", "feed:late"), host.subPages.sweep())
+        assertEquals(setOf("root", "other"), host.ids)
+        assertEquals(emptyList(), host.subPages.prefixes)
     }
 
     // MARK: The executor

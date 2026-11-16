@@ -414,6 +414,7 @@ public class OrcaPageModel(
     /** Mounts a fetched page, unless the SubPage left the page meanwhile, and draws the tree again. */
     private fun mount(slot: SubPageSlot, mode: String, page: PageResponse) {
         if (!isMounted(slot)) return
+        if (mode != "join" || slot.mounts.pages.isEmpty()) slot.generation += 1
         subPages.mount(slot.mounts.subPageKey, mode, page)
         slot.error = null
         structureChanged()
@@ -456,6 +457,12 @@ internal class SubPageSlot(val mounts: SubPageMounts) {
 
     /** The widget's own fetch, while it runs. */
     var job: Job? = null
+
+    /**
+     * Counts the mounts that are not a join. It is part of the key of each drawn page, so a page that replaces
+     * another is composed anew: nothing the old page's composables remembered carries over.
+     */
+    var generation: Int = 0
 
     /** Why the widget's own fetch failed, drawn in the place of the pages; cleared by the next mount (Compose state). */
     var error: String? by mutableStateOf(null)

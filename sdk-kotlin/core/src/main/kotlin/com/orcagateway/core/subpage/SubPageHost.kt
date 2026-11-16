@@ -26,21 +26,20 @@ public class SubPageHost(private val renderer: PageRenderer, private val store: 
     /** Prefix of every page mounted in the host page, by SubPage in registration order. */
     public val prefixes: List<String> get() = registry.values.flatMap { it.prefixes }
 
-    /** The mounted page the node [sourceId] belongs to ([SubPage.prefixOf] over [prefixes]). */
-    public fun prefixOf(sourceId: String?): String? = SubPage.prefixOf(prefixes, sourceId)
-
     /**
      * Mounts a fetched [page] in the SubPage [key] ([SubPageMounts.apply]) and applies the change to the host
-     * page in the contract's order: nodes out, state keys out, nodes in, seeds written (one commit). A SubPage
-     * nested in a page that was taken out is unmounted with it. Null, and nothing done, for an unknown [key].
+     * page in the contract's order: nodes out, state keys out, nodes in, seeds written (one commit). A replace
+     * takes out every node under the old pages' prefixes, so the ones added since the mount (addComponent) go
+     * too, and a SubPage among them is unmounted with its page. Null, and nothing done, for an unknown [key].
      */
     public fun mount(key: String, mode: String, page: PageResponse): SubPageChange? {
         val mounts = registry[key] ?: return null
+        val before = mounts.prefixes
         val change = mounts.apply(mode, JsonValue.encoding(PageResponse.serializer(), page), store.state.page.keys)
         val added = change.nodes.map { it.decode(ComponentNode.serializer()) }
 
-        if (change.removedNodeIds.isNotEmpty()) {
-            renderer.nodes = renderer.nodes - change.removedNodeIds.toSet()
+        if (before.isNotEmpty() && mode != "join") {
+            removePages(before)
             sweep()
         }
         if (added.isNotEmpty()) renderer.nodes = renderer.nodes + added.associateBy { it.id }
@@ -50,16 +49,22 @@ public class SubPageHost(private val renderer: PageRenderer, private val store: 
     }
 
     /**
-     * Unmounts every SubPage whose node is no longer in the store (S8): its mounted nodes are removed, its
-     * state keys are left. Gives the keys it unmounted, a SubPage nested in one of them included.
+     * Unmounts every SubPage whose node is no longer in the store (S8): every node under its pages' prefixes
+     * is removed, its state keys are left. Gives the keys it unmounted, a SubPage nested in one of them included.
      */
     public fun sweep(): List<String> {
         val gone = ArrayList<String>()
         while (true) {
             val key = registry.keys.firstOrNull { it !in renderer.nodes } ?: return gone
             val mounts = registry.remove(key) ?: return gone
-            renderer.nodes = renderer.nodes - mounts.nodeIds.toSet()
+            removePages(mounts.prefixes)
             gone += key
         }
+    }
+
+    /** Takes every node of the pages mounted under [prefixes] out of the store: each id that starts with one. */
+    private fun removePages(prefixes: List<String>) {
+        if (prefixes.isEmpty()) return
+        renderer.nodes = renderer.nodes.filterKeys { id -> prefixes.none(id::startsWith) }
     }
 }
