@@ -297,10 +297,13 @@ On the `custom` home page, tap "Go to Map Page" (or start the app on it directly
 The "Map Integration" page shows a map 300 high around San Francisco with the zoom buttons at its
 bottom right. Under it are the lines "Map tapped on lat", "Map tapped on lng", "Long press at lat",
 "Long press at lng", "Camera moved to lat", "Camera moved to lng", "Camera moved to zoom", "Marker
-tapped:" and "Marker taps: 0", then the button "Move Camera to NYC". With the key:
+tapped:" and "Marker taps: 0", then the button "Move Camera to NYC".
 
-1. **The pins.** A red pin on San Francisco at the centre. Oakland's is across the bay, just past the
-   map's right edge: drag the map to the left to see it.
+With a key, expect the walk below. It has not been tried here: no key was available. The steps follow
+the Flutter plugin and Maps Compose, and the iOS demo's walk, on Apple's map, was seen.
+
+1. **The pins.** A red pin on San Francisco at the centre. Oakland's is off the map's right edge,
+   across the bay: drag the map most of its width to the left to see it.
 2. **Tap a pin.** Its info window opens over it ("San Francisco" and "This is SF!"), Google centres the
    map on it, and the lines read "Marker tapped: marker1" and "Marker taps: 1". Tap the same pin again:
    "Marker taps:" counts 2. Google fires `onMarkerTap` on every tap, as the Flutter plugin does.
