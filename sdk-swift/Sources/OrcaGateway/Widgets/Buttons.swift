@@ -31,6 +31,9 @@ struct ButtonNodeView: View {
                 model.fire("onTap", on: node)
             } label: {
                 label.modifier(ContentPadding(value: node.type == "ElevatedButton" ? node["padding"] : nil))
+                    // Its Material resets a DefaultTextStyle above it
+                    // (button_style_button.dart:628, material.dart:470-474).
+                    .environment(\.orcaDefaultTextStyle, nil)
             }
         )
         .disabled(!enabled)
@@ -389,7 +392,8 @@ private struct TooltipLabel: ViewModifier {
 /// them). `tooltip` is its accessibility label: iOS has no tooltip, and
 /// until step 8 no Tooltip's long press shows a bubble (`TooltipLabel`). No
 /// press feedback, as Flutter draws none (`splashColor` and
-/// `highlightColor` are never read).
+/// `highlightColor` are never read). No Material either, so unlike the
+/// other buttons it leaves a DefaultTextStyle above it in force.
 @MainActor
 struct IconButtonNodeView: View {
     let node: ResolvedNode
@@ -508,6 +512,8 @@ struct FloatingActionButtonNodeView: View {
         let shape = RoundedRectangle(cornerRadius: mini ? 12 : 16)
         let elevation = Props.number(node["elevation"]) ?? 6
         ChildView(node: node, model: model)
+            // Its RawMaterialButton's Material resets a DefaultTextStyle above it.
+            .environment(\.orcaDefaultTextStyle, nil)
             .foregroundColor(Props.color(hex: "#4F378B"))
             .frame(width: side, height: side)
             .background {

@@ -326,6 +326,9 @@ struct InkWellNodeView: View {
         let shape = CornersShape(radii: CornerRadii(all: Props.number(node["borderRadius"]) ?? 0))
         let highlight = Props.color(node["highlightColor"]) ?? Self.themeHighlight
         return ChildView(node: node, model: model)
+            // The builder's transparent Material resets a DefaultTextStyle
+            // above it (layout_builders.dart:620, material.dart:470-474).
+            .environment(\.orcaDefaultTextStyle, nil)
             .background {
                 ZStack {
                     Rectangle().hitFill()

@@ -8,17 +8,27 @@ import SwiftUI
 /// (`softWrap` false) clip cuts at the box edge, fade fades the last
 /// ellipsis-width, ellipsis truncates, visible paints past the box; with
 /// `maxLines` clip, fade and visible stop after that many lines with no
-/// ellipsis. TextKit.swift holds the parts SwiftUI's Text lacks.
+/// ellipsis. Under a DefaultTextStyle (Flutter `Text.build`, FW widgets/
+/// text.dart:723-772) the style is the DTS's with the Text's own fields
+/// over it, drawn on the engine's defaults (14, white, regular), and
+/// textAlign, maxLines and overflow are the Text's own ?? the DTS's
+/// (`TextStyles.layer`); without one the Text draws on the ambient style.
+/// TextKit.swift holds the parts SwiftUI's Text lacks.
 @MainActor
 struct TextNodeView: View {
     let node: ResolvedNode
     @Environment(\.orcaTight) private var tight
     @Environment(\.layoutDirection) private var direction
+    @Environment(\.orcaDefaultTextStyle) private var defaultStyle
 
     var body: some View {
-        let style = TextStyleProps(node["style"])
-        let alignment = Props.textAlignment(node["textAlign"], direction: direction)
-        lineBox(style)
+        let layer = TextStyles.layer(dts: defaultStyle, own: TextStyles.Layer(
+            style: node["style"], textAlign: node["textAlign"]?.stringValue,
+            maxLines: node["maxLines"]?.intValue, overflow: node["overflow"]?.stringValue))
+        let parsed = TextStyleProps(layer.style)
+        let style = defaultStyle == nil ? parsed : parsed.onEngineBase
+        let alignment = Props.textAlignment(layer.textAlign.map { .string($0) }, direction: direction)
+        lineBox(style, layer)
             .multilineTextAlignment(alignment ?? .leading)
             .background(style.background)
             .frame(maxWidth: tight.contains(.horizontal) ? .infinity : nil,
@@ -30,43 +40,40 @@ struct TextNodeView: View {
     /// and half of it above the first and below the last. Without `height`
     /// the lines alone, no modifier added.
     @ViewBuilder
-    private func lineBox(_ style: TextStyleProps) -> some View {
+    private func lineBox(_ style: TextStyleProps, _ layer: TextStyles.Layer) -> some View {
         if style.height != nil {
             let extra = style.extraLeading
-            lines(style, lineSpacing: max(extra, 0))
+            lines(style, layer, lineSpacing: max(extra, 0))
                 .lineSpacing(max(extra, 0))
                 .padding(.vertical, extra / 2)
         } else {
-            lines(style, lineSpacing: 0)
+            lines(style, layer, lineSpacing: 0)
         }
     }
 
     @ViewBuilder
-    private func lines(_ style: TextStyleProps, lineSpacing: CGFloat) -> some View {
+    private func lines(_ style: TextStyleProps, _ layer: TextStyles.Layer, lineSpacing: CGFloat) -> some View {
         let data = Props.text(node["data"])
-        let maxLines = node["maxLines"]?.intValue.flatMap { $0 > 0 ? $0 : nil }
+        let maxLines = layer.maxLines.flatMap { $0 > 0 ? $0 : nil }
         let oneLine = node["softWrap"]?.boolValue == false
+        let overflow = layer.overflow ?? "clip"
         #if canImport(UIKit)
-        if node["textAlign"]?.stringValue == "justify" {
+        if layer.textAlign == "justify" {
             JustifiedText(style: style, data: data, lines: oneLine ? 1 : maxLines ?? 0,
-                          ellipsis: overflow(style) == "ellipsis", lineSpacing: lineSpacing)
+                          ellipsis: overflow == "ellipsis", lineSpacing: lineSpacing)
         } else {
-            wrapped(style.styledText(data), style: style, maxLines: maxLines, oneLine: oneLine)
+            wrapped(style.styledText(data), style: style, overflow: overflow, maxLines: maxLines, oneLine: oneLine)
         }
         #else
-        wrapped(style.styledText(data), style: style, maxLines: maxLines, oneLine: oneLine)
+        wrapped(style.styledText(data), style: style, overflow: overflow, maxLines: maxLines, oneLine: oneLine)
         #endif
     }
 
-    /// `overflow`, else `style.overflow`, else Flutter's default clip.
-    private func overflow(_ style: TextStyleProps) -> String {
-        node["overflow"]?.stringValue ?? style.overflow ?? "clip"
-    }
-
     @ViewBuilder
-    private func wrapped(_ text: some View, style: TextStyleProps, maxLines: Int?, oneLine: Bool) -> some View {
+    private func wrapped(_ text: some View, style: TextStyleProps, overflow: String, maxLines: Int?,
+                         oneLine: Bool) -> some View {
         if oneLine {
-            switch overflow(style) {
+            switch overflow {
             case "ellipsis":
                 text.lineLimit(1)
             case "visible":
@@ -80,7 +87,7 @@ struct TextNodeView: View {
                 OneLineLayout { text }.clipped()
             }
         } else if let maxLines {
-            if overflow(style) == "ellipsis" {
+            if overflow == "ellipsis" {
                 text.lineLimit(maxLines)
             } else {
                 LineCutLayout {

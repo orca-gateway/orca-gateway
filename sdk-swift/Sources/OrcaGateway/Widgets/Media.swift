@@ -4,25 +4,29 @@ import SwiftUI
 import UIKit
 #endif
 
-/// Flutter `Icon`: a Material name drawn as the nearest SF Symbol
-/// (`IconNames`), in a `size` by `size` box (default 24), in `color` or the
-/// surrounding foreground colour. A `src` draws that image instead, tinted
-/// like Flutter's `ImageIcon`.
+/// Flutter `Icon` as the Flutter builder (`_buildIcon`) makes it: a Material
+/// name drawn as the nearest SF Symbol (`IconNames`), in a `size` by `size`
+/// box (default 24), in `color` or the surrounding foreground colour.
+///
+/// A `src` takes precedence, as Flutter's `ImageIcon` (the builder's
+/// ImageIcon node draws here too; FW widgets/image_icon.dart:91-119): the
+/// image at one point per image pixel (a network image at scale 1), fitted
+/// `scaleDown` into the square (shrunk to fit keeping its aspect, never
+/// enlarged), centred, and always tinted srcIn (a template image) with
+/// `color` or else the surrounding foreground. The square is empty while it
+/// loads, after a failed load and for a `src` that is not a URL, as
+/// Flutter's `Image` with no image yet: never the name glyph.
 @MainActor
 struct IconNodeView: View {
     let node: ResolvedNode
+    /// A picture already in hand, drawn in place of loading `src` (tests).
+    var image: Image?
 
     var body: some View {
         let size = Props.number(node["size"]) ?? 24
         Group {
-            if let src = node["src"]?.stringValue, let url = URL(string: src) {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.renderingMode(.template).resizable().scaledToFit()
-                    } else {
-                        Color.clear
-                    }
-                }
+            if let src = node["src"], !src.isNull {
+                source(Props.text(src), size: size)
             } else {
                 let name = node["name"]?.stringValue ?? node["icon"]?.stringValue
                 // A Material glyph fills about 20 of its 24 points.
@@ -34,6 +38,30 @@ struct IconNodeView: View {
         .frame(width: size, height: size)
         .modifier(OptionalForeground(color: Props.color(node["color"])))
         .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func source(_ src: String, size: CGFloat) -> some View {
+        if let image {
+            fitted(image, size: size)
+        } else if let url = URL(string: src) {
+            AsyncImage(url: url, scale: 1) { phase in
+                if let image = phase.image {
+                    fitted(image, size: size)
+                } else {
+                    Color.clear
+                }
+            }
+        } else {
+            Color.clear
+        }
+    }
+
+    /// Flutter's paintImage with BoxFit.scaleDown and Alignment.center.
+    private func fitted(_ image: Image, size: CGFloat) -> some View {
+        ImageBox(width: size, height: size, tight: [], fit: .scaleDown, alignment: .center) {
+            image.renderingMode(.template).resizable()
+        }
     }
 }
 

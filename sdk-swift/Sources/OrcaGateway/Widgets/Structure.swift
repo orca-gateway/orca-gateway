@@ -83,6 +83,9 @@ struct ScaffoldView: View {
         // constraints, so an axis forced on the Scaffold (the warn banner's
         // stretched Column) reaches neither the AppBar title nor the body.
         .environment(\.orcaTight, [])
+        // Its slots lie on its Material, which resets a DefaultTextStyle
+        // above it (scaffold.dart:3415, material.dart:470-474).
+        .environment(\.orcaDefaultTextStyle, nil)
         .environment(\.colorScheme, .light)
     }
 
@@ -430,6 +433,10 @@ struct AppBarToolbar: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: Props.number(node["toolbarHeight"]) ?? 56)
+        // The whole toolbar lies on the AppBar's Material, which resets a
+        // DefaultTextStyle above it; the title draws in the bar's font
+        // (app_bar.dart:1162, :1233).
+        .environment(\.orcaDefaultTextStyle, nil)
     }
 }
 
@@ -467,6 +474,8 @@ struct CardView: View {
         let radius = Props.number(node["borderRadius"]) ?? 12
         let shape = CornersShape(radii: CornerRadii(all: radius))
         ChildView(node: node, model: model)
+            // Its Material resets a DefaultTextStyle above it (card.dart:279).
+            .environment(\.orcaDefaultTextStyle, nil)
             .orcaPadding(node["padding"])
             .modifier(ClipIf(shape: Props.clips(node["clipBehavior"]) ? shape : nil))
             .background(

@@ -22,6 +22,7 @@ import com.orcagateway.sdk.widgets.ButtonWidget
 import com.orcagateway.sdk.widgets.CardWidget
 import com.orcagateway.sdk.widgets.CenterWidget
 import com.orcagateway.sdk.widgets.CheckboxWidget
+import com.orcagateway.sdk.widgets.CircularProgressIndicatorWidget
 import com.orcagateway.sdk.widgets.ClipOvalWidget
 import com.orcagateway.sdk.widgets.ClipRRectWidget
 import com.orcagateway.sdk.widgets.ClipRectWidget
@@ -30,6 +31,7 @@ import com.orcagateway.sdk.widgets.ConstrainedBoxWidget
 import com.orcagateway.sdk.widgets.ContainerWidget
 import com.orcagateway.sdk.widgets.CustomScrollViewWidget
 import com.orcagateway.sdk.widgets.DecoratedBoxWidget
+import com.orcagateway.sdk.widgets.DefaultTextStyleWidget
 import com.orcagateway.sdk.widgets.DividerWidget
 import com.orcagateway.sdk.widgets.DrawerWidget
 import com.orcagateway.sdk.widgets.ExpandedWidget
@@ -52,6 +54,7 @@ import com.orcagateway.sdk.widgets.InteractiveViewerWidget
 import com.orcagateway.sdk.widgets.IntrinsicHeightWidget
 import com.orcagateway.sdk.widgets.IntrinsicWidthWidget
 import com.orcagateway.sdk.widgets.LimitedBoxWidget
+import com.orcagateway.sdk.widgets.LinearProgressIndicatorWidget
 import com.orcagateway.sdk.widgets.ListViewWidget
 import com.orcagateway.sdk.widgets.OffstageWidget
 import com.orcagateway.sdk.widgets.OpacityWidget
@@ -61,11 +64,13 @@ import com.orcagateway.sdk.widgets.PositionedWidget
 import com.orcagateway.sdk.widgets.PullToRefreshWidget
 import com.orcagateway.sdk.widgets.RadioWidget
 import com.orcagateway.sdk.widgets.ReorderableListWidget
+import com.orcagateway.sdk.widgets.RichTextWidget
 import com.orcagateway.sdk.widgets.RotatedBoxWidget
 import com.orcagateway.sdk.widgets.SafeAreaWidget
 import com.orcagateway.sdk.widgets.ScaffoldWidget
 import com.orcagateway.sdk.widgets.ScrollWidget
 import com.orcagateway.sdk.widgets.ScrollbarWidget
+import com.orcagateway.sdk.widgets.SelectableTextWidget
 import com.orcagateway.sdk.widgets.SizedBoxWidget
 import com.orcagateway.sdk.widgets.SliderWidget
 import com.orcagateway.sdk.widgets.SliverAppBarWidget
@@ -76,6 +81,7 @@ import com.orcagateway.sdk.widgets.SpacerWidget
 import com.orcagateway.sdk.widgets.StackWidget
 import com.orcagateway.sdk.widgets.SubPageWidget
 import com.orcagateway.sdk.widgets.SwitchWidget
+import com.orcagateway.sdk.widgets.TableWidget
 import com.orcagateway.sdk.widgets.TextFieldWidget
 import com.orcagateway.sdk.widgets.TextWidget
 import com.orcagateway.sdk.widgets.TransformWidget
@@ -137,7 +143,7 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 82 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 89 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
@@ -149,11 +155,16 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
          * UnsupportedWidgetPlaceholder, the five scroll widgets of native
          * parity step 5 (A5.x: ListView, GridView, PageView, Scrollbar,
          * PullToRefresh), step 13's CustomScrollView, SliverAppBar,
-         * SliverList, SliverGrid and SliverToBoxAdapter (B13.1, B13.2), and
+         * SliverList, SliverGrid and SliverToBoxAdapter (B13.1, B13.2),
          * the nine form controls of native parity step 6 (A6.x: Checkbox,
          * Radio, Switch, Slider, TextFormField, Form, IconButton,
          * FloatingActionButton, InkWell; TextFormField draws with
-         * TextField's builder, as Flutter's). Keep the two lists in step: the caps
+         * TextField's builder, as Flutter's), and the seven rich widgets of
+         * native parity step 7 (A7.x: RichText, SelectableText,
+         * DefaultTextStyle, ImageIcon, CircularProgressIndicator,
+         * LinearProgressIndicator, Table; ImageIcon draws with Icon's builder,
+         * whose `src` path is Flutter's ImageIcon, as `_buildImageIcon` makes
+         * it). Keep the two lists in step: the caps
          * vector advertises what this draws (WidgetBuildersTest checks it).
          */
         public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
@@ -243,6 +254,17 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
                 FloatingActionButtonWidget(node, model, modifier)
             }
             register("InkWell") { node, model, modifier -> InkWellWidget(node, model, modifier) }
+            register("RichText") { node, _, modifier -> RichTextWidget(node, modifier) }
+            register("SelectableText") { node, _, modifier -> SelectableTextWidget(node, modifier) }
+            register("DefaultTextStyle") { node, model, modifier -> DefaultTextStyleWidget(node, model, modifier) }
+            register("ImageIcon") { node, model, modifier -> IconWidget(node, model, modifier) }
+            register("CircularProgressIndicator") { node, model, modifier ->
+                CircularProgressIndicatorWidget(node, model, modifier)
+            }
+            register("LinearProgressIndicator") { node, model, modifier ->
+                LinearProgressIndicatorWidget(node, model, modifier)
+            }
+            register("Table") { node, model, modifier -> TableWidget(node, model, modifier) }
         }
     }
 }

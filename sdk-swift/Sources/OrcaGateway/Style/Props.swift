@@ -270,4 +270,46 @@ struct TextStyleProps {
         return t
     }
 }
+
+extension TextStyleProps {
+    /// Flutter's engine defaults for what a style leaves unset: 14 points
+    /// (painting/text_painter.dart:42), white (engine txt/src/txt/
+    /// text_style.h:26,41), regular, upright, no line. A raw RichText draws
+    /// on them, never on the ambient style (design D5).
+    static let engineSize: CGFloat = 14
+    static let engineColor = Color.white
+
+    /// The font on the engine base at a fixed size (no Dynamic Type: a raw
+    /// RichText does not scale its text): size ?? 14, weight ?? regular,
+    /// italic only when the style says so.
+    var engineFont: Font {
+        let size = self.size ?? Self.engineSize
+        let font: Font = family.map { .custom($0, fixedSize: size) } ?? .system(size: size)
+        let weighted = font.weight(weight ?? .regular)
+        return italic ? weighted.italic() : weighted
+    }
+
+    /// `string` as one run on the engine base. Its font and colour are
+    /// always set, so nothing ambient shows through and a style whose
+    /// fontStyle is "normal" or whose decoration is "none" (what
+    /// `TextStyles.merge` writes over a parent's) draws upright and without
+    /// a line. Then what the style sends: background, letter and word
+    /// spacing (as `text(_:)`), a solid underline and line-through in the
+    /// text's colour.
+    func engineRun(_ string: String) -> AttributedString {
+        var run = AttributedString(string)
+        run.swiftUI.font = engineFont
+        run.swiftUI.foregroundColor = color ?? Self.engineColor
+        if let background { run.swiftUI.backgroundColor = background }
+        if let letterSpacing { run.swiftUI.kern = letterSpacing }
+        if let wordSpacing {
+            for space in run.characters.indices where run.characters[space] == " " {
+                run[space..<run.characters.index(after: space)].swiftUI.kern = (letterSpacing ?? 0) + wordSpacing
+            }
+        }
+        if underline { run.swiftUI.underlineStyle = .single }
+        if strikethrough { run.swiftUI.strikethroughStyle = .single }
+        return run
+    }
+}
 #endif

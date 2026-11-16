@@ -29,7 +29,7 @@ class ModelRoundTripTest {
     @Test
     fun allRenderFixturesRoundTrip() {
         val files = Fixtures.files("render")
-        assertEquals(55, files.size, "render fixtures 01-45, 60-69")
+        assertEquals(56, files.size, "render fixtures 01-46, 60-69")
         var nodes = 0
         for ((name, fixture) in files) {
             val expected = fixture["expected"]

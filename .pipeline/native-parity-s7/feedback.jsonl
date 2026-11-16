@@ -1,0 +1,3 @@
+{"ts":"2026-11-16T16:34:09Z","stage":"09","round":1,"template":null,"text":"standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 1's two questions are minor (no blocked task; next is groups 2-4), defaults"}
+{"ts":"2026-11-16T18:03:54Z","stage":"09","round":2,"template":null,"text":"standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 groups 2-3: both questions minor (no blocked task; next is groups 4-6 with q1 and q2 on their defaults as the parent said), defaults"}
+{"ts":"2026-11-16T19:32:24Z","stage":"10","round":1,"template":null,"text":"the user (relayed by the parent session, 2026-11-16): \"PR 50 and 51 merged, go with your recommendation\": q2 answered, a for Table and for SelectableText"}

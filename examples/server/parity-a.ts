@@ -76,16 +76,24 @@ import {
   IconButton,
   FloatingActionButton,
   InkWell,
+  RichText,
+  SelectableText,
+  DefaultTextStyle,
+  CircularProgressIndicator,
+  LinearProgressIndicator,
+  Table,
 } from "../../engine/src/components";
+// ImageIcon is not re-exported by the components index; its class file is.
+import { ImageIcon } from "../../engine/src/components/primitive/image-icon";
 
 // Native parity, Phase A (pipeline native-parity). One app, one page per plan
 // step, each the "torture" page for the props that step brings to Swift and
 // Kotlin, so the same page can be compared on Flutter, iOS and Android.
 // Pages: polish (step 1), lifecycle (step 2), layout and layout-safe (step 3),
-// effects (step 4), lists (step 5), forms (step 6). Later steps add rich and
-// overlays: one page constant each, one entry in `routes`. Images come from
-// picsum.photos; offline they draw "!" in their box. Only widgets all three
-// SDKs draw.
+// effects (step 4), lists (step 5), forms (step 6), rich (step 7). Later steps
+// add overlays: one page constant each, one entry in `routes`. Images come from
+// picsum.photos; offline an Image draws "!" in its box and an ImageIcon its
+// empty box. Only widgets all three SDKs draw.
 
 const red = "#E53935";
 const blue = "#1E88E5";
@@ -1573,6 +1581,248 @@ const formsPage = PageDefinition.create({
     }),
 });
 
+// ── Step 7 · rich: RichText, SelectableText, DefaultTextStyle,
+//    CircularProgressIndicator, LinearProgressIndicator, Table and ImageIcon
+//    (A7.1-A7.4) ─────────────────────────────────────────────────────────────
+
+const dark = "#263238";
+const ink = "#212121";
+
+/** A widget with a grey caption under it. */
+function labelled(label: string, child: Widget): Widget {
+  return Column.new({
+    mainAxisSize: "min",
+    crossAxisAlignment: "start",
+    children: [child, SizedBox.new({ height: 4 }), caption(label)],
+  });
+}
+
+/** A 240-wide LinearProgressIndicator (the bar takes its parent's width), its props named under it. */
+function linear(label: string, props: Parameters<typeof LinearProgressIndicator.new>[0]): Widget {
+  return labelled(label, SizedBox.new({ width: 240, child: LinearProgressIndicator.new(props) }));
+}
+
+/** An ImageIcon on a pale box its own size, so the icon box shows round the tinted image. */
+function imageIcon(label: string, src: string, size: number, color: string): Widget {
+  return labelled(label, Container.new({ color: pale, child: ImageIcon.new({ src, size, color }) }));
+}
+
+const selectableLong =
+  "Long press or double tap a word to select it, drag the handles to widen the selection, then Copy. " +
+  "This SelectableText is long enough to wrap onto several lines.";
+const selectableScroll =
+  "maxLines 2: two lines show and the rest scrolls inside the box. Drag the text upwards to read the third line, " +
+  "then this fourth line; no ellipsis.";
+
+const richPage = PageDefinition.create({
+  id: "rich",
+  title: "Rich",
+  state: [{ key: "name", scope: "page", initial: "Ada" }],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({ title: Text.new({ data: "Rich (step 7)" }) }),
+      body: SingleChildScrollView.new({
+        child: Padding.new({
+          padding: EdgeInsets.all(16),
+          child: Column.new({
+            crossAxisAlignment: "start",
+            children: [
+              section(
+                "A7.1 RichText: spans of different styles in one line, nested spans, a span bound to page state",
+                caption("The render fixture 46, centred on one line: Hello (bold blue) world (bold italic green) then the name (bold, upright, red, underlined) and ! (bold blue)"),
+                SizedBox.new({ height: 4 }),
+                fullWidth(
+                  Container.new({
+                    color: pale,
+                    child: RichText.new({
+                      text: {
+                        text: "Hello ",
+                        style: { fontWeight: "bold", color: blue },
+                        children: [
+                          {
+                            text: "world",
+                            style: { fontStyle: "italic", color: green },
+                            children: [
+                              { text: V.pageState("name"), style: { color: red, decoration: "underline" } },
+                            ],
+                          },
+                          { text: V.static("!") },
+                        ],
+                      },
+                      textAlign: "center",
+                      maxLines: 1,
+                      overflow: "ellipsis",
+                    }),
+                  }),
+                ),
+                SizedBox.new({ height: 4 }),
+                caption("Tap a button: only the red underlined span changes"),
+                Row.new({
+                  gap: 8,
+                  children: ["Grace", "Ada"].map((name) =>
+                    OutlinedButton.new({
+                      child: Text.new({ data: `name = ${name}` }),
+                      actions: { onTap: SetState("name", V.static(name)) },
+                    }),
+                  ),
+                }),
+                SizedBox.new({ height: 12 }),
+                caption("Lines under their own run only: an overline, a double underline, a wavy red underline, a dashed and a dotted one; a 'none' child clears its parent's underline; word spacing 12 on the last run"),
+                SizedBox.new({ height: 4 }),
+                fullWidth(
+                  RichText.new({
+                    text: {
+                      text: "Lines: ",
+                      style: { color: ink, fontSize: 16 },
+                      children: [
+                        { text: "overline", style: { decoration: "overline" } },
+                        { text: " · " },
+                        { text: "double", style: { decoration: "underline", decorationStyle: "double" } },
+                        { text: " · " },
+                        {
+                          text: "wavy red",
+                          style: { decoration: "underline", decorationStyle: "wavy", decorationColor: red },
+                        },
+                        { text: " · " },
+                        { text: "dashed", style: { decoration: "underline", decorationStyle: "dashed" } },
+                        { text: " · " },
+                        { text: "dotted", style: { decoration: "underline", decorationStyle: "dotted" } },
+                        { text: " · " },
+                        {
+                          text: "underlined, ",
+                          style: { decoration: "underline" },
+                          children: [{ text: "none clears it", style: { decoration: "none" } }],
+                        },
+                        { text: " · " },
+                        { text: "wide word spacing here", style: { wordSpacing: 12, color: blue } },
+                      ],
+                    },
+                  }),
+                ),
+                SizedBox.new({ height: 12 }),
+                caption("An unstyled RichText on a dark box: white, 14, regular (the engine's defaults, not the page's text style)"),
+                SizedBox.new({ height: 4 }),
+                Container.new({
+                  color: dark,
+                  padding: EdgeInsets.all(8),
+                  child: RichText.new({
+                    text: { text: "Unstyled root, ", children: [{ text: "and an unstyled child" }] },
+                  }),
+                }),
+              ),
+              section(
+                "A7.2 SelectableText selects; DefaultTextStyle styles the Text below it",
+                caption("Select a word (long press or double tap), widen it with the handles, Copy, then paste into the field below"),
+                SizedBox.new({ height: 4 }),
+                fullWidth(SelectableText.new({ data: selectableLong })),
+                SizedBox.new({ height: 8 }),
+                fullWidth(
+                  Container.new({ color: pale, child: SelectableText.new({ data: selectableScroll, maxLines: 2 }) }),
+                ),
+                SizedBox.new({ height: 8 }),
+                fullWidth(TextField.new({ decoration: { hintText: "Paste here to check Copy" } })),
+                SizedBox.new({ height: 12 }),
+                caption("Below, a DefaultTextStyle red, bold, 18 over a Column:"),
+                SizedBox.new({ height: 4 }),
+                DefaultTextStyle.new({
+                  style: { color: red, fontWeight: "bold", fontSize: 18 },
+                  child: Column.new({
+                    crossAxisAlignment: "start",
+                    gap: 8,
+                    children: [
+                      Text.new({ data: "Plain Text: red, bold, 18" }),
+                      Text.new({ data: "Own colour wins: blue, still bold 18", style: { color: blue } }),
+                      SelectableText.new({ data: "SelectableText: red, bold, 18, and selectable" }),
+                      RichText.new({
+                        text: { text: "RichText ignores it: grey, regular, 14", style: { color: grey } },
+                      }),
+                      Card.new({
+                        child: Padding.new({
+                          padding: EdgeInsets.all(12),
+                          child: Column.new({
+                            crossAxisAlignment: "start",
+                            gap: 8,
+                            children: [
+                              Text.new({ data: "In a Card: the normal look (a Material resets it)" }),
+                              ElevatedButton.new({ child: Text.new({ data: "Button: the normal look" }) }),
+                            ],
+                          }),
+                        }),
+                      }),
+                      Row.new({
+                        gap: 8,
+                        children: [
+                          IconButton.new({ child: Text.new({ data: "Aa" }) }),
+                          Expanded.new({ child: Text.new({ data: "The IconButton on the left draws no Material: its Aa is red, bold" }) }),
+                        ],
+                      }),
+                    ],
+                  }),
+                }),
+              ),
+              section(
+                "A7.3 Circular and Linear progress: indeterminate and 0.4, default and coloured",
+                caption("Nothing spins or slides (as Flutter's builder): indeterminate is one still arc, or the bare track; 0.4 is a 144° arc from 12 o'clock over a faint full ring, or a 40 % bar from the left"),
+                SizedBox.new({ height: 4 }),
+                Row.new({
+                  gap: 16,
+                  children: [
+                    labelled("default", CircularProgressIndicator.new()),
+                    labelled("0.4", CircularProgressIndicator.new({ value: 0.4 })),
+                    labelled("green, 6", CircularProgressIndicator.new({ color: green, strokeWidth: 6 })),
+                    labelled("0.4 green, 6", CircularProgressIndicator.new({ value: 0.4, color: green, strokeWidth: 6 })),
+                  ],
+                }),
+                SizedBox.new({ height: 12 }),
+                linear("Linear, default: the grey track only", {}),
+                SizedBox.new({ height: 8 }),
+                linear("Linear 0.4: a blue bar over the first 40 %", { value: 0.4 }),
+                SizedBox.new({ height: 8 }),
+                linear("Linear, red on amber, minHeight 8: the amber track only", {
+                  color: red,
+                  backgroundColor: amber,
+                  minHeight: 8,
+                }),
+                SizedBox.new({ height: 8 }),
+                linear("Linear 0.4, red on amber, minHeight 8", {
+                  value: 0.4,
+                  color: red,
+                  backgroundColor: amber,
+                  minHeight: 8,
+                }),
+              ),
+              section(
+                "A7.4 Table: each child a full-width row; ImageIcon tinted and sized",
+                caption("Border blue, width 2, round and between three rows 24, 48 and 72 high, each as wide as the table. columnWidths and defaultColumnWidth are sent and change nothing"),
+                SizedBox.new({ height: 4 }),
+                fullWidth(
+                  Table.new({
+                    border: { color: blue, width: 2 },
+                    columnWidths: { 0: 80 },
+                    defaultColumnWidth: 120,
+                    children: [fill("row 1 · 24", red, 24), fill("row 2 · 48", green, 48), fill("row 3 · 72", amber, 72)],
+                  }),
+                ),
+                SizedBox.new({ height: 12 }),
+                caption("ImageIcon draws its image as one solid tint (srcIn), centred in a size × size box, never enlarged: a 16 × 16 image stays 16 in a 48 and in a 24 box; a 200 × 200 one shrinks to fill its 48 box"),
+                SizedBox.new({ height: 4 }),
+                Row.new({
+                  gap: 16,
+                  crossAxisAlignment: "start",
+                  children: [
+                    imageIcon("16 in 48, red", "https://picsum.photos/seed/orca-icon/16/16", 48, red),
+                    imageIcon("16 in 24, blue", "https://picsum.photos/seed/orca-icon/16/16", 24, blue),
+                    imageIcon("200 in 48, green", "https://picsum.photos/seed/orca-icon-big/200/200", 48, green),
+                  ],
+                }),
+              ),
+            ],
+          }),
+        }),
+      }),
+    }),
+});
+
 const parityFlow = Flow.create({
   name: "parity",
   routes: [
@@ -1585,6 +1835,7 @@ const parityFlow = Flow.create({
     { path: "effects", page: effectsPage },
     { path: "lists", page: listsPage },
     { path: "forms", page: formsPage },
+    { path: "rich", page: richPage },
   ],
 });
 

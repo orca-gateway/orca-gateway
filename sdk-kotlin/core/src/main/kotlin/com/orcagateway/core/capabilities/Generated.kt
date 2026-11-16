@@ -37,6 +37,7 @@ public object GeneratedCapabilities {
         "Card",
         "Center",
         "Checkbox",
+        "CircularProgressIndicator",
         "ClipOval",
         "ClipRRect",
         "ClipRect",
@@ -46,6 +47,7 @@ public object GeneratedCapabilities {
         "Container",
         "CustomScrollView",
         "DecoratedBox",
+        "DefaultTextStyle",
         "Divider",
         "Drawer",
         "ElevatedButton",
@@ -63,11 +65,13 @@ public object GeneratedCapabilities {
         "IconButton",
         "IgnorePointer",
         "Image",
+        "ImageIcon",
         "InkWell",
         "InteractiveViewer",
         "IntrinsicHeight",
         "IntrinsicWidth",
         "LimitedBox",
+        "LinearProgressIndicator",
         "ListView",
         "Offstage",
         "Opacity",
@@ -78,11 +82,13 @@ public object GeneratedCapabilities {
         "PullToRefresh",
         "Radio",
         "ReorderableListView",
+        "RichText",
         "RotatedBox",
         "Row",
         "SafeArea",
         "Scaffold",
         "Scrollbar",
+        "SelectableText",
         "SingleChildScrollView",
         "SizedBox",
         "Slider",
@@ -94,6 +100,7 @@ public object GeneratedCapabilities {
         "Stack",
         "SubPage",
         "Switch",
+        "Table",
         "Text",
         "TextButton",
         "TextField",
@@ -196,5 +203,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "00a7fbbd3ed5d6eda4be64af8ddc85b2d2c287d1826065f968b8be51104273ad"
+    public const val capsHash: String = "8d06076b3a65aa6f098af24196f41d44ea385f45978d2e8fc155828e87fe10fc"
 }

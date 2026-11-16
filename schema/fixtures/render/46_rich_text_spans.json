@@ -1,0 +1,141 @@
+{
+  "name": "rich-text-spans",
+  "description": "RichText whose root span is bold #1E88E5 'Hello ' with two children: an italic #43A047 'world' span that nests an underlined #E53935 span whose text is a page-state Value, and an unstyled span whose text is V.static('!'). textAlign center, maxLines 1 and overflow ellipsis sit on the RichText itself. The server resolves the static span to the plain string '!', keeps the state span's Value, and the node watches `name` from a Value two spans deep; every client resolver fills the inner span with the page state ('Ada') and passes the rest through unchanged.",
+  "input": {
+    "type": "RichText",
+    "key": "t",
+    "props": {
+      "text": {
+        "text": "Hello ",
+        "style": {
+          "fontWeight": "bold",
+          "color": "#1E88E5"
+        },
+        "children": [
+          {
+            "text": "world",
+            "style": {
+              "fontStyle": "italic",
+              "color": "#43A047"
+            },
+            "children": [
+              {
+                "text": {
+                  "type": "state",
+                  "key": "name",
+                  "scope": "page"
+                },
+                "style": {
+                  "color": "#E53935",
+                  "decoration": "underline"
+                }
+              }
+            ]
+          },
+          {
+            "text": {
+              "type": "static",
+              "value": "!"
+            }
+          }
+        ]
+      },
+      "textAlign": "center",
+      "maxLines": 1,
+      "overflow": "ellipsis"
+    }
+  },
+  "context": {
+    "pageState": {
+      "name": "Ada"
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "t",
+      "type": "RichText",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "text": {
+          "text": "Hello ",
+          "style": {
+            "fontWeight": "bold",
+            "color": "#1E88E5"
+          },
+          "children": [
+            {
+              "text": "world",
+              "style": {
+                "fontStyle": "italic",
+                "color": "#43A047"
+              },
+              "children": [
+                {
+                  "text": {
+                    "type": "state",
+                    "key": "name",
+                    "scope": "page"
+                  },
+                  "style": {
+                    "color": "#E53935",
+                    "decoration": "underline"
+                  }
+                }
+              ]
+            },
+            {
+              "text": "!"
+            }
+          ]
+        },
+        "textAlign": "center",
+        "maxLines": 1,
+        "overflow": "ellipsis"
+      },
+      "children": [],
+      "watches": [
+        "name"
+      ]
+    }
+  ],
+  "resolved": {
+    "t": {
+      "text": {
+        "text": "Hello ",
+        "style": {
+          "fontWeight": "bold",
+          "color": "#1E88E5"
+        },
+        "children": [
+          {
+            "text": "world",
+            "style": {
+              "fontStyle": "italic",
+              "color": "#43A047"
+            },
+            "children": [
+              {
+                "text": "Ada",
+                "style": {
+                  "color": "#E53935",
+                  "decoration": "underline"
+                }
+              }
+            ]
+          },
+          {
+            "text": "!"
+          }
+        ]
+      },
+      "textAlign": "center",
+      "maxLines": 1,
+      "overflow": "ellipsis"
+    }
+  }
+}
