@@ -67,6 +67,8 @@ public enum GeneratedCapabilities {
         "actionGroup",
         "addComponent",
         "always",
+        "animateForward",
+        "animateReverse",
         "conditionalAction",
         "copyToClipboard",
         "debugLog",
@@ -137,5 +139,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "f175041a24e0e0130a79235d21ab6687367a87cef3371e35d077bdd62282ee39"
+    public static let capsHash = "127704a41d307211cf0dc5921f1672de9203a00989330ecf454a092a73d44125"
 }

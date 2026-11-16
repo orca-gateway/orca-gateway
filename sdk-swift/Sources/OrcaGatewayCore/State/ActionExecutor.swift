@@ -41,7 +41,7 @@ public final class ActionExecutor {
         "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
         "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
         "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
-        "once", "always", "debugLog",
+        "once", "always", "debugLog", "animateForward", "animateReverse",
     ]
 
     public let store: ElmStore
@@ -206,6 +206,12 @@ public final class ActionExecutor {
 
         case .openDrawer:
             await emit(ActionEffect("openDrawer"))
+
+        // The page model plays these on its animation registry; an id no
+        // builder registered still goes out, an empty one does not.
+        case .animateForward(let ref), .animateReverse(let ref):
+            guard !ref.animationId.isEmpty else { return }
+            await emit(ActionEffect(action.kind, ["animationId": .string(ref.animationId)]))
 
         case .openUrl(let o):
             await emit(ActionEffect("openUrl", ["url": .string(resolver.resolveToString(o.url ?? .null))]))
