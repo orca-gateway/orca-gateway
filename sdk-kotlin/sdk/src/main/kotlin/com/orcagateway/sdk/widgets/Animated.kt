@@ -1,0 +1,302 @@
+package com.orcagateway.sdk.widgets
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntSize
+import com.orcagateway.core.animation.AnimationDuration
+import com.orcagateway.core.animation.AnimationMix
+import com.orcagateway.core.animation.ImplicitAnimation
+import com.orcagateway.core.json.JsonValue
+import com.orcagateway.core.render.ResolvedNode
+import com.orcagateway.sdk.ChildView
+import com.orcagateway.sdk.NodeView
+import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.WidgetBuilder
+import com.orcagateway.sdk.style.Props
+import kotlin.math.roundToInt
+
+// Flutter's implicitly animated widgets (layout_builders.dart
+// `_buildAnimatedContainer` ... `_buildHero`). Each of the first three is its
+// plain twin drawn with props that move: the core's ImplicitAnimation mixes
+// the old resolved props and the new ones at the page's frame time, and the
+// mix goes to the same drawing code a Container, an opacity or an Align uses.
+
+/**
+ * [node] with the props to draw now: its own when nothing moves, the core's
+ * mix of the old and the new ones while a run is live.
+ *
+ * The first composition shows [target] as it is. When [target] changes the
+ * widget keeps what is on screen until the next frame, where the run begins
+ * (`duration` ms, 300; `curve` by name, easeInOut when missing or unknown)
+ * from the value on screen, also in the middle of a run; it takes frames
+ * only until the run ends. Reduced motion ([orcaReduceMotion]) or a
+ * duration of 0: [target] at once, no frame taken.
+ *
+ * [target] is [node]'s props with Flutter's defaults filled in, so a prop
+ * the page leaves out animates from the default as it does in Flutter.
+ */
+@Composable
+private fun sampled(
+    node: ResolvedNode,
+    model: OrcaPageModel,
+    target: Map<String, JsonValue> = node.props,
+): ResolvedNode {
+    val animation = remember(node.id) {
+        ImplicitAnimation(mix = AnimationMix::props).also { it.retarget(target, 0.0) }
+    }
+    animation.durationMs = AnimationDuration.milliseconds(node["duration"])
+    animation.curve = node["curve"]?.stringValue
+    animation.reduceMotion = orcaReduceMotion()
+    val jumps = animation.reduceMotion || animation.durationMs <= 0
+
+    var onScreen by remember(animation) { mutableStateOf(target) }
+    LaunchedEffect(model, animation, target, jumps) {
+        if (jumps) {
+            animation.retarget(target, model.animationFrameMs)
+            onScreen = target
+            return@LaunchedEffect
+        }
+        if (animation.target == target) return@LaunchedEffect
+        model.withAnimationFrame { now ->
+            animation.retarget(target, now)
+            onScreen = animation.value(now) ?: target
+        }
+        while (animation.isRunning(model.animationFrameMs)) {
+            model.withAnimationFrame { now -> onScreen = animation.value(now) ?: target }
+        }
+    }
+    return node.copy(props = if (jumps) target else onScreen)
+}
+
+/** [node]'s props with [prop] set to [default] when the page leaves it out. */
+private fun ResolvedNode.propsWith(prop: String, default: JsonValue): Map<String, JsonValue> =
+    if (this[prop] == null) props + (prop to default) else props
+
+/**
+ * Flutter `AnimatedContainer`: a Container whose `width`, `height`, `color`,
+ * `padding`, `margin`, `decoration` and `alignment` move to their new value
+ * over `duration` through `curve` ([sampled]). Everything else, and how the
+ * props are drawn (`color` only without a `decoration`, the sizing with and
+ * without a child or an alignment), is [ContainerWidget]'s, which [draw]
+ * calls with the sampled props.
+ */
+@Composable
+internal fun AnimatedContainerWidget(
+    node: ResolvedNode,
+    model: OrcaPageModel,
+    modifier: Modifier,
+    draw: WidgetBuilder = { sampled, m, mod -> ContainerWidget(sampled, m, mod) },
+) {
+    draw(sampled(node, model), model, modifier)
+}
+
+/**
+ * Flutter `AnimatedOpacity`: `opacity` (1 when missing) moves to its new
+ * value over `duration` through `curve`; [draw] is [OpacityWidget] with the
+ * sampled props.
+ */
+@Composable
+internal fun AnimatedOpacityWidget(
+    node: ResolvedNode,
+    model: OrcaPageModel,
+    modifier: Modifier,
+    draw: WidgetBuilder = { sampled, m, mod -> OpacityWidget(sampled, m, mod) },
+) {
+    draw(sampled(node, model, node.propsWith("opacity", JsonValue.Double(1.0))), model, modifier)
+}
+
+/**
+ * Flutter `Opacity`: the child drawn with `opacity` (0 to 1; an elastic
+ * curve's overshoot is cut off), laid out as if it were not there. With no
+ * child it is an empty box of the size its parent forces.
+ */
+@Composable
+internal fun OpacityWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
+    val opacity = (Props.number(node["opacity"]) ?: 1.0).coerceIn(0.0, 1.0).toFloat()
+    Box(modifier.alpha(opacity), propagateMinConstraints = true) {
+        ChildView(node, model)
+    }
+}
+
+/**
+ * Flutter `AnimatedAlign`: `alignment` (center when missing), `widthFactor`
+ * and `heightFactor` move to their new value over `duration` through
+ * `curve`; [draw] is [AlignWidget] with the sampled props. Between two
+ * names the alignment is an `{x, y}` point, which [Props.alignment] reads.
+ */
+@Composable
+internal fun AnimatedAlignWidget(
+    node: ResolvedNode,
+    model: OrcaPageModel,
+    modifier: Modifier,
+    draw: WidgetBuilder = { sampled, m, mod -> AlignWidget(sampled, m, mod) },
+) {
+    draw(sampled(node, model, node.propsWith("alignment", JsonValue.String("center"))), model, modifier)
+}
+
+/**
+ * Flutter `Align` (`RenderPositionedBox`, as [CenterWidget] for the
+ * centre): the child loose at `alignment`. On an axis with a factor
+ * (`widthFactor`, `heightFactor`) or no limit it is the child's size times
+ * the factor (1 when absent); on the others as big as it may be.
+ */
+@Composable
+internal fun AlignWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
+    val alignment = Props.alignment(node["alignment"])
+    val widthFactor = Props.number(node["widthFactor"])
+    val heightFactor = Props.number(node["heightFactor"])
+    Layout(content = { ChildView(node, model) }, modifier = modifier) { measurables, constraints ->
+        val child = measurables.firstOrNull()?.measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val width = alignedSide(child?.width ?: 0, widthFactor, constraints.hasBoundedWidth, constraints.maxWidth)
+            .coerceIn(constraints.minWidth, constraints.maxWidth)
+        val height = alignedSide(child?.height ?: 0, heightFactor, constraints.hasBoundedHeight, constraints.maxHeight)
+            .coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(width, height) {
+            child?.place(alignment.align(IntSize(child.width, child.height), IntSize(width, height), layoutDirection))
+        }
+    }
+}
+
+/** Flutter's shrink-wrapped side (the child's times the factor) with a factor or no limit, else the limit. */
+private fun alignedSide(child: Int, factor: Double?, bounded: Boolean, max: Int): Int =
+    if (factor != null || !bounded) (child * (factor ?: 1.0)).coerceAtLeast(0.0).roundToInt() else max
+
+/**
+ * Which children an AnimatedSwitcher shows and how opaque each is: the
+ * [current] one, and while a fade is live the [outgoing] one under it. No
+ * timer inside: [frame] takes the page's frame time. [progress] is Compose
+ * state, so a composable that reads an alpha is redrawn as the fade moves.
+ */
+internal class SwitcherFade {
+    /** The child shown; null before the first [show] and for a switcher with no child. */
+    var current: String? = null
+        private set
+
+    /** The child fading out; null when no fade is live. */
+    var outgoing: String? = null
+        private set
+
+    private var shown = false
+    private var startMs: Double? = null
+    private var durationMs = 0.0
+    private var outgoingFrom = 1.0
+
+    /** The live fade's linear time, 0 to 1; 1 at rest. */
+    private var progress by mutableDoubleStateOf(1.0)
+
+    val isFading: Boolean get() = progress < 1.0
+
+    /** The [current] child's opacity: 0 to 1 over the fade, linear. */
+    val incomingAlpha: Double get() = progress
+
+    /**
+     * The [outgoing] child's opacity: down from what it had when it was
+     * replaced (1, or less when it was itself still fading in) at the same
+     * linear rate, as Flutter reverses its controller.
+     */
+    val outgoingAlpha: Double get() = (outgoingFrom - progress).coerceAtLeast(0.0)
+
+    /**
+     * The switcher's child is now [id]. The first child, the same id again,
+     * and any id when [jump] or [durationMs] is 0 or less: shown as it is.
+     * Another id: a fade of [durationMs] that begins at the next [frame];
+     * a child still fading out from an earlier change is dropped.
+     */
+    fun show(id: String?, durationMs: Double, jump: Boolean) {
+        if (shown && id == current) return
+        if (!shown || jump || durationMs <= 0) {
+            shown = true
+            current = id
+            outgoing = null
+            progress = 1.0
+            return
+        }
+        outgoingFrom = incomingAlpha
+        outgoing = current
+        current = id
+        startMs = null
+        this.durationMs = durationMs
+        progress = 0.0
+    }
+
+    /** One frame at [now] ms: the first one of a fade is its start. */
+    fun frame(now: Double) {
+        if (!isFading) return
+        val start = startMs ?: now.also { startMs = it }
+        val next = ((now - start) / durationMs).coerceIn(0.0, 1.0)
+        if (next >= 1.0) outgoing = null
+        progress = next
+    }
+}
+
+/**
+ * Flutter `AnimatedSwitcher`, with the child told apart by its node id
+ * (D9; Flutter goes by widget class and key): when the first child's id
+ * changes, the old child fades out and the new one in, both linear over
+ * `duration` ms (300), stacked centred. The same id with new props is the
+ * same child: no fade. Reduced motion ([orcaReduceMotion]): the swap is
+ * immediate.
+ *
+ * The old child is drawn from the page's nodes while it fades. One that the
+ * change removed from the page (a `replaceComponent`) has nothing left to
+ * draw, so it is gone at once and only the new child fades in.
+ */
+@Composable
+internal fun AnimatedSwitcherWidget(
+    node: ResolvedNode,
+    model: OrcaPageModel,
+    modifier: Modifier,
+    fade: SwitcherFade = remember(node.id) { SwitcherFade() },
+) {
+    fade.show(node.childIds.firstOrNull(), AnimationDuration.milliseconds(node["duration"]), orcaReduceMotion())
+    val current = fade.current
+    LaunchedEffect(model, fade, current) {
+        while (fade.isFading) model.withAnimationFrame { now -> fade.frame(now) }
+    }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        val fading = fade.isFading
+        // One call site keyed by id: a child keeps its composition as it turns from current to outgoing.
+        for (id in listOfNotNull(fade.outgoing, current)) {
+            key(id) {
+                val alpha = if (id == current) fade.incomingAlpha else fade.outgoingAlpha
+                NodeView(id, model, if (fading) Modifier.alpha(alpha.toFloat()) else Modifier)
+            }
+        }
+    }
+}
+
+/** The `tag` of the Hero a node is drawn in (semantics): how a shared-element flight, and a test, finds it. */
+internal val OrcaHeroTag: SemanticsPropertyKey<String> = SemanticsPropertyKey("OrcaHeroTag")
+
+/**
+ * Where a Hero's `tag` meets its child's modifier: the seam for the
+ * shared-element flight (D10: `Modifier.sharedElement(key = tag)` inside
+ * the single-stack NavHost's `SharedTransitionLayout`). Today it only marks
+ * the child with [OrcaHeroTag]; an empty tag marks nothing.
+ */
+internal fun Modifier.orcaHero(tag: String): Modifier =
+    if (tag.isEmpty()) this else semantics { this[OrcaHeroTag] = tag }
+
+/**
+ * Flutter `Hero`: its child, drawn as if the Hero were not there; an empty
+ * or missing `tag`, or no child, is Flutter's plain child or nothing. The
+ * flight between two pages is not drawn yet ([orcaHero]): a push with a
+ * Hero is a plain push.
+ */
+@Composable
+internal fun HeroWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
+    ChildView(node, model, modifier.orcaHero(node["tag"]?.stringValue.orEmpty()))
+}

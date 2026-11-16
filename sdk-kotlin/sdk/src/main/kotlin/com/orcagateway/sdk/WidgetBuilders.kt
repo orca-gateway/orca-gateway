@@ -4,7 +4,11 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.orcagateway.core.render.ResolvedNode
+import com.orcagateway.sdk.widgets.AnimatedAlignWidget
 import com.orcagateway.sdk.widgets.AnimatedBuilderWidget
+import com.orcagateway.sdk.widgets.AnimatedContainerWidget
+import com.orcagateway.sdk.widgets.AnimatedOpacityWidget
+import com.orcagateway.sdk.widgets.AnimatedSwitcherWidget
 import com.orcagateway.sdk.widgets.AppBarWidget
 import com.orcagateway.sdk.widgets.BottomNavItemWidget
 import com.orcagateway.sdk.widgets.BottomNavigationBarWidget
@@ -19,6 +23,7 @@ import com.orcagateway.sdk.widgets.ExpandedWidget
 import com.orcagateway.sdk.widgets.FallbackPromptWidget
 import com.orcagateway.sdk.widgets.FlexWidget
 import com.orcagateway.sdk.widgets.GestureDetectorWidget
+import com.orcagateway.sdk.widgets.HeroWidget
 import com.orcagateway.sdk.widgets.IconWidget
 import com.orcagateway.sdk.widgets.ImageWidget
 import com.orcagateway.sdk.widgets.PaddingWidget
@@ -87,11 +92,13 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 31 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 36 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
-         * and S10's BottomNavigationBar, BottomNavItem and Drawer. Keep the two
+         * S10's BottomNavigationBar, BottomNavItem and Drawer, and S12's
+         * AnimatedContainer, AnimatedOpacity, AnimatedAlign, AnimatedSwitcher
+         * and Hero. Keep the two
          * lists in step: the caps vector advertises what this draws
          * (WidgetBuildersTest checks it).
          */
@@ -127,6 +134,11 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("BottomNavigationBar") { node, model, modifier -> BottomNavigationBarWidget(node, model, modifier) }
             register("BottomNavItem") { node, _, modifier -> BottomNavItemWidget(node, modifier) }
             register("Drawer") { node, model, modifier -> DrawerWidget(node, model, modifier) }
+            register("AnimatedContainer") { node, model, modifier -> AnimatedContainerWidget(node, model, modifier) }
+            register("AnimatedOpacity") { node, model, modifier -> AnimatedOpacityWidget(node, model, modifier) }
+            register("AnimatedAlign") { node, model, modifier -> AnimatedAlignWidget(node, model, modifier) }
+            register("AnimatedSwitcher") { node, model, modifier -> AnimatedSwitcherWidget(node, model, modifier) }
+            register("Hero") { node, model, modifier -> HeroWidget(node, model, modifier) }
         }
     }
 }

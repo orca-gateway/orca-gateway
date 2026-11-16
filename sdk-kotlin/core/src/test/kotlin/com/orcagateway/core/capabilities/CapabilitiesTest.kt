@@ -55,12 +55,16 @@ class CapabilitiesTest {
      *
      * B10.C-K: S10 adds Drawer, BottomNavigationBar and BottomNavItem, so the
      * pin moves from 28 to 31 (a pin moved to the new truth).
+     *
+     * B12.2-K to B12.5-K: S12 adds AnimatedContainer, AnimatedOpacity,
+     * AnimatedAlign, AnimatedSwitcher and Hero, so the pin moves from 31 to
+     * 36 (again to the new truth).
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame31WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame36WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(31, kotlin.size)
+        assertEquals(36, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -72,6 +76,9 @@ class CapabilitiesTest {
         val s10 = setOf("BottomNavItem", "BottomNavigationBar", "Drawer")
         assertTrue(kotlin.containsAll(s10), "missing: ${s10 - kotlin.toSet()}")
         assertTrue(GeneratedCapabilities.widgets.containsAll(s10), "not advertised: ${s10 - GeneratedCapabilities.widgets.toSet()}")
+        val s12 = setOf("AnimatedAlign", "AnimatedContainer", "AnimatedOpacity", "AnimatedSwitcher", "Hero")
+        assertTrue(kotlin.containsAll(s12), "missing: ${s12 - kotlin.toSet()}")
+        assertTrue(GeneratedCapabilities.widgets.containsAll(s12), "not advertised: ${s12 - GeneratedCapabilities.widgets.toSet()}")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
@@ -81,11 +88,13 @@ class CapabilitiesTest {
         val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["actionKinds"])
         assertEquals(listed, GeneratedCapabilities.actionKinds.toSet())
         assertTrue(Action.kinds.toSet().containsAll(listed), "not wire kinds: ${listed - Action.kinds.toSet()}")
-        assertEquals(20, listed.size)
+        // S12 added animateForward and animateReverse: 20 to 22.
+        assertEquals(22, listed.size)
+        assertTrue(listed.containsAll(setOf("animateForward", "animateReverse")))
         assertTrue(listed.containsAll(setOf("switchTab", "openDrawer")))
         // Step 2 added the fire-mode wrappers and the debugLog effect.
         assertTrue(listed.containsAll(setOf("once", "always", "debugLog")), "missing: ${setOf("once", "always", "debugLog") - listed}")
-        // Swift's twin: the iOS SDK advertises the same 20 kinds.
+        // Swift's twin: the iOS SDK advertises the same 22 kinds.
         assertEquals(strings(json("sdk-swift/capabilities.json").jsonObject["actionKinds"]), listed)
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).
