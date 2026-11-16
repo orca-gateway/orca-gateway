@@ -3,21 +3,20 @@
 ## Front page
 
 ### In one breath
-group 2 of 5 · tasks: 3 green, 0 blocked · A3.2, A3.4 (Align), A3.7 green on both SDKs in tests
-S-size, K-size: Align, AspectRatio, ConstrainedBox, FittedBox, FractionallySizedBox, LimitedBox.
-D1 (started early): pages `layout` and `layout-safe`; its native-vector check is red until G5.
+group 3 of 5 · tasks: 2 green, 0 blocked · A3.4 (Flexible, Baseline), A3.5 green on both SDKs
+K-flex, S-flex: Flexible loose in a Row or Column; IntrinsicHeight, IntrinsicWidth, Baseline.
+Both Baselines report their child's intrinsic size, so IntrinsicHeight around one matches Flutter.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-5 auto-decided (minor): D1 early; LimitedBox in a plain Column does not cap natively (follow-up);
-Swift ConstrainedBox does not stretch a hugging child to its min (follow-up); demo SafeArea and
-Offstage TextField kept.
+2 auto-decided (minor): Kotlin baseline-aligned Row in IntrinsicHeight uses the tallest child
+(follow-up); Swift marks intrinsic measuring with an environment flag (orcaIntrinsicHeight).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 3 (Flexible, IntrinsicHeight, IntrinsicWidth, Baseline). (default: go)
+2. Next: group 4 (Wrap, Offstage, SafeArea; K-shell added). (default: go)
 
 ## Appendix
 
@@ -82,3 +81,38 @@ recomputed by the fit review); page `layout-safe`, SafeArea all edges vs top fal
 "avoid Wrap". Decisions: body-level SafeArea on `layout`; Offstage child holds a counter and a TextField; GoBack.
 Review fit: pass (one caption nit fixed) · Review quality: finding → pass (two inline copies of `fill`; one rework)
 Not done: hand checks after G5.
+
+### Group 3
+Commits: K-flex 0e86fc9, S-flex 33a7e7d (each staged by path). Nothing pushed. Gate 2 approved under the standing
+rule. K-flow (group 4) started on the Kotlin tree while K-flex was under review; S-flow waited for S-flex (shared
+NodeView.swift and Layout.swift).
+
+#### Task K-flex · Kotlin Flexible, Intrinsic*, Baseline
+Files: `sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/widgets/Flex.kt` · `.../widgets/Intrinsic.kt` (new) ·
+`sdk-kotlin/sdk/src/test/kotlin/com/orcagateway/sdk/widgets/FlexibleIntrinsicTest.kt` (new)
+Cases: A3.4 kt (Flexible, Baseline), A3.5 kt → green (18 tests; `./gradlew build` sdk 329 + core 351 at pass 1, lint
+clean; FlexLayoutTest 19/19, goldens unchanged). Red first: 17 on stubs; 2 more stayed red on Compose's own intrinsics
+until FlexMeasurePolicy ported RenderFlex._getIntrinsicSize.
+Changed: FlexibleWidget; `Modifier.flex(flex, fill)` and FlexFactorNode carry the fit; a loose child measured min 0, max
+its share; `shares()` helper; all four Flex intrinsics overridden; IntrinsicHeight via IntrinsicSize.Max; IntrinsicWidth
+policy with step rounding and tighten; BaselineMeasurePolicy (FirstBaseline, else the child's height; child intrinsics).
+Decisions: all four intrinsics overridden (no existing layout moved); intrinsic main lengths rounded up to whole px;
+a baseline-aligned Row inside IntrinsicHeight takes its tallest child's height (s3-k-intrinsic-baseline-row, follow-up).
+Review fit: pass · Review quality: finding → pass (Baseline's lambda policy derived intrinsics from measure, so
+IntrinsicHeight around a Baseline was 30 not 10; class policy with the child's intrinsics; test added)
+Not done: registration (K-caps, group 5).
+
+#### Task S-flex · Swift Flexible, Intrinsic*, Baseline
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Flex.swift` · `.../Widgets/Layout.swift` · `.../Widgets/Intrinsic.swift` (new)
+· `.../NodeView.swift` · `sdk-swift/Tests/OrcaGatewayTests/FlexibleIntrinsicTests.swift` (new)
+Cases: A3.4 sw (Flexible, Baseline), A3.5 sw → green (13 tests incl. the Baseline-intrinsic case added mid-task;
+macOS 219 + 350, iOS 18.5 250 + 350 at pass 1, 0 warnings; FlexLayoutTests unchanged). Red first: all 13.
+Changed: LooseFlex in FlexLayout (a loose child at most its share, leftover placed by mainAxisAlignment with
+_distributeSpace); FlexibleView; FlexView counts Flexible; Intrinsic.swift: BoxLimits.tightened (= tightFor.enforce),
+IntrinsicHeight, IntrinsicWidth (steps), Baseline (first text baseline, else height; ideographic as alphabetic).
+Decisions: FlexLayout applies mainAxisAlignment (gap boxes count as items, as the stack path); orcaIntrinsicHeight
+flag (s3-swift-intrinsic-flag). Known limits outside the files, follow-ups: colour-only Container ideal height 10 (Flutter
+0); a fixed-width Container not shrunk to its Flexible share (as Expanded today); a Row's flex children inside
+IntrinsicWidth at their own widths.
+Review fit: pass · Review quality: finding → pass (tightened repeated enforced's clamp; now one enforced expression)
+Not done: advertising (S-caps, group 5).
