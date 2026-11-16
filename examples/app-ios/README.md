@@ -54,7 +54,7 @@ scheme, or pass them to `simctl launch`:
 | Basic actions | `basic-actions` | `home` | navigation, back, URL, clipboard, share, toasts |
 | Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
 | Todo | `todo` | `home` | add, tick, delete |
-| Custom extensions | `custom` | `home` | a plugin widget, plugin actions, the voice recorder and the video player (see "Plugins" below) |
+| Custom extensions | `custom` | `home` | a plugin widget, plugin actions, the voice recorder, the video player and the Google map (see "Plugins" below) |
 | Saved state | `saved-state` | `home` | a count saved on the device or for the session (see "Saved state" below) |
 
 ```bash
@@ -133,7 +133,7 @@ the login page while logged out (`wasRedirected=true`).
 
 ## Plugins
 
-The app registers four plugins. Two are the Swift twins of the Flutter example's: `BadgePlugin`
+The app registers five plugins. Two are the Swift twins of the Flutter example's: `BadgePlugin`
 draws the server's `ColoredBadge` widget in SwiftUI, and `DeviceActionsPlugin` runs the custom
 actions `hapticFeedback`, `showConfetti`, `rateApp` and `processPayment`. Both are in
 `OrcaCounter/OrcaCounterApp.swift`. The third, `VoiceRecorderPlugin`, is the voice recorder package
@@ -142,8 +142,10 @@ SDK is, so a change to it shows up on the next build; see "Voice recorder" below
 `VideoPlayerPlugin`, is the video player package (`plugins/orca_video_player/ios`, product
 `OrcaVideoPlayer`), linked the same way but through `./OrcaVideoPlayer`, a symlink to it, because
 SwiftPM names a local package after its directory and the voice recorder's is also `ios`; see
-"Video player" below. All four are passed as
-`OrcaApp(..., plugins: [...])`. To see them, start the server (step 1 above) and launch
+"Video player" below. The fifth, `GoogleMapPlugin`, is the Google map package
+(`plugins/orca_google_map/ios`, product `OrcaGoogleMap`), drawn with Apple's MapKit and linked as
+the video player is, through the symlink `./OrcaGoogleMap`; see "Google map" below. All five are
+passed as `OrcaApp(..., plugins: [...])`. To see them, start the server (step 1 above) and launch
 the `custom` app:
 
 ```bash
@@ -212,6 +214,52 @@ Mac's network; a video that cannot load shows "Video failed to load" in its plac
 
 The https video needs nothing in `Info.plist`: App Transport Security allows https. A video over
 http would need an `NSAppTransportSecurity` exception in the app's own Info.plist.
+
+### Google map
+
+The page sets `myLocationEnabled: true`, and the plugin never asks for location, as in Flutter. To
+see the blue location dot, grant the app location and give the simulator a place before launching
+(both act on the simulator only):
+
+```bash
+xcrun simctl privacy <device id> grant location com.orcagateway.examples.counter
+xcrun simctl location <device id> set 37.76,-122.45
+```
+
+That place is by Sutro Tower, clear of the pins; at the San Francisco pin's own 37.7749,-122.4194
+the dot hides under the pin. On the `custom` app's home page, tap "Go to Map Page" (or launch
+straight to it: add `SIMCTL_CHILD_ORCA_PATH=map` to the command above). The page, "Map
+Integration", shows the plugin's `GoogleMap` widget drawn by MapKit: San Francisco at zoom 12 with a
+round pin in the middle, `marker1`. The other pin, `marker2` in Oakland, is off the right edge,
+across the Bay Bridge. The lines under the map read "Map tapped on lat 0" and "lng 0", "Long press
+at lat 0" and "lng 0", "Camera moved to lat 0", "lng 0" and "zoom 0", "Marker tapped:" and "Marker
+taps: 0", and then comes the button "Move Camera to NYC". Apple's map tiles come over the network,
+so the simulator needs the Mac's network. Then:
+
+1. Tap the pin: its callout opens with "San Francisco" and "This is SF!", and the lines read
+   "Marker tapped: marker1" and "Marker taps: 1". Tap the same pin again: "Marker taps: 2". The id
+   is the same, so the count is what shows the second tap. A tap on the callout fires nothing.
+2. Tap the map away from the pins: after a moment (the tap waits out a double tap, MapKit's zoom)
+   the callout closes and "Map tapped on lat" and "lng" show the point tapped.
+3. Press and hold the map: "Long press at lat" and "lng" show the point, once, as the press begins.
+4. Drag the map: the three "Camera moved to" lines follow it as it moves (the zoom in Google's
+   levels, about 12 at first). They stay at 0 until the camera moves. Drag it left to find the
+   Oakland pin; a tap on it shows its callout, "Marker tapped: marker2" and one more tap in the
+   count. Double-tap, or hold Option and drag to pinch, and the zoom line changes.
+5. Tap "Move Camera to NYC": the map glides to New York at zoom 14, and the "Camera moved to" lines
+   end at about 40.71, -74.01 and 14.
+6. With location granted as above, the blue dot is at the simulated place.
+
+The map is Apple's, so the app needs no Google key and no `GMSServices` call: the plugin yaml's
+`GOOGLE_MAPS_IOS_API_KEY` is Flutter's. Two things differ from Flutter's Google map: `mapType:
+terrain` draws the standard map (MapKit has no relief map), and a tap on a pin does not move the
+camera to it, where Google's map centres it. There are no zoom buttons, whatever
+`zoomControlsEnabled` says, as with Flutter's Google map on iOS.
+
+iOS gives an app location only when its Info.plist has `NSLocationWhenInUseUsageDescription`; the
+demo's carries the plugin's sentence. An app of your own that sets `myLocationEnabled` needs the
+key and asks for location itself (`CLLocationManager`'s `requestWhenInUseAuthorization`), since the
+plugin never asks.
 
 ## Version check and sessions
 

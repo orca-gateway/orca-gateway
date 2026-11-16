@@ -5,10 +5,10 @@ same Bun server as the Flutter and iOS examples. The SDK's alpha is on Maven Cen
 `com.orcagateway:sdk`, but this example does not use it: its Gradle build includes
 `../../sdk-kotlin` (`includeBuild` in `settings.gradle.kts`), so it builds the SDK from source and an
 SDK change shows up on the next build. Your own app installs the published artifact instead; see
-"Install" in [`sdk-kotlin/README.md`](../../sdk-kotlin/README.md#install). The voice recorder and
-video player plugins come from source the same way: the build also includes
-`../../plugins/orca_voice_recorder/android` and `../../plugins/orca_video_player/android` (see
-[Plugins](#plugins)).
+"Install" in [`sdk-kotlin/README.md`](../../sdk-kotlin/README.md#install). The voice recorder,
+video player and Google map plugins come from source the same way: the build also includes
+`../../plugins/orca_voice_recorder/android`, `../../plugins/orca_video_player/android` and
+`../../plugins/orca_google_map/android` (see [Plugins](#plugins)).
 
 ## Run it
 
@@ -156,7 +156,7 @@ the login page while logged out (`wasRedirected=true`).
 
 ## Plugins
 
-The app registers four plugins. Two are its own ([`DemoPlugins.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/DemoPlugins.kt)),
+The app registers five plugins. Two are its own ([`DemoPlugins.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/DemoPlugins.kt)),
 as the Flutter example has them: `BadgePlugin` draws the `ColoredBadge` widget of the example server's
 `custom` app, and `DeviceActionsPlugin` runs its actions `hapticFeedback`, `showConfetti`, `rateApp`
 and `processPayment`. The third is the voice recorder package's `VoiceRecorderPlugin`
@@ -165,8 +165,10 @@ and `processPayment`. The third is the voice recorder package's `VoiceRecorderPl
 [The voice recorder](#the-voice-recorder) below). The fourth is the video player package's
 `VideoPlayerPlugin` ([`plugins/orca_video_player/android`](../../plugins/orca_video_player/android)),
 which plays the `VideoPlayer` of the app's Video Page and runs its playback actions (see
-[The video player](#the-video-player) below). Start the server (step 1 above), then the app on
-`custom`:
+[The video player](#the-video-player) below). The fifth is the Google map package's `GoogleMapPlugin`
+([`plugins/orca_google_map/android`](../../plugins/orca_google_map/android)), which draws the
+`GoogleMap` of the app's Map Page and runs its `moveCamera` action (see [The Google map](#the-google-map)
+below). Start the server (step 1 above), then the app on `custom`:
 
 ```bash
 task example:android:run APP=custom PAGE=home
@@ -248,6 +250,74 @@ and Speed 1.5, and the lines "Position: 0 ms" and "Finished: false". Then:
 5. **The end.** The clip is 7.5 s long. At its end the video stops on its last frame, the ▶ comes
    back and the line reads "Finished: true". Play or a tap starts it again from 0; "Finished:" stays
    true.
+
+### The Google map
+
+`settings.gradle.kts` includes `../../plugins/orca_google_map/android` as well, so the build substitutes
+`com.orcagateway:orca-google-map` from source on the same `sdk-kotlin` build. Its directory is called
+`android` too, so it takes its root project's name, `orca-google-map-android`, as the video player's
+does. `MainActivity` adds `GoogleMapPlugin()` to its plugins. The location permissions
+`ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` come from the library's manifest through the
+manifest merger. Neither the app nor the plugin asks for them, as the Flutter plugin does not.
+
+The map is Google's (Maps Compose on Google Play services), so the emulator image must have Google Play
+(the Pixel images marked "Google Play" in the Device Manager). Google draws the map's tiles only with a
+Google Maps API key, and the key is yours: put it in `examples/app-android/local.properties` (create
+the file if it is missing), then build and install again:
+
+```properties
+GOOGLE_MAPS_ANDROID_API_KEY=<your key>
+```
+
+`app/build.gradle.kts` reads it into the manifest's `com.google.android.geo.API_KEY` meta-data.
+`local.properties` is git-ignored, so the key is never committed. Google's
+[Set up an API key](https://developers.google.com/maps/documentation/android-sdk/get-api-key) says how
+to get one: a Google Cloud project with the Maps SDK for Android enabled, and a key restricted to Android
+apps with the package `com.orcagateway.examples.counter` and the SHA-1 of the debug signing key, which
+`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android` prints.
+
+Without a key the page still opens, with no crash. Google logs "Authorization failure"
+(`adb logcat -s "Google Maps Android API"`) and the map stays a plain grey box with the Google logo and
+the zoom buttons. On the API 34 Google Play image tried here (Google Play services 23.18, which loads
+Google's legacy map renderer) it then draws no pins and its camera does not move: drags, the zoom
+buttons and "Move Camera to NYC" leave it on San Francisco, and the "Camera moved to" lines stay 0. Taps
+and long presses still report their coordinates.
+
+The page sets `myLocationEnabled`, so the map shows the device's position once the app holds a location
+permission. Grant it and give the emulator a position before you open the page (`geo fix` takes the
+longitude first; the emulator's Extended controls › Location does the same):
+
+```bash
+adb shell pm grant com.orcagateway.examples.counter android.permission.ACCESS_FINE_LOCATION
+adb emu geo fix -122.4194 37.7749
+```
+
+On the `custom` home page, tap "Go to Map Page" (or start the app on it directly:
+`adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --es ORCA_APP_ID custom --es ORCA_PATH map`).
+The "Map Integration" page shows a map 300 high around San Francisco with the zoom buttons at its
+bottom right. Under it are the lines "Map tapped on lat", "Map tapped on lng", "Long press at lat",
+"Long press at lng", "Camera moved to lat", "Camera moved to lng", "Camera moved to zoom", "Marker
+tapped:" and "Marker taps: 0", then the button "Move Camera to NYC".
+
+With a key, expect the walk below. It has not been tried here: no key was available. The steps follow
+the Flutter plugin and Maps Compose, and the iOS demo's walk, on Apple's map, was seen.
+
+1. **The pins.** A red pin on San Francisco at the centre. Oakland's is off the map's right edge,
+   across the bay: drag the map most of its width to the left to see it.
+2. **Tap a pin.** Its info window opens over it ("San Francisco" and "This is SF!"), Google centres the
+   map on it, and the lines read "Marker tapped: marker1" and "Marker taps: 1". Tap the same pin again:
+   "Marker taps:" counts 2. Google fires `onMarkerTap` on every tap, as the Flutter plugin does.
+3. **Tap off the pins.** The info window closes and "Map tapped on lat" and "lng" show the point.
+4. **Long press.** "Long press at lat" and "lng" show the point.
+5. **Pan or zoom.** Drag the map or use + and -: the three "Camera moved to" lines follow the camera
+   while it moves.
+6. **Move Camera to NYC.** The map animates to New York at zoom 14, and the "Camera moved to" lines end
+   on about 40.7128, -74.006 and 14.
+7. **Your location.** With the permission granted, a blue dot marks the emulator's position and Google's
+   my-location button sits at the top right; it moves the camera there.
+
+One difference from the Flutter plugin does not show on this page: a prop of the wrong type takes its
+default, where Flutter fails the map's build.
 
 ## Offline, force update and sessions
 

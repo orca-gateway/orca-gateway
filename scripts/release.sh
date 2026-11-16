@@ -43,6 +43,8 @@ PACKAGES=(
   "orca_voice_recorder-android|plugins/orca_voice_recorder/android|orca_voice_recorder-android-v|maven|plugins/orca_voice_recorder/android/VERSION"
   "orca_video_player-ios|plugins/orca_video_player/ios|orca_video_player-ios-v|mirror|plugins/orca_video_player/ios/VERSION"
   "orca_video_player-android|plugins/orca_video_player/android|orca_video_player-android-v|maven|plugins/orca_video_player/android/VERSION"
+  "orca_google_map-ios|plugins/orca_google_map/ios|orca_google_map-ios-v|mirror|plugins/orca_google_map/ios/VERSION"
+  "orca_google_map-android|plugins/orca_google_map/android|orca_google_map-android-v|maven|plugins/orca_google_map/android/VERSION"
 )
 
 # The public repository the mirror workflow pushes sdk-swift to. The override

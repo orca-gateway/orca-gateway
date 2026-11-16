@@ -12,8 +12,8 @@ name: SDK Swift Mirror
 #                            simulator.
 #   orca_<name>-ios-v<X>     plugins/<name>/ios/ to its own mirror (e.g.
 #                            orca-voice-recorder-swift); built on macOS (it
-#                            needs AVFoundation), verified on macOS and the
-#                            iOS simulator.
+#                            needs Apple-only frameworks: AVFoundation,
+#                            MapKit), verified on macOS and the iOS simulator.
 #
 # The work is in scripts/swift-mirror.sh, which also runs against a local
 # bare repository to rehearse a release. Its PACKAGES table gives each tag its
@@ -24,8 +24,9 @@ name: SDK Swift Mirror
 # SWIFT_MIRROR_DEPLOY_KEY (orca-gateway/orca-gateway-swift), the voice
 # recorder's ORCA_VOICE_RECORDER_SWIFT_DEPLOY_KEY
 # (orca-gateway/orca-voice-recorder-swift), the video player's
-# ORCA_VIDEO_PLAYER_SWIFT_DEPLOY_KEY (orca-gateway/orca-video-player-swift).
-# See docs/User_Actions.md.
+# ORCA_VIDEO_PLAYER_SWIFT_DEPLOY_KEY (orca-gateway/orca-video-player-swift),
+# the Google map's ORCA_GOOGLE_MAP_SWIFT_DEPLOY_KEY
+# (orca-gateway/orca-google-map-swift). See docs/User_Actions.md.
 on:
   push:
     tags:
@@ -143,7 +144,8 @@ jobs:
   verify-linux:
     name: Resolve the mirror at the tag (linux, the core)
     needs: publish
-    # sdk-swift only: a plugin needs AVFoundation.
+    # sdk-swift only: a plugin needs Apple-only frameworks (AVFoundation,
+    # MapKit).
     if: needs.publish.outputs.plugin == 'false'
     runs-on: ubuntu-latest
     container: swift:6.2-noble

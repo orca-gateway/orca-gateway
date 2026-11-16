@@ -1,4 +1,5 @@
 import OrcaGateway
+import OrcaGoogleMap
 import OrcaVideoPlayer
 import OrcaVoiceRecorder
 import SwiftUI
@@ -36,9 +37,10 @@ import UIKit
 ///
 /// ORCA_APP_ID=custom shows the two plugins below at work, the voice
 /// recorder (`VoiceRecorderPlugin`, from plugins/orca_voice_recorder/ios) behind
-/// its home page's "Go to Voice Page", and the video player
-/// (`VideoPlayerPlugin`, from plugins/orca_video_player/ios) behind its "Go to
-/// Video Page".
+/// its home page's "Go to Voice Page", the video player (`VideoPlayerPlugin`,
+/// from plugins/orca_video_player/ios) behind its "Go to Video Page", and the
+/// Google map (`GoogleMapPlugin`, from plugins/orca_google_map/ios, drawn with
+/// MapKit) behind its "Go to Map Page".
 ///
 /// Five more switches try the screens OrcaApp draws around the pages; unset,
 /// each leaves the app as it was. ORCA_API_KEY (default `demo-key`): any other
@@ -90,7 +92,8 @@ struct OrcaCounterApp: App {
             preloadedConfig: preloadedConfig, staticFlowManager: staticFlowManager,
             enableSessionTracking: isOn("ORCA_SESSIONS"),
             onDeeplink: logDeeplink,
-            plugins: [BadgePlugin(), DeviceActionsPlugin(), VoiceRecorderPlugin(), VideoPlayerPlugin()],
+            plugins: [BadgePlugin(), DeviceActionsPlugin(), VoiceRecorderPlugin(), VideoPlayerPlugin(),
+                      GoogleMapPlugin()],
             splashView: isOn("ORCA_SPLASH") ? { AnyView(HostSplash()) } : nil,
             colorScheme: colorScheme, locale: locale)
     }

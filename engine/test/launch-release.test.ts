@@ -6,8 +6,8 @@
 // with a local bare origin and a stub `npm` on PATH: no network, no real
 // registry, and nothing in this repository is touched. P-release releases the
 // voice recorder's iOS and Android packages the same way, its mirror a local
-// bare repository and `swift`, `./gradlew` and `java` stubs, and the video
-// player's after it.
+// bare repository and `swift`, `./gradlew` and `java` stubs, then the video
+// player's and the Google map's.
 
 import { afterAll, describe, expect, test } from "bun:test";
 import {
@@ -65,7 +65,7 @@ afterAll(() => {
   }
 });
 
-// The fourteen manifests PACKAGES in release.sh reads, engine at 0.3.4.
+// The sixteen manifests PACKAGES in release.sh reads, engine at 0.3.4.
 const MANIFESTS: Record<string, string> = {
   "engine/package.json": JSON.stringify(
     {
@@ -89,6 +89,8 @@ const MANIFESTS: Record<string, string> = {
   "plugins/orca_voice_recorder/android/VERSION": "0.1.0-alpha.1\n",
   "plugins/orca_video_player/ios/VERSION": "0.1.0-alpha.1\n",
   "plugins/orca_video_player/android/VERSION": "0.1.0-alpha.1\n",
+  "plugins/orca_google_map/ios/VERSION": "0.1.0-alpha.1\n",
+  "plugins/orca_google_map/android/VERSION": "0.1.0-alpha.1\n",
 };
 
 // What the logins check calls: `npm config get @orca-gateway:registry`,
@@ -280,7 +282,7 @@ describe("release.sh native plugin rows", () => {
     expect(out).toMatch(/^ +10\) sdk-kotlin +0\.1\.0-alpha\.1 +\(maven\)$/m);
     expect(out).toMatch(/^ +11\) orca_voice_recorder-ios +0\.1\.0-alpha\.1 +\(mirror\)$/m);
     expect(out).toMatch(/^ +12\) orca_voice_recorder-android +0\.1\.0-alpha\.1 +\(maven\)$/m);
-    expect(out).not.toMatch(/^ +15\)/m);
+    expect(out).not.toMatch(/^ +17\)/m);
 
     expect(out).toContain(`ok mirror ${voiceMirror} `);
     expect(out).not.toContain("no-sdk-swift-mirror");
@@ -367,7 +369,7 @@ describe("release.sh video player rows", () => {
     expect(out).toMatch(/^ +12\) orca_voice_recorder-android +0\.1\.0-alpha\.1 +\(maven\)$/m);
     expect(out).toMatch(/^ +13\) orca_video_player-ios +0\.1\.0-alpha\.1 +\(mirror\)$/m);
     expect(out).toMatch(/^ +14\) orca_video_player-android +0\.1\.0-alpha\.1 +\(maven\)$/m);
-    expect(out).not.toMatch(/^ +15\)/m);
+    expect(out).not.toMatch(/^ +17\)/m);
 
     expect(out).toContain(`ok mirror ${videoMirror} `);
     expect(out).not.toContain("no-sdk-swift-mirror");
@@ -409,6 +411,105 @@ describe("release.sh video player rows", () => {
     const tags = git(s.work, s.env, "ls-remote", "--tags", "origin");
     expect(tags).toContain("refs/tags/orca_video_player-ios-v0.1.0-alpha.2");
     expect(tags).toContain("refs/tags/orca_video_player-android-v0.1.0-alpha.1");
+    expect(git(s.work, s.env, "ls-remote", "origin", "main").split("\t")[0]).toBe(
+      git(s.work, s.env, "rev-parse", "HEAD").trim(),
+    );
+  }, 30_000);
+});
+
+// ── P-release: the Google map's iOS and Android rows ────────
+
+describe("release.sh google map rows", () => {
+  test("P-release the google map's ios and android rows are 15 and 16 with their VERSIONs, and release through the mirror, validation, artifact and override names derived from the row", () => {
+    const s = makeScratchRepo(OLD_SECTIONS);
+    const android = join(s.work, "plugins", "orca_google_map", "android");
+    writeFileSync(join(android, "gradlew"), GRADLEW_STUB, { mode: 0o755 });
+    git(s.work, s.env, "add", "-A");
+    git(s.work, s.env, "commit", "-m", "the android package's wrapper");
+    git(s.work, s.env, "push", "--quiet", "origin", "main");
+    const head = git(s.work, s.env, "rev-parse", "HEAD");
+
+    const bin = join(s.root, "bin");
+    writeFileSync(join(bin, "swift"), LOGGING_STUB("swift"), { mode: 0o755 });
+    writeFileSync(join(bin, "bun"), BUN_STUB, { mode: 0o755 });
+    const jdk = join(s.root, "jdk");
+    mkdirSync(join(jdk, "bin"), { recursive: true });
+    writeFileSync(join(jdk, "bin", "java"), JAVA_STUB, { mode: 0o755 });
+    const androidSdk = join(s.root, "android-sdk");
+    mkdirSync(androidSdk);
+    const mapMirror = join(s.root, "map-mirror.git");
+    const log = join(s.root, "stub-calls.log");
+    const env = {
+      ...s.env,
+      STUB_LOG: log,
+      JAVA_HOME: jdk,
+      ANDROID_HOME: androidSdk,
+      ORCA_GOOGLE_MAP_SWIFT_MIRROR_URL: mapMirror,
+      // The other mirrors' overrides, unreachable: the map must use its own.
+      SWIFT_MIRROR_URL: join(s.root, "no-sdk-swift-mirror.git"),
+      ORCA_VOICE_RECORDER_SWIFT_MIRROR_URL: join(s.root, "no-voice-mirror.git"),
+      ORCA_VIDEO_PLAYER_SWIFT_MIRROR_URL: join(s.root, "no-video-mirror.git"),
+    };
+
+    // Before the mirror exists: stopped at the check, under the walkthrough's name.
+    const missing = runRelease({ ...s, env }, "15\n");
+    expect(missing.out).toContain(
+      `the mirror ${mapMirror} is not reachable. Create it first (docs/User_Actions.md, the orca_google_map Swift mirror).`,
+    );
+    expect(missing.exitCode).not.toBe(0);
+    expectNothingChanged(s, head);
+
+    git(s.root, s.env, "init", "--bare", "-b", "main", mapMirror);
+
+    // 15 next, 16 kept (the default for an untagged pre-release), proceed.
+    const { exitCode, out } = runRelease({ ...s, env }, "15,16\nn\n\ny\n");
+
+    expect(out).toMatch(/^ +14\) orca_video_player-android +0\.1\.0-alpha\.1 +\(maven\)$/m);
+    expect(out).toMatch(/^ +15\) orca_google_map-ios +0\.1\.0-alpha\.1 +\(mirror\)$/m);
+    expect(out).toMatch(/^ +16\) orca_google_map-android +0\.1\.0-alpha\.1 +\(maven\)$/m);
+    expect(out).not.toMatch(/^ +17\)/m);
+
+    expect(out).toContain(`ok mirror ${mapMirror} `);
+    expect(out).not.toContain("no-sdk-swift-mirror");
+    expect(out).not.toContain("no-voice-mirror");
+    expect(out).not.toContain("no-video-mirror");
+    expect(out).toContain(`ok JDK 17.0.12, Android SDK ${androidSdk} `);
+    expect(out).toContain(
+      "[orca_google_map-ios] 0.1.0-alpha.1 -> [k]eep 0.1.0-alpha.1 / [n]ext 0.1.0-alpha.2 / [r]elease 0.1.0",
+    );
+    expect(out).not.toContain("Regenerating");
+
+    const calls = readFileSync(log, "utf8").trimEnd().split("\n");
+    expect(calls).toEqual([
+      "swift build --package-path plugins/orca_google_map/ios",
+      "swift test --package-path plugins/orca_google_map/ios",
+      `gradlew ${realpathSync(android)} build publishAllPublicationsToStagingRepository --console=plain`,
+    ]);
+
+    const ios = out.indexOf(
+      `[orca_google_map-ios] tag push triggers .github/workflows/sdk-swift-mirror.yml (split, push to ${mapMirror}, tag 0.1.0-alpha.2 there)`,
+    );
+    const kotlin = out.indexOf(
+      "[orca_google_map-android] tag push triggers .github/workflows/sdk-kotlin-publish.yml (signs and releases com.orcagateway:orca-google-map 0.1.0-alpha.1 to Maven Central)",
+    );
+    expect(ios).toBeGreaterThan(-1);
+    expect(kotlin).toBeGreaterThan(ios);
+    expect(out).toContain("All done.");
+    expect(exitCode).toBe(0);
+
+    expect(readFileSync(join(s.work, "plugins/orca_google_map/ios/VERSION"), "utf8")).toBe("0.1.0-alpha.2\n");
+    expect(readFileSync(join(android, "VERSION"), "utf8")).toBe("0.1.0-alpha.1\n");
+    expect(git(s.work, s.env, "log", "-1", "--format=%B").trimEnd()).toBe(
+      "chore(release): version bump\n\n" +
+        "- orca_google_map-ios 0.1.0-alpha.1 -> 0.1.0-alpha.2\n" +
+        "- orca_google_map-android 0.1.0-alpha.1 -> 0.1.0-alpha.1",
+    );
+    expect(git(s.work, s.env, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD")).toBe(
+      "plugins/orca_google_map/ios/VERSION\n",
+    );
+    const tags = git(s.work, s.env, "ls-remote", "--tags", "origin");
+    expect(tags).toContain("refs/tags/orca_google_map-ios-v0.1.0-alpha.2");
+    expect(tags).toContain("refs/tags/orca_google_map-android-v0.1.0-alpha.1");
     expect(git(s.work, s.env, "ls-remote", "origin", "main").split("\t")[0]).toBe(
       git(s.work, s.env, "rev-parse", "HEAD").trim(),
     );
