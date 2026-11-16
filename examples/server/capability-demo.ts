@@ -12,6 +12,8 @@ import {
   Divider,
   Checkbox,
 } from "../../engine/src/components";
+// Not re-exported by components/index.ts; the primitive barrel has it.
+import { UnsupportedWidgetPlaceholder } from "../../engine/src/components/primitive";
 
 // Capability negotiation demo (Epic 25b, foundation slice).
 //
@@ -228,6 +230,49 @@ const degradePage = PageDefinition.create({
     }),
 });
 
+// ── /placeholder: the "cannot run here" card ─────────────────
+//
+// UnsupportedWidgetPlaceholder is the grey card for a widget the client
+// knows but cannot run on its platform. Flutter web substitutes it for
+// plugin widgets that have no web build; every SDK draws it when the server
+// sends it, as this page does. The first card carries every prop (fixture
+// 17_unsupported_widget_placeholder.json); the second only widgetType, so
+// the SDK's defaults show.
+
+const placeholderPage = PageDefinition.create({
+  id: "placeholder",
+  title: "Placeholder",
+  state: [],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({
+        title: Text.new({ data: "Placeholder" }),
+        centerTitle: true,
+      }),
+      body: Padding.new({
+        padding: EdgeInsets.all(16),
+        child: Column.new({
+          crossAxisAlignment: "stretch",
+          children: [
+            Text.new({ data: "Every prop set (fixture 17):" }),
+            SizedBox.new({ height: 8 }),
+            UnsupportedWidgetPlaceholder.new({
+              widgetType: "OrcaGoogleMap",
+              displayName: "Google Maps",
+              iconName: "map",
+              docsUrl: "https://docs.orcagateway.com/plugins/orca_google_map",
+              reason: "Maps render in the compiled mobile app. Open on device to preview.",
+            }),
+            SizedBox.new({ height: 16 }),
+            Text.new({ data: "Only widgetType, so the SDK's defaults show:" }),
+            SizedBox.new({ height: 8 }),
+            UnsupportedWidgetPlaceholder.new({ widgetType: "OrcaGoogleMap" }),
+          ],
+        }),
+      }),
+    }),
+});
+
 // ── App ──────────────────────────────────────────────────────
 
 const demoFlow = Flow.create({
@@ -238,6 +283,7 @@ const demoFlow = Flow.create({
     { path: "blocked", page: blockedPage },
     { path: "negotiation", page: negotiationPage },
     { path: "degrade", page: degradePage },
+    { path: "placeholder", page: placeholderPage },
   ],
 });
 

@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "slug": "native-parity-s18",
+  "idea": "Native parity step 18 (Phase C): app shell, theming and error screens on both sdk-swift and sdk-kotlin, matching the Flutter SDK: host-supplied loading, splash, error and force-update views; status-specific error screens (401, 403, 404, 429, 5xx, offline) with Flutter's messages; dark mode and locale through the SDK; UnsupportedWidgetPlaceholder; a request timeout option. Plan step 18; rows C18.1-C18.5.",
+  "kind": "feature",
+  "created_at": "2026-11-15T21:57:28Z",
+  "updated_at": "2026-11-16T04:04:28Z",
+  "active_session": "7317184b-fcd8-4ef3-bc8c-3dc085f8486c",
+  "current": "10",
+  "stages": {
+    "01": {
+      "status": "skipped",
+      "reason": "covered by the approved native-parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, step 18) and its test-case file phase-c-tests.md (C18.1-C18.5); per your brief for Phase C: one slice per plan step, stages 01-07 skipped as covered by the plan file"
+    },
+    "02": {
+      "status": "skipped",
+      "reason": "covered by the approved native-parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, step 18) and its test-case file phase-c-tests.md (C18.1-C18.5); per your brief for Phase C: one slice per plan step, stages 01-07 skipped as covered by the plan file"
+    },
+    "03": {
+      "status": "skipped",
+      "reason": "covered by the approved native-parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, step 18) and its test-case file phase-c-tests.md (C18.1-C18.5); per your brief for Phase C: one slice per plan step, stages 01-07 skipped as covered by the plan file"
+    },
+    "04": {
+      "status": "skipped",
+      "reason": "covered by the approved native-parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, step 18) and its test-case file phase-c-tests.md (C18.1-C18.5); per your brief for Phase C: one slice per plan step, stages 01-07 skipped as covered by the plan file"
+    },
+    "05": {
+      "status": "skipped",
+      "reason": "covered by the approved native-parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, step 18) and its test-case file phase-c-tests.md (C18.1-C18.5); per your brief for Phase C: one slice per plan step, stages 01-07 skipped as covered by the plan file"
+    },
+    "06": {
+      "status": "skipped",
+      "reason": "covered by the approved native-parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, step 18) and its test-case file phase-c-tests.md (C18.1-C18.5); per your brief for Phase C: one slice per plan step, stages 01-07 skipped as covered by the plan file"
+    },
+    "07": {
+      "status": "skipped",
+      "reason": "covered by the approved native-parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, step 18) and its test-case file phase-c-tests.md (C18.1-C18.5); per your brief for Phase C: one slice per plan step, stages 01-07 skipped as covered by the plan file"
+    },
+    "08": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-15T22:17:35Z",
+      "approved_with": "standing rule (minor and patch auto-approved): questions 1-3 minor, defaults (commands as found; commits per task on feat/native-parity-s18; one gate per group). Questions 4 (apply Flutter's timeout in Flutter) and 5 (x-orca-locale from the app locale) would change Flutter or the wire, so they are major: left at their no-change defaults, nothing in this slice depends on them, and they stay open for you"
+    },
+    "09": {
+      "status": "approved",
+      "rounds": 7,
+      "card": "cards/09-r7.md",
+      "approved_at": "2026-11-16T01:05:59Z",
+      "approved_with": "A (standing rule: gate 09's one question 'A approves the stage; stage 10 ticks C18.1-C18.5 and opens the step 18 PR' is minor, default go)"
+    },
+    "10": {
+      "status": "in_review",
+      "rounds": 2,
+      "card": "cards/10-r2.md"
+    },
+    "11": {
+      "status": "pending"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": true
+  }
+}

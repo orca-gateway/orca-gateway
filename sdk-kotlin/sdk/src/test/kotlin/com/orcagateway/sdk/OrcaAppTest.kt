@@ -111,8 +111,8 @@ class OrcaAppTest {
         val engine = StubEngine(failWith = 500)
         compose.setContent { OrcaApp(client(engine), path = "home") }
 
-        compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("Could not load this page") > 0 }
-        compose.onNodeWithText("HTTP 500: {\"error\":\"boom\"}").assertIsDisplayed()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("Server Error") > 0 }
+        compose.onNodeWithText("Something went wrong on the server. Please try again later.").assertIsDisplayed()
 
         engine.failWith = null
         compose.onNodeWithText("Try again").performClick()
@@ -188,8 +188,8 @@ class OrcaAppTest {
         val engine = ConfigEngine(config(initialRoute = "/welcome"), failConfigWith = 500)
         compose.setContent { OrcaApp(engine.client, path = null) }
 
-        compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("Could not load this app") > 0 }
-        compose.onNodeWithText("HTTP 500: {\"error\":\"boom\"}").assertIsDisplayed()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("Server Error") > 0 }
+        compose.onNodeWithText("Something went wrong on the server. Please try again later.").assertIsDisplayed()
         assertEquals(emptyList(), engine.pageRequests)
 
         engine.failConfigWith = null

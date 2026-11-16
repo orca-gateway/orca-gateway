@@ -255,11 +255,12 @@ final class StructureWidgetTests: XCTestCase {
 
     /// The pin moved from 31 to 44 when native parity step 3 advertised its 13
     /// layout wrappers (A3.1), then to 55 when step 4 advertised its 11 effect
-    /// and touch wrappers (A4.x).
-    func test_B10_C_S_fiftyFiveWidgetsAreAdvertisedWithTheThreeNewOnes() {
+    /// and touch wrappers (A4.x), and to 56 when S18 added
+    /// UnsupportedWidgetPlaceholder.
+    func test_B10_C_S_fiftySixWidgetsAreAdvertisedWithTheThreeNewOnes() {
         let widgets = GeneratedCapabilities.widgets
-        XCTAssertEqual(widgets.count, 55)
-        XCTAssertEqual(Set(widgets).count, 55)
+        XCTAssertEqual(widgets.count, 56)
+        XCTAssertEqual(Set(widgets).count, 56)
         XCTAssertTrue(Set(widgets).isSuperset(of: ["BottomNavigationBar", "BottomNavItem", "Drawer"]))
         XCTAssertEqual(WidgetRegistry.shared.types, Set(widgets))
     }

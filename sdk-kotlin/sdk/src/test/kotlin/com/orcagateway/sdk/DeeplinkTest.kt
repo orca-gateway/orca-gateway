@@ -456,7 +456,8 @@ class DeeplinkTest {
     fun b11_1_aColdLinkSurvivesAFailedConfigFetch() {
         val engine = LinkEngine(failConfigWith = 500)
         app(engine, view("https://shop.example/settings"))
-        shows("Could not load this app")
+        // Step 18's boot error screen (C18.2): OrcaErrorInfo's words for a 500.
+        shows("Server Error")
         assertEquals(emptyList(), events)
 
         engine.failConfigWith = null

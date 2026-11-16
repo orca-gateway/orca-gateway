@@ -13,16 +13,24 @@ public data class HttpRequest(
     public val url: URI,
     public val headers: Map<String, String> = emptyMap(),
     public val body: ByteArray? = null,
+    /**
+     * How long the whole request may take, send to answer, in milliseconds
+     * ([OrcaClient.timeoutMillis] on every request the client sends). The
+     * transport enforces it and throws its timeout error past it; null keeps
+     * the transport's own timeouts.
+     */
+    public val timeoutMillis: Long? = null,
 ) {
     override fun equals(other: Any?): Boolean =
         other is HttpRequest && method == other.method && url == other.url && headers == other.headers &&
-            body contentEquals other.body
+            body contentEquals other.body && timeoutMillis == other.timeoutMillis
 
-    override fun hashCode(): Int = ((method.hashCode() * 31 + url.hashCode()) * 31 + headers.hashCode()) * 31 +
-        body.contentHashCode()
+    override fun hashCode(): Int = (((method.hashCode() * 31 + url.hashCode()) * 31 + headers.hashCode()) * 31 +
+        body.contentHashCode()) * 31 + timeoutMillis.hashCode()
 
     override fun toString(): String =
-        "HttpRequest(method=$method, url=$url, headers=$headers, body=${body?.let { "${it.size} bytes" }})"
+        "HttpRequest(method=$method, url=$url, headers=$headers, body=${body?.let { "${it.size} bytes" }}, " +
+            "timeoutMillis=$timeoutMillis)"
 }
 
 /** One HTTP response; header names are lowercased. */
@@ -56,7 +64,9 @@ public data class HttpResponse(
  * Implementations may be called from any thread and concurrently (Swift
  * `Sendable`), must not block the calling thread, lowercase the response's
  * header names, and throw when no response arrives at all. Any status,
- * 4xx and 5xx included, is a response, not an exception.
+ * 4xx and 5xx included, is a response, not an exception. A custom transport
+ * must apply [HttpRequest.timeoutMillis] itself: the core, having no
+ * coroutines library, cannot enforce it.
  */
 public interface HttpTransport {
     public suspend fun send(request: HttpRequest): HttpResponse

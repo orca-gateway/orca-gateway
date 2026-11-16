@@ -1,8 +1,8 @@
 # Orca Gateway iOS SDK
 
 > [!WARNING]
-> **Alpha (`0.1.0-alpha.1`).** The native iOS client for Orca Gateway works for the pages its 25
-> widgets and 15 action kinds cover, but its API may still change between alphas. For production
+> **Alpha (`0.1.0-alpha.1`).** The native iOS client for Orca Gateway works for the pages its 56
+> widgets and 20 action kinds cover, but its API may still change between alphas. For production
 > apps use the Flutter SDK ([`orca_gateway`](https://github.com/orca-gateway/orca-gateway/tree/main/sdk)).
 
 The SDK renders the same server-driven pages as the Flutter SDK, from the same Bun engine and the
@@ -303,6 +303,73 @@ DevTools also shows how a value was worked out:
 
 The [iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios) starts
 it in debug builds and turns the overlay and bodies on from two switches.
+
+## App shell: host views, theme, locale, errors and timeout
+
+`OrcaApp` draws a few screens of its own around the pages: a spinner while it boots, an error
+screen when the config or a page cannot be fetched, and the force-update screen. Each boot screen
+can be your own, `colorScheme` and `locale` reach everything `OrcaApp` draws, and the client's
+`timeout` bounds every request:
+
+```swift
+OrcaApp(
+    client: OrcaClient(baseURL: url, appId: "shop", apiKey: "demo-key", timeout: 10),
+    enableOffline: true,
+    splashView: { AnyView(SplashScreen()) },
+    errorView: { error in AnyView(Text(OrcaErrorInfo(error).title)) },
+    forceUpdateView: { AnyView(UpdateScreen()) },
+    colorScheme: .dark,
+    locale: Locale(identifier: "fr-FR"))
+```
+
+- `splashView` shows while the version check runs (`enableOffline`) and while the navigation config
+  is asked for (Flutter's `splashWidget`). `loadingView` (Flutter's `loadingWidget`) shows in the
+  same places when there is no `splashView`; with neither, the SDK's spinner.
+- `errorView` gets the error when the config cannot be fetched or the plugins conflict, and is
+  drawn alone, with no retry (Flutter's `errorBuilder`). Without it, `OrcaErrorView`.
+- `forceUpdateView` replaces "Update required. Please update the app." (Flutter's
+  `forceUpdateBuilder`).
+
+The four are boot screens, as in Flutter. With a `path` no config is fetched, and a page keeps the
+SDK's spinner while it loads and `OrcaErrorView`, with its "Try again" button, when it fails.
+`OrcaApp(router:)` takes the same options.
+
+`colorScheme` (`.dark` or `.light`; nil, the default, follows the system) and `locale` (nil: the
+environment's) are set in the environment of everything under `OrcaApp`: its screens, your views
+and the pages. They do not turn the whole window, as `preferredColorScheme` would. A page's
+Scaffold stays light whatever the scheme, as Flutter's builders draw it in the default light theme,
+so dark mode shows on the SDK's screens and your own views, not inside a server page. The
+`x-orca-locale` header stays the device's locale, as in Flutter.
+
+**Error screens.** `OrcaErrorView(error:retry:)` is Flutter's `buildOrcaError`: an icon, a title
+and a message, centred, and a "Try again" button when it has a `retry` (a native extra). `OrcaApp`
+shows it for a page or a config that failed; you can show it too. `OrcaErrorInfo(error)` gives its
+`kind`, `title` and `message` for a screen of your own. Titles and messages are Flutter's:
+
+| Error | `kind` | Title |
+|---|---|---|
+| HTTP 401 | `.unauthorized` | Unauthorized |
+| HTTP 403 | `.forbidden` | Forbidden |
+| HTTP 404 | `.notFound` | Not Found |
+| HTTP 429 | `.tooManyRequests` | Too Many Requests |
+| HTTP 500 and up | `.server` | Server Error |
+| Any other HTTP status | `.status` | Error, with `Failed to fetch page: <status>` (a server action: its own message) |
+| A body that does not decode, a bad URL | `.configuration` | Configuration Error |
+| No network, no host, no connection, a timeout | `.connection` | Connection Failed |
+| Anything else | `.unknown` | Something Went Wrong |
+
+Two native differences: "Failed to fetch page" also stands for the config and the version check,
+which Flutter names, and a timeout is Connection Failed, where Flutter's falls to Something Went
+Wrong.
+
+**Timeout.** `OrcaClient(timeout:)`, 30 seconds by default, bounds each request from send to answer;
+a slower one fails with `URLError(.timedOut)`, shown as Connection Failed. Flutter's `OrcaClient`
+declares the same 30-second `timeout` but never applies it, so a Flutter app waits as long as its
+HTTP stack does. A custom `transport` must honour task cancellation, or the timeout waits for its
+answer.
+
+The [iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios) has a
+switch for each of these, with the commands to see the error screens, dark mode and a host splash.
 
 ## Plugins
 

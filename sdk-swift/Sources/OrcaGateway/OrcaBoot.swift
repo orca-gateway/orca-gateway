@@ -57,7 +57,8 @@ final class OrcaBootModel: ObservableObject {
         /// The server demands an update; no page is ever fetched.
         case forceUpdate
         /// The app cannot start (a plugin conflict, Flutter's boot error):
-        /// the message shows and nothing is fetched.
+        /// Flutter's default error screen shows with this message, and
+        /// nothing is fetched.
         case failed(String)
     }
 
@@ -103,27 +104,74 @@ final class OrcaBootModel: ObservableObject {
     }
 }
 
-/// OrcaApp's root: the spinner while the version check runs, the
+/// The host's boot views, OrcaApp's `loadingView`, `splashView`, `errorView`
+/// and `forceUpdateView` (Flutter `OrcaApp.loadingWidget`, `splashWidget`,
+/// `errorBuilder` and `forceUpdateBuilder`, sdk/lib/src/widgets/orca_app.dart);
+/// each nil draws the SDK's own. Boot only: pages keep the SDK's spinner
+/// and error screen.
+struct BootViews {
+    var loading: (() -> AnyView)? = nil
+    var splash: (() -> AnyView)? = nil
+    var error: ((Error) -> AnyView)? = nil
+    var forceUpdate: (() -> AnyView)? = nil
+
+    /// Flutter `_buildSplash`: the splash, else the loading view, else the
+    /// SDK's spinner.
+    @MainActor @ViewBuilder
+    func splashScreen() -> some View {
+        if let host = splash ?? loading {
+            host()
+        } else {
+            ProgressView()
+        }
+    }
+
+    /// Flutter `_buildForceUpdate`: the host's view, else `ForceUpdateView`.
+    @MainActor @ViewBuilder
+    func forceUpdateScreen() -> some View {
+        if let forceUpdate {
+            forceUpdate()
+        } else {
+            ForceUpdateView()
+        }
+    }
+
+    /// Flutter `_buildError`: the host's view given `error`, drawn alone,
+    /// else the SDK's screen.
+    @MainActor @ViewBuilder
+    func errorScreen<SDKScreen: View>(_ error: Error, sdk: () -> SDKScreen) -> some View {
+        if let host = self.error {
+            host(error)
+        } else {
+            sdk()
+        }
+    }
+}
+
+/// OrcaApp's root: the splash while the version check runs, the
 /// force-update screen when the server demands one, the error when the app
-/// cannot start, else `content`, which is built only then. Sessions are
-/// tracked here, around all of them but the error.
+/// cannot start (each the host's when given), else `content`, which is
+/// built only then. Sessions are tracked here, around all of them but the
+/// error.
 @MainActor
 struct OrcaBootView<Content: View>: View {
     @ObservedObject var boot: OrcaBootModel
     let client: OrcaClient
+    var views = BootViews()
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         Group {
             switch boot.phase {
             case .checking:
-                ProgressView()
+                views.splashScreen()
             case .forceUpdate:
-                ForceUpdateView()
+                views.forceUpdateScreen()
             case .failed(let message):
-                // No retry: a plugin conflict stays one.
-                LoadError(title: "Could not load this page", message: message, retry: nil)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Flutter's ArgumentError: its default screen, with the
+                // conflict's own words. No retry: a conflict stays one.
+                let conflict = OrcaPluginConflict(message: message)
+                views.errorScreen(conflict) { OrcaErrorView(error: conflict, message: message) }
             case .ready:
                 content()
             }

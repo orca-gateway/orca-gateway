@@ -529,4 +529,69 @@ class OrcaClientTest {
         assertEquals(412, error.status)
         assertEquals(listOf("GET"), stub.requests.map { it.method })
     }
+
+    // MARK: C18.5 the request timeout (Flutter's `timeout`, 30 s by default)
+
+    private fun answer(body: String) = HttpResponse(200, body = body.encodeToByteArray())
+
+    /** The page and its handshake retry, config, a server action, version and session all carry it. */
+    @Test
+    fun c18_5_everyRequestTheClientBuildsCarriesItsTimeout() = runSuspend {
+        val stub = StubEngine(counterPage())
+        val c = OrcaClient(base, "counter", transport = stub, timeoutMillis = 1_500)
+        assertEquals(1_500L, c.timeoutMillis)
+        c.fetchPage("home")
+        stub.forced = answer("""{"flows":[]}""")
+        c.fetchConfig()
+        stub.forced = answer("""{"actions":[]}""")
+        c.executeAction("bump")
+        stub.forced = answer("""{"flows":{}}""")
+        c.fetchVersion()
+        c.sendSession("start", "d1")
+
+        val requests = stub.requests
+        assertEquals(
+            listOf("page/home", "page/home", "config", "action", "version", "session"),
+            requests.map { it.url.path.removePrefix("/api/v1/app/counter/") },
+        )
+        assertEquals(List(requests.size) { 1_500L }, requests.map { it.timeoutMillis })
+    }
+
+    @Test
+    fun c18_5_theDefaultIsThirtySecondsAsInFlutter() = runSuspend {
+        val stub = StubEngine(counterPage())
+        val c = client(stub)
+        assertEquals(30_000L, c.timeoutMillis)
+        c.fetchPage("home")
+        assertEquals(listOf(30_000L, 30_000L), stub.requests.map { it.timeoutMillis })
+    }
+
+    /** `identified` is a `copy(deviceId = ...)`: the copy keeps the timeout, and `copy` can change it. */
+    @Test
+    fun c18_5_copiesKeepTheTimeout() = runSuspend {
+        val stub = StubEngine(counterPage())
+        val c = OrcaClient(base, "counter", transport = stub, timeoutMillis = 1_500)
+        val identified = c.copy(deviceId = "d1")
+        assertEquals(1_500L, identified.timeoutMillis)
+        assertEquals(1_500L, c.copy(appId = "router").copy(apiKey = "k").timeoutMillis)
+        assertEquals(200L, c.copy(timeoutMillis = 200).timeoutMillis)
+        assertEquals(1_500L, c.timeoutMillis)
+
+        identified.fetchPage("home")
+        assertEquals(listOf(1_500L, 1_500L), stub.requests.map { it.timeoutMillis })
+    }
+
+    /** The request keeps its timeout in equality and in its text. */
+    @Test
+    fun c18_5_aRequestComparesAndPrintsItsTimeout() {
+        val url = URI("http://h/a")
+        assertEquals(HttpRequest("GET", url, timeoutMillis = 100), HttpRequest("GET", url, timeoutMillis = 100))
+        assertEquals(
+            HttpRequest("GET", url, timeoutMillis = 100).hashCode(),
+            HttpRequest("GET", url, timeoutMillis = 100).hashCode(),
+        )
+        assertFalse(HttpRequest("GET", url, timeoutMillis = 100) == HttpRequest("GET", url))
+        assertNull(HttpRequest("GET", url).timeoutMillis)
+        assertTrue("timeoutMillis=100" in HttpRequest("GET", url, timeoutMillis = 100).toString())
+    }
 }

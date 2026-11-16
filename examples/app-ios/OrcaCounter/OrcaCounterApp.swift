@@ -26,6 +26,16 @@ import UIKit
 /// prints one `OrcaCounter deeplink:` line for each.
 ///
 /// ORCA_APP_ID=custom shows the two plugins below at work.
+///
+/// Five more switches try the screens OrcaApp draws around the pages; unset,
+/// each leaves the app as it was. ORCA_API_KEY (default `demo-key`): any other
+/// key gets the server's 401, so the Unauthorized screen shows. ORCA_SCHEME
+/// (`dark` or `light`) is OrcaApp's colorScheme; unset follows the system.
+/// ORCA_LOCALE (a BCP-47 tag such as `ar` or `fr-FR`) is OrcaApp's locale;
+/// unset is the device's. ORCA_SPLASH=1 gives OrcaApp the host's own splash
+/// (`HostSplash` below), shown while the version check runs or the config is
+/// asked for. ORCA_TIMEOUT (seconds) is the client's timeout; unset keeps the
+/// SDK's 30.
 @main
 struct OrcaCounterApp: App {
     init() {
@@ -45,17 +55,42 @@ struct OrcaCounterApp: App {
 
     var body: some Scene {
         WindowGroup {
-            let client = OrcaClient(baseURL: Self.serverURL, appId: Self.setting("ORCA_APP_ID", "counter"),
-                                    apiKey: "demo-key")
             let path: String? = Self.setting("ORCA_BOOT", "path") == "config"
                 ? nil : Self.setting("ORCA_PATH", "home")
             OrcaApp(
-                client: client, path: path,
+                client: Self.client, path: path,
                 enableOffline: Self.isOn("ORCA_OFFLINE"),
                 enableSessionTracking: Self.isOn("ORCA_SESSIONS"),
                 onDeeplink: Self.logDeeplink,
-                plugins: [BadgePlugin(), DeviceActionsPlugin()])
+                plugins: [BadgePlugin(), DeviceActionsPlugin()],
+                splashView: Self.isOn("ORCA_SPLASH") ? { AnyView(HostSplash()) } : nil,
+                colorScheme: Self.colorScheme, locale: Self.locale)
         }
+    }
+
+    /// ORCA_APP_ID's app with ORCA_API_KEY. ORCA_TIMEOUT sets the timeout
+    /// only when given, so unset keeps the SDK's own.
+    static var client: OrcaClient {
+        var client = OrcaClient(baseURL: serverURL, appId: setting("ORCA_APP_ID", "counter"),
+                                apiKey: setting("ORCA_API_KEY", "demo-key"))
+        if let seconds = TimeInterval(setting("ORCA_TIMEOUT", "")) { client.timeout = seconds }
+        return client
+    }
+
+    /// ORCA_SCHEME: `dark` or `light`; anything else, or unset, is nil and
+    /// follows the system.
+    static var colorScheme: ColorScheme? {
+        switch setting("ORCA_SCHEME", "") {
+        case "dark": return .dark
+        case "light": return .light
+        default: return nil
+        }
+    }
+
+    /// ORCA_LOCALE as a locale; unset is nil, the device's.
+    static var locale: Locale? {
+        let tag = setting("ORCA_LOCALE", "")
+        return tag.isEmpty ? nil : Locale(identifier: tag)
     }
 
     /// The example server. The simulator reaches the Mac at localhost; set
@@ -84,6 +119,30 @@ struct OrcaCounterApp: App {
     /// A switch: on when the setting is "1" or "true".
     static func isOn(_ key: String) -> Bool {
         ["1", "true"].contains(setting(key, ""))
+    }
+}
+
+// MARK: - Host splash
+
+/// The host's own splash (ORCA_SPLASH=1), in place of the SDK's spinner: the
+/// app's name over a colour of its own, so it cannot pass for the SDK's. The
+/// caption ends with the locale OrcaApp gives its views, so ORCA_LOCALE shows.
+private struct HostSplash: View {
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        ZStack {
+            Color.indigo.ignoresSafeArea()
+            VStack(spacing: 12) {
+                Text("Orca Counter")
+                    .font(.system(size: 40, weight: .bold))
+                Text("host splash · \(locale.identifier)")
+                    .font(.footnote)
+                    .opacity(0.8)
+            }
+            .foregroundColor(.white)
+        }
+        .accessibilityIdentifier("hostSplash")
     }
 }
 
