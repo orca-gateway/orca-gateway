@@ -106,13 +106,15 @@ internal fun ReorderableListWidget(node: ResolvedNode, model: OrcaPageModel, mod
         val fillsWidth = constraints.hasBoundedWidth
         val fillsHeight = constraints.hasBoundedHeight
         val state = rememberLazyListState()
-        val drag = remember(state) { ReorderDrag(state) }
+        val ids = node.childIds
+        // A drag is over one set of rows: when the page changes them the held
+        // row is let go (a new drag, and with it new gestures), nothing fired.
+        val drag = remember(state, ids) { ReorderDrag(state) }
         val current = rememberUpdatedState(node)
         if (!frozen) {
             if (node.actions.keys.any { it in ScrollEvent.TRIGGERS }) ListScrollTriggers(node, model, state)
             AutoScroll(drag, state)
         }
-        val ids = node.childIds
         // Rows keep their state by node id as the page moves them; ids are
         // unique in a page, and a list naming one twice falls back to the index.
         val keyed = remember(ids) { ids.toSet().size == ids.size }
@@ -187,13 +189,30 @@ private fun ReorderableRow(
         Modifier
     } else {
         Modifier.pointerInput(drag, horizontal, direction) {
+            // Whether this row's gesture is the one that picked a row up: it
+            // then always lets it go, also when the row is no longer at that index.
+            var holding = false
             detectDragGesturesAfterLongPress(
-                onDragStart = { drag.begin(at.value) },
+                onDragStart = { holding = drag.begin(at.value) },
                 onDrag = { _, amount ->
-                    if (drag.from == at.value) drag.moveBy((if (horizontal) amount.x else amount.y) * direction)
+                    if (holding && drag.from == at.value) {
+                        drag.moveBy((if (horizontal) amount.x else amount.y) * direction)
+                    }
                 },
-                onDragEnd = { if (drag.from == at.value) drag.end(count())?.let { drop.value(it) } },
-                onDragCancel = { if (drag.from == at.value) drag.cancel() },
+                onDragEnd = {
+                    if (holding) {
+                        holding = false
+                        val moved = drag.from != at.value
+                        val event = drag.end(count())
+                        if (!moved) event?.let { drop.value(it) }
+                    }
+                },
+                onDragCancel = {
+                    if (holding) {
+                        holding = false
+                        drag.cancel()
+                    }
+                },
             )
         }
     }
@@ -263,15 +282,16 @@ private class ReorderDrag(private val state: LazyListState) {
     private fun spans(): List<ItemSpan> =
         state.layoutInfo.visibleItemsInfo.map { ItemSpan(it.index, it.offset.toDouble(), it.size.toDouble()) }
 
-    /** Pick row [index] up, unless another one is held. */
-    fun begin(index: Int) {
-        if (from >= 0) return
-        val item = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    /** Pick row [index] up, unless another one is held; whether it was picked up. */
+    fun begin(index: Int): Boolean {
+        if (from >= 0) return false
+        val item = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return false
         start = item.offset
         size = item.size
         finger = 0f
         placed = item.offset.toFloat()
         from = index
+        return true
     }
 
     /** The list placed the held row [fromStart] past its own start edge (padding included). */

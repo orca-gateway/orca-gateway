@@ -12,11 +12,14 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.render.ComponentMutation
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.LocalOrcaFrozenNodes
 import com.orcagateway.sdk.NodeView
@@ -382,5 +385,63 @@ class ReorderableListViewTest {
         compose.waitForIdle()
 
         assertEquals(listOf(0.dp, 40.dp, 80.dp), (0..2).map { top(it) })
+    }
+
+    /**
+     * B13.3-K: the page puts a row before the held one while it is held. The
+     * drag is dropped (letting go fires nothing, no row is drawn as dragged),
+     * and the list drags again.
+     */
+    @Test
+    fun b13_3_childrenChangedWhileARowIsHeldEndTheDragAndTheListDragsAgain() {
+        val model = show()
+        val added = listOf(
+            ComponentNode(
+                "r9", "SizedBox", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single,
+                mapOf("height" to JsonValue.Int(40)), listOf("t9"),
+            ),
+            text("t9", "Row 9"),
+        )
+
+        hold(1)
+        move(1, Offset(0f, 20f))
+        compose.runOnIdle { model.apply(ComponentMutation.Add("l", added, position = 1)) }
+        compose.waitForIdle()
+        release(1)
+
+        assertEquals(listOf("r0", "r9", "r1", "r2"), model.resolve("l")?.childIds)
+        assertNull(model.value("drops"))
+        assertEquals(listOf(0.dp, 40.dp, 80.dp), listOf(0, 9, 1).map { top(it) })
+
+        // The new row took the held row's index: dragged above row 0 it gives {1, 0}.
+        drag(9, Offset(0f, -50f))
+
+        assertEquals(JsonValue.Int(1), model.value("drops"))
+        assertEquals(JsonValue.Int(1), model.value("from"))
+        assertEquals(JsonValue.Int(0), model.value("to"))
+    }
+
+    /** B13.3-K: right to left, a horizontal list runs from the right and a drag to the left moves a row on. */
+    @Test
+    fun b13_3_aHorizontalListRightToLeftRunsFromTheRightAndDragsLeftward() {
+        val model = OrcaPageModel(page(*nodes(3, onReorder, horizontal = true)))
+        compose.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Box(Modifier.size(100.dp, 100.dp), propagateMinConstraints = true) { NodeView("l", model) }
+            }
+        }
+        compose.waitForIdle()
+        assertEquals(listOf(60.dp, 20.dp, -20.dp), (0..2).map { left(it) })
+
+        hold(0)
+        move(0, Offset(-60f, 0f))
+        assertEquals(0.dp, left(0))
+        assertEquals(60.dp, left(1))
+        release(0)
+
+        assertEquals(JsonValue.Int(1), model.value("drops"))
+        assertEquals(JsonValue.Int(0), model.value("from"))
+        assertEquals(JsonValue.Int(2), model.value("to"))
+        assertEquals(listOf(60.dp, 20.dp, -20.dp), (0..2).map { left(it) })
     }
 }
