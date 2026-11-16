@@ -69,8 +69,8 @@ import com.orcagateway.sdk.style.TextStyleProps
  */
 @Composable
 internal fun TextFieldWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
-    val field = remember { FieldText(pageText(node, model)) }
-    field.follow(pageText(node, model))
+    val field = remember { FieldText(Props.text(pageValue(node, model))) }
+    field.follow(Props.text(pageValue(node, model)))
 
     val enabled = node["enabled"]?.boolValue ?: true
     val readOnly = node["readOnly"]?.boolValue ?: false
@@ -91,7 +91,7 @@ internal fun TextFieldWidget(node: ResolvedNode, model: OrcaPageModel, modifier:
             val limited = limit(next, maxLength)
             val edited = limited.text != field.value.text
             field.value = limited
-            if (edited) edit(node, model, limited.text)
+            if (edited) edit(node, model, JsonValue.String(limited.text))
         },
         modifier = modifier.fillMaxWidth().focusRequester(focus),
         enabled = enabled,
@@ -128,19 +128,25 @@ internal fun TextFieldWidget(node: ResolvedNode, model: OrcaPageModel, modifier:
 }
 
 /**
- * One edit, Flutter's `onChanged`: the page-state key `stateKey` first,
- * then `onChange` with `{value}`. A field with neither fires nothing.
+ * One change by the user to a bound control, Flutter's builders'
+ * `onChanged` (TextField, Checkbox, Radio, ...): [value] written to the
+ * page-state key `stateKey` first (page scope: their `setState` sends no
+ * scope), then `onChange` fired with `{value}`. A control with neither
+ * does nothing.
  */
-private fun edit(node: ResolvedNode, model: OrcaPageModel, text: String) {
-    val value = JsonValue.String(text)
+internal fun edit(node: ResolvedNode, model: OrcaPageModel, value: JsonValue) {
     node["stateKey"]?.stringValue?.let { key -> model.store.dispatch(mapOf(key to value)) }
     model.fire("onChange", on = node, eventData = mapOf("value" to value))
 }
 
-/** The page's value: the store at `stateKey`, else the resolved `value` (Flutter `_buildTextField`). */
-private fun pageText(node: ResolvedNode, model: OrcaPageModel): String {
-    val key = node["stateKey"]?.stringValue ?: return Props.text(node["value"])
-    return Props.text(model.store.value(key))
+/**
+ * The page's value of a bound control: the store at `stateKey` (app and
+ * page merged, page on top: Flutter's `stateGet`), else the resolved
+ * `value` prop, null when there is none.
+ */
+internal fun pageValue(node: ResolvedNode, model: OrcaPageModel): JsonValue? {
+    val key = node["stateKey"]?.stringValue ?: return node["value"]
+    return model.store.value(key)
 }
 
 /** A positive count (`maxLines`, `maxLength`); anything else null. */
