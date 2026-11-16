@@ -54,6 +54,7 @@ The server runs on `http://localhost:8080` by default.
 | `saved-state.ts`      | App `saved-state`: `PersistState` and `ClearState`. A page-state count saved on the device (kept after a relaunch) or for the session (kept until the app process ends), or forgotten; an app-state visits count saved on the device; a second page to leave to and come back from |
 | `orca_google_map.ts`  | Google Maps integration via the map plugin                    |
 | `orca_voice_recorder.ts` | The voice recorder plugin's widget and actions, generated from its `orca_plugin.yaml`; `custom.ts`'s `/voice` page records, stops into page state and plays |
+| `orca_video_player.ts` | The video player plugin's widget and actions, generated from its `orca_plugin.yaml`; `custom.ts`'s `/video` page plays an https MP4, keeps its position in page state, and plays, pauses, seeks, sets the volume and the speed |
 | `index.ts`            | Entry point — registers all examples into a single engine     |
 
 ## Settings for trying SDK features
