@@ -26,8 +26,11 @@ final class CapabilitiesTests: XCTestCase {
         XCTAssertEqual(advertised, listed.intersection(ios))
         XCTAssertEqual(advertised, listed)
 
-        // The six Material-only widgets are never advertised on iOS.
-        for orphan in ["Checkbox", "FloatingActionButton", "InkWell", "Radio", "SnackBar", "Tooltip"] {
+        // SnackBar and Tooltip have no ios target until native parity step 8,
+        // so they are never advertised on iOS. Checkbox, Radio,
+        // FloatingActionButton and InkWell, Epic 23b's other Material-only
+        // four, take it in step 6 (design D2).
+        for orphan in ["SnackBar", "Tooltip"] {
             XCTAssertFalse(ios.contains(orphan), "\(orphan) has the ios target")
             XCTAssertFalse(advertised.contains(orphan))
         }
