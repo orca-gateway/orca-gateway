@@ -4,7 +4,8 @@
 // of MapMarker objects), its four triggers with the eventData they fire and the
 // moveCamera action with its params. The Swift, Kotlin and TypeScript
 // generators read it, so this test pins it against the names the Dart plugin
-// registers and reads (lib/src/google_map_plugin.dart): change one without the
+// registers and reads (lib/src/google_map_plugin.dart), and its notes against
+// what Flutter does with a value of the wrong type: change one without the
 // other and it fails.
 
 import 'dart:io';
@@ -22,6 +23,12 @@ final _manifest = p.join(_plugin, 'orca_plugin.yaml');
 /// The Flutter plugin's source, the reference the schema describes.
 final _dart = File(
   p.join(_plugin, 'lib', 'src', 'google_map_plugin.dart'),
+).readAsStringSync();
+
+/// The SDK source of [path] under sdk/lib/src/, for what its reads do with a
+/// value of the wrong type.
+String _sdk(String path) => File(
+  p.normalize(p.absolute('..', 'sdk', 'lib', 'src', path)),
 ).readAsStringSync();
 
 /// The yaml type of a Dart type Flutter reads a value as.
@@ -90,11 +97,30 @@ void main() {
     ).allMatches(build).toList();
     expect(widget.props.keys.toList(), [for (final m in reads) m[3]]);
 
+    // OrcaComponentContext.prop and propOr cast what they resolve `as T?`,
+    // with no type check: a value of another type throws in the build.
+    final context = _sdk(p.join('rendering', 'component_context.dart'));
+    for (final method in [
+      'T? prop<T>(String key)',
+      'T propOr<T>(String key,',
+    ]) {
+      final start = context.indexOf(method);
+      expect(start, isNot(-1), reason: method);
+      final body = context.substring(start, context.indexOf('\n  }\n', start));
+      expect(body, contains(' as T?'), reason: method);
+      expect(body, isNot(matches(RegExp(r'\bis!? T\b'))), reason: method);
+    }
+
     for (final m in reads) {
       final local = m[1]!;
       final name = m[3]!;
       final note = notes[name] as YamlMap;
       expect(widget.props[name]!.type, _yamlType[m[2]], reason: name);
+      expect(
+        _description(note).toLowerCase(),
+        contains("a non-${_yamlType[m[2]]} fails the map's build"),
+        reason: '$name of another type',
+      );
       // Every read has a fallback or is null-checked: none is required.
       expect(widget.props[name]!.required, isFalse, reason: '$name required');
 
@@ -122,7 +148,8 @@ void main() {
           for (final c in cases) c[1],
         ], reason: '$name is one of Flutter\'s cases');
         expect(note['default'], otherwise, reason: '$name default');
-        expect(_description(note), contains('anything else'), reason: name);
+        // Any other string; a non-string throws in prop's cast first.
+        expect(_description(note), contains('any other string'), reason: name);
         expect(_description(note), contains(otherwise), reason: name);
       } else {
         // markers: a list walked only when present, no default.
@@ -168,6 +195,7 @@ void main() {
     // The marker is skipped when one of these is null.
     final skip = RegExp(r'if \(([^)]*)\) continue;').allMatches(build);
     final skipIf = skip.map((m) => m[1]!).join(' || ');
+    final skippedNames = <String>[];
 
     for (final name in names) {
       final where = 'MapMarker.$name';
@@ -182,11 +210,28 @@ void main() {
       expect(read, isNotNull, reason: '$where is read');
       final type = read![2] == '?.toString()' ? 'string' : _yamlType[read[3]];
       expect(fields[name]!.type, type, reason: where);
+      if (read[2] == '?.toString()') {
+        // Any value is taken as its text.
+        expect(
+          _description(note),
+          contains('a non-string is used as its text'),
+          reason: '$where of another type',
+        );
+      } else {
+        // `as T?` throws on a value of another type, in the map's build.
+        expect(
+          _description(note),
+          contains("a non-$type fails the map's build"),
+          reason: '$where of another type',
+        );
+      }
 
       final local = read[1];
       final skipped = local != null && skipIf.contains('$local == null');
       expect(fields[name]!.required, skipped, reason: '$where required');
       if (skipped) {
+        skippedNames.add(name);
+        expect(type, 'number', reason: '$where is skipped when null');
         expect(note['default'], isNull, reason: '$where has no default');
         expect(_description(notes), contains(name), reason: where);
       } else if (read[4] != null) {
@@ -200,6 +245,17 @@ void main() {
       }
     }
     expect(_description(notes), contains('skipped'));
+    // Only a null one skips the marker; a non-number one throws in its
+    // `as num?` cast first.
+    final either = skippedNames.join(' or ');
+    expect(
+      _description(notes),
+      contains('An entry that is not an object, or lacks $either, is skipped'),
+    );
+    expect(
+      _description(notes),
+      contains("a non-number $either fails the map's build"),
+    );
 
     // The id names the marker in onMarkerTap; title and snippet fill the
     // info window.
@@ -336,6 +392,19 @@ void main() {
         expect(note['default'], isNull, reason: '$where has no default');
         expect(_description(note), contains('node\'s id'), reason: where);
         expect(_description(note), contains('does nothing'), reason: where);
+        // resolveString takes any resolved value as its text.
+        expect(
+          _flat(_sdk(p.join('state', 'action_executor.dart'))),
+          contains(
+            'String resolveString(dynamic raw) { final resolved = '
+            "resolveValue(raw); return resolved?.toString() ?? ''; }",
+          ),
+        );
+        expect(
+          _description(note),
+          contains('a non-string is used as its text'),
+          reason: '$where of another type',
+        );
         continue;
       }
 

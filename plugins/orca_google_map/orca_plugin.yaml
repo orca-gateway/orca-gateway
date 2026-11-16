@@ -69,24 +69,24 @@ schema:
       kind: primitive
       description: "The platform's Google map, its camera first at latitude, longitude and zoom, drawn as mapType, with a pin per marker; a tap on a pin opens its info window (title, snippet)."
       props:
-        latitude: { type: number, default: 0, description: "The initial camera's latitude: read when the map is created; later only moveCamera moves the camera." }
-        longitude: { type: number, default: 0, description: "The initial camera's longitude: read when the map is created; later only moveCamera moves the camera." }
-        zoom: { type: number, default: 14, description: "The initial camera's zoom, Google's zoom level: read when the map is created; later only moveCamera moves the camera." }
-        mapType: { type: string, enum: [normal, satellite, terrain, hybrid], default: normal, description: "The map's tiles; anything else draws normal." }
-        myLocationEnabled: { type: boolean, default: false, description: "Shows the device's location on the map (once the app holds location permission; the plugin never asks for it)." }
-        zoomControlsEnabled: { type: boolean, default: true, description: "Shows the map's zoom + and - buttons (on Android; the iOS map has none)." }
+        latitude: { type: number, default: 0, description: "The initial camera's latitude: read when the map is created; later only moveCamera moves the camera. A non-number fails the map's build." }
+        longitude: { type: number, default: 0, description: "The initial camera's longitude: read when the map is created; later only moveCamera moves the camera. A non-number fails the map's build." }
+        zoom: { type: number, default: 14, description: "The initial camera's zoom, Google's zoom level: read when the map is created; later only moveCamera moves the camera. A non-number fails the map's build." }
+        mapType: { type: string, enum: [normal, satellite, terrain, hybrid], default: normal, description: "The map's tiles; any other string draws normal, a non-string fails the map's build." }
+        myLocationEnabled: { type: boolean, default: false, description: "Shows the device's location on the map (once the app holds location permission; the plugin never asks for it). A non-boolean fails the map's build." }
+        zoomControlsEnabled: { type: boolean, default: true, description: "Shows the map's zoom + and - buttons (on Android; the iOS map has none). A non-boolean fails the map's build." }
         markers:
           type: array
-          description: "The map's pins. An entry that is not an object, or lacks a number latitude or longitude, is skipped."
+          description: "The map's pins; a non-array fails the map's build. An entry that is not an object, or lacks latitude or longitude, is skipped; a non-number latitude or longitude fails the map's build."
           items:
             type: object
             name: MapMarker
             props:
-              id: { type: string, default: "", description: "The marker's id, which onMarkerTap fires as markerId." }
-              latitude: { type: number, required: true, description: "The pin's latitude." }
-              longitude: { type: number, required: true, description: "The pin's longitude." }
-              title: { type: string, default: "", description: "The info window's title." }
-              snippet: { type: string, description: "The info window's text under the title." }
+              id: { type: string, default: "", description: "The marker's id, which onMarkerTap fires as markerId; a non-string is used as its text." }
+              latitude: { type: number, required: true, description: "The pin's latitude; a non-number fails the map's build." }
+              longitude: { type: number, required: true, description: "The pin's longitude; a non-number fails the map's build." }
+              title: { type: string, default: "", description: "The info window's title; a non-string fails the map's build." }
+              snippet: { type: string, description: "The info window's text under the title; a non-string fails the map's build." }
       triggers: [onTap, onLongPress, onCameraMove, onMarkerTap]
       # The eventData each trigger fires with.
       event_data:
@@ -115,7 +115,7 @@ schema:
     moveCamera:
       description: "Animates the camera of the map targetId names to latitude, longitude at zoom. Fires no trigger itself; the map's onCameraMove fires as the camera moves."
       params:
-        targetId: { type: string, required: true, description: "The map node's id, resolved as a value; an empty or unknown id does nothing." }
+        targetId: { type: string, required: true, description: "The map node's id, resolved as a value; a non-string is used as its text, and an empty or unknown id does nothing." }
         latitude: { type: number, required: true, description: "Resolved as a value; missing does nothing, a non-number fails the action." }
         longitude: { type: number, required: true, description: "Resolved as a value; missing does nothing, a non-number fails the action." }
         zoom: { type: number, default: 14, description: "Google's zoom level, resolved as a value; a non-number fails the action." }
