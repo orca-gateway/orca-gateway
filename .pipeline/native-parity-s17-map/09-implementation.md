@@ -24,7 +24,7 @@ nothing new
 ## Appendix
 
 ### Group 1
-#### T1 · Map schema block pinned to Flutter (93a17543, reworks 865dbbe2, 635eb3b6)
+#### T1 · Map schema block pinned to Flutter (14093445, reworks 1535a30f, 65122745)
 Files: plugins/orca_google_map/orca_plugin.yaml (its `schema:` block and a notes header) · cli/test/google_map_schema_test.dart (new)
 Cases: C17.5/yaml → green (cli 49 = 45 + 4, analyze clean; red first on the old block: "latitude required", "MapMarker.id
 required", no `event_data`, an empty targetId note; 20 hand mutations each caught, yaml restored; C16.6 stub diffs green)
@@ -34,10 +34,10 @@ id "", latitude and longitude required (a marker without both is skipped), title
 in `event_data:`; moveCamera targetId (the node's id), latitude and longitude required, zoom 14
 Decisions: `required` dropped where Flutter defaults · each note says what Flutter does with a wrong type (`as T?` throws
 in the build) · the SDK's reads pinned by signature and key expression, never word for word (all minor, auto-decided)
-Review fit: a non-number marker latitude was said to be skipped; Flutter throws; notes fixed (865dbbe2), fixed · Review
-quality: resolveString's body was pinned word for word; now sliced as prop's, checked for `?.toString()` (635eb3b6), fixed
+Review fit: a non-number marker latitude was said to be skipped; Flutter throws; notes fixed (1535a30f), fixed · Review
+quality: resolveString's body was pinned word for word; now sliced as prop's, checked for `?.toString()` (65122745), fixed
 
-#### T2 · Pub and git ignore native dirs (e5f517a)
+#### T2 · Pub and git ignore native dirs (c2d30b77)
 Files: plugins/orca_google_map/.pubignore (new) · plugins/orca_google_map/.gitignore (new)
 Cases: P-pub → green (red first: dummies under ios/ and android/ in the `flutter pub publish --dry-run` archive, none
 of .build/, .swiftpm/, Package.resolved, .gradle/, .kotlin/, local.properties ignored; green: ios/ and android/ out of
@@ -48,7 +48,7 @@ outputs; both byte-identical to the video player's (cmp); the map had neither fi
 Decisions: the video's files exactly · the dummies deleted by exact path, the empty folders by rmdir (both minor)
 Review fit: pass · Review quality: pass
 
-#### T3 · Android Gradle package, needs: maps-compose (d1f3f399)
+#### T3 · Android Gradle package, needs: maps-compose (b1493c7b)
 Files: GM/android/{settings.gradle.kts, gradle.properties, VERSION, gradlew (a symlink to ../../../sdk-kotlin/gradlew),
 google-map/build.gradle.kts} (all new)
 Cases: P-pkg/K → green (`./gradlew build --continue` BUILD SUCCESSFUL on the empty module; red first: "does not contain a
@@ -64,7 +64,7 @@ Review fit: pass · Review quality: pass
 (GM/ = plugins/orca_google_map/, KT/ and KTT/ = the map's Kotlin main and test package folders)
 
 ### Group 2
-#### T4 · SwiftPM package with generated props types (18309ee9)
+#### T4 · SwiftPM package with generated props types (396e0843)
 Files: GM/ios/{Package.swift, VERSION, Sources/OrcaGoogleMap/Generated/OrcaGoogleMapTypes.swift, Tests/OrcaGoogleMapTests/
 GoogleMapPropsTests.swift} (all new) · cli/test/google_map_swift_props_test.dart (new)
 Cases: P-pkg/S, C17.5/S → green (swift test 5, 0 warnings from a clean build; xcodebuild build and test on the iOS 18.5
@@ -77,7 +77,7 @@ moveCamera's four params, both manifest branches (the URL as a whole JSON string
 Decisions: a Value-object param reads nil, left in the raw action for T7 · the video's macOS-only manifest test (minor)
 Review fit: pass · Review quality: pass
 
-#### T5 · Kotlin generated props, params, drift test (f47854c6)
+#### T5 · Kotlin generated props, params, drift test (d018fa41)
 Files: KT/OrcaGoogleMapTypes.kt (new) · KTT/GoogleMapPropsTest.kt (new) · cli/test/google_map_kotlin_props_test.dart (new)
 Cases: C17.5/K → green (the map's Gradle build, GoogleMapPropsTest 7/7, lint ran, explicitApi and -Werror; the drift
 test 1/1; cli 51 with T4's; sdk-kotlin green; red first: "Unresolved reference 'GoogleMapProps'", "No types at …")
@@ -90,7 +90,7 @@ Decisions: the video's T5 shape (plain JUnit, Java reflection, raw "custom:<name
 video's Kotlin test lacks, matching the Swift side (both minor, auto-decided)
 Review fit: pass · Review quality: pass
 
-#### T6 · Demo /map page for hand checks (bfd80acf)
+#### T6 · Demo /map page for hand checks (ce6f420a)
 Files: examples/server/{orca_google_map.ts, custom.ts, README.md} · engine/test/map-demo.test.ts (new)
 Cases: C17.1/page → green (engine 827 = 822 + 5; red first in 3 of 5: page state, the four triggers, the Texts; the
 other 2 pin what /map already had; examples/server tsc 36 errors before and after, the same kinds, none new)
@@ -105,7 +105,7 @@ Review fit: pass · Review quality: pass
 
 
 ### Group 3
-#### T7 · Swift MapKit plugin, view, moveCamera (64755921, 555b0a06 rework)
+#### T7 · Swift MapKit plugin, view, moveCamera (a1a22706, 0e3f21d4 rework)
 Files: SW/{GoogleMapPlugin,MapSurface,MapKitView}.swift · SWT/{GoogleMapPluginTests (fakes),MapKitViewTests (a window)}.swift
 Cases: C17.1/S → green (swift test 27 = 5 + 22, 0 warnings; xcodebuild test on the iOS 18.5 simulator 26; red first:
 "cannot find 'GoogleMapPlugin' in scope"; each view-path line removed in turn turned a test red)
@@ -116,9 +116,9 @@ loop, the four payloads, Google zoom to a span (360·w/(256·2^z), Mercator) and
 the camera set once, mapType, showsUserLocation and markers diffed on update, a pin with a callout, onMarkerTap on
 selection and on a selected pin's tap, onTap off pins (after a double tap's wait), onLongPress once, onCameraMove from the visible region
 Decisions: the span from the safe area · an SF Symbol pin (MKMarkerAnnotationView shows no callout) · fills its box (minor)
-Review fit: a tap on a selected pin fired nothing, Flutter fires each tap; it does now (555b0a06), fixed · Review quality: pass
+Review fit: a tap on a selected pin fired nothing, Flutter fires each tap; it does now (0e3f21d4), fixed · Review quality: pass
 
-#### T8 · Kotlin Maps Compose plugin, location permissions (16d00160)
+#### T8 · Kotlin Maps Compose plugin, location permissions (3e8ede71)
 Files: GM/android/google-map/src/main/AndroidManifest.xml · KT/{GoogleMapPlugin,MapSurface,GoogleMapView}.kt · KTT/GoogleMapPluginTest.kt (all new)
 Cases: C17.1/K → green (GoogleMapPluginTest 16/16, props 7/7, -Werror clean, lint 0 errors; red first: "Unresolved
 reference 'MapCamera'"; 14 hand mutations each turned a test red)
@@ -131,7 +131,7 @@ onMarkerTap, returns false: the info window opens), onMapClick, onMapLongClick, 
 Decisions: a wrong-typed prop takes its default, as the video's (Flutter fails the build) · buildings on, min zoom 0 (minor)
 Review fit: pass · Review quality: pass
 
-#### T9 · release.sh rows 15-16, scratch-repo test (4468f9e0)
+#### T9 · release.sh rows 15-16, scratch-repo test (c28f219d)
 Files: scripts/release.sh · engine/test/launch-release.test.ts
 Cases: P-release → green (`bun test test/launch-release.test.ts` 6 pass, also under /bin/bash 3.2; red first: "index out
 of range: 15"; engine 828 = 827 + 1; `bash -n` clean; shellcheck's 4 SC2005 notes on untouched lines as before)
@@ -144,7 +144,7 @@ Decisions: the voice's and the video's list-end checks move from row 15 to row 1
 tests; the video's failed once row 15 existed) · the missing-mirror run pins T15's title (all minor, auto-decided)
 Review fit: pass · Review quality: pass
 
-#### T10 · Mirror PACKAGES line, LICENSE, rehearsal (4f5941e4, c2513dd5 rework)
+#### T10 · Mirror PACKAGES line, LICENSE, rehearsal (c44c2bd7, bdb45f54 rework)
 Files: scripts/swift-mirror.sh · .github/workflows/sdk-swift-mirror.yml (its header's secrets paragraph only) · GM/ios/LICENSE (new)
 Cases: P-mirror → green (rehearsal SC/s17m/t10/rehearse.sh 12 of 12; red first: "tag must start with one of sdk-swift-v
 orca_voice_recorder-ios-v orca_video_player-ios-v", then "the split has no LICENSE"; part B, against a local bare mirror,
@@ -155,9 +155,9 @@ Changed: the PACKAGES line orca_google_map-ios-v → orca-gateway/orca-google-ma
 OrcaGoogleMap (the mirror release.sh derives) · the workflow's secrets paragraph names the map's · LICENSE is the BSL text
 Decisions: the job needs no new wiring (`secrets[needs.resolve.outputs.secret]`; the tag glob and regex already match)
 · the workflow edit reaches its verify-linux comment too (rework, comments only) (both minor)
-Review fit: three comments said every plugin needs AVFoundation; they name MapKit too (c2513dd5), fixed · Review quality: pass
+Review fit: three comments said every plugin needs AVFoundation; they name MapKit too (bdb45f54), fixed · Review quality: pass
 
-#### T11 · CI matrices gain the map (2e654d10)
+#### T11 · CI matrices gain the map (98a38a21)
 Files: .github/workflows/native-plugins.yml
 Cases: P-ci → green (the YAML parses; a scratch check of both matrices 20 of 20, red first 2 of 16: both listed only the
 voice and the video; the map's CI steps locally: swift build + swift test --skip-build 26, 0 warnings; xcodebuild test 25
@@ -170,7 +170,7 @@ Decisions: release-row order · the header kept · built locally with Swift 6.4.
 Review fit: pass · Review quality: pass
 
 ### Group 4
-#### T7 · Swift map, group 4 addition: the pin white on red (4bacde41)
+#### T7 · Swift map, group 4 addition: the pin white on red (17399387)
 Files: SW/MapKitView.swift · SWT/MapKitViewTests.swift
 Cases: C17.1/S → green (found at the iOS hand check: the pin drew white on a black disc; one new test, red first on iOS:
 rendering mode `.automatic`, the disc pixel 0,0,0; swift test 28, 0 warnings; xcodebuild test on the iOS 18.5 simulator 27;
@@ -180,7 +180,7 @@ unchanged (it already drew red); the test checks the image is not a template and
 Decisions: `.withRenderingMode(.alwaysOriginal)` alone left it black (the annotation view draws the symbol's CGImage,
 which has no palette) · systemRed fixed when first drawn (both minor, auto-decided)
 Review fit: pass · Review quality: pass
-#### T12 · iOS demo links and registers map (3d0fc497)
+#### T12 · iOS demo links and registers map (f4af2759)
 Files: examples/app-ios/{OrcaCounter.xcodeproj/project.pbxproj, OrcaCounter/OrcaCounterApp.swift, Info.plist, README.md} ·
 examples/app-ios/OrcaGoogleMap (new, a git symlink to ../../plugins/orca_google_map/ios)
 Cases: C17.1/hand-S → green to build (`xcodebuild clean build` BUILD SUCCEEDED, 0 Swift warnings; red first: "Unable to
@@ -191,7 +191,7 @@ OrcaGoogleMap and registers `GoogleMapPlugin()` after the video's · Info.plist'
 the yaml's text · README "### Google map": simctl location grant and position, the walk with "Marker taps", no key
 Decisions: the README's simulated location 37.76,-122.45 so the dot does not hide under marker1 (minor)
 Review fit: pass · Review quality: pass
-#### T13 · Android demo includes map, reads key (3ddf9e2d, ff452a83 rework)
+#### T13 · Android demo includes map, reads key (374796d9, 8422a884 rework)
 Files: examples/app-android/{settings.gradle.kts, app/build.gradle.kts, app/src/main/AndroidManifest.xml,
 app/src/main/kotlin/com/orcagateway/examples/counter/MainActivity.kt, README.md}
 Cases: P-key, C17.1/hand-K → green to build (`./gradlew :app:assembleDebug` BUILD SUCCESSFUL, warnings as errors; red
@@ -204,7 +204,7 @@ com.google.android.geo.API_KEY; `GoogleMapPlugin()` registered; README "### The 
 the keyed walk said to be expected, untried for want of a key; Oakland's pin a drag of most of the map's width away)
 Decisions: the yaml's env name for the placeholder · an empty value when absent (no crash) · Google's key page linked (minor)
 Review fit: the keyed walk written as seen, Oakland "just past" the edge (about 245 dp past), fixed · Review quality: pass
-#### T14 · Native READMEs: install, register, location (6710c59e; 052bf170 rework; 880c5dcc retry)
+#### T14 · Native READMEs: install, register, location (139b5b56; a6e24b6d rework; 50175661 retry)
 Files: GM/ios/README.md (new) · GM/android/README.md (new) · GM/README.md
 Cases: P-readme → green (SC/s17m/t14/check-readmes.ts 260 of 260 against the yaml, the Swift, Kotlin and Dart sources,
 release.sh, swift-mirror.sh, the workflows, custom.ts and every link; red first: 123 README checks fail; `flutter pub
@@ -229,7 +229,7 @@ restricted to them, where the app puts it, iOS needs none) · CLAUDE.md: rows 15
 and the native order bullet. Copies and diffs in SC/s17m/t15/
 Decisions: a full key walkthrough (none existed for Flutter) · the no-key view from T13's README (all minor)
 Review fit: pass · Review quality: pass
-#### T16 · /map counts marker taps, added at 09 (a6c9fcbc)
+#### T16 · /map counts marker taps, added at 09 (96b302bd)
 Files: examples/server/custom.ts · engine/test/map-demo.test.ts
 Cases: C17.1/page → green (map-demo 5 pass, red first in 3 of 5: the state list, onMarkerTap, the Texts; engine 828,
 0 fail: T6's exact checks edited, none added; examples/server tsc 36 errors before and after, none new)
@@ -244,7 +244,7 @@ Review fit: pass · Review quality: pass
   pins and the blue dot; a pin tap opens its callout, "Marker tapped: marker1", "Marker taps: 1"; a second tap on the
   same pin counts 2; a tap off the pins and a long press show their coordinates; a drag moves the "Camera moved to"
   lines; "Move Camera to NYC" animates to New York at zoom 14. Found: the pin drew white on a black disc; fixed in
-  4bacde41 and seen red, its tap still firing. Screenshots SC/s17m/hand/i-0 … i-7.
+  17399387 and seen red, its tap still firing. Screenshots SC/s17m/hand/i-0 … i-7.
 - API 34 emulator (Google Play image), no Maps key (none here): /map opens, no crash, "Authorization failure"; a grey
   box with Google's logo and the zoom buttons; no pins; a tap and a long press show their coordinates; the zoom
   buttons, a drag and "Move Camera to NYC" leave "Camera moved to" at 0. The plan expected pins and camera moves
@@ -263,7 +263,7 @@ Group 1: the full run on T1-T3 (before T1's two reworks), every Done-when comman
   shellcheck clean · every workflow yml parses
 - map `flutter pub publish --dry-run`: exit 65 with 1 warning (no CHANGELOG entry for 0.2.1) and 1 hint, as
   at baseline
-After the reworks (865dbbe2, 635eb3b6: only the yaml's notes and the cli test): cli 49 pass, analyze clean.
+After the reworks (1535a30f, 65122745: only the yaml's notes and the cli test): cli 49 pass, analyze clean.
 Failures: none.
 
 Group 2, after T4-T6 (SC/s17m/g2run), on the branch head: cli `dart test` 51 pass (49 + T4's and T5's drift tests),
@@ -274,14 +274,14 @@ map android BUILD SUCCESSFUL (up to date: T5's run had built it and passed Googl
 leave no diff · scripts and workflows parse · pub dry run as at baseline (1 warning, 1 hint) · examples/server tsc 36
 errors before and after T6, the same kinds. Failures: none.
 
-Group 3, after T7-T11 (SC/s17m/g3run), on T11's commit 2e654d10: cli 51 pass, analyze clean · engine 828 pass, 0 fail
+Group 3, after T7-T11 (SC/s17m/g3run), on T11's commit 98a38a21: cli 51 pass, analyze clean · engine 828 pass, 0 fail
 (827 + T9's 1) · Flutter 543 pass, analyze clean · sdk-swift 604 pass · sdk-kotlin BUILD SUCCESSFUL · voice: ios 24,
 android green · video: ios 26, android green · map ios `swift test` 26, 0 warnings, `xcodebuild test` TEST SUCCEEDED ·
 map android BUILD SUCCESSFUL (T11 reran its unit tests with --rerun: 16 + 7) · the generators leave no diff · scripts
-parse, shellcheck clean · workflows parse · pub dry run as at baseline. After T7's rework 555b0a06: map ios `swift test`
+parse, shellcheck clean · workflows parse · pub dry run as at baseline. After T7's rework 0e3f21d4: map ios `swift test`
 27, 0 warnings; `xcodebuild test` on the iOS 18.5 simulator 26, TEST SUCCEEDED. Failures: none.
 
-Group 4, after T7's addition, T12-T16 and the T13 and T14 reworks (SC/s17m/g4run), on 880c5dcc: cli 51 pass, analyze
+Group 4, after T7's addition, T12-T16 and the T13 and T14 reworks (SC/s17m/g4run), on 50175661: cli 51 pass, analyze
 clean · engine 828 pass, 0 fail · Flutter 543 pass, analyze clean · sdk-swift 604 pass · sdk-kotlin BUILD SUCCESSFUL ·
 voice: ios 24, android green · video: ios 26, android green · map ios `swift test` 28, 0 warnings, `xcodebuild test`
 on the iOS 18.5 simulator 27, TEST SUCCEEDED · map android BUILD SUCCESSFUL · app-android `:app:assembleDebug` BUILD
@@ -306,4 +306,5 @@ none
   presses fire. C17.1 on Kotlin needs the user's Maps key for its keyed walk (docs/User_Actions.md has the steps).
 - The differences from Flutter are in the iOS and Android READMEs (terrain, zoom buttons, marker-tap camera, bearing,
   wrong-typed props, a Column's unbounded height).
-- PR #49 merged (3880607): the branch is rebased onto main before its PR; the video slice is closed (stage 12).
+- PR #49 merged (3880607): the branch is rebased onto it with no conflict (the tree unchanged; the commit ids above
+  are the rebased ones); the video slice is closed (stage 12).
