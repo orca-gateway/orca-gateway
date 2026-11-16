@@ -131,8 +131,11 @@ struct WidgetView: View {
         case "FloatingActionButton": FloatingActionButtonNodeView(node: node, model: model)
         case "FallbackPrompt": FallbackPromptView(node: node, model: model)
         case "UnsupportedWidgetPlaceholder": UnsupportedWidgetPlaceholderView(node: node, model: model)
-        case "Icon": IconNodeView(node: node)
+        // Flutter's ImageIcon builder is an Icon with `src` (PB:386-396).
+        case "Icon", "ImageIcon": IconNodeView(node: node)
         case "Image": ImageNodeView(node: node)
+        case "CircularProgressIndicator": CircularProgressIndicatorView(node: node)
+        case "LinearProgressIndicator": LinearProgressIndicatorView(node: node)
         case "Container": ContainerView(node: node, model: model)
         case "Expanded": ExpandedView(node: node, model: model)
         case "Flexible": FlexibleView(node: node, model: model)
