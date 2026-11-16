@@ -65,7 +65,7 @@ inventory.md. Swift deploys to iOS 16 / macOS 13; Kotlin minSdk 24, Compose BOM 
   sliderValue(fraction, min, max, divisions) (clamp, then min + round(t·d)·(max − min)/d when discrete) and
   sliderFraction(value, min, max) (clamped, 0 when max == min). The UI layers only measure, draw and feed gestures.
 - D6 Look and feel = Flutter's builders, with the plan's platform controls where Flutter uses Material ones.
-  Swift (plan): Switch a SwiftUI `Toggle` (activeColor → the on tint; inactiveColor not settable on iOS, documented);
+  Swift (plan): Switch a SwiftUI `Toggle` (activeColor at alpha 0x80 → the on tint, Flutter's checked track, decision swift-switch-track; inactiveColor not settable on iOS, documented);
   Slider a SwiftUI `Slider` (step (max − min)/divisions; no value-indicator label and no trackHeight on iOS,
   documented); Checkbox an iOS-style tick control (SF Symbols square / checkmark.square.fill / minus.square.fill,
   activeColor fill), with a label the whole row taps; Radio a dot control drawn with SwiftUI shapes at Flutter's 20/2/10 pt (amended at 09: the SF Symbols circle /
@@ -74,8 +74,10 @@ inventory.md. Swift deploys to iOS 16 / macOS 13; Kotlin minSdk 24, Compose BOM 
   tappable area with the highlight colour while pressed (no ripple on iOS, documented); IconButton Flutter's own box
   (size + 16 square, centred child, 0.38 when disabled, no press feedback, as Flutter).
   Kotlin (Material 3 where Flutter uses Material): Checkbox M3 `Checkbox` (activeColor → checked box colour), with a
-  label a ListTile-like row (whole row toggles, leading box, title); Switch M3 `Switch` (activeColor → checked thumb,
-  inactiveColor → unchecked track, Flutter's mapping IB:274-281); Slider M3 `Slider` (steps = divisions − 1, the
+  label a ListTile-like row (whole row toggles, leading box, title); Switch M3 `Switch` (activeColor → checked thumb
+  and the checked track at alpha 0x80, switch.dart:950-957, amended at 09; inactiveColor → unchecked track, Flutter's
+  mapping IB:274-281); Slider M3 `Slider` styled to Flutter's year2023 look through its thumb and track slots
+  (decision kotlin-slider-look; steps = divisions − 1, the
   value indicator with `label` only when divisions is set, trackHeight honoured); FAB M3 `FloatingActionButton` /
   `SmallFloatingActionButton` with long press; InkWell `combinedClickable` with a ripple in splashColor, clipped to
   borderRadius. Radio and IconButton draw Flutter's own look (Flutter uses no Material Radio or IconButton here,
