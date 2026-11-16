@@ -349,7 +349,8 @@ public class OrcaPageModel(
     /**
      * Show [page] in place of the current one, in this model (Flutter's
      * refetch in OrcaPage, sdk/lib/src/widgets/orca_page.dart onRefetchPage,
-     * and ComponentStore.init): page state starts again from its initials and
+     * and ComponentStore.init): page state starts again from its initials,
+     * the saved entry laid over them as at set-up (`initPage`), and
      * app state is kept, only unset app keys taking its initials (`initPage`).
      * The pages mounted in SubPages stay, their nodes and their state keys;
      * every other node is the new page's, and a SubPage whose node did not
@@ -362,6 +363,7 @@ public class OrcaPageModel(
         val carried = store.state.page.filterKeys(mounted)
         store.pageId = page.pageId
         store.seed(page.state)
+        executor.savedState?.restorePage(store, page.pageId)
         if (carried.isNotEmpty()) store.dispatch(carried)
         renderer.replace(page, keep = mounted)
         subPages.sweep()

@@ -306,6 +306,73 @@ class SavedStateBootTest {
         assertSame(saved, second.executor.savedState)
     }
 
+    /**
+     * A page refetched in place (refetchPage, Flutter's `OrcaPage.onRefetchPage`, which calls `initPage`) is
+     * seeded from the fresh response with its saved entry over that seed: the saved key keeps its saved value.
+     */
+    @Test
+    fun c14_6_aRefetchLaysTheSavedEntryOverTheFreshSeed(): Unit = runBlocking {
+        val engine = SavedEngine()
+        val router = OrcaRouter(engine.client, "home", savedState = SavedState(FileKeyValueStore(folder.root)))
+        val loader = router.loader(router.root)
+        loader.loadIfNeeded(context)
+        val model = assertIs<OrcaPageLoader.Phase.Loaded>(loader.phase).model
+        model.run(Action.SetState("count", value = JsonValue.Int(5)))
+        model.run(Action.PersistState("count"))
+        model.run(Action.SetState("count", value = JsonValue.Int(6)))
+
+        // The server now declares another initial; the refetch seeds the page from its answer.
+        engine.initialCount = 1
+        model.executor.execute(Action.RefetchPage)
+
+        assertEquals(listOf("home", "home"), engine.pages)
+        assertSame(model, assertIs<OrcaPageLoader.Phase.Loaded>(loader.phase).model)
+        assertEquals(mapOf("count" to JsonValue.Int(5)), model.store.state.page)
+    }
+
+    /**
+     * Flutter's order on a refetch: the fresh page's initials, the saved entry over them, then the keys of the
+     * pages mounted in SubPages over both. A key with no saved value takes the fresh page's initial.
+     */
+    @Test
+    fun c14_6_aRefetchKeepsASubPagesCarriedKeyOverTheSavedEntry() {
+        FileKeyValueStore(folder.root).putString("orca_saved_page_host", """{"count":4,"detail:count":9}""")
+        fun host(count: Long, name: String) = PageResponse(
+            pageId = "host",
+            title = "Host",
+            state = listOf(
+                StateDefinition("count", StateScope.Page, JsonValue.Int(count)),
+                StateDefinition("name", StateScope.Page, JsonValue.String(name)),
+            ),
+            components = listOf(
+                column("root", "detail"),
+                ComponentNode("detail", "SubPage", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single),
+            ),
+        )
+        val detail = PageResponse(
+            pageId = "detail/a",
+            title = "",
+            state = listOf(StateDefinition("count", StateScope.Page, JsonValue.Int(5))),
+            components = listOf(text("0", "Page a")),
+        )
+        val model = OrcaPageModel(host(100, "none"), savedState = SavedState(FileKeyValueStore(folder.root)))
+        assertEquals(
+            mapOf("count" to JsonValue.Int(4), "name" to JsonValue.String("none"), "detail:count" to JsonValue.Int(9)),
+            model.store.state.page,
+        )
+        model.subPages.register("detail")
+        model.subPages.mount("detail", "replace", detail)
+        model.store.dispatch(mapOf("detail:count" to JsonValue.Int(6), "name" to JsonValue.String("kim")))
+
+        model.replacePage(host(200, "fresh"))
+
+        assertEquals(
+            mapOf("count" to JsonValue.Int(4), "name" to JsonValue.String("fresh"), "detail:count" to JsonValue.Int(6)),
+            model.store.state.page,
+        )
+        model.close()
+    }
+
     @Test
     fun c14_6_aServerTabBarsPersistStateSavesTheAppEntryAndANewOrcaAppStartsWithIt() {
         val engine = SavedEngine()

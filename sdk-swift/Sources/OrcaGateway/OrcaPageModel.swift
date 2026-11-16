@@ -464,8 +464,9 @@ public final class OrcaPageModel: ObservableObject {
     /// model (Flutter `OrcaPage.onRefetchPage`: `initPage`, then
     /// `componentStore.init`), so the view, the executor and the action
     /// awaiting the refetch stay. Page state goes back to the new page's
-    /// initial values; app state is kept, only its unset keys are seeded.
-    /// `once` keys survive, as the executor does (Flutter forgets them because
+    /// initial values, with its saved entry laid over them as `useSavedState`
+    /// does (`initPage` restores at every seed); app state is kept, only its
+    /// unset keys are seeded. `once` keys survive, as the executor does (Flutter forgets them because
     /// it builds a new executor on every OrcaPage build, not because of the refetch).
     /// The page, and so its title, becomes the new one (Flutter keeps the first response's title).
     /// The pages mounted in SubPages stay, their nodes and their state keys,
@@ -479,6 +480,7 @@ public final class OrcaPageModel: ObservableObject {
         renderer = renderer.replacing(with: page, keep: mounted)
         store.pageId = page.pageId
         store.seed(page.state)
+        if !isInert { executor.savedState?.restorePage(into: store, pageId: page.pageId) }
         if !carried.isEmpty { store.dispatch(carried) }
         var seen: Set<String> = []
         let kept = nodeOrder.filter { mounted($0) && renderer.nodes[$0] != nil && seen.insert($0).inserted }

@@ -325,6 +325,59 @@ final class SavedStateBootTests: XCTestCase {
         XCTAssertEqual(fresh.store.state.page, ["count": 3, "name": "none"])
     }
 
+    /// A page refetched in place (refetchPage, Flutter `OrcaPage.onRefetchPage`,
+    /// which calls `initPage`) is seeded from the fresh response with its
+    /// saved entry over that seed: a saved key keeps its saved value, a key
+    /// with none takes the fresh page's initial.
+    func testC14_6_aRefetchLaysTheSavedEntryOverTheFreshSeed() async throws {
+        let server = SavedStateServer()
+        let router = try await launch(server, savedState: saved())
+        let home = try await page(nil, in: router)
+        await home.run(Self.set("count", 3))
+        await home.run(Self.persist("count", .page, "local"))
+        await home.run(Self.set("count", 8))
+        await home.run(Self.set("name", "kim"))
+
+        try await home.executor.execute(.refetchPage)
+
+        XCTAssertEqual(server.pagesAsked, ["home", "home"], "fetched again")
+        guard case .loaded(let same) = router.loader(for: router.top).phase else { return XCTFail("no page") }
+        XCTAssertTrue(same === home, "in place")
+        XCTAssertEqual(home.store.state.page, ["count": 3, "name": "none"])
+        XCTAssertEqual(home.resolve("0")?["data"], 3)
+    }
+
+    /// Flutter's order on a refetch: the fresh page's initials, the saved
+    /// entry over them, then the keys of the pages mounted in SubPages over
+    /// both.
+    func testC14_6_aRefetchKeepsASubPagesCarriedKeyOverTheSavedEntry() throws {
+        files().set(#"{"count": 4, "detail:count": 9}"#, forKey: "orca_saved_page_host")
+        func host(_ count: JSONValue, _ name: JSONValue) -> PageResponse {
+            PageResponse(
+                pageId: "host", title: "Host",
+                state: [StateDefinition(key: "count", scope: .page, initial: count),
+                        StateDefinition(key: "name", scope: .page, initial: name)],
+                components: [
+                    ComponentNode(id: "root", type: "Column", kind: .layout, childMode: .multi, children: ["detail"]),
+                    ComponentNode(id: "detail", type: "SubPage", kind: .layout, childMode: .single),
+                ])
+        }
+        let detail = PageResponse(
+            pageId: "detail/a", title: "", state: [StateDefinition(key: "count", scope: .page, initial: 5)],
+            components: [ComponentNode(id: "0", type: "Text", kind: .primitive, childMode: .none,
+                                       props: ["data": ["type": "state", "scope": "page", "key": "count"]],
+                                       watches: ["count"])])
+        let model = OrcaPageModel(page: host(100, "none"))
+        model.useSavedState(saved())
+        XCTAssertEqual(model.store.state.page, ["count": 4, "name": "none", "detail:count": 9])
+        try model.mountSubPage("detail", mode: "replace", page: detail)
+        model.store.dispatch(["detail:count": 6, "name": "kim"])
+
+        model.replacePage(host(200, "fresh"))
+
+        XCTAssertEqual(model.store.state.page, ["count": 4, "name": "fresh", "detail:count": 6])
+    }
+
     // MARK: U5
 
     func testC14_6_anAppThatNeverSavesIsAsBeforeAndWritesNothing() async throws {
