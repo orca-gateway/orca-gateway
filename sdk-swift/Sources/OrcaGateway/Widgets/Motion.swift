@@ -72,7 +72,7 @@ struct AnimatedBuilderView: View {
             content
                 .environment(\.orcaAnimationProgress, driver.progress(at: now))
                 .onChange(of: context.date) { date in
-                    driver.settle(at: OrcaPageModel.milliseconds(date))
+                    driver.settle(at: OrcaPageModel.milliseconds(date), node: node)
                 }
         }
         .onAppear { driver.appear(node: node, reduceMotion: reduceMotion, at: model.frameClock()) }
@@ -90,15 +90,6 @@ struct AnimatedBuilderView: View {
             }
         }
     }
-
-    /// The controller's raw value `elapsed` seconds after the builder
-    /// appeared (Flutter's `forward()` and `repeat(reverse:)`).
-    static func clock(elapsed: Double, duration: Double, repeats: Bool,
-                      reverse: Bool, autoStart: Bool) -> Double {
-        var controller = AnimationController(durationMs: duration * 1000, repeats: repeats, reverses: reverse)
-        if autoStart { controller.start(at: 0) }
-        return controller.value(at: elapsed * 1000)
-    }
 }
 
 /// One AnimatedBuilder's clock while it is on screen: a core
@@ -112,8 +103,10 @@ final class AnimatedBuilderDriver: ObservableObject {
     private let owner: AnimationRegistry.Owner
     private var node: ResolvedNode?
     private var id: String?
-    /// The controller of a builder with no id, or one whose id a later
-    /// builder took.
+    /// The builder's own controller. While the builder owns its id the
+    /// registry's entry is the one effects move, and `current()` copies it
+    /// here; a builder with no id, or one whose id a later builder took,
+    /// carries on from this one.
     private var local = AnimationController()
     private var wake: AnyCancellable?
 
@@ -142,6 +135,7 @@ final class AnimatedBuilderDriver: ObservableObject {
             // for frames again.
             wake = model.animationChanged.sink { [weak self] changed in
                 guard let self, changed == self.id else { return }
+                _ = self.current()
                 self.objectWillChange.send()
             }
         }
@@ -153,42 +147,45 @@ final class AnimatedBuilderDriver: ObservableObject {
     func disappear() {
         wake = nil
         guard let id else { return }
-        if let own = model.animations.controller(id: id, owner: owner) { local = own }
+        _ = current()
         model.animations.unregister(id: id, owner: owner)
         self.id = nil
     }
 
-    /// The registry's controller while this builder owns its id, else its own.
-    private var controller: AnimationController {
-        id.flatMap { model.animations.controller(id: $0, owner: owner) } ?? local
+    /// The builder's controller as it is now: the registry's while this
+    /// builder owns its id, copied into `local` so that a builder losing its
+    /// id keeps its last state, completions already taken included.
+    private func current() -> AnimationController {
+        if let id, let owned = model.animations.controller(id: id, owner: owner) { local = owned }
+        return local
     }
 
     /// The value after the curve: what the builder's descendants resolve by.
     func progress(at now: Double) -> Double {
-        controller.progress(at: now)
+        current().progress(at: now)
     }
 
     /// Whether the view needs another frame: a run is live, or one has ended
     /// and `settle` has not reported it yet.
     func needsTick(at now: Double) -> Bool {
-        var probe = controller
+        var probe = current()
         return probe.isRunning(at: now) || probe.takeCompletion(at: now)
     }
 
     /// The frame tick: fires `onComplete` when a run has reached 1 or
-    /// reached 0 since the last tick, and lets the view pause. The returned
-    /// task is the action's run; nil when nothing completed or the node has
-    /// no `onComplete`.
+    /// reached 0 since the last tick, and lets the view pause. `current` is
+    /// the node as the view has it now (its `onComplete` may have been
+    /// replaced since the builder appeared); without one, the node it
+    /// appeared with. The returned task is the action's run; nil when
+    /// nothing completed or the node has no `onComplete`.
     @discardableResult
-    func settle(at now: Double) -> Task<Void, Never>? {
-        let take: (inout AnimationController) -> Bool = { $0.takeCompletion(at: now) }
-        let completed: Bool
-        if let id, let owned = model.animations.update(id: id, owner: owner, take) {
-            completed = owned
-        } else {
-            completed = take(&local)
-        }
-        guard completed, let node else { return nil }
+    func settle(at now: Double, node current: ResolvedNode? = nil) -> Task<Void, Never>? {
+        var controller = self.current()
+        let completed = controller.takeCompletion(at: now)
+        local = controller
+        // Nothing happens here once a later builder owns the id.
+        if let id { model.animations.update(id: id, owner: owner) { $0 = controller } }
+        guard completed, let node = current ?? node else { return nil }
         objectWillChange.send()
         return model.fire("onComplete", on: node)
     }

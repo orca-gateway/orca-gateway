@@ -11,18 +11,27 @@ import XCTest
 /// driver takes "now" in milliseconds wherever the view passes a frame date.
 @MainActor
 final class MotionTests: XCTestCase {
+    /// The clock is the core's `AnimationController`: `start` is Flutter's
+    /// `forward()` or, on a repeating builder, `repeat(reverse:)`.
     func testOneShotClampsAtTheEnd() {
-        XCTAssertEqual(AnimatedBuilderView.clock(elapsed: 0.5, duration: 1, repeats: false, reverse: false, autoStart: true), 0.5)
-        XCTAssertEqual(AnimatedBuilderView.clock(elapsed: 3, duration: 1, repeats: false, reverse: false, autoStart: true), 1)
+        var controller = AnimationController(durationMs: 1000, repeats: false, reverses: false)
+        controller.start(at: 0)
+        XCTAssertEqual(controller.value(at: 500), 0.5)
+        XCTAssertEqual(controller.value(at: 3000), 1)
     }
 
     func testRepeatWrapsAndReverseBouncesBack() {
-        XCTAssertEqual(AnimatedBuilderView.clock(elapsed: 1.25, duration: 1, repeats: true, reverse: false, autoStart: true), 0.25, accuracy: 1e-9)
-        XCTAssertEqual(AnimatedBuilderView.clock(elapsed: 1.25, duration: 1, repeats: true, reverse: true, autoStart: true), 0.75, accuracy: 1e-9)
+        var wrapping = AnimationController(durationMs: 1000, repeats: true, reverses: false)
+        wrapping.start(at: 0)
+        XCTAssertEqual(wrapping.value(at: 1250), 0.25, accuracy: 1e-9)
+        var bouncing = AnimationController(durationMs: 1000, repeats: true, reverses: true)
+        bouncing.start(at: 0)
+        XCTAssertEqual(bouncing.value(at: 1250), 0.75, accuracy: 1e-9)
     }
 
     func testNoAutoStartHoldsAtZero() {
-        XCTAssertEqual(AnimatedBuilderView.clock(elapsed: 5, duration: 1, repeats: true, reverse: false, autoStart: false), 0)
+        let controller = AnimationController(durationMs: 1000, repeats: true, reverses: false)
+        XCTAssertEqual(controller.value(at: 5000), 0)
     }
 
     /// The curves are the core's now (the UI's own table is gone).
@@ -149,6 +158,83 @@ final class MotionTests: XCTestCase {
 
         second.disappear()
         XCTAssertFalse(stage.model.animations.forward(id: "pulse", at: 2000), "the owner leaving removes the id")
+    }
+
+    /// A builder whose id a later builder takes keeps its own controller as
+    /// it was: forwarded to 1 it stays at 1, and the completion it reported
+    /// is not reported again.
+    func test_B12_1_aDisplacedBuilderKeepsItsValueAndItsCompletions() async throws {
+        let stage = try Stage(["animationId": "pulse", "duration": 400, "curve": "linear", "autoStart": false])
+        let first = try stage.builder()
+        stage.now = 0
+        stage.model.perform(ActionEffect("animateForward", ["animationId": "pulse"]))
+        await first.settle(at: 400)?.value
+        XCTAssertEqual(stage.completions, 1)
+
+        _ = try stage.builder(at: 500)
+        XCTAssertEqual(first.progress(at: 600), 1, "the displaced builder snapped back")
+        XCTAssertFalse(first.needsTick(at: 600))
+        XCTAssertNil(first.settle(at: 600))
+        XCTAssertEqual(stage.completions, 1)
+    }
+
+    /// `autoStart`, the run already reported, then displaced: `onComplete`
+    /// does not fire a second time.
+    func test_B12_1_aDisplacedAutoStartBuilderDoesNotCompleteTwice() async throws {
+        let stage = try Stage(["animationId": "pulse", "duration": 400, "curve": "linear"])
+        let first = try stage.builder(at: 0)
+        await first.settle(at: 400)?.value
+        XCTAssertEqual(stage.completions, 1)
+
+        _ = try stage.builder(at: 500)
+        XCTAssertEqual(first.progress(at: 600), 1)
+        XCTAssertFalse(first.needsTick(at: 600))
+        XCTAssertNil(first.settle(at: 600))
+        XCTAssertEqual(stage.completions, 1)
+    }
+
+    /// Displaced in the middle of a run an effect started: the builder
+    /// finishes that run on its own controller and completes once.
+    func test_B12_1_aBuilderDisplacedMidRunFinishesAndCompletesOnce() async throws {
+        let stage = try Stage(["animationId": "pulse", "duration": 400, "curve": "linear", "autoStart": false])
+        let first = try stage.builder()
+        stage.now = 0
+        stage.model.perform(ActionEffect("animateForward", ["animationId": "pulse"]))
+
+        _ = try stage.builder(at: 100)
+        XCTAssertEqual(first.progress(at: 200), 0.5, accuracy: 1e-12)
+        XCTAssertTrue(first.needsTick(at: 200))
+        XCTAssertNil(first.settle(at: 200))
+        XCTAssertEqual(first.progress(at: 400), 1)
+        await first.settle(at: 400)?.value
+        XCTAssertEqual(stage.completions, 1)
+        XCTAssertNil(first.settle(at: 500))
+        XCTAssertFalse(first.needsTick(at: 500))
+        XCTAssertEqual(stage.completions, 1)
+    }
+
+    /// The builder's `onComplete` was replaced while it was on screen (an
+    /// updateComponent): the run that ends fires the node's current action,
+    /// not the one it appeared with.
+    func test_B12_1_onCompleteIsTheNodesCurrentAction() async throws {
+        let stage = try Stage(["animationId": "pulse", "duration": 400, "curve": "linear", "autoStart": false])
+        let driver = try stage.builder()
+        var updated = try XCTUnwrap(stage.model.resolve("b"))
+        updated.actions["onComplete"] = try JSONValue.object([
+            "type": "setState", "scope": "page", "key": "done", "value": ["type": "static", "value": 10],
+        ]).decode(Action.self)
+
+        stage.now = 0
+        stage.model.perform(ActionEffect("animateForward", ["animationId": "pulse"]))
+        await driver.settle(at: 400, node: updated)?.value
+        XCTAssertEqual(stage.completions, 10, "the action the builder appeared with was fired")
+
+        // A node that lost its `onComplete` fires nothing.
+        updated.actions["onComplete"] = nil
+        stage.now = 1000
+        stage.model.perform(ActionEffect("animateReverse", ["animationId": "pulse"]))
+        XCTAssertNil(driver.settle(at: 1400, node: updated))
+        XCTAssertEqual(stage.completions, 10)
     }
 
     /// A builder with `autoStart` runs once on its own and completes once; a
