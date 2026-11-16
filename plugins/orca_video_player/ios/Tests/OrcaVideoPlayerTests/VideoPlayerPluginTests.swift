@@ -82,6 +82,16 @@ final class VideoPlayerPluginTests: XCTestCase {
             try await executor.execute(try raw.decode(Action.self))
         }
 
+        /// The error the action fails with, as text; nil when it does not fail.
+        func failure(_ raw: JSONValue) async -> String? {
+            do {
+                try await run(raw)
+                return nil
+            } catch {
+                return "\(error)"
+            }
+        }
+
         /// A view's player state, on screen with `options`, its triggers
         /// recorded as the view's onReceive would fire them.
         func appear(_ options: VideoPlayerOptions) -> (VideoPlayerState, Fired) {
@@ -373,10 +383,14 @@ final class VideoPlayerPluginTests: XCTestCase {
         try await h.run(["type": "seekVideo", "playerId": "demo", "position": -250])
         try await h.run(["type": "seekVideo", "playerId": "demo", "position": 9000])
         try await h.run(["type": "seekVideo", "playerId": "demo"])
-        try await h.run(["type": "seekVideo", "playerId": "demo", "position": "1500"])
+        for playerId: JSONValue in ["demo", "ghost"] {
+            let failure = await h.failure(["type": "seekVideo", "playerId": playerId, "position": "1500"])
+            XCTAssertEqual(failure, "position is not a number: 1500",
+                           "Dart's `as num?` throws before the player is looked up: the action fails")
+        }
 
         XCTAssertEqual(playback.calls, Self.initialized + ["seek 1500", "seek 1500", "seek 0", "seek 5000"],
-                       "a missing or non-number position does nothing")
+                       "a missing position does nothing")
         XCTAssertEqual(state.controller?.value.position, 5000)
     }
 
@@ -387,8 +401,13 @@ final class VideoPlayerPluginTests: XCTestCase {
         try await h.run(["type": "setVolume", "playerId": "demo", "volume": 1.5])
         try await h.run(["type": "setVolume", "playerId": "demo", "volume": -1])
         try await h.run(["type": "setVolume", "playerId": "demo"])
+        for playerId: JSONValue in ["demo", "ghost"] {
+            let failure = await h.failure(["type": "setVolume", "playerId": playerId, "volume": true])
+            XCTAssertEqual(failure, "volume is not a number: true", "Dart's `as num?` throws: the action fails")
+        }
 
-        XCTAssertEqual(playback.calls, Self.initialized + ["setVolume 0.5", "setVolume 1.0", "setVolume 0.0"])
+        XCTAssertEqual(playback.calls, Self.initialized + ["setVolume 0.5", "setVolume 1.0", "setVolume 0.0"],
+                       "a missing volume does nothing")
         XCTAssertEqual(state.controller?.value.volume, 0)
     }
 
@@ -419,6 +438,12 @@ final class VideoPlayerPluginTests: XCTestCase {
         try await h.run(["type": "setPlaybackSpeed", "playerId": "demo"])
         try await h.run(["type": "setPlaybackSpeed", "playerId": "ghost", "speed": 0])
         XCTAssertEqual(playback.calls.count, Self.initialized.count + 3, "a missing speed or an unknown player does nothing")
+
+        for playerId: JSONValue in ["demo", "ghost"] {
+            let failure = await h.failure(["type": "setPlaybackSpeed", "playerId": playerId, "speed": "fast"])
+            XCTAssertEqual(failure, "speed is not a number: fast", "Dart's `as num?` throws: the action fails")
+        }
+        XCTAssertEqual(playback.calls.count, Self.initialized.count + 3)
     }
 
     func testC17_2_S_AnUnknownOrMissingPlayerIdDoesNothing() async throws {

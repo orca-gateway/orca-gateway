@@ -42,8 +42,8 @@ public struct VideoPlayerPlugin: OrcaPlugin {
         return [
             "playVideo": { await players.playVideo($0, $1) },
             "pauseVideo": { await players.pauseVideo($0, $1) },
-            "seekVideo": { await players.seekVideo($0, $1) },
-            "setVolume": { await players.setVolume($0, $1) },
+            "seekVideo": { try await players.seekVideo($0, $1) },
+            "setVolume": { try await players.setVolume($0, $1) },
             "setPlaybackSpeed": { try await players.setPlaybackSpeed($0, $1) },
         ]
     }
@@ -92,7 +92,8 @@ struct VideoPlayerEvent: Equatable {
 /// The ready players by playerId (Flutter's `_controllers`) and the five
 /// actions on them, line for line Flutter's handlers (:291-332): playerId
 /// resolved as a string value, position, volume and speed as values; an
-/// unknown playerId or a missing number does nothing.
+/// unknown playerId or a missing number does nothing, a number that is not
+/// one fails the action (Dart's `as num?`), before the player is looked up.
 @MainActor
 final class VideoPlayers {
     private(set) var controllers: [String: VideoController] = [:]
@@ -125,25 +126,34 @@ final class VideoPlayers {
         controller(PauseVideoParams(action).action["playerId"], executor)?.pause()
     }
 
-    func seekVideo(_ action: JSONValue, _ executor: ActionExecutor) {
+    func seekVideo(_ action: JSONValue, _ executor: ActionExecutor) throws {
         let params = SeekVideoParams(action)
-        guard let controller = controller(params.action["playerId"], executor),
-              let position = executor.resolve(params.action["position"]).dartInt else { return }
+        let position = try number(params.action, "position", executor)?.dartInt
+        guard let controller = controller(params.action["playerId"], executor), let position else { return }
         controller.seek(to: position)
     }
 
-    func setVolume(_ action: JSONValue, _ executor: ActionExecutor) {
+    func setVolume(_ action: JSONValue, _ executor: ActionExecutor) throws {
         let params = SetVolumeParams(action)
-        guard let controller = controller(params.action["playerId"], executor),
-              let volume = executor.resolve(params.action["volume"]).doubleValue else { return }
+        let volume = try number(params.action, "volume", executor)?.doubleValue
+        guard let controller = controller(params.action["playerId"], executor), let volume else { return }
         controller.setVolume(volume)
     }
 
     func setPlaybackSpeed(_ action: JSONValue, _ executor: ActionExecutor) throws {
         let params = SetPlaybackSpeedParams(action)
-        guard let controller = controller(params.action["playerId"], executor),
-              let speed = executor.resolve(params.action["speed"]).doubleValue else { return }
+        let speed = try number(params.action, "speed", executor)?.doubleValue
+        guard let controller = controller(params.action["playerId"], executor), let speed else { return }
         try controller.setPlaybackSpeed(speed)
+    }
+
+    /// Dart's `executor.resolveValue(action[key]) as num?`: nil when missing
+    /// or null, else a number; anything else throws, as the cast does.
+    private func number(_ action: JSONValue, _ key: String, _ executor: ActionExecutor) throws -> JSONValue? {
+        let value = executor.resolve(action[key])
+        if value.isNull { return nil }
+        guard value.isNumber else { throw VideoPlayerNumberError(key: key, value: value) }
+        return value
     }
 
     /// The player under Dart's `executor.resolveString(action['playerId'] ?? '')`:
@@ -307,6 +317,15 @@ struct VideoPlayerArgumentError: Error, CustomStringConvertible {
     let name: String
 
     var description: String { "Invalid argument (\(name)): \(DartFormat.double(value))" }
+}
+
+/// A param that resolved to something other than a number, where Dart's
+/// `as num?` throws: it fails the action, with the Kotlin plugin's text.
+struct VideoPlayerNumberError: Error, CustomStringConvertible {
+    let key: String
+    let value: JSONValue
+
+    var description: String { "\(key) is not a number: \(DartFormat.string(value))" }
 }
 
 /// One VideoPlayer view's player, Flutter's `_OrcaVideoPlayerState`
