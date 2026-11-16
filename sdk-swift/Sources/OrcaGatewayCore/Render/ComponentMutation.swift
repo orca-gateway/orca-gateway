@@ -54,8 +54,9 @@ extension PageRenderer {
     }
 
     /// The first node that lists `id` as a child, searching from the root so
-    /// the answer does not depend on dictionary order.
-    private func parentOf(_ id: String) -> String? {
+    /// the answer does not depend on dictionary order; nil when none does.
+    /// A slot's widget is listed in its node's `children` as well.
+    public func parentOf(_ id: String) -> String? {
         var seen: Set<String> = []
         var queue = rootId.map { [$0] } ?? []
         while !queue.isEmpty {

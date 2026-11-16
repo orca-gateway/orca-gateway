@@ -151,8 +151,9 @@ enum RoutePush: Equatable {
 /// the host or the system writes into `stack` itself is not animated here;
 /// the first page of a stack never is.
 ///
-/// Hero: a `navigate` that pushes, fired by a widget inside a Hero with a
-/// tag, records that Hero on the pushed route (`heroSource(of:)`) for as
+/// Hero: the first `navigate` of a run of actions fired by a widget inside
+/// a Hero with a tag, when it pushes and that widget's page is still the one
+/// on top, records that Hero on the pushed route (`heroSource(of:)`) for as
 /// long as the route is on the stacks. On iOS 18 and up that push is the
 /// system's zoom out of the Hero, also for a `fade` or `slideUp` route,
 /// whose own entrance is skipped for that push (`RoutePush.decide`). Below
@@ -360,13 +361,8 @@ public final class OrcaRouter: ObservableObject {
         entrances[route.id]?.look(at: ms, reduceMotion: reduceMotion) ?? (1, 0, 0, 1)
     }
 
-    /// The tag of the Hero a route was pushed from; nil for a route no Hero
-    /// pushed.
-    func heroTag(of id: OrcaRoute.ID) -> String? {
-        heroSources[id]?.tag
-    }
-
-    /// The Hero a route was pushed from, with the route it is on.
+    /// The Hero a route was pushed from, with the route it is on; nil for a
+    /// route no Hero pushed.
     func heroSource(of id: OrcaRoute.ID) -> HeroSource? {
         heroSources[id]
     }
@@ -404,7 +400,8 @@ public final class OrcaRouter: ObservableObject {
     }
 
     /// `navigate` from a page's action: `heroTag` is the tag of the Hero
-    /// around the widget that fired it, recorded on the route a push adds.
+    /// the push leaves from (`takeFiringHeroTag`), recorded on the route a
+    /// push adds.
     func navigate(to path: String, replace: Bool, heroTag: String?) {
         guard !path.isEmpty else { return }
         if shell != nil {
@@ -751,15 +748,26 @@ public final class OrcaRouter: ObservableObject {
         onRouteChanged?(RouteChangeEvent(location: location, previousLocation: previous, type: type))
     }
 
+    /// The Hero tag for the `navigate` being performed: that of the Hero
+    /// around the widget that fired the run, for the run's first `navigate`
+    /// and only while that widget's page is the loaded page of the route on
+    /// top. A later `navigate` of the run (the second push of a group), and
+    /// one that comes when another page is on top (after an await), leave
+    /// from a page that does not hold that Hero: nil.
+    private func takeFiringHeroTag() -> String? {
+        guard let hero = OrcaPageModel.firingHero, let tag = hero.take(),
+              case .loaded(let model)? = loaders[top.id]?.phase, model === hero.page else { return nil }
+        return tag
+    }
+
     /// Perform a navigation effect; false for any other effect.
     @discardableResult
     func perform(_ effect: ActionEffect) -> Bool {
         switch effect.type {
         case "navigate":
-            // Fired by a widget inside a Hero, the push flies from it.
             navigate(to: effect.payload["route"]?.stringValue ?? "",
                      replace: effect.payload["replace"]?.boolValue ?? false,
-                     heroTag: OrcaPageModel.firingHeroTag)
+                     heroTag: takeFiringHeroTag())
         case "goBack":
             goBack()
         case "switchTab":

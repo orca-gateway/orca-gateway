@@ -13,16 +13,64 @@ public struct OrcaToast: Identifiable, Equatable, Sendable {
     public var style: Style
 }
 
-/// A node and everything below it, frozen as it resolved at one moment: what
-/// an AnimatedSwitcher draws its outgoing child from once a replace or a
-/// delete has taken that child off the page.
+/// A node and everything below it, frozen as it was last drawn: what an
+/// AnimatedSwitcher draws its outgoing child from once a replace or a delete
+/// has taken that child off the page.
 struct NodeSnapshot: Equatable {
     let rootId: String
-    /// The subtree's nodes as they resolved, by id.
+    /// The subtree's nodes as they were drawn, by id.
     let nodes: [String: ResolvedNode]
     /// The same nodes as the page held them (what layout reads types from).
     let components: [ComponentNode]
     let state: StoreState
+}
+
+/// The resolved nodes last drawn below one point of a page, by id: what an
+/// AnimatedSwitcher keeps of its child so it can still draw it, fading out,
+/// once a server action has removed it from the page (Kotlin's
+/// `OrcaNodeSnapshot`).
+///
+/// The view that draws a watched node hands it here each time it resolves
+/// it (`orcaNodeRecorder`): a dictionary entry for a node already resolved
+/// for drawing. Each recorder also tells its `parent`, so an outer
+/// switcher's record includes what an inner one draws.
+@MainActor
+final class NodeRecorder {
+    /// The recorder around the widget that owns this one, if any.
+    weak var parent: NodeRecorder?
+    private var nodes: [String: ResolvedNode] = [:]
+    private var components: [String: ComponentNode] = [:]
+
+    /// `node` was drawn; `source` is the same node as the page holds it.
+    func record(_ node: ResolvedNode, source: ComponentNode) {
+        nodes[node.id] = node
+        components[node.id] = source
+        parent?.record(node, source: source)
+    }
+
+    /// Forget everything: the widget that owns this one has a new child.
+    func reset() {
+        nodes.removeAll()
+        components.removeAll()
+    }
+
+    /// The subtree under `root` as last drawn: the nodes reachable from it
+    /// through children and slots, with `state` the page's at this moment.
+    /// Nil when `root` was never drawn.
+    func snapshot(of root: String, state: StoreState) -> NodeSnapshot? {
+        var found: [String: ResolvedNode] = [:]
+        var sources: [ComponentNode] = []
+        var pending = [root]
+        while let id = pending.popLast() {
+            guard found[id] == nil, let node = nodes[id], let source = components[id] else { continue }
+            found[id] = node
+            sources.append(source)
+            pending += node.childIds
+            pending += node.slots.values
+        }
+        guard found[root] != nil else { return nil }
+        return NodeSnapshot(rootId: root, nodes: found, components: sources, state: state)
+    }
 }
 
 /// One rendered page: its nodes, its store, and the executor that runs its
@@ -107,30 +155,6 @@ public final class OrcaPageModel: ObservableObject {
         self.frameClock = live.frameClock
     }
 
-    /// The node `id` and every node below it (children and slots) as they
-    /// resolve now; nil when the page has no such node. `animationProgress`
-    /// is the enclosing AnimatedBuilder's value. Below an AnimatedBuilder
-    /// that registered an `animationId`, its nodes take that controller's.
-    func snapshot(of id: String, animationProgress: Double? = nil) -> NodeSnapshot? {
-        var nodes: [String: ResolvedNode] = [:]
-        var components: [ComponentNode] = []
-        func walk(_ id: String, _ progress: Double?) {
-            guard nodes[id] == nil, let node = resolve(id, animationProgress: progress),
-                  let source = renderer.nodes[id] else { return }
-            nodes[id] = node
-            components.append(source)
-            var below = progress
-            if node.type == "AnimatedBuilder", let name = node["animationId"]?.stringValue {
-                below = animations.progress(id: name, at: frameClock())
-            }
-            for child in node.childIds { walk(child, below) }
-            for slot in node.slots.keys.sorted() { walk(node.slots[slot] ?? "", below) }
-        }
-        walk(id, animationProgress)
-        guard nodes[id] != nil else { return nil }
-        return NodeSnapshot(rootId: id, nodes: nodes, components: components, state: store.state)
-    }
-
     public var page: PageResponse { renderer.page }
 
     public func resolve(_ id: String) -> ResolvedNode? {
@@ -186,31 +210,28 @@ public final class OrcaPageModel: ObservableObject {
                      eventData: [String: JSONValue]? = nil) -> Task<Void, Never>? {
         guard !isInert, let action = node.actions[trigger] else { return nil }
         let source = ActionSource(widgetId: node.id, trigger: trigger)
-        // The Hero around the node, as it is now: what a `navigate` of this
-        // run flies from (`OrcaRouter.perform`).
-        let hero = heroTag(enclosing: node.id)
+        // The Hero around the node, as it is now: what the first `navigate`
+        // of this run flies from (`OrcaRouter.perform`).
+        let hero = heroTag(enclosing: node.id).map { FiringHero(tag: $0, page: self) }
         return Task {
-            await Self.$firingHeroTag.withValue(hero) {
+            await Self.$firingHero.withValue(hero) {
                 await run(action, eventData: eventData, source: source)
             }
         }
     }
 
-    /// The tag of the Hero around the widget whose trigger the current task
-    /// runs (`fire`); nil outside such a run and outside a Hero.
-    @TaskLocal static var firingHeroTag: String?
+    /// The Hero around the widget whose trigger the current task runs
+    /// (`fire`); nil outside such a run and outside a Hero with a tag.
+    @TaskLocal static var firingHero: FiringHero?
 
-    /// The tag of the nearest Hero above node `id`, as `orcaHeroTag` gives
-    /// it to the views below a Hero: nil when there is none, and when the
-    /// nearest one has no tag or an empty one.
+    /// The tag of the nearest Hero above node `id`: nil when there is none,
+    /// and when the nearest one has no tag or an empty one.
     func heroTag(enclosing id: String) -> String? {
         var seen: Set<String> = [id]
         var current = id
-        // A slot's widget is listed in its node's `children` as well.
-        while let parent = renderer.nodes.values.first(where: { $0.children.contains(current) }),
-              seen.insert(parent.id).inserted {
-            if parent.type == "Hero" { return resolve(parent.id).flatMap(HeroView.tag(of:)) }
-            current = parent.id
+        while let parent = renderer.parentOf(current), seen.insert(parent).inserted {
+            if renderer.node(parent)?.type == "Hero" { return resolve(parent).flatMap(HeroView.tag(of:)) }
+            current = parent
         }
         return nil
     }
@@ -330,6 +351,29 @@ public final class OrcaPageModel: ObservableObject {
         guard !isInert else { return }
         renderer.apply(mutation)
         structureRevision += 1
+    }
+}
+
+/// The Hero around the widget that fired one run of actions. Its tag is for
+/// the run's first `navigate` alone: a later one leaves from a page that
+/// does not hold that Hero.
+@MainActor
+final class FiringHero {
+    private let tag: String
+    /// The page the widget is on.
+    private(set) weak var page: OrcaPageModel?
+    private var taken = false
+
+    init(tag: String, page: OrcaPageModel) {
+        self.tag = tag
+        self.page = page
+    }
+
+    /// The tag, the first time it is asked for; nil ever after.
+    func take() -> String? {
+        guard !taken else { return nil }
+        taken = true
+        return tag
     }
 }
 

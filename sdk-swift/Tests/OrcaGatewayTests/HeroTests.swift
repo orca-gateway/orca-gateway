@@ -41,8 +41,11 @@ final class HeroTests: XCTestCase {
 
     private func router(_ config: JSONValue) throws -> OrcaRouter {
         let nav = try JSONDecoder().decode(NavConfig.self, from: config.encoded())
-        return OrcaRouter(client: PageStub.client(PageStub()), config: nav, system: SystemRecorder().actions())
+        return OrcaRouter(client: pages.client, config: nav, system: SystemRecorder().actions())
     }
+
+    /// Every path answers with the page of `page(on:to:)`.
+    private let pages = HeroPages()
 
     private static func hero(_ id: String, tag: JSONValue?, child: String) -> JSONValue {
         ["id": .string(id), "type": "Hero", "kind": "layout", "childMode": "single",
@@ -57,16 +60,18 @@ final class HeroTests: XCTestCase {
          "watches": []]
     }
 
-    /// A page attached to `router`: taps outside a Hero, inside one, inside
-    /// one with an empty tag and one with none, inside two, and inside a
-    /// tagged one whose nearer Hero has no tag. `route` is where they go.
-    private func page(on router: OrcaRouter, to route: String = "/detail") throws -> OrcaPageModel {
-        let model = try OrcaPageModel(page: JSONValue.object([
+    /// The loaded page of `router`'s top route: taps outside a Hero, inside
+    /// one, inside one with an empty tag and one with none, inside two, and
+    /// inside a tagged one whose nearer Hero has no tag. `route` is where
+    /// they go. `twice`, inside a Hero, pushes `/detail` then `/fade`.
+    private func page(on router: OrcaRouter, to route: String = "/detail") async throws -> OrcaPageModel {
+        pages.page = [
             "pageId": "p", "title": "T",
             "state": [["key": "tag", "scope": "page", "initial": "from-state"]],
             "components": [
                 ["id": "root", "type": "Column", "kind": "layout", "childMode": "multi", "props": [:],
-                 "children": ["outside", "h", "empty", "bare", "outer", "outer2", "stated", "goer"], "watches": []],
+                 "children": ["outside", "h", "empty", "bare", "outer", "outer2", "stated", "goer", "seq"],
+                 "watches": []],
                 Self.tap("outside", to: route),
                 Self.hero("h", tag: "product-42", child: "box"),
                 ["id": "box", "type": "Container", "kind": "layout", "childMode": "single", "props": [:],
@@ -86,9 +91,21 @@ final class HeroTests: XCTestCase {
                 Self.tap("inStated", to: route),
                 Self.hero("goer", tag: "product-42", child: "go"),
                 Self.tap("go", to: route, replace: true),
+                Self.hero("seq", tag: "product-42", child: "twice"),
+                ["id": "twice", "type": "GestureDetector", "kind": "layout", "childMode": "single",
+                 "props": [:], "children": [],
+                 "actions": ["onTap": ["type": "actionGroup", "mode": "sequential", "actions": [
+                     ["type": "navigate", "route": "/detail"], ["type": "navigate", "route": "/fade"],
+                 ]]],
+                 "watches": []],
             ],
-        ]).decode(PageResponse.self))
-        router.attach(model)
+        ]
+        let loader = router.loader(for: router.top)
+        await loader.loadIfNeeded()
+        guard case .loaded(let model) = loader.phase else {
+            throw NSError(domain: "HeroTests", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "the page did not load: \(loader.phase)"])
+        }
         return model
     }
 
@@ -103,120 +120,162 @@ final class HeroTests: XCTestCase {
     func test_B12_5_aTapInsideAHeroRecordsItsTagOnThePushedRoute() async throws {
         let router = try router(plain)
         let start = router.top
-        let model = try page(on: router)
+        let model = try await page(on: router)
         try await tap("inside", on: model)
         XCTAssertEqual(router.top.path, "detail")
-        XCTAssertEqual(router.heroTag(of: router.top.id), "product-42")
+        XCTAssertEqual(router.heroSource(of: router.top.id)?.tag, "product-42")
         XCTAssertEqual(router.heroSource(of: router.top.id), HeroSource(route: start.id, tag: "product-42"),
                        "the source is the Hero of the page that was on top")
-        XCTAssertNil(router.heroTag(of: start.id), "the page under it is no flight")
+        XCTAssertNil(router.heroSource(of: start.id)?.tag, "the page under it is no flight")
     }
 
     func test_B12_5_aTapOutsideAnyHeroRecordsNone() async throws {
         let router = try router(plain)
-        let model = try page(on: router)
+        let model = try await page(on: router)
         try await tap("outside", on: model)
         XCTAssertEqual(router.top.path, "detail")
-        XCTAssertNil(router.heroTag(of: router.top.id))
+        XCTAssertNil(router.heroSource(of: router.top.id)?.tag)
         XCTAssertNil(router.heroSource(of: router.top.id))
     }
 
     func test_B12_5_anEmptyOrAbsentTagRecordsNone() async throws {
         for id in ["inEmpty", "inBare"] {
             let router = try router(plain)
-            let model = try page(on: router)
+            let model = try await page(on: router)
             try await tap(id, on: model)
             XCTAssertEqual(router.top.path, "detail", id)
-            XCTAssertNil(router.heroTag(of: router.top.id), id)
+            XCTAssertNil(router.heroSource(of: router.top.id)?.tag, id)
         }
     }
 
     func test_B12_5_nestedHeroesRecordTheNearest() async throws {
         let router = try router(plain)
-        let model = try page(on: router)
+        let model = try await page(on: router)
         try await tap("deep", on: model)
-        XCTAssertEqual(router.heroTag(of: router.top.id), "near")
+        XCTAssertEqual(router.heroSource(of: router.top.id)?.tag, "near")
 
-        // The nearest Hero decides, as `orcaHeroTag` does below it: one with
-        // no tag is no hero, whatever lies further out.
+        // The nearest Hero decides (`heroTag(enclosing:)`): one with no tag
+        // is no hero, whatever lies further out.
         let other = try self.router(plain)
-        try await tap("deep2", on: try page(on: other))
+        let otherPage = try await page(on: other)
+        try await tap("deep2", on: otherPage)
         XCTAssertEqual(other.top.path, "detail")
-        XCTAssertNil(other.heroTag(of: other.top.id))
+        XCTAssertNil(other.heroSource(of: other.top.id)?.tag)
     }
 
     func test_B12_5_theTagIsTheHerosResolvedTagAtTheTap() async throws {
         let router = try router(plain)
-        let model = try page(on: router)
+        let model = try await page(on: router)
         XCTAssertEqual(model.heroTag(enclosing: "inStated"), "from-state")
         XCTAssertEqual(model.heroTag(enclosing: "inside"), "product-42")
         XCTAssertNil(model.heroTag(enclosing: "outside"))
         XCTAssertNil(model.heroTag(enclosing: "h"), "a Hero is not inside itself")
         XCTAssertNil(model.heroTag(enclosing: "no-such-node"))
         try await tap("inStated", on: model)
-        XCTAssertEqual(router.heroTag(of: router.top.id), "from-state")
+        XCTAssertEqual(router.heroSource(of: router.top.id)?.tag, "from-state")
     }
 
     func test_B12_5_aGoADeepLinkAndTheBootRecordNone() async throws {
         let router = try router(plain)
-        XCTAssertNil(router.heroTag(of: router.top.id), "the boot")
+        XCTAssertNil(router.heroSource(of: router.top.id)?.tag, "the boot")
 
         // `navigate` with `replace` from inside a Hero is a go, not a push.
-        let model = try page(on: router)
+        let model = try await page(on: router)
         try await tap("go", on: model)
         XCTAssertEqual(router.top.path, "detail")
-        XCTAssertNil(router.heroTag(of: router.top.id))
+        XCTAssertNil(router.heroSource(of: router.top.id)?.tag)
 
         router.handleDeeplink(try XCTUnwrap(URL(string: "app://host/fade")))
         XCTAssertEqual(router.top.path, "fade")
-        XCTAssertNil(router.heroTag(of: router.top.id))
+        XCTAssertNil(router.heroSource(of: router.top.id)?.tag)
 
         // The host's own push names no Hero.
         router.navigate(to: "/detail")
-        XCTAssertNil(router.heroTag(of: router.top.id))
+        XCTAssertNil(router.heroSource(of: router.top.id)?.tag)
 
         let linked = try JSONDecoder().decode(NavConfig.self, from: plain.encoded())
         let booted = OrcaRouter(client: PageStub.client(PageStub()), config: linked,
                                 system: SystemRecorder().actions(), link: URL(string: "app://host/detail"))
         XCTAssertEqual(booted.top.path, "detail")
-        XCTAssertNil(booted.heroTag(of: booted.top.id))
+        XCTAssertNil(booted.heroSource(of: booted.top.id)?.tag)
     }
 
     func test_B12_5_aTagDoesNotLeakIntoALaterPush() async throws {
         let router = try router(plain)
-        let model = try page(on: router)
+        let model = try await page(on: router)
         try await tap("inside", on: model)
-        XCTAssertEqual(router.heroTag(of: router.top.id), "product-42")
+        XCTAssertEqual(router.heroSource(of: router.top.id)?.tag, "product-42")
         try await tap("outside", on: model)
         XCTAssertEqual(router.stack.count, 2)
-        XCTAssertNil(router.heroTag(of: router.top.id))
-        XCTAssertEqual(router.heroTag(of: router.stack[0].id), "product-42", "the page under keeps its own")
+        XCTAssertNil(router.heroSource(of: router.top.id)?.tag)
+        XCTAssertEqual(router.heroSource(of: router.stack[0].id)?.tag, "product-42", "the page under keeps its own")
+    }
+
+    /// A run's tag is for its first `navigate` only: the second push of a
+    /// group leaves from a page that does not hold that Hero.
+    func test_B12_5_onlyTheFirstNavigateOfARunHoldsTheTag() async throws {
+        let router = try router(plain)
+        router.zoomAvailable = true
+        let start = router.top
+        let model = try await page(on: router)
+        try await tap("twice", on: model)
+        XCTAssertEqual(router.stack.map(\.path), ["detail", "fade"])
+        XCTAssertEqual(router.heroSource(of: router.stack[0].id), HeroSource(route: start.id, tag: "product-42"))
+        XCTAssertNil(router.heroSource(of: router.stack[1].id), "the second push took the tag too")
+        XCTAssertNil(router.zoomSource(of: router.stack[1].id))
+        XCTAssertEqual(router.entrance(of: router.stack[1].id)?.spec.kind, .fade, "its own entrance was skipped")
+    }
+
+    /// The page that fires is no longer the one on top (the user moved on
+    /// while its action ran): its Hero is not where the push leaves from.
+    func test_B12_5_aNavigateAfterTheTopChangedRecordsNone() async throws {
+        let router = try router(plain)
+        router.zoomAvailable = true
+        let model = try await page(on: router, to: "/fade")
+        router.navigate(to: "/detail")
+        try await tap("inside", on: model)
+        XCTAssertEqual(router.stack.map(\.path), ["detail", "fade"])
+        XCTAssertNil(router.heroSource(of: router.top.id))
+        XCTAssertNil(router.zoomSource(of: router.top.id))
+        XCTAssertEqual(router.entrance(of: router.top.id)?.spec.kind, .fade)
+    }
+
+    /// A page the router did not load (attached by hand) is not the page on
+    /// top either.
+    func test_B12_5_aPageTheRouterDidNotLoadRecordsNone() async throws {
+        let router = try router(plain)
+        let loaded = try await page(on: router)
+        let stray = OrcaPageModel(page: loaded.page)
+        router.attach(stray)
+        try await tap("inside", on: stray)
+        XCTAssertEqual(router.top.path, "detail")
+        XCTAssertNil(router.heroSource(of: router.top.id))
     }
 
     func test_B12_5_poppingDropsTheTag() async throws {
         let router = try router(plain)
-        let model = try page(on: router)
+        let model = try await page(on: router)
         try await tap("inside", on: model)
         let pushed = router.top
-        XCTAssertNotNil(router.heroTag(of: pushed.id))
+        XCTAssertNotNil(router.heroSource(of: pushed.id)?.tag)
         router.goBack()
         XCTAssertEqual(router.top.path, "start")
-        XCTAssertNil(router.heroTag(of: pushed.id))
+        XCTAssertNil(router.heroSource(of: pushed.id)?.tag)
         XCTAssertNil(router.heroSource(of: pushed.id))
 
         // A back swipe writes the path itself.
         try await tap("inside", on: model)
         let again = router.top
-        XCTAssertNotNil(router.heroTag(of: again.id))
+        XCTAssertNotNil(router.heroSource(of: again.id)?.tag)
         router.stack = []
-        XCTAssertNil(router.heroTag(of: again.id))
+        XCTAssertNil(router.heroSource(of: again.id)?.tag)
     }
 
     func test_B12_5_theSameInsideATabsStack() async throws {
         let router = try router(tabbed)
         XCTAssertTrue(router.hasShell)
         let feed = router.top
-        let model = try page(on: router, to: "/feed/item/7")
+        let model = try await page(on: router, to: "/feed/item/7")
         try await tap("inside", on: model)
         XCTAssertEqual(router.tabStacks[0].map(\.path), ["feed", "feed/item/7"])
         let item = router.top
@@ -227,28 +286,27 @@ final class HeroTests: XCTestCase {
         router.navigate(to: "/feed/item/7", replace: true)
         XCTAssertEqual(router.currentTab, 0)
         XCTAssertEqual(router.top.id, item.id)
-        XCTAssertEqual(router.heroTag(of: item.id), "product-42")
+        XCTAssertEqual(router.heroSource(of: item.id)?.tag, "product-42")
         router.goBack()
-        XCTAssertNil(router.heroTag(of: item.id))
+        XCTAssertNil(router.heroSource(of: item.id)?.tag)
     }
 
     func test_B12_5_withoutAConfigThePushedRouteRecordsTheTagToo() async throws {
-        let router = OrcaRouter(client: PageStub.client(PageStub()), path: "home",
-                                system: SystemRecorder().actions())
+        let router = OrcaRouter(client: pages.client, path: "home", system: SystemRecorder().actions())
         let home = router.root
-        let model = try page(on: router, to: "detail")
+        let model = try await page(on: router, to: "detail")
         try await tap("inside", on: model)
         XCTAssertEqual(router.top.path, "detail")
         XCTAssertEqual(router.heroSource(of: router.top.id), HeroSource(route: home.id, tag: "product-42"))
         try await tap("go", on: model)
         XCTAssertTrue(router.stack.isEmpty)
-        XCTAssertNil(router.heroTag(of: router.top.id), "a go records none")
+        XCTAssertNil(router.heroSource(of: router.top.id)?.tag, "a go records none")
         try await tap("outside", on: model)
-        XCTAssertNil(router.heroTag(of: router.top.id))
+        XCTAssertNil(router.heroSource(of: router.top.id)?.tag)
         try await tap("inside", on: model)
         let pushed = router.top
         router.goBack()
-        XCTAssertNil(router.heroTag(of: pushed.id))
+        XCTAssertNil(router.heroSource(of: pushed.id)?.tag)
     }
 
     // MARK: - Zoom, content entrance or the plain push
@@ -290,7 +348,7 @@ final class HeroTests: XCTestCase {
         let router = try router(plain)
         router.zoomAvailable = true
         let start = router.top
-        let model = try page(on: router, to: "/fade")
+        let model = try await page(on: router, to: "/fade")
         try await tap("inside", on: model)
         XCTAssertEqual(router.top.path, "fade")
         XCTAssertEqual(router.zoomSource(of: router.top.id), HeroSource(route: start.id, tag: "product-42"))
@@ -305,15 +363,16 @@ final class HeroTests: XCTestCase {
     func test_B12_5_whereThereIsNoZoomAHeroPushIsTheRoutesOwn() async throws {
         let router = try router(plain)
         router.zoomAvailable = false
-        let model = try page(on: router, to: "/fade")
+        let model = try await page(on: router, to: "/fade")
         try await tap("inside", on: model)
-        XCTAssertEqual(router.heroTag(of: router.top.id), "product-42", "recorded all the same")
+        XCTAssertEqual(router.heroSource(of: router.top.id)?.tag, "product-42", "recorded all the same")
         XCTAssertNil(router.zoomSource(of: router.top.id))
         XCTAssertEqual(router.entrance(of: router.top.id)?.spec.kind, .fade)
 
         let other = try self.router(plain)
         other.zoomAvailable = false
-        try await tap("inside", on: try page(on: other))
+        let otherPage = try await page(on: other)
+        try await tap("inside", on: otherPage)
         XCTAssertNil(other.zoomSource(of: other.top.id))
         XCTAssertNil(other.entrance(of: other.top.id), "the plain push")
     }
@@ -363,6 +422,25 @@ final class HeroTests: XCTestCase {
                 XCTAssertEqual(red, CGRect(x: 0, y: 0, width: 20, height: 20), "tag \(String(describing: tag))")
             }
         }
+    }
+}
+/// Answers every page request with `page`.
+private final class HeroPages: HTTPTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _page: JSONValue = .null
+
+    var page: JSONValue {
+        get { lock.withLock { _page } }
+        set { lock.withLock { _page = newValue } }
+    }
+
+    var client: OrcaClient {
+        OrcaClient(baseURL: URL(string: "http://stub.invalid")!, appId: "fixture-app",
+                   device: DeviceInfo(osVersion: "test"), transport: self)
+    }
+
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        HTTPResponse(status: 200, body: try page.encoded())
     }
 }
 #endif

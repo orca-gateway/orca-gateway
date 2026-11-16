@@ -259,19 +259,30 @@ final class AnimatedWidgetTests: XCTestCase {
         XCTAssertFalse(driver.needsTick)
     }
 
-    /// A second swap mid-fade: every child on its way out keeps fading from
-    /// where it is, the newest fades in.
-    func test_B12_4_aSwapMidFadeKeepsTheOlderChildrenFading() throws {
+    /// A second swap mid-fade: the child that was still fading out from the
+    /// first swap is dropped (one outgoing layer at most, as the Kotlin
+    /// twin); the one just replaced fades out from where it is, the newest
+    /// fades in.
+    func test_B12_4_aSecondSwapMidFadeDropsTheEarlierOutgoingChild() throws {
         let driver = SwitcherDriver()
         driver.update(childId: "a", durationMs: 200, reduceMotion: false, at: 0)
         driver.update(childId: "b", durationMs: 200, reduceMotion: false, at: 0)
+        XCTAssertEqual(driver.layers(at: 50).map(\.id), ["a", "b"])
         driver.update(childId: "c", durationMs: 200, reduceMotion: false, at: 100)
         let layers = driver.layers(at: 150)
-        XCTAssertEqual(layers.map(\.id), ["a", "b", "c"])
+        XCTAssertEqual(layers.map(\.id), ["b", "c"], "the earlier outgoing child is still drawn")
         XCTAssertEqual(layers[0].opacity, 0.25, accuracy: 1e-9)
         XCTAssertEqual(layers[1].opacity, 0.25, accuracy: 1e-9)
-        XCTAssertEqual(layers[2].opacity, 0.25, accuracy: 1e-9)
         XCTAssertEqual(driver.layers(at: 300), [.init(id: "c", opacity: 1)])
+
+        // A child that comes back mid-fade rises again from where it is, and
+        // the one it replaces is the only one going out.
+        driver.update(childId: "d", durationMs: 200, reduceMotion: false, at: 1000)
+        driver.update(childId: "c", durationMs: 200, reduceMotion: false, at: 1050)
+        let back = driver.layers(at: 1050)
+        XCTAssertEqual(back.map(\.id), ["c", "d"])
+        XCTAssertEqual(back[0].opacity, 0.75, accuracy: 1e-9)
+        XCTAssertEqual(back[1].opacity, 0.25, accuracy: 1e-9)
     }
 
     /// The switcher draws its child, centred in the biggest one.
@@ -305,11 +316,24 @@ final class AnimatedWidgetTests: XCTestCase {
         return model
     }
 
-    /// What the view does on a redraw, snapshots included.
+    /// What the views do on a redraw of the switcher: the driver is told,
+    /// then the current child and everything below it is drawn, which
+    /// records each node (`draw`).
     @discardableResult
     private func show(_ driver: SwitcherDriver, _ model: OrcaPageModel, reduceMotion: Bool = false) throws -> Bool {
-        driver.update(node: try XCTUnwrap(model.resolve("w")), in: model,
-                      reduceMotion: reduceMotion, at: model.frameClock())
+        let node = try XCTUnwrap(model.resolve("w"))
+        let live = driver.update(node: node, in: model, reduceMotion: reduceMotion, at: model.frameClock())
+        if let child = node.childIds.first { draw(child, of: model, into: driver.recorder) }
+        return live
+    }
+
+    /// What NodeView does when it draws node `id`, and with `below` the
+    /// nodes under it: each is resolved and recorded.
+    private func draw(_ id: String, of model: OrcaPageModel, into recorder: NodeRecorder, below: Bool = true) {
+        guard let node = model.resolve(id), let source = model.renderer.node(id) else { return }
+        recorder.record(node, source: source)
+        guard below else { return }
+        for child in node.childIds { draw(child, of: model, into: recorder) }
     }
 
     /// The outgoing layer of `a` has the old child to draw: its node, its
@@ -430,6 +454,120 @@ final class AnimatedWidgetTests: XCTestCase {
         XCTAssertNil(driver.outgoing("a"))
         XCTAssertNil(driver.outgoing("c"))
         XCTAssertFalse(driver.needsTick)
+    }
+
+    /// A switcher `w` (it watches nothing) over `a`, a 20 by 20 Container
+    /// whose colour is page state `c`, red at first: only `a` watches `c`.
+    private func watchingChild(_ now: Clock, duration: Int = 200) throws -> OrcaPageModel {
+        let model = OrcaPageModel(page: try JSONValue.object([
+            "pageId": "p", "title": "T",
+            "state": [["key": "c", "scope": "page", "initial": "#FF0000"]],
+            "components": [
+                ["id": "w", "type": "AnimatedSwitcher", "kind": "layout", "childMode": "single",
+                 "props": ["duration": .int(duration)], "children": ["a"], "watches": []],
+                ["id": "a", "type": "Container", "kind": "layout", "childMode": "single",
+                 "props": ["width": 20, "height": 20, "color": Stage.state("c")], "children": [],
+                 "watches": ["c"]],
+            ],
+        ]).decode(PageResponse.self))
+        model.frameClock = { now.value }
+        return model
+    }
+
+    /// The same on the driver: the child alone redraws (the switcher is not
+    /// told), and the frozen page holds the child as it was then drawn.
+    func test_B12_4_theFrozenChildIsTheChildAsLastDrawn() throws {
+        let now = Clock()
+        let model = try watchingChild(now)
+        let driver = SwitcherDriver()
+        try show(driver, model)
+
+        model.store.dispatch(["c": "#00FF00"])
+        draw("a", of: model, into: driver.recorder)
+
+        now.value = 1000
+        model.apply(.replace(targetId: "a", components: [try Self.kid("n")]))
+        XCTAssertTrue(try show(driver, model))
+        let frozen = try XCTUnwrap(driver.outgoing("a"))
+        XCTAssertEqual(frozen.resolve("a")?["color"], "#00FF00")
+        XCTAssertEqual(frozen.store.value("c"), "#00FF00")
+        XCTAssertNil(frozen.resolve("n"), "the new child is not part of the old one's record")
+
+        // The record starts again with the new child: replaced in turn, the
+        // frozen page of `n` has nothing of `a`, which is dropped.
+        now.value = 1050
+        model.apply(.replace(targetId: "n", components: [try Self.kid("m")]))
+        XCTAssertTrue(try show(driver, model))
+        XCTAssertNil(driver.outgoing("a"), "the earlier outgoing child is still kept")
+        XCTAssertEqual(driver.layers(at: 1050).map(\.id), ["n", "m"])
+        let second = try XCTUnwrap(driver.outgoing("n"))
+        XCTAssertNotNil(second.resolve("n"))
+        XCTAssertNil(second.resolve("a"))
+    }
+
+    /// A node that was never drawn has no frozen page; a switcher inside
+    /// another tells the outer one's recorder what its child draws.
+    func test_B12_4_aRecorderTellsTheEnclosingOne() throws {
+        let now = Clock()
+        let model = try watchingChild(now)
+        let outer = NodeRecorder()
+        let driver = SwitcherDriver()
+        driver.update(node: try XCTUnwrap(model.resolve("w")), in: model, enclosing: outer,
+                      reduceMotion: false, at: 0)
+        XCTAssertNil(outer.snapshot(of: "a", state: model.store.state), "nothing was drawn yet")
+        draw("a", of: model, into: driver.recorder)
+        XCTAssertEqual(outer.snapshot(of: "a", state: model.store.state)?.nodes["a"]?["color"], "#FF0000")
+
+        // Drawn through the views: NodeView records into the recorder of
+        // its environment, the switcher's child included.
+        let seen = NodeRecorder()
+        let renderer = ImageRenderer(content: NodeView(id: "w", model: model)
+            .environment(\.orcaNodeRecorder, seen)
+            .frame(width: 100, height: 100, alignment: .topLeading))
+        renderer.scale = 1
+        XCTAssertNotNil(renderer.cgImage)
+        let drawn = try XCTUnwrap(seen.snapshot(of: "w", state: model.store.state))
+        XCTAssertEqual(Set(drawn.nodes.keys), ["w", "a"])
+        XCTAssertEqual(drawn.components.map(\.id).sorted(), ["a", "w"])
+    }
+
+    private static func isGreen(_ p: (r: UInt8, g: UInt8, b: UInt8, a: UInt8)) -> Bool {
+        p.g > 60 && Int(p.g) > Int(p.r) + 50 && Int(p.g) > Int(p.b) + 50
+    }
+
+    /// The child's own state changed after the switcher last redrew (only
+    /// the child watches it), then the child is replaced: the outgoing layer
+    /// shows what was on screen, the new value. Drawn through the views.
+    func test_B12_4_theOutgoingChildIsWhatWasOnScreenNotTheSwitchersLastRedraw() throws {
+        let now = Clock()
+        now.value = OrcaPageModel.milliseconds(Date())
+        // A fade far longer than the test: the outgoing layer stays opaque.
+        let model = try watchingChild(now, duration: 3_600_000)
+        let renderer = ImageRenderer(content: NodeView(id: "w", model: model)
+            .frame(width: 100, height: 100, alignment: .topLeading))
+        renderer.scale = 1
+        // The renderer keeps its views between images; a turn of the run
+        // loop lets them take a change in.
+        func drawn() throws -> Pixels {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            return try Pixels(XCTUnwrap(renderer.cgImage))
+        }
+        let box = CGRect(x: 0, y: 0, width: 20, height: 20)
+        assertRect(try XCTUnwrap(try drawn().bounds(of: Pixels.isRed)), box)
+
+        model.store.dispatch(["c": "#00FF00"])
+        let recoloured = try drawn()
+        assertRect(try XCTUnwrap(recoloured.bounds(of: Self.isGreen), "the child did not redraw"), box)
+        XCTAssertNil(recoloured.bounds(of: Pixels.isRed))
+
+        var next = Stage.kid("n")
+        next["props"] = ["width": 20, "height": 20, "color": "#0000FF"]
+        model.apply(.replace(targetId: "a", components: [try JSONValue.object(next).decode(ComponentNode.self)]))
+        XCTAssertNil(model.resolve("a"))
+        let fading = try drawn()
+        XCTAssertNil(fading.bounds(of: Pixels.isRed), "the outgoing layer shows the value of the switcher's last redraw")
+        assertRect(try XCTUnwrap(fading.bounds(of: Self.isGreen), "the outgoing layer is not the child as it was on screen"),
+                   box)
     }
 
     // MARK: B12.7 reduced motion

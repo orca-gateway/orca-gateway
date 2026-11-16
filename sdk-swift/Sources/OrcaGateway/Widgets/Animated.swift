@@ -197,10 +197,13 @@ struct AlignLayout: Layout {
 // MARK: AnimatedSwitcher
 
 /// An AnimatedSwitcher's children while it is on screen. The child changed
-/// when its node id changed: the new one fades in and every other one fades
-/// out from where it is, linearly, a full fade taking `duration` ms. The
-/// first child, a change under reduced motion and one with a duration of 0
-/// show at once. The same id with new props is not a change.
+/// when its node id changed: the new one fades in and the one it replaces
+/// fades out from where it is, linearly, a full fade taking `duration` ms.
+/// At most one child fades out: one still on its way out from an earlier
+/// change is dropped (as the Kotlin twin), unless nothing replaces it (the
+/// child before was none). The first child, a change under reduced motion
+/// and one with a duration of 0 show at once. The same id with new props is
+/// not a change.
 @MainActor
 final class SwitcherDriver: ObservableObject {
     /// One child to draw, the oldest first, and its opacity.
@@ -229,9 +232,10 @@ final class SwitcherDriver: ObservableObject {
     private var fades: [Fade] = []
     private var current: String?
     private var started = false
-    /// The current child's subtree as it resolved at the last redraw.
-    private var snapshot: NodeSnapshot?
-    /// The children fading out, each as an inert page of its last snapshot.
+    /// The current child's nodes, recorded as they are drawn: the view puts
+    /// it in the environment of the current child (`orcaNodeRecorder`).
+    let recorder = NodeRecorder()
+    /// The child fading out, as an inert page of what was last drawn of it.
     private var frozen: [String: OrcaPageModel] = [:]
     /// Whether the view needs another frame (see `ImplicitDriver.needsTick`).
     private(set) var needsTick = false
@@ -258,9 +262,12 @@ final class SwitcherDriver: ObservableObject {
             needsTick = false
             return false
         }
-        // Everyone turns round where they are; a child that comes back
-        // rises again from there.
+        // The child that leaves turns round where it is, and one that comes
+        // back rises again from there; a child still going out from an
+        // earlier change is dropped, unless no child took its place.
+        let leaving = current ?? fades.first { !$0.rising }?.id
         var next: [Fade] = fades.compactMap { fade in
+            guard fade.id == childId || fade.id == leaving else { return nil }
             let opacity = fade.opacity(at: now)
             guard opacity > 0 || fade.id == childId else { return nil }
             return Fade(id: fade.id, start: now, from: opacity, rising: fade.id == childId, span: durationMs)
@@ -274,24 +281,28 @@ final class SwitcherDriver: ObservableObject {
     }
 
     /// The view was redrawn with `node` on `model`: the fades as above, and
-    /// the snapshots. The current child's subtree is snapshotted on every
-    /// redraw, while it is still on the page; when the child changes, the
-    /// last snapshot of the one that left becomes its frozen page, which its
-    /// layer is drawn from until its fade ends.
+    /// the frozen page. The current child's nodes are recorded as they are
+    /// drawn (`recorder`, which also tells `enclosing`, the recorder of a
+    /// switcher further out); when the child changes, the record of the one
+    /// that left becomes its frozen page, which its layer is drawn from
+    /// until its fade ends, and the record starts again for the new child.
     @discardableResult
-    func update(node: ResolvedNode, in model: OrcaPageModel, animationProgress: Double? = nil,
+    func update(node: ResolvedNode, in model: OrcaPageModel, enclosing: NodeRecorder? = nil,
                 reduceMotion: Bool, at now: Double) -> Bool {
         let previous = current
         let childId = node.childIds.first
         let live = update(node: node, reduceMotion: reduceMotion, at: now)
-        if let previous, previous != childId, let snapshot, snapshot.rootId == previous {
-            frozen[previous] = OrcaPageModel(snapshot: snapshot, of: model)
+        recorder.parent = enclosing
+        if previous != childId {
+            if let previous, let snapshot = recorder.snapshot(of: previous, state: model.store.state) {
+                frozen[previous] = OrcaPageModel(snapshot: snapshot, of: model)
+            }
+            recorder.reset()
         }
         // A child that came back is the live one again; under reduced motion
         // or a duration of 0 nothing fades out, so nothing stays frozen.
         let fading = Set(fades.filter { !$0.rising }.map(\.id))
         frozen = frozen.filter { fading.contains($0.key) }
-        snapshot = childId.flatMap { model.snapshot(of: $0, animationProgress: animationProgress) }
         return live
     }
 
@@ -329,19 +340,22 @@ final class SwitcherDriver: ObservableObject {
 /// node id.
 ///
 /// A replace or a delete takes the old child's nodes off the page, so the
-/// outgoing layer is drawn from the driver's frozen page of that child: the
-/// subtree as it resolved at the switcher's last redraw. That layer only
-/// draws: no hit testing, no actions, no animation ids, no requests.
+/// outgoing layer is drawn from the driver's frozen page of that child: its
+/// nodes as each was last drawn, which the views below record as they draw
+/// (`orcaNodeRecorder`), so a change only the child watches is in it. That
+/// layer only draws: no hit testing, no actions, no animation ids, no
+/// requests.
 @MainActor
 struct AnimatedSwitcherView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
     @StateObject private var driver = SwitcherDriver()
     @OrcaReduceMotion private var reduceMotion
-    @Environment(\.orcaAnimationProgress) private var animationProgress
+    /// The recorder of a switcher further out, which this one's is told to.
+    @Environment(\.orcaNodeRecorder) private var enclosing
 
     var body: some View {
-        let live = driver.update(node: node, in: model, animationProgress: animationProgress,
+        let live = driver.update(node: node, in: model, enclosing: enclosing,
                                  reduceMotion: reduceMotion, at: model.frameClock())
         TimelineView(.animation(minimumInterval: nil, paused: !live)) { context in
             ZStack(alignment: .center) {
@@ -353,6 +367,7 @@ struct AnimatedSwitcherView: View {
                                 .accessibilityHidden(true)
                         } else {
                             NodeView(id: layer.id, model: model)
+                                .environment(\.orcaNodeRecorder, driver.recorder)
                         }
                     }
                     .opacity(layer.opacity)
@@ -366,19 +381,6 @@ struct AnimatedSwitcherView: View {
 }
 
 // MARK: Hero
-
-/// The tag of the nearest enclosing Hero, nil outside one: what a navigate
-/// fired below a Hero records as the source of the flight.
-private struct OrcaHeroTagKey: EnvironmentKey {
-    static let defaultValue: String? = nil
-}
-
-extension EnvironmentValues {
-    var orcaHeroTag: String? {
-        get { self[OrcaHeroTagKey.self] }
-        set { self[OrcaHeroTagKey.self] = newValue }
-    }
-}
 
 /// The namespace the app's Heroes and zooming pages meet in, set by the
 /// view that draws the router; nil for a page drawn outside `OrcaApp`.
@@ -394,9 +396,10 @@ extension EnvironmentValues {
 }
 
 /// Flutter `Hero` (`_buildHero`): draws its child; with no `tag`, or an
-/// empty one, it is the child alone. The tag is on `tag(of:)` and, for the
-/// widgets below, in `orcaHeroTag`: a `navigate` fired below a Hero records
-/// it on the route it pushes (`OrcaRouter.heroSource(of:)`).
+/// empty one, it is the child alone. The tag is on `tag(of:)`; a widget
+/// below finds it through `OrcaPageModel.heroTag(enclosing:)` when its
+/// action fires, and the run's first `navigate` records it on the route it
+/// pushes (`OrcaRouter.heroSource(of:)`).
 ///
 /// The flight: on iOS 18 and up, inside `OrcaApp`, a Hero with a tag is the
 /// source of the system's zoom transition (`HeroSource`: its page's route
@@ -426,7 +429,6 @@ struct HeroView: View {
 
     var body: some View {
         ChildView(node: node, model: model)
-            .environment(\.orcaHeroTag, Self.tag(of: node))
             .modifier(HeroZoomSource(source: source, namespace: namespace))
     }
 }
