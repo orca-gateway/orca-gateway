@@ -140,9 +140,9 @@ actions `hapticFeedback`, `showConfetti`, `rateApp` and `processPayment`. Both a
 (`plugins/orca_voice_recorder/ios`, product `OrcaVoiceRecorder`), linked through a local path as the
 SDK is, so a change to it shows up on the next build; see "Voice recorder" below. The fourth,
 `VideoPlayerPlugin`, is the video player package (`plugins/orca_video_player/ios`, product
-`OrcaVideoPlayer`), linked the same way; see "Video player" below. It is linked through
-`./OrcaVideoPlayer`, a symlink to that directory, because SwiftPM names a local package after its
-directory and two local packages named `ios` would clash. All four are passed as
+`OrcaVideoPlayer`), linked the same way but through `./OrcaVideoPlayer`, a symlink to it, because
+SwiftPM names a local package after its directory and the voice recorder's is also `ios`; see
+"Video player" below. All four are passed as
 `OrcaApp(..., plugins: [...])`. To see them, start the server (step 1 above) and launch
 the `custom` app:
 
