@@ -125,6 +125,8 @@ struct WidgetView: View {
         case "Text": TextNodeView(node: node)
         case "Divider": DividerView(node: node)
         case "ElevatedButton", "OutlinedButton", "TextButton": ButtonNodeView(node: node, model: model)
+        case "IconButton": IconButtonNodeView(node: node, model: model)
+        case "FloatingActionButton": FloatingActionButtonNodeView(node: node, model: model)
         case "FallbackPrompt": FallbackPromptView(node: node, model: model)
         case "UnsupportedWidgetPlaceholder": UnsupportedWidgetPlaceholderView(node: node, model: model)
         case "Icon": IconNodeView(node: node)
