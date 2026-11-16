@@ -189,12 +189,16 @@ struct DecorationBackground: View {
 ///
 /// Where the parent forces its size (TightAxes: a stretched Column, an
 /// Expanded), the box fills that axis, decoration included, as Flutter's
-/// tight constraints make it.
+/// tight constraints make it. A set `width` or `height` is kept within the
+/// parent's limits (TightForLayout, Flutter's `enforce`): a forced axis
+/// wins, a smaller max caps it, a ConstrainedBox's min raises it; that min,
+/// less the margin, also makes a box with no set size at least that big.
 @MainActor
 struct ContainerView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
     @Environment(\.orcaTight) private var tight
+    @Environment(\.orcaMinimum) private var minimum
 
     var body: some View {
         let decoration = BoxDecorationProps(node["decoration"])
@@ -209,7 +213,7 @@ struct ContainerView: View {
             .orcaPadding(node["padding"])
             .frame(maxWidth: fillsWidth ? .infinity : nil, maxHeight: fillsHeight ? .infinity : nil,
                    alignment: .topLeading)
-            .frame(width: width, height: height, alignment: .topLeading)
+            .modifier(TightFor(width: width, height: height, minimum: innerMinimum))
             .modifier(ClipIf(shape: Props.clips(node["clipBehavior"]) ? shape : nil))
             .background {
                 if let decoration {
@@ -221,6 +225,19 @@ struct ContainerView: View {
             .orcaPadding(node["margin"])
     }
 
+    /// The parent's min inside the margin (Flutter's margin Padding deflates it).
+    private var innerMinimum: CGSize {
+        let outer = minimum.size(for: node.id)
+        let margin = Props.insets(node["margin"]) ?? EdgeInsets()
+        return CGSize(width: max(outer.width - margin.leading - margin.trailing, 0),
+                      height: max(outer.height - margin.top - margin.bottom, 0))
+    }
+
+    /// The axes with a set size, which bound the child.
+    private var setAxes: TightAxes {
+        [Props.number(node["width"]) != nil ? .horizontal : [], Props.number(node["height"]) != nil ? .vertical : []]
+    }
+
     @ViewBuilder
     private var aligned: some View {
         if node.childIds.isEmpty {
@@ -228,11 +245,11 @@ struct ContainerView: View {
         } else if node["alignment"] != nil {
             ChildView(node: node, model: model)
                 .environment(\.orcaTight, [])
+                .modifier(Bound(axes: setAxes))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: Props.alignment(node["alignment"]))
         } else {
             ChildView(node: node, model: model)
-                .modifier(AddTight(axes: [Props.number(node["width"]) != nil ? .horizontal : [],
-                                          Props.number(node["height"]) != nil ? .vertical : []]))
+                .modifier(AddTight(axes: setAxes))
         }
     }
 }

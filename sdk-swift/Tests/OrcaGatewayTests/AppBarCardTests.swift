@@ -102,21 +102,34 @@ final class AppBarCardTests: XCTestCase {
     }
 
     /// A1.11: clipBehavior, when sent, clips the child to the card's shape;
-    /// absent, a child larger than the card is not clipped. The card is 100
-    /// square (its child Container), the red grandchild 300 square.
+    /// absent, a child that overflows the card is not clipped. The card (no
+    /// margin, at 0, 0) is 60 square, its child a Stack sized by a 60 by 60
+    /// SizedBox, whose red Positioned square (left 40, top 40, 60 by 60)
+    /// hangs 40 past its right and bottom (the Kotlin twin's fixture).
     func testA1_11CardClipBehaviorClipsTheChildOnlyWhenSent() throws {
-        let oversized: [String: JSONValue] = ["width": 100, "height": 100]
-        let clipped = try drawCard(["clipBehavior": "antiAlias", "borderRadius": 0], child: oversized,
-                                   grandchild: ["color": "#FF0000", "width": 300, "height": 300],
-                                   width: 200, height: 200)
-        assertRect(try XCTUnwrap(clipped.bounds(of: Pixels.isRed), "child not drawn"),
-                   CGRect(x: 4, y: 4, width: 100, height: 100))
+        func overhanging(_ card: [String: JSONValue]) throws -> Pixels {
+            var props: [String: JSONValue] = ["elevation": 0, "borderRadius": 0,
+                                              "margin": ["top": 0, "right": 0, "bottom": 0, "left": 0]]
+            props.merge(card) { $1 }
+            let components = [
+                Self.node("card", "Card", props: props, children: ["stack"]),
+                Self.node("stack", "Stack", childMode: "multi", props: [:], children: ["box", "pos"]),
+                Self.node("box", "SizedBox", props: ["width": 60, "height": 60]),
+                Self.node("pos", "Positioned", props: ["left": 40, "top": 40, "width": 60, "height": 60],
+                          children: ["red"]),
+                Self.node("red", "Container", props: ["color": "#FF0000"]),
+            ]
+            return try render(NodeView(id: "card", model: model(components)), width: 200, height: 200,
+                              direction: .leftToRight)
+        }
 
-        let open = try drawCard(["borderRadius": 0], child: oversized,
-                                grandchild: ["color": "#FF0000", "width": 300, "height": 300],
-                                width: 200, height: 200)
+        let clipped = try overhanging(["clipBehavior": "antiAlias"])
+        assertRect(try XCTUnwrap(clipped.bounds(of: Pixels.isRed), "child not drawn"),
+                   CGRect(x: 40, y: 40, width: 20, height: 20))
+
+        let open = try overhanging([:])
         assertRect(try XCTUnwrap(open.bounds(of: Pixels.isRed), "child not drawn"),
-                   CGRect(x: 4, y: 4, width: 196, height: 196))
+                   CGRect(x: 40, y: 40, width: 60, height: 60))
     }
 
     /// A1.11 and D4: a Card's `padding` and `margin` are absolute EdgeInsets:
@@ -289,19 +302,14 @@ final class AppBarCardTests: XCTestCase {
                           direction: direction)
     }
 
-    /// A Card with `props` holding a Container with `child` props (and that
-    /// one a Container with `grandchild` props), in a `width` by `height`
-    /// canvas.
-    func drawCard(_ props: [String: JSONValue], child: [String: JSONValue],
-                  grandchild: [String: JSONValue]? = nil, width: CGFloat, height: CGFloat,
+    /// A Card with `props` holding a Container with `child` props, in a
+    /// `width` by `height` canvas.
+    func drawCard(_ props: [String: JSONValue], child: [String: JSONValue], width: CGFloat, height: CGFloat,
                   direction: LayoutDirection = .leftToRight) throws -> Pixels {
-        var components = [
+        let components = [
             Self.node("card", "Card", props: props, children: ["child"]),
-            Self.node("child", "Container", props: child, children: grandchild == nil ? [] : ["grandchild"]),
+            Self.node("child", "Container", props: child),
         ]
-        if let grandchild {
-            components.append(Self.node("grandchild", "Container", props: grandchild))
-        }
         return try render(NodeView(id: "card", model: model(components)), width: width, height: height,
                           direction: direction)
     }

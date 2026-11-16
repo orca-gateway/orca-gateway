@@ -4,25 +4,37 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.orcagateway.core.render.ResolvedNode
+import com.orcagateway.sdk.widgets.AlignWidget
 import com.orcagateway.sdk.widgets.AnimatedBuilderWidget
 import com.orcagateway.sdk.widgets.AppBarWidget
+import com.orcagateway.sdk.widgets.AspectRatioWidget
+import com.orcagateway.sdk.widgets.BaselineWidget
 import com.orcagateway.sdk.widgets.BottomNavItemWidget
 import com.orcagateway.sdk.widgets.BottomNavigationBarWidget
 import com.orcagateway.sdk.widgets.ButtonWidget
 import com.orcagateway.sdk.widgets.CardWidget
 import com.orcagateway.sdk.widgets.CenterWidget
 import com.orcagateway.sdk.widgets.ClipRRectWidget
+import com.orcagateway.sdk.widgets.ConstrainedBoxWidget
 import com.orcagateway.sdk.widgets.ContainerWidget
 import com.orcagateway.sdk.widgets.DividerWidget
 import com.orcagateway.sdk.widgets.DrawerWidget
 import com.orcagateway.sdk.widgets.ExpandedWidget
 import com.orcagateway.sdk.widgets.FallbackPromptWidget
+import com.orcagateway.sdk.widgets.FittedBoxWidget
 import com.orcagateway.sdk.widgets.FlexWidget
+import com.orcagateway.sdk.widgets.FlexibleWidget
+import com.orcagateway.sdk.widgets.FractionallySizedBoxWidget
 import com.orcagateway.sdk.widgets.GestureDetectorWidget
 import com.orcagateway.sdk.widgets.IconWidget
 import com.orcagateway.sdk.widgets.ImageWidget
+import com.orcagateway.sdk.widgets.IntrinsicHeightWidget
+import com.orcagateway.sdk.widgets.IntrinsicWidthWidget
+import com.orcagateway.sdk.widgets.LimitedBoxWidget
+import com.orcagateway.sdk.widgets.OffstageWidget
 import com.orcagateway.sdk.widgets.PaddingWidget
 import com.orcagateway.sdk.widgets.PositionedWidget
+import com.orcagateway.sdk.widgets.SafeAreaWidget
 import com.orcagateway.sdk.widgets.ScaffoldWidget
 import com.orcagateway.sdk.widgets.ScrollWidget
 import com.orcagateway.sdk.widgets.SizedBoxWidget
@@ -32,6 +44,7 @@ import com.orcagateway.sdk.widgets.TextFieldWidget
 import com.orcagateway.sdk.widgets.TextWidget
 import com.orcagateway.sdk.widgets.TransformWidget
 import com.orcagateway.sdk.widgets.VideoWidget
+import com.orcagateway.sdk.widgets.WrapWidget
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -87,12 +100,13 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 31 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 44 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
-         * and S10's BottomNavigationBar, BottomNavItem and Drawer. Keep the two
-         * lists in step: the caps vector advertises what this draws
+         * S10's BottomNavigationBar, BottomNavItem and Drawer, and the 13
+         * layout wrappers of native parity step 3 (A3.1). Keep the two lists
+         * in step: the caps vector advertises what this draws
          * (WidgetBuildersTest checks it).
          */
         public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
@@ -127,6 +141,21 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("BottomNavigationBar") { node, model, modifier -> BottomNavigationBarWidget(node, model, modifier) }
             register("BottomNavItem") { node, _, modifier -> BottomNavItemWidget(node, modifier) }
             register("Drawer") { node, model, modifier -> DrawerWidget(node, model, modifier) }
+            register("Align") { node, model, modifier -> AlignWidget(node, model, modifier) }
+            register("AspectRatio") { node, model, modifier -> AspectRatioWidget(node, model, modifier) }
+            register("Baseline") { node, model, modifier -> BaselineWidget(node, model, modifier) }
+            register("ConstrainedBox") { node, model, modifier -> ConstrainedBoxWidget(node, model, modifier) }
+            register("FittedBox") { node, model, modifier -> FittedBoxWidget(node, model, modifier) }
+            register("Flexible") { node, model, modifier -> FlexibleWidget(node, model, modifier) }
+            register("FractionallySizedBox") { node, model, modifier ->
+                FractionallySizedBoxWidget(node, model, modifier)
+            }
+            register("IntrinsicHeight") { node, model, modifier -> IntrinsicHeightWidget(node, model, modifier) }
+            register("IntrinsicWidth") { node, model, modifier -> IntrinsicWidthWidget(node, model, modifier) }
+            register("LimitedBox") { node, model, modifier -> LimitedBoxWidget(node, model, modifier) }
+            register("Offstage") { node, model, modifier -> OffstageWidget(node, model, modifier) }
+            register("SafeArea") { node, model, modifier -> SafeAreaWidget(node, model, modifier) }
+            register("Wrap") { node, model, modifier -> WrapWidget(node, model, modifier) }
         }
     }
 }

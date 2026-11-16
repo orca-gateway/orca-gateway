@@ -1,0 +1,808 @@
+{
+  "name": "layout-wrappers",
+  "description": "Column holding the 13 layout and sizing wrappers with every prop each can carry on the wire: Align (bottomRight, widthFactor 0.5, heightFactor 2), AspectRatio 16/9, Baseline 20 alphabetic, ConstrainedBox with all four bounds, FittedBox cover with alignment topLeft (on the wire; Flutter does not read it), Flexible flex 2 loose inside a Row, FractionallySizedBox widthFactor 0.5 heightFactor 0.25 centerLeft, IntrinsicHeight around a stretched Row, IntrinsicWidth with stepWidth 8 and stepHeight 4 around a stretched Column, LimitedBox 100 x 50, Offstage bound to pageState `hidden` (true), SafeArea with top false and the other edges true, and Wrap (spacing 8, runSpacing 4, alignment center, crossAxisAlignment end) with three Text children. Every static prop reaches the wire unchanged, the Offstage binding stays a state Value with `hidden` in its watches, and every client resolver resolves each prop to the listed value.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "props": {},
+    "children": [
+      {
+        "type": "Align",
+        "key": "align",
+        "props": {
+          "alignment": "bottomRight",
+          "widthFactor": 0.5,
+          "heightFactor": 2
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "alignText",
+            "props": {
+              "data": "Align"
+            }
+          }
+        ]
+      },
+      {
+        "type": "AspectRatio",
+        "key": "aspectRatio",
+        "props": {
+          "aspectRatio": 1.7777777777777777
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "aspectRatioText",
+            "props": {
+              "data": "AspectRatio"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Baseline",
+        "key": "baseline",
+        "props": {
+          "baseline": 20,
+          "baselineType": "alphabetic"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "baselineText",
+            "props": {
+              "data": "Baseline"
+            }
+          }
+        ]
+      },
+      {
+        "type": "ConstrainedBox",
+        "key": "constrainedBox",
+        "props": {
+          "constraints": {
+            "minWidth": 40,
+            "maxWidth": 200,
+            "minHeight": 20,
+            "maxHeight": 100
+          }
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "constrainedBoxText",
+            "props": {
+              "data": "ConstrainedBox"
+            }
+          }
+        ]
+      },
+      {
+        "type": "FittedBox",
+        "key": "fittedBox",
+        "props": {
+          "fit": "cover",
+          "alignment": "topLeft"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "fittedBoxText",
+            "props": {
+              "data": "FittedBox"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Row",
+        "key": "flexibleRow",
+        "props": {},
+        "children": [
+          {
+            "type": "Flexible",
+            "key": "flexible",
+            "props": {
+              "flex": 2,
+              "fit": "loose"
+            },
+            "children": [
+              {
+                "type": "Text",
+                "key": "flexibleText",
+                "props": {
+                  "data": "Flexible"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "FractionallySizedBox",
+        "key": "fractionallySizedBox",
+        "props": {
+          "widthFactor": 0.5,
+          "heightFactor": 0.25,
+          "alignment": "centerLeft"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "fractionallySizedBoxText",
+            "props": {
+              "data": "FractionallySizedBox"
+            }
+          }
+        ]
+      },
+      {
+        "type": "IntrinsicHeight",
+        "key": "intrinsicHeight",
+        "props": {},
+        "children": [
+          {
+            "type": "Row",
+            "key": "intrinsicHeightRow",
+            "props": {
+              "crossAxisAlignment": "stretch"
+            },
+            "children": [
+              {
+                "type": "Text",
+                "key": "intrinsicHeightShort",
+                "props": {
+                  "data": "Short"
+                }
+              },
+              {
+                "type": "Text",
+                "key": "intrinsicHeightTall",
+                "props": {
+                  "data": "Taller"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "IntrinsicWidth",
+        "key": "intrinsicWidth",
+        "props": {
+          "stepWidth": 8,
+          "stepHeight": 4
+        },
+        "children": [
+          {
+            "type": "Column",
+            "key": "intrinsicWidthColumn",
+            "props": {
+              "crossAxisAlignment": "stretch"
+            },
+            "children": [
+              {
+                "type": "Text",
+                "key": "intrinsicWidthNarrow",
+                "props": {
+                  "data": "Narrow"
+                }
+              },
+              {
+                "type": "Text",
+                "key": "intrinsicWidthWide",
+                "props": {
+                  "data": "The widest line"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "LimitedBox",
+        "key": "limitedBox",
+        "props": {
+          "maxWidth": 100,
+          "maxHeight": 50
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "limitedBoxText",
+            "props": {
+              "data": "LimitedBox"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Offstage",
+        "key": "offstage",
+        "props": {
+          "offstage": {
+            "type": "state",
+            "scope": "page",
+            "key": "hidden"
+          }
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "offstageText",
+            "props": {
+              "data": "Offstage"
+            }
+          }
+        ]
+      },
+      {
+        "type": "SafeArea",
+        "key": "safeArea",
+        "props": {
+          "top": false,
+          "bottom": true,
+          "left": true,
+          "right": true
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "safeAreaText",
+            "props": {
+              "data": "SafeArea"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Wrap",
+        "key": "wrap",
+        "props": {
+          "spacing": 8,
+          "runSpacing": 4,
+          "alignment": "center",
+          "crossAxisAlignment": "end"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "wrapOne",
+            "props": {
+              "data": "One"
+            }
+          },
+          {
+            "type": "Text",
+            "key": "wrapTwo",
+            "props": {
+              "data": "Two"
+            }
+          },
+          {
+            "type": "Text",
+            "key": "wrapThree",
+            "props": {
+              "data": "Three"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "hidden": true
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "align",
+        "aspectRatio",
+        "baseline",
+        "constrainedBox",
+        "fittedBox",
+        "flexibleRow",
+        "fractionallySizedBox",
+        "intrinsicHeight",
+        "intrinsicWidth",
+        "limitedBox",
+        "offstage",
+        "safeArea",
+        "wrap"
+      ],
+      "watches": []
+    },
+    {
+      "id": "wrap",
+      "type": "Wrap",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "spacing": 8,
+        "runSpacing": 4,
+        "alignment": "center",
+        "crossAxisAlignment": "end"
+      },
+      "children": [
+        "wrapOne",
+        "wrapTwo",
+        "wrapThree"
+      ],
+      "watches": []
+    },
+    {
+      "id": "wrapThree",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Three"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "wrapTwo",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Two"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "wrapOne",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "One"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "safeArea",
+      "type": "SafeArea",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "top": false,
+        "bottom": true,
+        "left": true,
+        "right": true
+      },
+      "children": [
+        "safeAreaText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "safeAreaText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "SafeArea"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "offstage",
+      "type": "Offstage",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "offstage": {
+          "type": "state",
+          "scope": "page",
+          "key": "hidden"
+        }
+      },
+      "children": [
+        "offstageText"
+      ],
+      "watches": [
+        "hidden"
+      ]
+    },
+    {
+      "id": "offstageText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Offstage"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "limitedBox",
+      "type": "LimitedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "maxWidth": 100,
+        "maxHeight": 50
+      },
+      "children": [
+        "limitedBoxText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "limitedBoxText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "LimitedBox"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "intrinsicWidth",
+      "type": "IntrinsicWidth",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "stepWidth": 8,
+        "stepHeight": 4
+      },
+      "children": [
+        "intrinsicWidthColumn"
+      ],
+      "watches": []
+    },
+    {
+      "id": "intrinsicWidthColumn",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisAlignment": "stretch"
+      },
+      "children": [
+        "intrinsicWidthNarrow",
+        "intrinsicWidthWide"
+      ],
+      "watches": []
+    },
+    {
+      "id": "intrinsicWidthWide",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "The widest line"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "intrinsicWidthNarrow",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Narrow"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "intrinsicHeight",
+      "type": "IntrinsicHeight",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {},
+      "children": [
+        "intrinsicHeightRow"
+      ],
+      "watches": []
+    },
+    {
+      "id": "intrinsicHeightRow",
+      "type": "Row",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisAlignment": "stretch"
+      },
+      "children": [
+        "intrinsicHeightShort",
+        "intrinsicHeightTall"
+      ],
+      "watches": []
+    },
+    {
+      "id": "intrinsicHeightTall",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Taller"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "intrinsicHeightShort",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Short"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "fractionallySizedBox",
+      "type": "FractionallySizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "widthFactor": 0.5,
+        "heightFactor": 0.25,
+        "alignment": "centerLeft"
+      },
+      "children": [
+        "fractionallySizedBoxText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "fractionallySizedBoxText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "FractionallySizedBox"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "flexibleRow",
+      "type": "Row",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "flexible"
+      ],
+      "watches": []
+    },
+    {
+      "id": "flexible",
+      "type": "Flexible",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "flex": 2,
+        "fit": "loose"
+      },
+      "children": [
+        "flexibleText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "flexibleText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Flexible"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "fittedBox",
+      "type": "FittedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "fit": "cover",
+        "alignment": "topLeft"
+      },
+      "children": [
+        "fittedBoxText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "fittedBoxText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "FittedBox"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "constrainedBox",
+      "type": "ConstrainedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "constraints": {
+          "minWidth": 40,
+          "maxWidth": 200,
+          "minHeight": 20,
+          "maxHeight": 100
+        }
+      },
+      "children": [
+        "constrainedBoxText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "constrainedBoxText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "ConstrainedBox"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "baseline",
+      "type": "Baseline",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "baseline": 20,
+        "baselineType": "alphabetic"
+      },
+      "children": [
+        "baselineText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "baselineText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Baseline"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "aspectRatio",
+      "type": "AspectRatio",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "aspectRatio": 1.7777777777777777
+      },
+      "children": [
+        "aspectRatioText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "aspectRatioText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "AspectRatio"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "align",
+      "type": "Align",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "alignment": "bottomRight",
+        "widthFactor": 0.5,
+        "heightFactor": 2
+      },
+      "children": [
+        "alignText"
+      ],
+      "watches": []
+    },
+    {
+      "id": "alignText",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "Align"
+      },
+      "children": [],
+      "watches": []
+    }
+  ],
+  "resolved": {
+    "align": {
+      "alignment": "bottomRight",
+      "widthFactor": 0.5,
+      "heightFactor": 2
+    },
+    "aspectRatio": {
+      "aspectRatio": 1.7777777777777777
+    },
+    "baseline": {
+      "baseline": 20,
+      "baselineType": "alphabetic"
+    },
+    "constrainedBox": {
+      "constraints": {
+        "minWidth": 40,
+        "maxWidth": 200,
+        "minHeight": 20,
+        "maxHeight": 100
+      }
+    },
+    "fittedBox": {
+      "fit": "cover",
+      "alignment": "topLeft"
+    },
+    "flexible": {
+      "flex": 2,
+      "fit": "loose"
+    },
+    "fractionallySizedBox": {
+      "widthFactor": 0.5,
+      "heightFactor": 0.25,
+      "alignment": "centerLeft"
+    },
+    "intrinsicHeight": {},
+    "intrinsicWidth": {
+      "stepWidth": 8,
+      "stepHeight": 4
+    },
+    "limitedBox": {
+      "maxWidth": 100,
+      "maxHeight": 50
+    },
+    "offstage": {
+      "offstage": true
+    },
+    "safeArea": {
+      "top": false,
+      "bottom": true,
+      "left": true,
+      "right": true
+    },
+    "wrap": {
+      "spacing": 8,
+      "runSpacing": 4,
+      "alignment": "center",
+      "crossAxisAlignment": "end"
+    }
+  }
+}

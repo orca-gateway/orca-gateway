@@ -59,9 +59,14 @@ internal fun CenterWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
     Layout(content = { ChildView(node, model) }, modifier = modifier, measurePolicy = policy)
 }
 
-private class CenterMeasurePolicy(
+/**
+ * Flutter's `RenderPositionedBox` layout, shared by Center and Align: the
+ * child loose, placed by [alignment] (Center's is the middle).
+ */
+internal class CenterMeasurePolicy(
     private val widthFactor: Double?,
     private val heightFactor: Double?,
+    private val alignment: Alignment = Alignment.Center,
 ) : MeasurePolicy {
     override fun MeasureScope.measure(measurables: List<Measurable>, constraints: Constraints): MeasureResult {
         val child = measurables.firstOrNull()?.measure(constraints.copy(minWidth = 0, minHeight = 0))
@@ -71,7 +76,7 @@ private class CenterMeasurePolicy(
             .coerceIn(constraints.minHeight, constraints.maxHeight)
         return layout(width, height) {
             child?.place(
-                Alignment.Center.align(IntSize(child.width, child.height), IntSize(width, height), layoutDirection),
+                alignment.align(IntSize(child.width, child.height), IntSize(width, height), layoutDirection),
             )
         }
     }

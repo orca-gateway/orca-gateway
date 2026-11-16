@@ -1,10 +1,16 @@
 #if canImport(SwiftUI)
 import SwiftUI
 
-/// A child's `flex`: 0 for an ordinary child, the factor for Expanded and
-/// Spacer.
+/// A child's `flex`: 0 for an ordinary child, the factor for Expanded,
+/// Flexible and Spacer.
 struct FlexFactor: LayoutValueKey {
     static let defaultValue = 0
+}
+
+/// A flex child's fit is loose (a Flexible not `tight`): its share is the
+/// most it may take, not its size (Flutter `FlexFit.loose`).
+struct LooseFlex: LayoutValueKey {
+    static let defaultValue = false
 }
 
 private struct FlexAxisKey: EnvironmentKey {
@@ -48,22 +54,26 @@ extension EnvironmentValues {
     }
 }
 
-/// Flutter's `RenderFlex` for a Row or Column with Expanded or Spacer
-/// children. HStack and VStack cannot split space by weight, so this layout
-/// does what Flutter does:
+/// Flutter's `RenderFlex` for a Row or Column with Expanded, Flexible or
+/// Spacer children. HStack and VStack cannot split space by weight, so this
+/// layout does what Flutter does (`_computeSizes`, `performLayout`):
 ///
 /// 1. Each ordinary child is measured with no limit on the main axis and the
 ///    row's limit on the cross axis.
 /// 2. The main-axis space left after them (and the gaps) is shared by the
-///    flex children in proportion to `flex`; each gets exactly its share.
+///    flex children in proportion to `flex`. A tight child (Expanded,
+///    Spacer, Flexible `tight`) gets exactly its share; a loose one
+///    (Flexible) at most its share, and keeps its own size within it.
 /// 3. The layout is as long as it is offered when `mainAxisSize` is `max`,
 ///    and as wide as its widest child on the cross axis (all of it under
 ///    `stretch`). Children are placed in order, aligned on the cross axis.
 ///
-/// With flex children there is no space left over, so `mainAxisAlignment`
-/// changes nothing, as in Flutter. When the main axis is unbounded (a Column
-/// in a scroll view, where Flutter throws), flex children take their own
-/// size.
+/// What loose children leave of their shares goes to no other child:
+/// `main` (`mainAxisAlignment`) places it, as `_distributeSpace` does, the
+/// Flutter SDK's gap boxes (`gapItems`, any `gap`) counting as items. With
+/// tight children only there is none left. When the main axis is unbounded
+/// (a Column in a scroll view, where Flutter throws), flex children take
+/// their own size.
 ///
 /// `up` is Flutter's `VerticalDirection.up` (LB:119-158): a Column places
 /// its children bottom-to-top, a Row swaps its cross start and end. The
@@ -76,6 +86,8 @@ struct FlexLayout: Layout {
     var fill: Bool
     var gap: CGFloat
     var up = false
+    var main: Props.MainAxis = .start
+    var gapItems = false
 
     struct Measured {
         var mains: [CGFloat]
@@ -117,7 +129,7 @@ struct FlexLayout: Layout {
         for (i, child) in subviews.enumerated() where child[FlexFactor.self] > 0 {
             let share = free.map { $0 * CGFloat(child[FlexFactor.self]) / CGFloat(totalFlex) }
             let size = child.sizeThatFits(proposal(main: share, cross: availableCross))
-            mains[i] = share ?? main(size)
+            mains[i] = share.map { child[LooseFlex.self] ? min(main(size), $0) : $0 } ?? main(size)
             crosses[i] = crossOf(size)
         }
         return Measured(mains: mains, crosses: crosses,
@@ -141,7 +153,11 @@ struct FlexLayout: Layout {
         let boundsCross = axis == .horizontal ? bounds.height : bounds.width
         let reversed = up && axis == .vertical
         let flipped = up && axis == .horizontal
-        var position = axis == .horizontal ? bounds.minX : reversed ? bounds.maxY : bounds.minY
+        let free = max(0, (axis == .horizontal ? bounds.width : bounds.height) - measured.total)
+        let items = subviews.count + (gapItems ? max(subviews.count - 1, 0) : 0)
+        let (lead, space) = distribute(free, items: items)
+        let between = space * (gapItems ? 2 : 1) + gap
+        var position = axis == .horizontal ? bounds.minX + lead : reversed ? bounds.maxY - lead : bounds.minY + lead
         for (i, child) in subviews.enumerated() {
             let childCross = cross == .stretch ? boundsCross : min(measured.crosses[i], boundsCross)
             let end = boundsCross - childCross
@@ -158,7 +174,22 @@ struct FlexLayout: Layout {
                 : CGPoint(x: bounds.minX + offset, y: position)
             child.place(at: point, anchor: .topLeading,
                         proposal: proposal(main: measured.mains[i], cross: childCross))
-            position += reversed ? -gap : measured.mains[i] + gap
+            position += reversed ? -between : measured.mains[i] + between
+        }
+    }
+
+    /// Flutter `MainAxisAlignment._distributeSpace` from the main start (the
+    /// placement walks from the bottom for `up`, and SwiftUI mirrors a Row
+    /// in right-to-left): the space before the first item and between two.
+    private func distribute(_ free: CGFloat, items: Int) -> (lead: CGFloat, between: CGFloat) {
+        let count = CGFloat(items)
+        switch main {
+        case .start: return (0, 0)
+        case .end: return (free, 0)
+        case .center: return (free / 2, 0)
+        case .spaceBetween: return items < 2 ? (0, 0) : (0, free / (count - 1))
+        case .spaceAround: return items == 0 ? (0, 0) : (free / count / 2, free / count)
+        case .spaceEvenly: return (free / (count + 1), free / (count + 1))
         }
     }
 }
@@ -178,6 +209,25 @@ struct ExpandedView: View {
             .frame(maxWidth: axis == .horizontal ? .infinity : nil,
                    maxHeight: axis == .vertical ? .infinity : nil,
                    alignment: .topLeading)
+    }
+}
+
+/// Flutter `Flexible` (LB:234-240), its parent data in RenderFlex: `flex`
+/// (default 1) is read by FlexView; fit `tight` is Expanded's fit, any other
+/// is loose: FlexLayout offers the child its share as a maximum and it keeps
+/// its own size, the main axis not forced. Outside a Row or Column it just
+/// draws its child, as Flutter's release build ignores the parent data.
+@MainActor
+struct FlexibleView: View {
+    let node: ResolvedNode
+    let model: OrcaPageModel
+
+    var body: some View {
+        if node["fit"]?.stringValue == "tight" {
+            ExpandedView(node: node, model: model)
+        } else {
+            ChildView(node: node, model: model)
+        }
     }
 }
 

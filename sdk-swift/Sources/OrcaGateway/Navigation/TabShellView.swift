@@ -290,6 +290,10 @@ private struct TabStack: View {
 /// navigation bar keeps its title, and gets the menu button only when it set
 /// no leading item (`PageChrome`). At a tab's first page a drag from the
 /// leading edge opens the drawer too, unless the page has a drawer there.
+/// The bars take their insets from the page, as Flutter's shell Scaffold
+/// takes them from its body: the tab bar the bottom one, the top bar under
+/// a drawer the top one, so a SafeArea in the page adds neither and keeps
+/// its content between the bars.
 @MainActor
 private struct ShellBar: ViewModifier {
     let model: TabShellModel
@@ -301,7 +305,10 @@ private struct ShellBar: ViewModifier {
         let server = model.showsServerBar(for: route)
         let menu = model.menuTitle(for: route)
         let page = $page
+        let bottom: Edge.Set = model.hidesBar(for: route) ? [] : .bottom
+        let taken = bottom.union(menu == nil ? [] : .top)
         content
+            .environment(\.orcaSafeAreaTaken, taken)
             .overlay(alignment: .leading) {
                 if model.opensDrawerByEdge(for: route), !self.page.hasLeadingDrawer {
                     DrawerEdgeGrip(edge: .leading) { model.openDrawer() }
