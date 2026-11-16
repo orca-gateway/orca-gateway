@@ -124,6 +124,7 @@ struct WidgetView: View {
         case "Card": CardView(node: node, model: model)
         case "Text": TextNodeView(node: node)
         case "RichText": RichTextView(node: node)
+        case "SelectableText": SelectableTextView(node: node)
         case "DefaultTextStyle": DefaultTextStyleView(node: node, model: model)
         case "Divider": DividerView(node: node)
         case "ElevatedButton", "OutlinedButton", "TextButton": ButtonNodeView(node: node, model: model)

@@ -310,10 +310,10 @@ struct JustifiedText: UIViewRepresentable {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .justified
         paragraph.lineSpacing = lineSpacing
-        guard let runs else { return Self.attributed(data, style, paragraph: paragraph) }
+        guard let runs else { return style.attributed(data, paragraph: paragraph) }
         return runs.reduce(into: NSMutableAttributedString()) { text, run in
             let style = TextStyleProps(run.style).onEngineBase
-            let piece = Self.attributed(run.text, style, paragraph: paragraph)
+            let piece = style.attributed(run.text, paragraph: paragraph)
             if let background = style.background {
                 piece.addAttribute(.backgroundColor, value: UIColor(background),
                                    range: NSRange(location: 0, length: piece.length))
@@ -321,41 +321,62 @@ struct JustifiedText: UIViewRepresentable {
             text.append(piece)
         }
     }
+}
 
-    /// `string` in `style`: its font (italic through the descriptor), colour,
-    /// letter and word spacing, and its underline or line-through.
-    static func attributed(_ string: String, _ style: TextStyleProps,
-                           paragraph: NSParagraphStyle) -> NSMutableAttributedString {
-        var font = style.platformFont
-        if style.italic, let italic = font.fontDescriptor.withSymbolicTraits(.traitItalic) {
-            font = UIFont(descriptor: italic, size: 0)
+/// A style as UIKit text attributes, for the UIKit views that draw text
+/// (JustifiedText's label, SelectableText's text view).
+extension TextStyleProps {
+    /// `string` in this style: its font (`font`, else `platformFont`;
+    /// italic through the descriptor), colour, letter and word spacing,
+    /// its underline or line-through, and `paragraph`.
+    func attributed(_ string: String, paragraph: NSParagraphStyle,
+                    font: UIFont? = nil) -> NSMutableAttributedString {
+        var font = font ?? platformFont
+        if italic, let slanted = font.fontDescriptor.withSymbolicTraits(.traitItalic) {
+            font = UIFont(descriptor: slanted, size: 0)
         }
         var attributes: [NSAttributedString.Key: Any] = [.font: font, .paragraphStyle: paragraph]
-        if let color = style.color { attributes[.foregroundColor] = UIColor(color) }
-        if let letterSpacing = style.letterSpacing { attributes[.kern] = letterSpacing }
-        let pattern: NSUnderlineStyle = switch style.decorationStyle {
+        if let color { attributes[.foregroundColor] = UIColor(color) }
+        if let letterSpacing { attributes[.kern] = letterSpacing }
+        let pattern: NSUnderlineStyle = switch decorationStyle {
         case .double: .double
         case .dotted: [.single, .patternDot]
         case .dashed: [.single, .patternDash]
         default: .single
         }
-        let lineColor = style.decorationColor.map { UIColor($0) }
-        if style.underline {
+        let lineColor = decorationColor.map { UIColor($0) }
+        if underline {
             attributes[.underlineStyle] = pattern.rawValue
             attributes[.underlineColor] = lineColor
         }
-        if style.strikethrough {
+        if strikethrough {
             attributes[.strikethroughStyle] = pattern.rawValue
             attributes[.strikethroughColor] = lineColor
         }
         let text = NSMutableAttributedString(string: string, attributes: attributes)
-        if let wordSpacing = style.wordSpacing {
+        if let wordSpacing {
             for (offset, unit) in string.utf16.enumerated() where unit == 0x20 {
-                text.addAttribute(.kern, value: (style.letterSpacing ?? 0) + wordSpacing,
+                text.addAttribute(.kern, value: (letterSpacing ?? 0) + wordSpacing,
                                   range: NSRange(location: offset, length: 1))
             }
         }
         return text
+    }
+
+    /// `platformFont` at the Dynamic Type size `category`, as SwiftUI sizes
+    /// a Text's `font` (or the ambient `.body` when the style has none):
+    /// without a size or a family, the body size at `category`; a family
+    /// scaled from its size (17 without one) as `Font.custom` scales; a
+    /// system font with a size fixed.
+    func platformFont(at category: UIContentSizeCategory) -> UIFont {
+        let traits = UITraitCollection(preferredContentSizeCategory: category)
+        if family != nil {
+            return UIFontMetrics(forTextStyle: .body).scaledFont(for: platformFont, compatibleWith: traits)
+        }
+        guard size == nil else { return platformFont }
+        var body = self
+        body.size = UIFont.preferredFont(forTextStyle: .body, compatibleWith: traits).pointSize
+        return body.platformFont
     }
 }
 
