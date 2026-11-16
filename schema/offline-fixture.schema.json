@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orcagateway.com/schemas/offline-fixture.json",
+  "title": "Offline conformance fixture",
+  "description": "Executable spec for the boot of an app with offline support (static flows). Every Orca SDK (Flutter, Swift, Kotlin) runs each case the same way: seed the store with `saved`, answer GET /version with `version` and GET /config with `config` (recording the requests in order), run the SDK's preload (Flutter: `OrcaApp.preload` over a `StaticFlowManager`), let its saves land, then compare `expected`: the requests, the result, the store after, and, when the boot gave a config, what the page cache serves for each path once the dynamic paths of that config are known. The Flutter SDK is the oracle: an expected value is what it does.",
+  "type": "object",
+  "required": ["name", "description", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/Case" }
+    }
+  },
+  "definitions": {
+    "Case": {
+      "type": "object",
+      "description": "One cold start: a fresh cache over the store as `saved` leaves it, as after a restart.",
+      "required": ["name", "description", "saved", "version", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "description": {
+          "type": "string",
+          "description": "What the case pins, with the row it belongs to; a Flutter quirk kept on purpose says so here."
+        },
+        "saved": { "$ref": "#/definitions/SavedStore" },
+        "version": {
+          "description": "The answer to GET /api/v1/app/:appId/version, or \"fail\": the request does not reach the server (no network). On 200 the body is the engine's getVersionInfo (core/app.ts): `{flows: {name: version}}`, every flow listed, 0 for a flow without a version, plus `forceUpdate: true` only when the app sets it.",
+          "oneOf": [{ "const": "fail" }, { "$ref": "#/definitions/Answer" }]
+        },
+        "config": {
+          "$ref": "#/definitions/Answer",
+          "description": "The answer to GET /api/v1/app/:appId/config, present when the case requests it. On 200 the body is a /config body as the engine serves it (core/app.ts getNavConfig; the shape of navigation-fixture.schema.json#/definitions/Config): a flow's `version` is left out when it is 0; a static flow carries `isStatic` and `pages`, its non-dynamic pages pre-rendered and keyed by route path with no leading slash; a dynamic route carries `isDynamic` and has no page. A request to /config in a case without this key is a transport failure."
+        },
+        "expected": { "$ref": "#/definitions/Expected" }
+      }
+    },
+    "Answer": {
+      "type": "object",
+      "description": "An HTTP answer. The runner sends `body` as its JSON text with status `status`.",
+      "required": ["status", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "integer" },
+        "body": {}
+      }
+    },
+    "SavedStore": {
+      "type": "object",
+      "description": "The store before the boot, by Flutter's key names (StaticFlowManager). Each value is written here as JSON; the store holds its JSON text. An absent key is not in the store.",
+      "additionalProperties": false,
+      "properties": {
+        "orca_nav_config": {
+          "$ref": "navigation-fixture.schema.json#/definitions/Config",
+          "description": "The raw /config body saved by an earlier online boot."
+        },
+        "orca_flow_versions": { "$ref": "#/definitions/Versions" }
+      },
+      "patternProperties": {
+        "^orca_pages_.+$": {
+          "type": "object",
+          "description": "orca_pages_<flow>: the saved pages of one static flow, keyed by route path with no leading slash.",
+          "additionalProperties": { "$ref": "page-response.schema.json#" }
+        }
+      }
+    },
+    "Versions": {
+      "type": "object",
+      "description": "Flow name to version. Only flows whose /config entry has a version are saved.",
+      "additionalProperties": { "type": "integer" }
+    },
+    "Expected": {
+      "type": "object",
+      "required": ["requests", "result", "saved", "serves"],
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "array",
+          "description": "The requests the boot made, in order.",
+          "items": { "enum": ["version", "config"] }
+        },
+        "result": {
+          "description": "What preload gives the host.",
+          "oneOf": [
+            {
+              "type": "object",
+              "description": "A config: its flows, by name, with the version each carries (null when the entry has none). Whether it is the saved config or the fetched one follows from `requests`.",
+              "required": ["config"],
+              "additionalProperties": false,
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "additionalProperties": { "type": ["integer", "null"] }
+                }
+              }
+            },
+            {
+              "const": "forceUpdate",
+              "description": "/version said forceUpdate: the host shows its force-update screen."
+            },
+            {
+              "type": "object",
+              "description": "The boot fails. A string is preload's own message, exact (Flutter throws Exception(message)). `{status}` is the client's error for a /config answer with that status, passed through unchanged (Flutter: OrcaClientException.statusCode).",
+              "required": ["error"],
+              "additionalProperties": false,
+              "properties": {
+                "error": {
+                  "oneOf": [
+                    { "type": "string" },
+                    {
+                      "type": "object",
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "properties": { "status": { "type": "integer" } }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "saved": {
+          "type": "object",
+          "description": "The store after the boot, once its saves have landed. Its keys are exactly the keys in the store.",
+          "additionalProperties": false,
+          "properties": {
+            "orca_nav_config": {
+              "enum": ["config", "saved"],
+              "description": "\"config\": the exact body text this case's /config answer was sent with. \"saved\": the text the case started with, unchanged."
+            },
+            "orca_flow_versions": {
+              "$ref": "#/definitions/Versions",
+              "description": "Compared exactly."
+            }
+          },
+          "patternProperties": {
+            "^orca_pages_.+$": {
+              "type": "array",
+              "description": "The set of page paths stored for that flow (not the page JSON, so no SDK has to re-encode pages byte for byte).",
+              "items": { "type": "string" },
+              "uniqueItems": true
+            }
+          }
+        },
+        "serves": {
+          "type": "object",
+          "description": "Path (route path, no leading slash) to the pageId the page cache returns for it after the boot, or null when the page goes to the network (a dynamic route, a path no static flow of the config saved). Empty when the result is not a config.",
+          "additionalProperties": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}
