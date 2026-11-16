@@ -135,4 +135,4 @@ baseline: cli 51 · engine 828 pass · Flutter 543, analyze clean · sdk-swift 6
 Swift 24, video Swift 26, map Swift 28 (27 on the iOS 18.5 simulator), the three Gradle builds green · both demo
 apps build · generators: no drift (feat/native-parity-s17-map on main 3880607, 2026-11-16)
 
-commits: per task (feat/native-parity-s17-push, stacked on PR #51) · gate: per group (answered at gate 08, 2026-11-16, standing rule) · needs: firebase-messaging added (plan step 17) · open: question 5 (major, iOS A/B): T16, T12, T15, T17, T18 wait
+commits: per task (feat/native-parity-s17-push, stacked on PR #51) · gate: per group (answered at gate 08, 2026-11-16, standing rule) · needs: firebase-messaging added (plan step 17) · question 5 answered A by the user, 2026-11-16 (relayed by the parent session: "PR 50 and 51 merged, go with your recommendation"): T16, T12, T15, T17, T18 go
