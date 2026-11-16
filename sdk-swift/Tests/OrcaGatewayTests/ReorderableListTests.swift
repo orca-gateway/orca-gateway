@@ -79,14 +79,33 @@ final class ReorderableListTests: XCTestCase {
         XCTAssertNotNil(list.dragDelegate)
     }
 
-    func test_B13_3_aDropOnScreenLeavesTheRowsWhereTheyWere() async throws {
-        let model = try Self.model()
+    /// The hosted list's own reorder: UIKit moves the row on screen, then
+    /// asks the List's data source to move it, which calls `onMove`. The
+    /// page's order did not change, so the rows are drawn again in the
+    /// node's child order, and the list stays scrolled where it was.
+    func test_B13_3_aDropOnScreenDrawsTheChildrenInTheirOrderAgain() throws {
+        let model = try Self.model(heights: [90, 100, 110])
         let hosted = Hosted(model)
         defer { hosted.close() }
-        await Self.view(model).move(from: IndexSet(integer: 0), to: 3)?.value
+        let list = try XCTUnwrap(hosted.collectionView)
+        list.setContentOffset(CGPoint(x: 0, y: 40), animated: false)
+        hosted.pump(0.1)
+
+        XCTAssertTrue(list.beginInteractiveMovementForItem(at: IndexPath(item: 0, section: 0)))
+        hosted.pump(0.1)
+        list.updateInteractiveMovementTargetPosition(CGPoint(x: 100, y: 290))
         hosted.pump(0.3)
+        list.endInteractiveMovement()
+        hosted.pump(0.8)
+
+        XCTAssertEqual(model.store.value("moves"), 1)
+        XCTAssertEqual(model.store.value("from"), 0)
         XCTAssertEqual(model.store.value("to"), 3)
-        XCTAssertEqual(try XCTUnwrap(hosted.rows).map(\.height), [30, 40, 50])
+        XCTAssertEqual(model.resolve("list")?.childIds, ["a", "b", "c"])
+        let drawn = try XCTUnwrap(hosted.collectionView)
+        XCTAssertEqual(try XCTUnwrap(hosted.rows).sorted { $0.minY < $1.minY }.map(\.height), [90, 100, 110])
+        XCTAssertTrue(drawn === list, "the list was built again")
+        XCTAssertEqual(drawn.contentOffset.y, 40)
     }
 
     /// Horizontal: a scrolling row of all the children, no list.

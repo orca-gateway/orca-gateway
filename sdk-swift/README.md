@@ -237,6 +237,8 @@ edit mode and no handles.
 - **The order comes from the page.** The list never moves a row itself. After the drop it draws the
   children the page has, so the row goes back unless the action changes the order (page state, or a
   server action that sends the new children).
+- **Padding.** `padding` is drawn inside the rows: its left and right in every row, its top in the
+  first and its bottom in the last, so it scrolls with them.
 - **Horizontal.** With `scrollDirection: "horizontal"` the children are drawn in a scrolling row that
   cannot be reordered: SwiftUI drags rows in a vertical list only.
 - **Scroll triggers.** `onScrollBegin`, `onScrolling` and `onScrollEnd` fire as on a

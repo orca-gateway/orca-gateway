@@ -9,7 +9,11 @@ import SwiftUI
 /// the drop runs `onReorder` with `{oldIndex, newIndex}` (`ReorderDrop`:
 /// `newIndex` is Flutter's raw value), and nothing when the row stays where
 /// it was. The list never moves a row itself: it draws the children the
-/// page has, so the row returns unless the action changes the order.
+/// page has, so the row returns unless the action changes the order. A
+/// SwiftUI List keeps a dropped row where the finger left it when its data
+/// did not move, so every drop gives the rows a new identity (`drops`) and
+/// the List lays them out again in the children's order, scrolled where it
+/// was.
 ///
 /// Horizontal: a scrolling row of the children, with no drag (SwiftUI's
 /// `onMove` is the vertical List's).
@@ -27,6 +31,8 @@ struct ReorderableListNodeView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
     @Environment(\.layoutDirection) private var direction
+    /// The drops so far: the rows' identity, new after each one.
+    @State private var drops = 0
 
     var body: some View {
         if node["scrollDirection"]?.stringValue == "horizontal" {
@@ -76,7 +82,11 @@ struct ReorderableListNodeView: View {
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
             }
-            .onMove { source, destination in move(from: source, to: destination) }
+            .onMove { source, destination in
+                move(from: source, to: destination)
+                drops += 1
+            }
+            .id(drops)
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
