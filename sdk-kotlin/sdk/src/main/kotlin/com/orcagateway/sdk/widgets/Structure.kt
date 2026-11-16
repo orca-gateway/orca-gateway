@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -44,8 +46,11 @@ import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.IntState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -56,6 +61,7 @@ import androidx.compose.ui.graphics.DefaultShadowColor
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -111,7 +117,9 @@ private val LocalDrawerChildDirection = compositionLocalOf<LayoutDirection?> { n
  * is), `body` fills the rest at the top-start with loose constraints,
  * `floatingActionButton` floats bottom-end, and `bottomNavigationBar` sits
  * under the `persistentFooterButton_N` row. The page's snackbars show in its
- * `SnackbarHost` when it is the page root. Bottom sheets are not drawn yet.
+ * `SnackbarHost` when it is the page root. The `bottomSheet` slot is
+ * Flutter's persistent sheet over the body's bottom ([ScaffoldBottomSheet]),
+ * the floating button rising above it.
  *
  * A `drawer` slot is a modal drawer on the leading edge and an `endDrawer`
  * slot one on the trailing edge ([PageDrawer]), each closed until it is
@@ -227,7 +235,7 @@ private fun PageDrawer(
     }
 }
 
-/** The Scaffold itself, inside its drawers: bars, body, floating button, snackbars. */
+/** The Scaffold itself, inside its drawers: bars, body, bottom sheet, floating button, snackbars. */
 @Composable
 private fun ScaffoldFrame(
     node: ResolvedNode,
@@ -238,6 +246,8 @@ private fun ScaffoldFrame(
 ) {
     val footer = indexedSlots(node, "persistentFooterButton")
     val bottomBar = node.slots["bottomNavigationBar"]
+    val sheet = node.slots["bottomSheet"]
+    val sheetRise = remember { mutableIntStateOf(0) }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -261,12 +271,68 @@ private fun ScaffoldFrame(
             }
         },
         snackbarHost = { if (snackbars != null) SnackbarHost(snackbars) },
-        floatingActionButton = { node.slots["floatingActionButton"]?.let { NodeView(it, model) } },
+        floatingActionButton = {
+            node.slots["floatingActionButton"]?.let { NodeView(it, model, if (sheet != null) Modifier.risenBy(sheetRise) else Modifier) }
+        },
         containerColor = Props.color(node["backgroundColor"]) ?: MaterialTheme.colorScheme.background,
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             node.slots["body"]?.let { NodeView(it, model) }
         }
+        if (sheet != null) ScaffoldBottomSheet(sheet, model, padding, onBars = footer.isNotEmpty() || bottomBar != null, sheetRise)
+    }
+}
+
+/**
+ * A Scaffold's `bottomSheet` slot as Flutter's persistent bottom sheet
+ * (MUI scaffold.dart `_maybeBuildPersistentBottomSheet`, `_ScaffoldLayout`
+ * :1240-1258; bottom_sheet.dart:350-420): the node on Material 3's sheet,
+ * its theme's surfaceContainerLow (Flutter's #F7F2FA) with top corners of
+ * 28, elevation 1 with no shadow or tint, as wide as the node and at most
+ * 640, centred, its bottom on the bar and footer row or, without them, on
+ * the Scaffold's bottom edge (Flutter's contentBottom leaves the safe area
+ * to the sheet), as high as the space under the top bar. It lies over the
+ * body, which keeps its size, under the bars and the floating button, and
+ * takes the touches on it as Flutter's Material does. Drawn at once, never
+ * animated or dragged. [rise] is where its top stands over the floating
+ * button's own bottom ([risenBy]).
+ */
+@Composable
+private fun ScaffoldBottomSheet(id: String, model: OrcaPageModel, padding: PaddingValues, onBars: Boolean, rise: MutableIntState) {
+    Layout(
+        content = {
+            Box(
+                Modifier.widthIn(max = 640.dp)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .pointerInput(Unit) {},
+            ) {
+                NodeView(id, model)
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) { measurables, constraints ->
+        // The floating button's bottom is 16 over the bars, or over the inset without them (M3 Scaffold).
+        val fabFloor = padding.calculateBottomPadding().roundToPx()
+        val floor = if (onBars) fabFloor else 0
+        val room = maxOf(0, constraints.maxHeight - floor - padding.calculateTopPadding().roundToPx())
+        val sheet = measurables.single().measure(Constraints(maxWidth = constraints.maxWidth, maxHeight = room))
+        rise.intValue = floor + sheet.height - fabFloor - 16.dp.roundToPx()
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            sheet.place((constraints.maxWidth - sheet.width) / 2, constraints.maxHeight - floor - sheet.height)
+        }
+    }
+}
+
+/**
+ * The floating button over a bottom sheet, Flutter's endFloat with one
+ * (floating_action_button_location.dart:583-585, `FabFloatOffsetY`): raised
+ * until its centre is on the sheet's top edge, never lowered, so it stays
+ * 16 over the bars when the sheet is lower ([rise], [ScaffoldBottomSheet]).
+ */
+private fun Modifier.risenBy(rise: IntState): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    layout(placeable.width, placeable.height) {
+        placeable.place(0, -maxOf(0, rise.intValue - placeable.height / 2))
     }
 }
 
