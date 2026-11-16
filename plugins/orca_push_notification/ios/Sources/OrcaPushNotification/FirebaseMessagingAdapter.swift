@@ -117,6 +117,7 @@ protocol FirebaseMessagingInstance: AnyObject {
 
 extension Messaging: FirebaseMessagingInstance {
     func fetchToken() async throws -> String? {
+        // A continuation, not Firebase's async token(), which returns a non-optional String: a nil token stays nil.
         try await withCheckedThrowingContinuation { continuation in
             // Deprecated from Firebase 12.18 for register(completion:), which is opt-in, so this still
             // works: warning accepted. Follow-up: move to register(completion:) when it is not opt-in.
@@ -127,19 +128,11 @@ extension Messaging: FirebaseMessagingInstance {
     }
 
     func subscribe(topic: String) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            subscribe(toTopic: topic) { error in
-                if let error { continuation.resume(throwing: error) } else { continuation.resume() }
-            }
-        }
+        try await subscribe(toTopic: topic)
     }
 
     func unsubscribe(topic: String) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            unsubscribe(fromTopic: topic) { error in
-                if let error { continuation.resume(throwing: error) } else { continuation.resume() }
-            }
-        }
+        try await unsubscribe(fromTopic: topic)
     }
 }
 
