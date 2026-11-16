@@ -1,0 +1,30 @@
+{
+  "type": "action",
+  "deviceId": "fixture-device",
+  "timestamp": 1793980800000,
+  "payload": {
+    "actionType": "setState",
+    "family": "state",
+    "pageId": "home",
+    "data": {
+      "type": "setState",
+      "key": "count",
+      "scope": "page",
+      "value": {
+        "type": "transform",
+        "input": { "type": "state", "key": "count", "scope": "page" },
+        "by": [{ "type": "add", "by": { "type": "static", "value": 1 } }]
+      }
+    },
+    "durationMs": 1.25,
+    "transformTrace": [
+      { "op": "state", "in": "count", "out": "0" },
+      { "op": "input", "out": "0" },
+      { "op": "add", "in": "0", "out": "1" }
+    ],
+    "affectedWidgets": [
+      { "id": "5", "type": "Text", "watches": ["count"] },
+      { "id": "8", "type": "Container", "watches": ["count", "theme"] }
+    ]
+  }
+}
