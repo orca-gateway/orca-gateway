@@ -231,6 +231,13 @@ public final class OrcaRouter: ObservableObject {
     public let table: RouteTable?
     /// OrcaApp's plugins: every page this router loads is built by it.
     var plugins: OrcaPluginHost?
+    /// The flows of the config the router was made with (Flutter
+    /// `OrcaPage.flows`); empty without a config.
+    let flows: [NavFlow]
+    /// The offline cache every page loader asks first (Flutter
+    /// `OrcaPage.staticFlowManager`). OrcaApp's config boot sets it; nil for
+    /// any other router, whose pages always go to the network.
+    var staticFlowManager: StaticFlowManager?
 
     /// "Now" for route entrances, in milliseconds, on the scale of
     /// `OrcaPageModel.milliseconds(_:)`: the time a push is stamped with.
@@ -280,6 +287,7 @@ public final class OrcaRouter: ObservableObject {
         self.client = client
         self.system = system ?? .live
         self.table = nil
+        self.flows = []
         self.tabs = []
         self.hasDrawer = false
         let root = OrcaRoute(path)
@@ -307,6 +315,7 @@ public final class OrcaRouter: ObservableObject {
         self.system = system ?? .live
         let table = RouteTable(config)
         self.table = table
+        self.flows = config.flows
         self.tabs = config.tabs
         self.hasDrawer = !config.tabs.isEmpty
             && !(config.drawerItems.isEmpty && config.drawerComponents.isEmpty)
@@ -340,6 +349,13 @@ public final class OrcaRouter: ObservableObject {
         let loader = OrcaPageLoader(client: client, path: route.path, router: self)
         loaders[route.id] = loader
         return loader
+    }
+
+    /// The page the offline cache holds for a route path (no leading slash,
+    /// the cache's key): nil without a cache, for a dynamic route and for a
+    /// page no static flow saved. Throws when the saved pages do not decode.
+    func cachedPage(_ path: String) throws -> PageResponse? {
+        try staticFlowManager?.getCachedPage(path, flows: flows)
     }
 
     /// The route on top: the one a user is looking at.

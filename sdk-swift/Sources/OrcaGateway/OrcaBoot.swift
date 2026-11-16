@@ -29,6 +29,35 @@ public final class UserDefaultsKeyValueStore: KeyValueStore, @unchecked Sendable
     }
 }
 
+extension FileKeyValueStore {
+    /// The store OrcaApp uses with `enableOffline` when the host gives no
+    /// `staticFlowManager` (Flutter's `StaticFlowManager()` keeps it in the
+    /// app's SharedPreferences): Application Support/<bundle id>/OrcaGateway,
+    /// or Application Support/OrcaGateway when the main bundle has no id,
+    /// created by the first save. A host that runs `preload` during its own
+    /// splash builds its cache over this store, so the two share one cache:
+    ///
+    ///     let cache = StaticFlowManager(store: FileKeyValueStore.applicationSupport())
+    ///     if case .success(let config) = try await preload(client: client, cache: cache) {
+    ///         OrcaApp(client: client, preloadedConfig: config, staticFlowManager: cache)
+    ///     }
+    public static func applicationSupport() -> FileKeyValueStore {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return applicationSupport(in: support, bundleIdentifier: Bundle.main.bundleIdentifier)
+    }
+
+    /// The store under `support`: <bundleIdentifier>/OrcaGateway, or
+    /// OrcaGateway with no id. Nothing is created here.
+    static func applicationSupport(in support: URL, bundleIdentifier: String?) -> FileKeyValueStore {
+        var directory = support
+        if let bundleIdentifier {
+            directory.appendPathComponent(bundleIdentifier, isDirectory: true)
+        }
+        return FileKeyValueStore(directory: directory.appendingPathComponent("OrcaGateway", isDirectory: true))
+    }
+}
+
 extension OrcaClient {
     /// This client with a device id: its own when it has one, else the one
     /// saved in `store` (made on first run), as `_resolveDeviceId` in
@@ -42,9 +71,11 @@ extension OrcaClient {
     }
 }
 
-/// What OrcaApp does before its first page, the part of `_OrcaAppState`'s
-/// boot in sdk/lib/src/widgets/orca_app.dart the natives have so far: with
-/// `enableOffline`, the version check of `OrcaApp.preload`; a forceUpdate
+/// What OrcaApp does before its first page outside the config boot, part of
+/// `_OrcaAppState`'s boot in sdk/lib/src/widgets/orca_app.dart: with
+/// `enableOffline`, the version check of `OrcaApp.preload` alone (OrcaApp
+/// asks for it with a host `path` or a host's router, which cache nothing;
+/// its config boot runs `preload` in `OrcaAppBoot` instead); a forceUpdate
 /// answer blocks the app, any other answer boots it. Without it the app is
 /// ready at once and asks nothing. Internal: only OrcaApp drives it.
 @MainActor
@@ -79,8 +110,8 @@ final class OrcaBootModel: ObservableObject {
         phase = failure.map(Phase.failed) ?? (enableOffline ? .checking : .ready)
     }
 
-    /// Run the version check once, with no local versions yet (the static
-    /// flow cache arrives with plan step 14).
+    /// Run the version check once, with no local versions: a `path` or a
+    /// host's router keeps no flow versions.
     func start(client: OrcaClient) async {
         guard enableOffline, !started, phase == .checking else { return }
         started = true
