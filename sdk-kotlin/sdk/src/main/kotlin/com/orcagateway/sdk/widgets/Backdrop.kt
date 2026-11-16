@@ -278,7 +278,7 @@ private fun BackdropBox(
                 }
                 if (!blurView) drawContent()
             }
-            .then(if (blurView) Modifier.pointerInput(Unit) {} else Modifier),
+            .then(if (blurView && !LocalPointerBlocked.current) Modifier.pointerInput(Unit) {} else Modifier),
         propagateMinConstraints = true,
     ) {
         ChildView(node, model)

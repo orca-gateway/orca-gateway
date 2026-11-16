@@ -167,7 +167,7 @@ internal fun DecoratedBoxWidget(node: ResolvedNode, model: OrcaPageModel, modifi
         modifier.boxDecoration(decoration)
     }
     Box(drawn, propagateMinConstraints = true) {
-        Box(Modifier.matchParentSize().clip(decoration.shape).pointerInput(Unit) {})
+        if (!LocalPointerBlocked.current) Box(Modifier.matchParentSize().clip(decoration.shape).pointerInput(Unit) {})
         ChildView(node, model)
     }
 }
