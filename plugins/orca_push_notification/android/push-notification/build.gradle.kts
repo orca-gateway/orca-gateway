@@ -26,10 +26,10 @@ val sdkVersion = rootDir.resolve("../../../sdk-kotlin/VERSION").readText().trim(
 // Google's Firebase Cloud Messaging (Apache 2.0, github.com/firebase/firebase-android-sdk),
 // the one library outside the SDK's catalog, so its version lives here. It
 // brings firebase-common, firebase-installations and the Play services it
-// runs on from Google's Maven repository. 26.0.2 (Firebase BoM 35.2.0) is its
-// newest release; its AAR asks for minSdk 24 and no compileSdk above 36. The
-// google-services Gradle plugin is the app's, not applied here.
-val firebaseMessagingVersion = "26.0.2"
+// runs on from Google's Maven repository. Its AAR asks for minSdk 23 (ours is
+// 24). The google-services Gradle plugin is the app's, not applied here.
+// Not newer: from 25.1.0 getToken is deprecated, and warnings are errors here.
+val firebaseMessagingVersion = "25.0.2"
 
 // com.orcagateway:orca-push-notification: the release aar with a sources jar
 // and an empty javadoc jar (no Dokka), as the SDK's modules. The shared POM
