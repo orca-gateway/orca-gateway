@@ -54,7 +54,7 @@ scheme, or pass them to `simctl launch`:
 | Basic actions | `basic-actions` | `home` | navigation, back, URL, clipboard, share, toasts |
 | Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
 | Todo | `todo` | `home` | add, tick, delete |
-| Custom extensions | `custom` | `home` | a plugin widget, plugin actions and the voice recorder (see "Plugins" below) |
+| Custom extensions | `custom` | `home` | a plugin widget, plugin actions, the voice recorder and the video player (see "Plugins" below) |
 | Saved state | `saved-state` | `home` | a count saved on the device or for the session (see "Saved state" below) |
 
 ```bash
@@ -133,13 +133,17 @@ the login page while logged out (`wasRedirected=true`).
 
 ## Plugins
 
-The app registers three plugins. Two are the Swift twins of the Flutter example's: `BadgePlugin`
+The app registers four plugins. Two are the Swift twins of the Flutter example's: `BadgePlugin`
 draws the server's `ColoredBadge` widget in SwiftUI, and `DeviceActionsPlugin` runs the custom
 actions `hapticFeedback`, `showConfetti`, `rateApp` and `processPayment`. Both are in
 `OrcaCounter/OrcaCounterApp.swift`. The third, `VoiceRecorderPlugin`, is the voice recorder package
 (`plugins/orca_voice_recorder/ios`, product `OrcaVoiceRecorder`), linked through a local path as the
-SDK is, so a change to it shows up on the next build; see "Voice recorder" below. All three are
-passed as `OrcaApp(..., plugins: [...])`. To see them, start the server (step 1 above) and launch
+SDK is, so a change to it shows up on the next build; see "Voice recorder" below. The fourth,
+`VideoPlayerPlugin`, is the video player package (`plugins/orca_video_player/ios`, product
+`OrcaVideoPlayer`), linked the same way; see "Video player" below. It is linked through
+`./OrcaVideoPlayer`, a symlink to that directory, because SwiftPM names a local package after its
+directory and two local packages named `ios` would clash. All four are passed as
+`OrcaApp(..., plugins: [...])`. To see them, start the server (step 1 above) and launch
 the `custom` app:
 
 ```bash
@@ -184,6 +188,30 @@ xcrun simctl privacy <device id> reset microphone com.orcagateway.examples.count
 
 iOS ends an app that uses the microphone without `NSMicrophoneUsageDescription` in its Info.plist,
 so an app of your own that registers the plugin needs the key too.
+
+### Video player
+
+On the `custom` app's home page, tap "Go to Video Page" (or launch straight to it: add
+`SIMCTL_CHILD_ORCA_PATH=video` to the command above). The page, "Video Player", shows the plugin's
+`VideoPlayer` widget: a small grey circle while the video loads, then the video (a butterfly, about
+7.5 seconds, with sound) with a white ▶ in a dark circle over it. Under it are the buttons Play,
+Pause and Seek 0, then Volume 0.5 and Speed 1.5, and the lines "Position: 0 ms" and
+"Finished: false". The video comes over https from flutter.github.io, so the simulator needs the
+Mac's network; a video that cannot load shows "Video failed to load" in its place. Then:
+
+1. Tap the video: it plays, the ▶ goes, and "Position:" counts up in steps of about 100 ms. Tap it
+   again: it pauses, the ▶ comes back and the count stops.
+2. Tap "Play", then "Pause": the same from the buttons, the ▶ going and coming back with them.
+3. While it plays, tap "Seek 0": it goes back to the start and the count starts again from about 0.
+   Paused, it goes back too, but the line keeps its number until it plays: the position is reported
+   only while playing.
+4. Tap "Volume 0.5": the sound, played through the Mac, is half as loud. Tap "Speed 1.5": it plays
+   faster and the count climbs faster. Tapped while paused, the speed applies from the next play.
+5. Let it play to the end: it stops, the ▶ comes back and the line reads "Finished: true". Tap the
+   video or "Play": it plays again from the start.
+
+The https video needs nothing in `Info.plist`: App Transport Security allows https. A video over
+http would need an `NSAppTransportSecurity` exception in the app's own Info.plist.
 
 ## Version check and sessions
 
