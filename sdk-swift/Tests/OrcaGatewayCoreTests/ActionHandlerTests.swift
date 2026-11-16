@@ -128,6 +128,94 @@ final class ActionHandlerTests: XCTestCase {
             // Native parity step 5 (A5.6): run by the page model's handler.
             "refetchPage",
             "persistState", "clearState",
+            // Native parity step 8 (A8.1): run by the page model's handlers.
+            "openDialog", "closeDialog",
         ])
+    }
+
+    // MARK: A8.1 openDialog and closeDialog
+
+    /// Holds a handler until the test lets it go, as a sheet holds openDialog
+    /// until it closes (Flutter awaits showModalBottomSheet, orca_page.dart).
+    @MainActor final class Gate {
+        var continuation: CheckedContinuation<Void, Never>?
+        func wait() async { await withCheckedContinuation { continuation = $0 } }
+        func open() {
+            continuation?.resume()
+            continuation = nil
+        }
+    }
+
+    /// Both are known kinds, as Flutter's executor has a built-in handler for
+    /// each (sdk/lib/src/state/action_executor.dart, openDialog and
+    /// closeDialog), so a chain holding them counts as implemented.
+    func testA8_1_OpenDialogAndCloseDialogAreKnownKinds() {
+        XCTAssertTrue(ActionExecutor.kinds.isSuperset(of: ["openDialog", "closeDialog"]))
+        XCTAssertTrue(ActionExecutor.implements(.openDialog(.init(dialogId: "d", heightFactor: 0.4))))
+        XCTAssertTrue(ActionExecutor.implements(.closeDialog))
+        XCTAssertTrue(ActionExecutor.implements(.actionGroup(.init(actions: [
+            .openDialog(.init(dialogId: "d")), .always(.init(action: .once(.init(action: .closeDialog)))),
+        ]))))
+    }
+
+    /// With no page handler each runs nothing: no state change and no effect
+    /// (Flutter's openDialog awaits a null onOpenDialog, its closeDialog has
+    /// no context), the chain goes on, and DevTools hears each as a run
+    /// action, as Flutter reports every action a handler took.
+    @MainActor func testA8_1_WithNoHandlerBothChangeNoStateAndEmitNoEffect() async throws {
+        let debug = EventRecorder()
+        OrcaDebug.reporter = debug
+        defer { OrcaDebug.reporter = nil }
+        let state = StoreState(page: ["count": 0, "flag": true], app: ["user": "amr"])
+        let (executor, recorder, effects) = executor(state, handlers: [])
+        try await executor.execute(.actionGroup(.init(actions: [
+            .openDialog(.init(dialogId: "d", heightFactor: 0.4)),
+            .closeDialog,
+            .setState(.init(key: "count", value: 1)),
+        ])))
+        var after = state
+        after.page["count"] = 1
+        XCTAssertEqual(executor.store.state, after, "only the setState after them changed state")
+        XCTAssertEqual(effects(), [])
+        XCTAssertEqual(recorder.names, [])
+        let reported = debug.of("action").compactMap { $0.payload["actionType"]?.stringValue }
+        XCTAssertEqual(reported, ["openDialog", "closeDialog", "setState", "actionGroup"])
+    }
+
+    /// A page registers openDialog and closeDialog as it registers
+    /// refetchPage: each handler gets the action as sent (dialogId and
+    /// heightFactor), and nothing goes out as an effect.
+    @MainActor func testA8_1_ARegisteredHandlerRunsWithTheAction() async throws {
+        let (executor, recorder, effects) = executor(handlers: ["openDialog", "closeDialog"])
+        try await executor.execute(.openDialog(.init(dialogId: "confirm", heightFactor: 0.4)))
+        try await executor.execute(.openDialog(.init(dialogId: "plain")))
+        try await executor.execute(.closeDialog)
+        XCTAssertEqual(recorder.names, ["openDialog", "openDialog", "closeDialog"])
+        XCTAssertEqual(recorder.calls.map(\.action), [
+            ["type": "openDialog", "dialogId": "confirm", "heightFactor": 0.4],
+            ["type": "openDialog", "dialogId": "plain"],
+            ["type": "closeDialog"],
+        ])
+        XCTAssertEqual(effects(), [])
+    }
+
+    /// The action after openDialog in a sequential group runs only once the
+    /// page's handler returns, that is once its sheet has closed.
+    @MainActor func testA8_1_TheNextActionWaitsForTheOpenDialogHandler() async throws {
+        let executor = ActionExecutor(store: ElmStore(StoreState(page: ["after": 0])))
+        let gate = Gate()
+        executor.registerHandler("openDialog") { _, _ in await gate.wait() }
+        let chain = Task { @MainActor in
+            try await executor.execute(.actionGroup(.init(mode: "sequential", actions: [
+                .openDialog(.init(dialogId: "d", heightFactor: 0.4)),
+                .setState(.init(key: "after", value: 1)),
+            ])))
+        }
+        for _ in 0..<1000 where gate.continuation == nil { await Task.yield() }
+        XCTAssertNotNil(gate.continuation, "the handler never started")
+        XCTAssertEqual(executor.store.state.page["after"], 0, "ran before the sheet closed")
+        gate.open()
+        try await chain.value
+        XCTAssertEqual(executor.store.state.page["after"], 1)
     }
 }

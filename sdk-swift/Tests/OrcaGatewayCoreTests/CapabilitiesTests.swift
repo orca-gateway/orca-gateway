@@ -165,8 +165,9 @@ final class CapabilitiesTests: XCTestCase {
         let listed = Set((implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue))
         XCTAssertEqual(Set(GeneratedCapabilities.actionKinds), listed)
         XCTAssertTrue(listed.isSubset(of: Set(Action.kinds)))
-        // 23 before step 5's refetchPage (A5.6), 24 before step 14's persistState and clearState.
-        XCTAssertEqual(listed.count, 26)
+        // 23 before step 5's refetchPage (A5.6), 24 before step 14's persistState and clearState,
+        // 26 before native parity step 8's openDialog and closeDialog (A8.1).
+        XCTAssertEqual(listed.count, 28)
         XCTAssertTrue(listed.isSuperset(of: ["switchTab", "openDrawer"]))
         XCTAssertTrue(listed.isSuperset(of: ["once", "always", "debugLog"]))
         XCTAssertTrue(listed.contains("updateSubPage"))
@@ -194,6 +195,25 @@ final class CapabilitiesTests: XCTestCase {
         XCTAssertTrue(ActionExecutor.kinds.contains("refetchPage"))
         XCTAssertTrue(ActionExecutor.implements(.refetchPage))
         XCTAssertTrue(ActionExecutor.implements(.always(.init(action: .once(.init(action: .refetchPage))))))
+    }
+
+    /// A8.1: openDialog and closeDialog are advertised, each once, and the
+    /// executor runs both as known kinds (the page model's handlers, else
+    /// nothing and no effect, as Flutter's), so the engine keeps a node whose
+    /// action opens or closes a dialog (capability-filter.ts degrades a node
+    /// whose action kind is not advertised).
+    func testA8_1_OpenDialogAndCloseDialogAreAdvertisedAndKnownToTheExecutor() throws {
+        let implemented = try Fixtures.json("sdk-swift/capabilities.json")
+        let listed = (implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue)
+        XCTAssertEqual(listed, listed.sorted(), "capabilities.json actionKinds unsorted")
+        for kind in ["openDialog", "closeDialog"] {
+            XCTAssertTrue(listed.contains(kind), "\(kind) not in capabilities.json")
+            XCTAssertEqual(GeneratedCapabilities.actionKinds.filter { $0 == kind }.count, 1,
+                           "\(kind) is not advertised exactly once")
+            XCTAssertTrue(ActionExecutor.kinds.contains(kind))
+        }
+        XCTAssertTrue(ActionExecutor.implements(.openDialog(.init(dialogId: "d", heightFactor: 0.4))))
+        XCTAssertTrue(ActionExecutor.implements(.always(.init(action: .once(.init(action: .closeDialog))))))
     }
 
     func testValueKindsTransformsAndOpsAreComplete() {
