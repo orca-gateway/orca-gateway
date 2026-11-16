@@ -225,6 +225,12 @@ struct ContainerView: View {
     private var aligned: some View {
         if node.childIds.isEmpty {
             Color.clear
+        } else if case .object? = node["alignment"] {
+            // An AnimatedContainer mid-run: the alignment is a point between
+            // two names, which a SwiftUI Alignment cannot say.
+            AlignLayout(point: Props.unitPoint(node["alignment"])) {
+                ChildView(node: node, model: model).environment(\.orcaTight, [])
+            }
         } else if node["alignment"] != nil {
             ChildView(node: node, model: model)
                 .environment(\.orcaTight, [])

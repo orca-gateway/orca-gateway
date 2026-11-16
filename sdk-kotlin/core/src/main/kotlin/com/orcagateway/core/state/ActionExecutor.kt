@@ -217,6 +217,18 @@ public class ActionExecutor(
 
             Action.OpenDrawer -> emit(ActionEffect("openDrawer", emptyMap()))
 
+            // The page model plays it on its animation registry; an id no
+            // builder registered still goes out. No id, no effect (Dart).
+            is Action.AnimateForward ->
+                if (action.animationId.isNotEmpty()) {
+                    emit(ActionEffect("animateForward", mapOf("animationId" to JsonValue.String(action.animationId))))
+                }
+
+            is Action.AnimateReverse ->
+                if (action.animationId.isNotEmpty()) {
+                    emit(ActionEffect("animateReverse", mapOf("animationId" to JsonValue.String(action.animationId))))
+                }
+
             is Action.OpenUrl ->
                 emit(ActionEffect("openUrl", mapOf("url" to JsonValue.String(resolver.resolveToString(action.url ?: JsonValue.Null)))))
 
@@ -402,7 +414,7 @@ public class ActionExecutor(
             "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
             "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
             "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
-            "once", "always", "debugLog",
+            "once", "always", "debugLog", "animateForward", "animateReverse",
         )
 
         /** True when the action and everything nested in it is implemented. */

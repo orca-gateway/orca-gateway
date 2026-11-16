@@ -16,6 +16,17 @@ import com.orcagateway.sdk.widgets.hasLifecycleTriggers
 internal val LocalOrcaAnimationProgress = compositionLocalOf<Double?> { null }
 
 /**
+ * Set below a layer that is drawn from a snapshot and not from the page (an
+ * AnimatedSwitcher's outgoing child, which the page may no longer hold): the
+ * resolved nodes to draw, by id ([OrcaNodeSnapshot.frozen]). Null, the
+ * default, is the live page.
+ */
+internal val LocalOrcaFrozenNodes = compositionLocalOf<Map<String, ResolvedNode>?> { null }
+
+/** Where the live nodes drawn below this point are recorded as they are resolved; null: nowhere. */
+internal val LocalOrcaNodeRecorder = compositionLocalOf<OrcaNodeSnapshot?> { null }
+
+/**
  * Draws one node of a page by id, and everything below it. Each node
  * observes only its own watched keys (and changes to the node tree); the
  * model itself is not observed here, so a toast appearing does not redraw
@@ -27,18 +38,32 @@ internal val LocalOrcaAnimationProgress = compositionLocalOf<Double?> { null }
  * A node setting onInit, onVisible or an app trigger also gets
  * [LifecycleTriggers] (Flutter's OrcaLifecycleWrapper), which draws nothing;
  * other nodes are composed exactly as before.
+ *
+ * Under [LocalOrcaFrozenNodes] the node is the snapshot's and inert: it
+ * observes nothing, is not resolved again, runs no lifecycle trigger, its
+ * actions are [OrcaPageModel.INERT_ACTION]. It is drawn by the same
+ * builder at the same place, so a widget keeps its composition state as it
+ * turns from live to frozen; a builder that runs something of its own
+ * (an animation) asks [LocalOrcaFrozenNodes] and stops it.
  */
 @Composable
 public fun NodeView(id: String, model: OrcaPageModel, modifier: Modifier = Modifier) {
-    val observer = remember(model, id) { NodeObserver(model, id) }
-    // Reading the revision ties this node to its watches: the node is
-    // resolved again only when one of them, or the tree, changed.
-    val revision = observer.revision
-    // Under an AnimatedBuilder the progress changes every frame, and the
-    // node is resolved again with it so its `tween` props move.
-    val progress = LocalOrcaAnimationProgress.current
-    val node = remember(observer, revision, progress) { model.resolve(id, progress) } ?: return
-    if (hasLifecycleTriggers(node)) LifecycleTriggers(node, model)
+    val frozen = LocalOrcaFrozenNodes.current
+    val node = if (frozen != null) {
+        frozen[id] ?: return
+    } else {
+        val observer = remember(model, id) { NodeObserver(model, id) }
+        // Reading the revision ties this node to its watches: the node is
+        // resolved again only when one of them, or the tree, changed.
+        val revision = observer.revision
+        // Under an AnimatedBuilder the progress changes every frame, and the
+        // node is resolved again with it so its `tween` props move.
+        val progress = LocalOrcaAnimationProgress.current
+        val live = remember(observer, revision, progress) { model.resolve(id, progress) } ?: return
+        LocalOrcaNodeRecorder.current?.record(live)
+        if (hasLifecycleTriggers(live)) LifecycleTriggers(live, model)
+        live
+    }
     WidgetView(node, model, modifier)
 }
 

@@ -40,7 +40,7 @@ final class CapabilitiesTests: XCTestCase {
         let listed = Set((implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue))
         XCTAssertEqual(Set(GeneratedCapabilities.actionKinds), listed)
         XCTAssertTrue(listed.isSubset(of: Set(Action.kinds)))
-        XCTAssertEqual(listed.count, 20)
+        XCTAssertEqual(listed.count, 22)
         XCTAssertTrue(listed.isSuperset(of: ["switchTab", "openDrawer"]))
         XCTAssertTrue(listed.isSuperset(of: ["once", "always", "debugLog"]))
         // The executor runs exactly what is advertised, plus the server-only

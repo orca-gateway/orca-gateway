@@ -20,9 +20,9 @@ final class ActionFixtureTests: XCTestCase {
         func append(_ effect: JSONValue) { list.append(effect) }
     }
 
-    @MainActor func testAllTwentyFourActionFixturesPass() async throws {
+    @MainActor func testAllTwentySixActionFixturesPass() async throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 24)
+        XCTAssertEqual(files.count, 26)
         for (name, fx) in files { try await run(name, fx) }
     }
 
@@ -108,7 +108,7 @@ final class ActionFixtureTests: XCTestCase {
     func testImplementsLooksInsideOnceAndAlways() {
         XCTAssertTrue(ActionExecutor.implements(.once(.init(action: .goBack))))
         XCTAssertTrue(ActionExecutor.implements(.always(.init(action: .debugLog(.init())))))
-        XCTAssertFalse(ActionExecutor.implements(.once(.init(action: .animateForward(.init(animationId: "a"))))))
+        XCTAssertFalse(ActionExecutor.implements(.once(.init(action: .closeDialog))))
         XCTAssertFalse(ActionExecutor.implements(.always(.init(action: .once(.init(action: .refetchPage))))))
     }
 
@@ -116,7 +116,7 @@ final class ActionFixtureTests: XCTestCase {
 
     @MainActor func testUnimplementedKindsChangeNothing() async throws {
         let state = StoreState(page: ["count": 1])
-        let (next, effects) = ActionReducer().reduce(state, .animateForward(.init(animationId: "a")))
+        let (next, effects) = ActionReducer().reduce(state, .refetchPage)
         XCTAssertEqual(next, state)
         XCTAssertEqual(effects, [])
 
@@ -124,11 +124,11 @@ final class ActionFixtureTests: XCTestCase {
         let executor = ActionExecutor(store: store)
         var seen: [ActionEffect] = []
         executor.onEffect = { seen.append($0) }
-        try await executor.execute(.animateForward(.init(animationId: "a")))
+        try await executor.execute(.refetchPage)
         try await executor.execute(.closeDialog)
         XCTAssertEqual(store.state, state)
         XCTAssertEqual(seen, [])
-        XCTAssertFalse(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .animateForward(.init(animationId: "a"))]))))
+        XCTAssertFalse(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .refetchPage]))))
         XCTAssertTrue(ActionExecutor.implements(.actionGroup(.init(actions: [.goBack, .setState(.init(key: "a", value: 1))]))))
     }
 
@@ -151,6 +151,54 @@ final class ActionFixtureTests: XCTestCase {
         XCTAssertEqual(order, ["effect:switchTab", "perform:switchTab", "effect:openDrawer", "perform:openDrawer"])
         XCTAssertEqual(store.state, state)
         XCTAssertTrue(ActionExecutor.implements(.actionGroup(.init(actions: [.switchTab(.init(tabId: "a")), .openDrawer]))))
+    }
+
+    /// B12.1-S: fixture 32, the two animation effects in their place in a
+    /// sequential group, state untouched by them.
+    @MainActor func testB12_1_S_AnimateForwardAndReverseEmitTheirId_fixture32() async throws {
+        try await run(fixture: "32_animate_forward_reverse.json")
+    }
+
+    /// B12.1-S: fixture 33, an id no builder registered still goes out and
+    /// the group runs on.
+    @MainActor func testB12_1_S_AnimateUnknownIdStillEmitsAndTheGroupGoesOn_fixture33() async throws {
+        try await run(fixture: "33_animate_unknown_id.json")
+    }
+
+    /// B12.1-S: the two animation effects go out as data, then to the
+    /// platform (the page model's registry), and leave the state alone; an
+    /// empty id emits nothing and the group runs its next action.
+    @MainActor func testB12_1_S_AnimateEmitsThenPerformsAndAnEmptyIdEmitsNothing() async throws {
+        let state = StoreState(page: ["count": 1])
+        let store = ElmStore(state)
+        let executor = ActionExecutor(store: store)
+        var order: [String] = []
+        var seen: [ActionEffect] = []
+        executor.onEffect = { seen.append($0); order.append("effect:\($0.type)") }
+        executor.perform = { order.append("perform:\($0.type)") }
+
+        try await executor.execute(.animateForward(.init(animationId: "pulse")))
+        try await executor.execute(.animateReverse(.init(animationId: "pulse")))
+        XCTAssertEqual(seen, [
+            ActionEffect("animateForward", ["animationId": "pulse"]),
+            ActionEffect("animateReverse", ["animationId": "pulse"]),
+        ])
+        XCTAssertEqual(order, [
+            "effect:animateForward", "perform:animateForward", "effect:animateReverse", "perform:animateReverse",
+        ])
+        XCTAssertEqual(store.state, state)
+
+        seen = []
+        try await executor.execute(.actionGroup(.init(actions: [
+            .animateForward(.init(animationId: "")), .animateReverse(.init(animationId: "")), .goBack,
+        ])))
+        XCTAssertEqual(seen, [ActionEffect("goBack")])
+        XCTAssertEqual(store.state, state)
+        XCTAssertTrue(ActionExecutor.implements(.actionGroup(.init(actions: [
+            .animateForward(.init(animationId: "a")), .animateReverse(.init(animationId: "a")),
+        ]))))
+        XCTAssertTrue(ActionExecutor.kinds.isSuperset(of: ["animateForward", "animateReverse"]))
+        XCTAssertTrue(Set(GeneratedCapabilities.actionKinds).isSuperset(of: ["animateForward", "animateReverse"]))
     }
 
     func testSetStateWritesTheAppScopeAndReadsEventData() {

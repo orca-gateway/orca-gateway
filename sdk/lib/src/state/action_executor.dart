@@ -793,6 +793,7 @@ class ActionExecutor {
     _handlers['animateForward'] = (action, exec) async {
       final id = action['animationId'] as String?;
       if (id == null) return;
+      exec._emit('animateForward', {'animationId': id});
       // Reset to start so the animation replays on every trigger.
       exec.animationRegistry?.getController(id)?.forward(from: 0.0);
       if (OrcaDebug.isEnabled) {
@@ -803,6 +804,7 @@ class ActionExecutor {
     _handlers['animateReverse'] = (action, exec) async {
       final id = action['animationId'] as String?;
       if (id == null) return;
+      exec._emit('animateReverse', {'animationId': id});
       exec.animationRegistry?.getController(id)?.reverse();
       if (OrcaDebug.isEnabled) {
         exec._lastAffectedWidgets = findAnimationAffectedWidgets(exec, id);

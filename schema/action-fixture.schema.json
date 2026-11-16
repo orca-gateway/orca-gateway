@@ -183,12 +183,14 @@
             "serverAction",
             "switchTab",
             "openDrawer",
+            "animateForward",
+            "animateReverse",
             "debugLog"
           ]
         }
       },
       "additionalProperties": true,
-      "description": "navigate {route, replace, params?} \u00b7 goBack {} \u00b7 showSnackbar {message, duration} \u00b7 showToast {message, duration} \u00b7 openUrl {url} \u00b7 copyToClipboard {text} \u00b7 share {text, subject?} \u00b7 serverAction {id, params?} \u00b7 switchTab {tabId} \u00b7 openDrawer {} \u00b7 debugLog {level, tag, message?, data?}"
+      "description": "navigate {route, replace, params?} \u00b7 goBack {} \u00b7 showSnackbar {message, duration} \u00b7 showToast {message, duration} \u00b7 openUrl {url} \u00b7 copyToClipboard {text} \u00b7 share {text, subject?} \u00b7 serverAction {id, params?} \u00b7 switchTab {tabId} \u00b7 openDrawer {} \u00b7 animateForward {animationId} \u00b7 animateReverse {animationId} \u00b7 debugLog {level, tag, message?, data?}"
     },
     "HandlerEffect": {
       "type": "object",

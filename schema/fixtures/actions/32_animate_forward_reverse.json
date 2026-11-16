@@ -1,0 +1,76 @@
+{
+  "name": "animateForward-animateReverse",
+  "description": "animateForward and animateReverse each emit the animation id and leave state alone; in a sequential group they keep their place and order after a setState and before the next effect.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 1
+    },
+    "app": {}
+  },
+  "actions": [
+    {
+      "type": "actionGroup",
+      "mode": "sequential",
+      "actions": [
+        {
+          "type": "setState",
+          "scope": "page",
+          "key": "count",
+          "value": {
+            "type": "static",
+            "value": 2
+          }
+        },
+        {
+          "type": "animateForward",
+          "animationId": "pulse"
+        },
+        {
+          "type": "animateReverse",
+          "animationId": "pulse"
+        },
+        {
+          "type": "showToast",
+          "message": {
+            "type": "transform",
+            "input": {
+              "type": "state",
+              "scope": "page",
+              "key": "count"
+            },
+            "by": [
+              {
+                "type": "template",
+                "template": "count is {{value}}"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 2
+      },
+      "app": {}
+    },
+    "effects": [
+      {
+        "type": "animateForward",
+        "animationId": "pulse"
+      },
+      {
+        "type": "animateReverse",
+        "animationId": "pulse"
+      },
+      {
+        "type": "showToast",
+        "message": "count is 2",
+        "duration": 2000
+      }
+    ]
+  }
+}
