@@ -731,4 +731,61 @@ class VideoPlayerPluginTest {
         failing.release()
         assertEquals(2, shadows.size)
     }
+
+    /**
+     * video_player's ExoPlayer and AVPlayerLayer show the first frame once the
+     * video is ready; MediaPlayer on a TextureView draws nothing until it
+     * starts or seeks. The view's surface comes after the player is ready (the
+     * TextureView is drawn then), so a surface given to a ready player that is
+     * not playing asks for the frame where it is: a seek to 0 before the first
+     * play, the position, the state and the events unchanged.
+     */
+    @Test
+    fun c17_2_aSurfaceGivenToTheReadyPlayerShowsItsFrameBeforeAnyPlay() {
+        val shadows = ArrayList<ShadowMediaPlayer>()
+        val seeks = ArrayList<Int>()
+        ShadowMediaPlayer.setCreateListener { player, shadow ->
+            shadow.invalidStateBehavior = ShadowMediaPlayer.InvalidStateBehavior.ASSERT
+            player.setOnSeekCompleteListener { seeks += it.currentPosition }
+            shadows += shadow
+        }
+        ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(CLIP), ShadowMediaPlayer.MediaInfo(10_000, 0))
+        val main = shadowOf(Looper.getMainLooper())
+
+        val device = MediaPlayerPlayback()
+        val events = RecordedEvents()
+        device.events = events
+        device.open(CLIP)
+        device.setSurface(Surface(SurfaceTexture(0)))
+        main.idle()
+        assertEquals(emptyList(), seeks, "no seek before the player is ready")
+        assertEquals(listOf("prepared 10000 0x0"), events.log)
+        val shadow = shadows.single()
+
+        // The TextureView's surface, once the ready view draws it: the frame at 0, not playing.
+        device.setSurface(Surface(SurfaceTexture(0)))
+        main.idle()
+        assertEquals(listOf(0), seeks)
+        assertEquals(ShadowMediaPlayer.State.PREPARED, shadow.state)
+        assertEquals(0L, device.positionMs)
+        assertEquals(listOf("prepared 10000 0x0"), events.log, "no event: nothing for the plugin to fire")
+
+        // Playing draws its own frames; no surface draws none.
+        device.play()
+        device.setSurface(Surface(SurfaceTexture(0)))
+        device.setSurface(null)
+        main.idle()
+        assertEquals(listOf(0), seeks)
+        assertEquals(ShadowMediaPlayer.State.STARTED, shadow.state)
+
+        // Paused: a new surface gets the frame where the player is.
+        device.pause()
+        device.seekTo(2_500)
+        main.idle()
+        device.setSurface(Surface(SurfaceTexture(0)))
+        main.idle()
+        assertEquals(listOf(0, 2_500, 2_500), seeks)
+        assertEquals(ShadowMediaPlayer.State.PAUSED, shadow.state)
+        device.release()
+    }
 }

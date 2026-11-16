@@ -301,10 +301,16 @@ internal class MediaPlayerPlayback : VideoPlayback {
         }
     }
 
+    /**
+     * A ready player that is not playing seeks to where it is, so the new
+     * surface gets that frame (the first, before any play), as ExoPlayer and
+     * AVPlayerLayer show it: MediaPlayer draws nothing until a start or a seek.
+     */
     override fun setSurface(surface: Surface?) {
         if (released) return
         this.surface = surface
         player?.setSurface(surface)
+        if (surface != null) ready?.takeUnless { it.isPlaying }?.let { seekTo(it.currentPosition.toLong()) }
     }
 
     override fun play() {
