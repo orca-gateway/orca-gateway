@@ -5,8 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,12 +17,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ripple.RippleAlpha
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonElevation
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.LocalAbsoluteTonalElevation
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalRippleConfiguration
@@ -28,7 +34,11 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.LocalTonalElevationEnabled
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RippleConfiguration
+import androidx.compose.material3.RippleDefaults
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
@@ -40,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -48,8 +59,13 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -57,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import com.orcagateway.core.render.ResolvedNode
 import com.orcagateway.sdk.ChildView
 import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.WithColorScheme
 import com.orcagateway.sdk.style.LocalOrcaTheme
 import com.orcagateway.sdk.style.Props
 
@@ -280,3 +297,219 @@ internal fun Modifier.longPress(key: Any, action: State<() -> Unit>): Modifier =
         }
     }
 }
+
+/**
+ * Flutter `IconButton` as its builder (`_buildIconButton`) draws it, not
+ * Material's: a (`size` + 16) square, `size` 24 by default, holding the
+ * child (an empty `size` square without one) centred, or with `padding`
+ * aligned by `alignment` (center by default) inside it. `color`, only when
+ * set, tints the child's icons (Flutter's IconTheme, here the content
+ * colour, as [IconWidget] reads it; unlike Flutter's IconTheme it also
+ * colours a Text child without its own colour); an Icon child keeps its
+ * own size, so `size` grows only the box. Disabled it is drawn at opacity
+ * 0.38. It takes touches only when enabled and given `onTap` or
+ * `onLongPress`, then over its whole box, and offers those to
+ * accessibility; otherwise it takes none, so the widgets around it get
+ * them. A long press takes Flutter's 500 ms ([FlutterGestureTiming]).
+ * `constraints` bound the box from outside. `tooltip` is its accessibility
+ * label: no tooltip is drawn yet.
+ * No ripple or press feedback, as Flutter draws none (`splashColor` and
+ * `highlightColor` are never read).
+ */
+@Composable
+internal fun IconButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
+    val enabled = node["enabled"]?.boolValue ?: true
+    val size = Props.length(node["size"]) ?: 24.dp
+    val color = Props.color(node["color"])
+    val padding = Props.insets(node["padding"])
+    val bounds = node["constraints"]?.objectValue
+    val tap = enabled && node.actions["onTap"] != null
+    val longPress = enabled && node.actions["onLongPress"] != null
+    val fire = rememberUpdatedState<(String) -> Unit> { trigger -> model.fire(trigger, on = node) }
+    val constrained = labelled(node, modifier).sizeIn(
+        minWidth = Props.length(bounds?.get("minWidth")) ?: Dp.Unspecified,
+        minHeight = Props.length(bounds?.get("minHeight")) ?: Dp.Unspecified,
+        maxWidth = Props.length(bounds?.get("maxWidth")) ?: Dp.Unspecified,
+        maxHeight = Props.length(bounds?.get("maxHeight")) ?: Dp.Unspecified,
+    )
+    val touched = if (tap || longPress) {
+        constrained.pointerInput(tap, longPress) {
+            detectTapGestures(
+                onTap = if (tap) ({ fire.value("onTap") }) else null,
+                onLongPress = if (longPress) ({ fire.value("onLongPress") }) else null,
+            )
+        }.semantics {
+            if (tap) onClick { fire.value("onTap"); true }
+            if (longPress) onLongClick { fire.value("onLongPress"); true }
+        }
+    } else {
+        constrained
+    }
+    val child: @Composable () -> Unit = {
+        if (node.childIds.isNotEmpty()) ChildView(node, model) else Box(Modifier.size(size))
+    }
+    FlutterGestureTiming {
+        Box(
+            touched.then(if (enabled) Modifier else Modifier.alpha(0.38f))
+                .size(size + 16.dp)
+                .then(padding?.let { Modifier.padding(it.paddingValues()) } ?: Modifier),
+            contentAlignment = if (padding != null) Props.alignment(node["alignment"]) else Alignment.Center,
+        ) {
+            if (color != null) CompositionLocalProvider(LocalContentColor provides color, content = child) else child()
+        }
+    }
+}
+
+/**
+ * Flutter `FloatingActionButton` (`_buildFAB`): Material 3's
+ * `FloatingActionButton`, or `SmallFloatingActionButton` when `mini` (40
+ * in a 48 touch target, as Flutter pads it), in Flutter's `ThemeData()`
+ * colours ([flutterLight]): `backgroundColor` (primaryContainer without
+ * one), the content in onPrimaryContainer, at `elevation` (6 without one;
+ * pressed and focused 6, hovered 8, as both Material 3s). Enabled, a tap
+ * fires `onTap` and a long press `onLongPress`, through a wrapper as
+ * Flutter's GestureDetector around it: it takes the tap even with no
+ * `onTap` (Flutter passes onPressed whenever enabled), and a long press,
+ * after Flutter's 500 ms ([FlutterGestureTiming]), is never a tap.
+ * `splashColor`, `focusColor` and `hoverColor` colour its ripple
+ * ([fabOverlay]). Disabled it is drawn unchanged (Flutter's disabled elevation
+ * falls back to `elevation`) and is an [InertFab]. `tooltip` is its
+ * accessibility label. The Scaffold's `floatingActionButton` slot places
+ * it at the bottom end, 16 in, as Flutter's endFloat.
+ */
+@Composable
+internal fun FloatingActionButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
+    val enabled = node["enabled"]?.boolValue ?: true
+    val mini = node["mini"]?.boolValue ?: false
+    val elevation = Props.length(node["elevation"]) ?: 6.dp
+    val longPress = rememberUpdatedState<() -> Unit> { model.fire("onLongPress", on = node) }
+    val labelled = labelled(node, modifier)
+    val content: @Composable () -> Unit = { if (node.childIds.isNotEmpty()) ChildView(node, model) }
+    val interactions = remember { MutableInteractionSource() }
+    FlutterGestureTiming {
+        WithColorScheme(flutterLight) {
+            val fill = Props.color(node["backgroundColor"]) ?: MaterialTheme.colorScheme.primaryContainer
+            val ink = MaterialTheme.colorScheme.onPrimaryContainer
+            val shape = if (mini) FloatingActionButtonDefaults.smallShape else FloatingActionButtonDefaults.shape
+            val pressable = labelled.longPress(model, longPress).semantics { onLongClick { longPress.value(); true } }
+            val onTap: () -> Unit = { model.fire("onTap", on = node) }
+            val raised = FloatingActionButtonDefaults.elevation(defaultElevation = elevation)
+            val ripple = fabOverlay(node, ink, interactions) ?: LocalRippleConfiguration.current
+            CompositionLocalProvider(LocalRippleConfiguration provides ripple) {
+                when {
+                    !enabled -> InertFab(labelled, mini, shape, fill, ink, elevation, content)
+                    mini -> SmallFloatingActionButton(onTap, pressable, shape, fill, ink, raised, interactions, content)
+                    else -> FloatingActionButton(onTap, pressable, shape, fill, ink, raised, interactions, content)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Flutter's FAB overlay colours as its InkWell draws them: `splashColor`
+ * while pressed (and dragged), `focusColor` while focused, `hoverColor`
+ * while hovered, each at its own alpha. One left unset is Material 3's:
+ * the content colour [ink] at the state's default alpha (0.1 pressed and
+ * focused, 0.08 hovered, as Flutter's M3 FAB defaults). Null, the theme's
+ * ripple, when none is set.
+ */
+@Composable
+private fun fabOverlay(node: ResolvedNode, ink: Color, interactions: InteractionSource): RippleConfiguration? {
+    val splash = Props.color(node["splashColor"])
+    val focus = Props.color(node["focusColor"])
+    val hover = Props.color(node["hoverColor"])
+    val pressed by interactions.collectIsPressedAsState()
+    val focused by interactions.collectIsFocusedAsState()
+    if (splash == null && focus == null && hover == null) return null
+    val m3 = RippleDefaults.RippleAlpha
+    return RippleConfiguration(
+        color = when {
+            pressed -> splash ?: ink
+            focused -> focus ?: ink
+            else -> hover ?: ink
+        },
+        rippleAlpha = RippleAlpha(
+            draggedAlpha = splash?.alpha ?: m3.draggedAlpha,
+            focusedAlpha = focus?.alpha ?: m3.focusedAlpha,
+            hoveredAlpha = hover?.alpha ?: m3.hoveredAlpha,
+            pressedAlpha = splash?.alpha ?: m3.pressedAlpha,
+        ),
+    )
+}
+
+/**
+ * Flutter's gesture timing for [content]: a long press after Flutter's
+ * kLongPressTimeout, 500 ms (gestures/constants.dart:29), where Compose
+ * takes the platform's (400 on Android 12 and later); the rest of the view
+ * configuration is the current one. Around the builders that keep
+ * Flutter's own timing (IconButton and FloatingActionButton);
+ * [ButtonWidget] and [GestureDetectorWidget] still take the platform's.
+ */
+@Composable
+internal fun FlutterGestureTiming(content: @Composable () -> Unit) {
+    val platform = LocalViewConfiguration.current
+    val flutter = remember(platform) { FlutterViewConfiguration(platform) }
+    CompositionLocalProvider(LocalViewConfiguration provides flutter, content = content)
+}
+
+/** [platform] with Flutter's long-press timeout. */
+private class FlutterViewConfiguration(platform: ViewConfiguration) : ViewConfiguration by platform {
+    override val longPressTimeoutMillis: Long get() = 500L
+}
+
+/**
+ * Material 3's FloatingActionButton as it draws at rest, without its
+ * clickable, for a disabled FAB: no click or long press, disabled to
+ * accessibility, the same look. Mirrors androidx.compose.material3 1.4.0
+ * FloatingActionButton.kt (its `Surface`: shape, colours, tonal and shadow
+ * elevation; the labelLarge text style; the content centred in a Box at
+ * least 56 square; the small one at least 40) and the clickable Surface's
+ * `minimumInteractiveComponentSize`. The public non-clickable Surface is
+ * hit and consumes nothing, as Flutter's Material takes the hit and a
+ * GestureDetector around it still gets the tap. Re-check it when the BOM
+ * moves material3.
+ */
+@Composable
+private fun InertFab(
+    modifier: Modifier,
+    mini: Boolean,
+    shape: Shape,
+    fill: Color,
+    ink: Color,
+    elevation: Dp,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = (if (mini) modifier.sizeIn(minWidth = 40.dp, minHeight = 40.dp) else modifier)
+            .semantics {
+                role = Role.Button
+                disabled()
+            }
+            .minimumInteractiveComponentSize(),
+        shape = shape,
+        color = fill,
+        contentColor = ink,
+        tonalElevation = elevation,
+        shadowElevation = elevation,
+    ) {
+        CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.merge(MaterialTheme.typography.labelLarge)) {
+            Box(Modifier.defaultMinSize(minWidth = 56.dp, minHeight = 56.dp), contentAlignment = Alignment.Center) {
+                content()
+            }
+        }
+    }
+}
+
+/** [modifier] with the node's `tooltip`, unless empty, as its accessibility label (Flutter's Tooltip semantics). */
+private fun labelled(node: ResolvedNode, modifier: Modifier): Modifier {
+    val tooltip = node["tooltip"]?.stringValue?.takeIf { it.isNotEmpty() } ?: return modifier
+    return modifier.semantics { contentDescription = tooltip }
+}
+
+/**
+ * Flutter's `ThemeData()` colours, which the FAB is drawn in: Material 3's
+ * default light scheme, but for onPrimaryContainer, #4F378B in Flutter
+ * (color_scheme_defaults.g.dart) where Compose's is #21005D.
+ */
+private val flutterLight = lightColorScheme(onPrimaryContainer = Color(0xFF4F378B))
