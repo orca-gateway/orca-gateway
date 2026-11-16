@@ -70,21 +70,58 @@ import com.orcagateway.sdk.style.TextStyleProps
  */
 @Composable
 internal fun TextWidget(node: ResolvedNode, modifier: Modifier) {
-    val data = Props.text(node["data"])
-    val layer = LocalOrcaDefaultTextStyle.current?.let { TextStyles.layer(it, node.props) }
-    val props = TextStyleProps(if (layer != null) layer.style else node["style"])
-    var style = (if (layer != null) ENGINE_TEXT_STYLE else LocalTextStyle.current).merge(props.textStyle())
-    val align = if (layer != null) JsonValue.String(layer.textAlign) else node["textAlign"]
-    Props.textAlign(align)?.let { style = style.merge(TextStyle(textAlign = it)) }
-    if (props.drawsDecoration) style = style.merge(TextStyle(textDecoration = TextDecoration.None))
-    val maxLines = (if (layer != null) layer.maxLines else node["maxLines"]?.intValue)
-        ?.takeIf { it > 0 }?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
+    val dts = LocalOrcaDefaultTextStyle.current?.let { TextStyles.layer(it, node.props) }
+    val props = TextStyleProps(if (dts != null) dts.style else node["style"])
+    val base = if (dts != null) ENGINE_TEXT_STYLE else LocalTextStyle.current
+    val align = if (dts != null) JsonValue.String(dts.textAlign) else node["textAlign"]
     val label = node["semanticsLabel"]?.stringValue
-    val overflowValue = if (layer != null) {
-        JsonValue.String(layer.overflow)
+    val overflowValue = if (dts != null) {
+        JsonValue.String(dts.overflow)
     } else {
         node["overflow"]?.takeUnless { it.isNull } ?: props.overflow
     }
+    DrawnText(
+        data = Props.text(node["data"]),
+        props = props,
+        style = drawnStyle(base, props, align),
+        maxLines = lineLimit(if (dts != null) dts.maxLines else node["maxLines"]?.intValue) ?: Int.MAX_VALUE,
+        overflowValue = overflowValue,
+        softWrap = node["softWrap"]?.boolValue ?: true,
+        modifier = if (label != null) modifier.clearAndSetSemantics { contentDescription = label } else modifier,
+    )
+}
+
+/** A wire `maxLines` as a line limit: null for none (absent, zero or below). */
+internal fun lineLimit(maxLines: Long?): Int? =
+    maxLines?.takeIf { it > 0 }?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
+
+/**
+ * The style a Text draws: [props] over [base] (the engine's defaults under
+ * a DefaultTextStyle, else the ambient style), [align] when it names one,
+ * and no Compose line when the Text draws its decoration itself.
+ */
+internal fun drawnStyle(base: TextStyle, props: TextStyleProps, align: JsonValue?): TextStyle {
+    var style = base.merge(props.textStyle())
+    Props.textAlign(align)?.let { style = style.merge(TextStyle(textAlign = it)) }
+    if (props.drawsDecoration) style = style.merge(TextStyle(textDecoration = TextDecoration.None))
+    return style
+}
+
+/**
+ * [data] in [style] as [TextWidget] draws it, for it and SelectableText:
+ * word spacing, the decorations Compose cannot draw and the `fade`
+ * overflow drawn over Compose's Text (TextDecorations.kt).
+ */
+@Composable
+internal fun DrawnText(
+    data: String,
+    props: TextStyleProps,
+    style: TextStyle,
+    maxLines: Int,
+    overflowValue: JsonValue?,
+    softWrap: Boolean,
+    modifier: Modifier,
+) {
     val overflow = Props.overflow(overflowValue)
     val fade = overflowValue?.stringValue == "fade"
     val decorationColor = props.decorationColor ?: style.color.takeOrElse { LocalContentColor.current }
@@ -117,10 +154,10 @@ internal fun TextWidget(node: ResolvedNode, modifier: Modifier) {
     }
     Text(
         text = props.wordSpacing?.let { wordSpaced(data, it, style) } ?: AnnotatedString(data),
-        modifier = (if (label != null) modifier.clearAndSetSemantics { contentDescription = label } else modifier).then(drawn),
+        modifier = modifier.then(drawn),
         overflow = overflow,
-        softWrap = node["softWrap"]?.boolValue ?: true,
-        maxLines = maxLines ?: Int.MAX_VALUE,
+        softWrap = softWrap,
+        maxLines = maxLines,
         onTextLayout = { layout = it },
         style = style,
     )
