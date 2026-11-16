@@ -51,6 +51,7 @@ public enum GeneratedCapabilities {
         "Flexible",
         "FractionallySizedBox",
         "GestureDetector",
+        "GridView",
         "Hero",
         "Icon",
         "IgnorePointer",
@@ -59,16 +60,20 @@ public enum GeneratedCapabilities {
         "IntrinsicHeight",
         "IntrinsicWidth",
         "LimitedBox",
+        "ListView",
         "Offstage",
         "Opacity",
         "OutlinedButton",
         "Padding",
+        "PageView",
         "Positioned",
+        "PullToRefresh",
         "ReorderableListView",
         "RotatedBox",
         "Row",
         "SafeArea",
         "Scaffold",
+        "Scrollbar",
         "SingleChildScrollView",
         "SizedBox",
         "Spacer",
@@ -111,6 +116,7 @@ public enum GeneratedCapabilities {
         "once",
         "openDrawer",
         "openUrl",
+        "refetchPage",
         "serverAction",
         "setState",
         "share",
@@ -172,5 +178,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "cae35f8dd9e0234d4fb04745b6dfe79322ed74f26e33c3089d515af07841bf86"
+    public static let capsHash = "d2da2c213f33a30bc3aaaf2b1d78a1f09bf367a4b8624ceac380e5c72ca2f35c"
 }

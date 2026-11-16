@@ -44,3 +44,9 @@ Follow-ups: Kotlin builders not reading LocalPointerBlocked; InertButton vs mate
 ### Next
 Step 5 (lists, grids, pages, pull to refresh; rows A5) opens as native-parity-s5, stacked on this branch until #44
 merges. Its inventory is drafted.
+
+### Merged
+PR #44 merged by amrebada at 2026-11-16T08:22:53Z (merge 992652c, head d16d855), every PR check green after one rerun
+of the JDK 17 job (a Maven Central 429); main green at the merge (Engine, Schema, SDK, SDK Swift, SDK Kotlin CI). Gate
+10 approved under the standing rule, Q1 answered by the merge itself; 11 skipped by default; 12 approved; 13-16 skipped
+(no deploy target).

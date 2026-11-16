@@ -256,12 +256,13 @@ final class StructureWidgetTests: XCTestCase {
     /// The pin moved from 31 to 49 when native parity step 3 advertised its 13
     /// layout wrappers (A3.1) and step 12 its 5 animated widgets, then to 60
     /// when step 4 advertised its 11 effect and touch wrappers (A4.x), then
-    /// to 62 with step 13's ReorderableListView and SubPage, and to 63 when
-    /// S18 added UnsupportedWidgetPlaceholder.
-    func test_B10_C_S_sixtyThreeWidgetsAreAdvertisedWithTheThreeNewOnes() {
+    /// to 62 with step 13's ReorderableListView and SubPage, to 63 when
+    /// S18 added UnsupportedWidgetPlaceholder, and to 68 when native parity
+    /// step 5 advertised its five scroll widgets (A5.x).
+    func test_B10_C_S_sixtyEightWidgetsAreAdvertisedWithTheThreeNewOnes() {
         let widgets = GeneratedCapabilities.widgets
-        XCTAssertEqual(widgets.count, 63)
-        XCTAssertEqual(Set(widgets).count, 63)
+        XCTAssertEqual(widgets.count, 68)
+        XCTAssertEqual(Set(widgets).count, 68)
         XCTAssertTrue(Set(widgets).isSuperset(of: ["BottomNavigationBar", "BottomNavItem", "Drawer"]))
         XCTAssertEqual(WidgetRegistry.shared.types, Set(widgets))
     }

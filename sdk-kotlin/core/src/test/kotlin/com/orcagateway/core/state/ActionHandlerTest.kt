@@ -168,12 +168,14 @@ class ActionHandlerTest {
         executor.registerHandler("custom:x", Calls().handler("x"))
         executor.registerHandler("navigate", Calls().handler("navigate"))
         assertEquals(before, ActionExecutor.kinds)
+        // A5.6: refetchPage is a built-in that does nothing on its own; the
+        // page loader's handler reloads (Flutter's onRefetchPage).
         assertEquals(
             setOf(
                 "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
                 "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
                 "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
-                "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage",
+                "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage", "refetchPage",
             ),
             ActionExecutor.kinds,
         )

@@ -126,7 +126,8 @@ internal fun SizedBoxWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
  * content within its limits; this view already does, so it changes
  * nothing. `primary` hands the view to the iOS status-bar tap in Flutter
  * and has no Android counterpart: it is ignored. A node with a scroll
- * trigger gets [ScrollTriggers]; the others keep their tree.
+ * trigger gets [ScrollTriggers]; the others keep their tree. Directly in a
+ * Scrollbar it reports itself there, and what it holds reports to none.
  */
 @Composable
 internal fun ScrollWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -143,8 +144,14 @@ internal fun ScrollWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Mo
             else -> Modifier.verticalScroll(state, reverseScrolling = reverse)
         }
         val content = scroll.scrolledContent(horizontal, reverse).padding(insets.paddingValues())
-        Box(content, propagateMinConstraints = true) {
-            ChildView(node, model)
+        val density = LocalDensity.current.density.toDouble()
+        val source = remember(state, horizontal, reverse, density) {
+            ScrollbarSource(horizontal, reverse, metrics = { state.metrics(density) }, inProgress = { state.isScrollInProgress })
+        }
+        ReportToScrollbar(source) {
+            Box(content, propagateMinConstraints = true) {
+                ChildView(node, model)
+            }
         }
     }
 }
@@ -162,17 +169,18 @@ private fun ScrollTriggers(node: ResolvedNode, model: OrcaPageModel, state: Scro
     val density = LocalDensity.current.density.toDouble()
     LaunchedEffect(model, state, density) {
         val observer = ScrollObserver()
-        snapshotFlow {
-            ScrollMetrics(
-                offset = state.value / density,
-                maxExtent = state.maxValue / density,
-                viewportDimension = state.viewportSize / density,
-            ) to state.isScrollInProgress
-        }.collect { (metrics, inProgress) ->
+        snapshotFlow { state.metrics(density) to state.isScrollInProgress }.collect { (metrics, inProgress) ->
             for (event in observer.observe(metrics, inProgress)) model.fire(event.trigger, current.value, event.eventData)
         }
     }
 }
+
+/** Where [this] stands in dp, Flutter's logical pixels, from its pixels and the screen's [density]. */
+private fun ScrollState.metrics(density: Double): ScrollMetrics = ScrollMetrics(
+    offset = value / density,
+    maxExtent = maxValue / density,
+    viewportDimension = viewportSize / density,
+)
 
 /**
  * The scrolled content measured with no minimum on the scroll axis, in a

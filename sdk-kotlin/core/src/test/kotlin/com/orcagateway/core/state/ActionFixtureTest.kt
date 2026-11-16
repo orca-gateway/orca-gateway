@@ -87,9 +87,9 @@ class ActionFixtureTest {
     private suspend fun runFixture(file: String) = runFixture(file, Fixtures.json("schema/fixtures/actions/$file"))
 
     @Test
-    fun allTwentyEightActionFixturesPass() = runSuspend {
+    fun allTwentyNineActionFixturesPass() = runSuspend {
         val files = Fixtures.files("actions")
-        assertEquals(28, files.size)
+        assertEquals(29, files.size)
         for ((name, fx) in files) runFixture(name, fx)
     }
 
@@ -108,6 +108,10 @@ class ActionFixtureTest {
     /** B13.3-K: onReorder's {oldIndex, newIndex} goes through `V.event` into state and a serverAction's params. */
     @Test
     fun b13_3_onReorderReadsOldIndexAndNewIndexThroughTheEvent() = runSuspend { runFixture("34_reorder_event.json") }
+
+    /** A5.6: refetchPage emits no effect and leaves the state as it was (Flutter awaits a null onRefetchPage). */
+    @Test
+    fun a5_6_refetchPageEmitsNothing() = runSuspend { runFixture("48_refetchPage.json") }
 
     // MARK: source and once
 
@@ -172,8 +176,8 @@ class ActionFixtureTest {
     fun implementsLooksInsideOnceAndAlways() {
         assertTrue(ActionExecutor.implements(Action.Once(Action.GoBack)))
         assertTrue(ActionExecutor.implements(Action.Always(Action.DebugLog())))
-        assertFalse(ActionExecutor.implements(Action.Once(Action.RefetchPage)))
-        assertFalse(ActionExecutor.implements(Action.Always(Action.ActionGroup(actions = listOf(Action.RefetchPage)))))
+        assertFalse(ActionExecutor.implements(Action.Once(Action.CloseDialog)))
+        assertFalse(ActionExecutor.implements(Action.Always(Action.ActionGroup(actions = listOf(Action.CloseDialog)))))
     }
 
     @Test
@@ -191,7 +195,7 @@ class ActionFixtureTest {
         executor.execute(Action.CloseDialog)
         assertEquals(state, store.state)
         assertEquals(emptyList(), seen)
-        assertFalse(ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.RefetchPage))))
+        assertFalse(ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.CloseDialog))))
         assertTrue(
             ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.SetState("a", value = j(1))))),
         )

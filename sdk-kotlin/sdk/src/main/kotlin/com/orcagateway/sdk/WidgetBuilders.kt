@@ -37,6 +37,7 @@ import com.orcagateway.sdk.widgets.FlexWidget
 import com.orcagateway.sdk.widgets.FlexibleWidget
 import com.orcagateway.sdk.widgets.FractionallySizedBoxWidget
 import com.orcagateway.sdk.widgets.GestureDetectorWidget
+import com.orcagateway.sdk.widgets.GridViewWidget
 import com.orcagateway.sdk.widgets.HeroWidget
 import com.orcagateway.sdk.widgets.IconWidget
 import com.orcagateway.sdk.widgets.IgnorePointerWidget
@@ -45,15 +46,19 @@ import com.orcagateway.sdk.widgets.InteractiveViewerWidget
 import com.orcagateway.sdk.widgets.IntrinsicHeightWidget
 import com.orcagateway.sdk.widgets.IntrinsicWidthWidget
 import com.orcagateway.sdk.widgets.LimitedBoxWidget
+import com.orcagateway.sdk.widgets.ListViewWidget
 import com.orcagateway.sdk.widgets.OffstageWidget
 import com.orcagateway.sdk.widgets.OpacityWidget
 import com.orcagateway.sdk.widgets.PaddingWidget
+import com.orcagateway.sdk.widgets.PageViewWidget
 import com.orcagateway.sdk.widgets.PositionedWidget
+import com.orcagateway.sdk.widgets.PullToRefreshWidget
 import com.orcagateway.sdk.widgets.ReorderableListWidget
 import com.orcagateway.sdk.widgets.RotatedBoxWidget
 import com.orcagateway.sdk.widgets.SafeAreaWidget
 import com.orcagateway.sdk.widgets.ScaffoldWidget
 import com.orcagateway.sdk.widgets.ScrollWidget
+import com.orcagateway.sdk.widgets.ScrollbarWidget
 import com.orcagateway.sdk.widgets.SizedBoxWidget
 import com.orcagateway.sdk.widgets.SpacerWidget
 import com.orcagateway.sdk.widgets.StackWidget
@@ -119,7 +124,7 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 63 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 68 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
@@ -127,8 +132,10 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
          * AnimatedContainer, AnimatedOpacity, AnimatedAlign, AnimatedSwitcher
          * and Hero, the 13 layout wrappers of native parity step 3 (A3.1),
          * the 11 effect and touch wrappers of native parity step 4
-         * (A4.x), S13's ReorderableListView and SubPage, and S18's
-         * UnsupportedWidgetPlaceholder. Keep the two lists in step: the caps
+         * (A4.x), S13's ReorderableListView and SubPage, S18's
+         * UnsupportedWidgetPlaceholder, and the five scroll widgets of native
+         * parity step 5 (A5.x: ListView, GridView, PageView, Scrollbar,
+         * PullToRefresh). Keep the two lists in step: the caps
          * vector advertises what this draws (WidgetBuildersTest checks it).
          */
         public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
@@ -197,6 +204,11 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("InteractiveViewer") { node, model, modifier -> InteractiveViewerWidget(node, model, modifier) }
             register("Opacity") { node, model, modifier -> OpacityWidget(node, model, modifier) }
             register("RotatedBox") { node, model, modifier -> RotatedBoxWidget(node, model, modifier) }
+            register("ListView") { node, model, modifier -> ListViewWidget(node, model, modifier) }
+            register("GridView") { node, model, modifier -> GridViewWidget(node, model, modifier) }
+            register("PageView") { node, model, modifier -> PageViewWidget(node, model, modifier) }
+            register("Scrollbar") { node, model, modifier -> ScrollbarWidget(node, model, modifier) }
+            register("PullToRefresh") { node, model, modifier -> PullToRefreshWidget(node, model, modifier) }
         }
     }
 }

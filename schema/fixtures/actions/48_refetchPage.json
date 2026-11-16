@@ -1,0 +1,29 @@
+{
+  "name": "refetchPage",
+  "description": "refetchPage emits no effect: the executor awaits the host's reload (Flutter's onRefetchPage), and with none wired it leaves page and app state unchanged. The in-place reload itself (app state kept, page state reset to the new page's initial values) is the host's, outside the executor. Native parity step 5.",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 2
+    },
+    "app": {
+      "visits": 3
+    }
+  },
+  "actions": [
+    {
+      "type": "refetchPage"
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 2
+      },
+      "app": {
+        "visits": 3
+      }
+    },
+    "effects": []
+  }
+}

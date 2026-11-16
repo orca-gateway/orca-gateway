@@ -1,5 +1,6 @@
 package com.orcagateway.sdk.widgets
 
+import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
@@ -18,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
 import com.orcagateway.core.client.HttpRequest
 import com.orcagateway.core.client.HttpResponse
 import com.orcagateway.core.client.HttpTransport
@@ -38,12 +40,14 @@ import com.orcagateway.sdk.LocalOrcaNodeRecorder
 import com.orcagateway.sdk.OrcaNodeSnapshot
 import com.orcagateway.sdk.NodeObserver
 import com.orcagateway.sdk.NodeView
+import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.WidgetBuilders
 import com.orcagateway.sdk.support.button
 import com.orcagateway.sdk.support.column
 import com.orcagateway.sdk.support.text
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.Rule
 import org.junit.Test
@@ -52,6 +56,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.net.URI
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -100,6 +105,44 @@ private fun counter(name: String, count: Int): PageResponse = pageOf(
     text("addLabel", "Add $name"),
     state = mapOf("count" to count),
 )
+
+/** `setState(key, value)` on the page with a static value, Flutter's `_setPage`. */
+private fun setPage(key: String, value: Int): Action =
+    Action.SetState(key = key, scope = StateScope.Page, value = JsonValue.obj("type" to "static", "value" to value))
+
+/** A button labelled with its id, Flutter's `_button`: an ElevatedButton over the Text `<id>_label`. */
+private fun labelled(id: String, action: Action): Array<ComponentNode> = arrayOf(
+    button(id, "ElevatedButton", "${id}_label", mapOf("onTap" to action)),
+    text("${id}_label", id),
+)
+
+/** Flutter's sub-page `detail/a` (`_detail('a', 5)`) with the `bump` button that sets its count to 6. */
+private fun detailA(): PageResponse = pageOf(
+    "detail/a",
+    column("0", "label", "count", "bump"),
+    text("label", "Page a"),
+    watching("count", "count"),
+    *labelled("bump", setPage("count", 6)),
+    state = mapOf("count" to 5),
+)
+
+/**
+ * Flutter's refetch host (`_host` with `hostBump` and `refetch`): its own `count` (100), the SubPage `detail`
+ * showing `detail/a` unless [withSubPage] is false, a button that sets the count to 101 and one that runs
+ * refetchPage.
+ */
+private fun refetchHost(withSubPage: Boolean = true): PageResponse {
+    val sub = if (withSubPage) listOf(subPage("detail", "detail/a")) else emptyList()
+    return pageOf(
+        "host",
+        column("root", "hostCount", *sub.map { it.id }.toTypedArray(), "hostBump", "refetch"),
+        watching("hostCount", "count"),
+        *sub.toTypedArray(),
+        *labelled("hostBump", setPage("count", 101)),
+        *labelled("refetch", Action.RefetchPage),
+        state = mapOf("count" to 100),
+    )
+}
 
 /** The engine behind a host page: pages by id, `/action` answering [actions], every request kept. */
 private class Engine(vararg pages: PageResponse) : HttpTransport {
@@ -681,5 +724,80 @@ class SubPageTest {
         val body = JsonValue.parse(engine.requests.last().body!!)
         assertEquals(JsonValue.obj("count" to 7, "sp:count" to 1), body["pageState"])
         assertEquals(mapOf("count" to JsonValue.Int(42), "sp:count" to JsonValue.Int(1)), model.store.state.page)
+    }
+
+    // MARK: A5.6-K, refetchPage and the pages mounted in SubPages
+
+    /**
+     * The page [path] of [engine] loaded as OrcaApp loads a page (its refetchPage fetches [path] again into the
+     * same model), and drawn.
+     */
+    private fun load(engine: Engine, path: String = "host"): OrcaPageModel {
+        val loader = OrcaPageLoader(engine.client, path)
+        runBlocking { loader.loadIfNeeded(ApplicationProvider.getApplicationContext<Context>()) }
+        val model = assertIs<OrcaPageLoader.Phase.Loaded>(loader.phase).model
+        compose.setContent {
+            Box(Modifier.size(300.dp, 600.dp)) { NodeView("root", model) }
+        }
+        compose.waitForIdle()
+        return model
+    }
+
+    private fun tap(text: String) {
+        compose.onNodeWithText(text).performClick()
+        compose.waitForIdle()
+    }
+
+    /**
+     * Flutter's "C-flutter: a host refetch keeps the sub-page nodes and its state value"
+     * (sdk/test/sub_page_widget_test.dart): the host's own keys start again; the mounted page keeps its nodes and
+     * its value, and is not fetched again.
+     */
+    @Test
+    fun a5_6_kt_aHostRefetchKeepsTheSubPageNodesAndItsStateValue() {
+        val engine = Engine(refetchHost(), detailA())
+        val model = load(engine)
+        tap("bump")
+        tap("hostBump")
+        assertEquals(mapOf("count" to JsonValue.Int(101), "detail:count" to JsonValue.Int(6)), model.store.state.page)
+
+        tap("refetch")
+
+        assertEquals(listOf("host", "detail/a", "host"), engine.locations)
+        assertEquals(mapOf("count" to JsonValue.Int(100), "detail:count" to JsonValue.Int(6)), model.store.state.page)
+        assertEquals(
+            setOf("detail:0", "detail:label", "detail:count", "detail:bump", "detail:bump_label"),
+            model.renderer.nodes.keys.filter { it.startsWith("detail:") }.toSet(),
+        )
+        shown("Page a")
+        shown("6")
+    }
+
+    /**
+     * A refetched host page without the SubPage node unmounts it, as Flutter's `ComponentStore.init`
+     * (`_unmountMissingSubPages`): its nodes go, its state keys stay (S8), and the host forgets it, so the node
+     * coming back with a later refetch mounts it anew.
+     */
+    @Test
+    fun a5_6_kt_aHostRefetchWithoutTheSubPageUnmountsIt() {
+        val engine = Engine(refetchHost(), detailA())
+        val model = load(engine)
+        shown("Page a")
+
+        engine.pages["host"] = refetchHost(withSubPage = false)
+        tap("refetch")
+
+        gone("Page a")
+        assertEquals(emptyList(), model.renderer.nodes.keys.filter { it.startsWith("detail") })
+        assertEquals(emptyList(), model.subPages.prefixes)
+        assertNull(model.subPages.mounts("detail"))
+        assertEquals(mapOf("count" to JsonValue.Int(100), "detail:count" to JsonValue.Int(5)), model.store.state.page)
+
+        engine.pages["host"] = refetchHost()
+        tap("refetch")
+
+        assertEquals(listOf("host", "detail/a", "host", "host", "detail/a"), engine.locations)
+        assertEquals(listOf("detail:"), model.subPages.prefixes)
+        shown("Page a")
     }
 }

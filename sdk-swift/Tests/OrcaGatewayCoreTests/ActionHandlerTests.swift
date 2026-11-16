@@ -125,6 +125,8 @@ final class ActionHandlerTests: XCTestCase {
             "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
             "switchTab", "openDrawer", "once", "always", "debugLog", "animateForward", "animateReverse",
             "updateSubPage",
+            // Native parity step 5 (A5.6): run by the page model's handler.
+            "refetchPage",
         ])
     }
 }

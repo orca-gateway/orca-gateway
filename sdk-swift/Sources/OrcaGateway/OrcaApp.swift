@@ -72,7 +72,9 @@ private struct ToastView: View {
 }
 
 /// Loads a page through OrcaClient and keeps the result. Under a router the
-/// fetch carries the shared app state, and the page joins the router.
+/// fetch carries the shared app state, and the page joins the router. Every
+/// page made here runs refetchPage in place (`refetch`), unless the host
+/// registered its own `refetchPage`.
 @MainActor
 public final class OrcaPageLoader: ObservableObject {
     public enum Phase {
@@ -118,6 +120,10 @@ public final class OrcaPageLoader: ObservableObject {
             let renderStart = timing.elapsed()
             let model = router?.plugins?.page(page, store: ElmStore(app: app), client: client)
                 ?? OrcaPageModel(page: page, store: ElmStore(app: app), client: client)
+            model.onRefetchPage = { [weak self, weak model] in
+                guard let self, let model else { return }
+                try await self.refetch(model)
+            }
             router?.attach(model)
             let renderComplete = timing.elapsed()
             let path = self.path
@@ -135,6 +141,18 @@ public final class OrcaPageLoader: ObservableObject {
             self.error = error
             phase = .failed(failedMessage(error))
         }
+    }
+
+    /// refetchPage on a page made here (Flutter `OrcaPage`'s `onRefetchPage`):
+    /// fetch the path again with the app state and swap the tree into the
+    /// same model. No loading phase and no effect; the action ends once the
+    /// new tree is in. A failed fetch throws out of the action and the page
+    /// stays as it was.
+    func refetch(_ model: OrcaPageModel) async throws {
+        var client = self.client
+        if client.device == DeviceInfo() { client.device = .current() }
+        let page = try await client.fetchPage(path, appState: router?.appState ?? model.store.state.app)
+        model.replacePage(page)
     }
 }
 

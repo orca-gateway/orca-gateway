@@ -72,6 +72,7 @@ public class OrcaPageModel(
     registry: WidgetRegistry = WidgetRegistry.shared,
     client: ActionClient? = null,
 ) : AutoCloseable {
+    /** The page's node tree. A refetch ([replacePage]) takes the new page's nodes into it. */
     public val renderer: PageRenderer = PageRenderer(page, registry)
     public val executor: ActionExecutor = ActionExecutor(store, client)
 
@@ -80,7 +81,7 @@ public class OrcaPageModel(
 
     /**
      * Bumped after every change to the node tree (a server action adding,
-     * updating, replacing or deleting components). Compose state.
+     * updating, replacing or deleting components, a refetch). Compose state.
      */
     public var structureRevision: Int by mutableIntStateOf(0)
         private set
@@ -329,6 +330,28 @@ public class OrcaPageModel(
     internal fun apply(mutation: ComponentMutation) {
         renderer.apply(mutation)
         // S8: a SubPage node the mutation took out takes its mounted pages with it.
+        subPages.sweep()
+        structureChanged()
+    }
+
+    /**
+     * Show [page] in place of the current one, in this model (Flutter's
+     * refetch in OrcaPage, sdk/lib/src/widgets/orca_page.dart onRefetchPage,
+     * and ComponentStore.init): page state starts again from its initials and
+     * app state is kept, only unset app keys taking its initials (`initPage`).
+     * The pages mounted in SubPages stay, their nodes and their state keys;
+     * every other node is the new page's, and a SubPage whose node did not
+     * come back is unmounted. The executor, its `once` keys and the onInit
+     * guard stay, so nodes keeping their id do not fire onInit again.
+     */
+    internal fun replacePage(page: PageResponse) {
+        val prefixes = subPages.prefixes
+        val mounted = { key: String -> prefixes.any(key::startsWith) }
+        val carried = store.state.page.filterKeys(mounted)
+        store.pageId = page.pageId
+        store.seed(page.state)
+        if (carried.isNotEmpty()) store.dispatch(carried)
+        renderer.replace(page, keep = mounted)
         subPages.sweep()
         structureChanged()
     }

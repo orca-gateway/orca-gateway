@@ -137,16 +137,30 @@ public data class RenderNode(
  * what the server sent. Not thread-safe.
  */
 public class PageRenderer(
-    /** The page as the server sent it; mutations change [nodes], not this. */
-    public val page: PageResponse,
+    page: PageResponse,
     public val registry: WidgetRegistry = WidgetRegistry.shared,
 ) {
+    /** The page as the server sent it; mutations change [nodes], not this ([replace] does). */
+    public var page: PageResponse = page
+        private set
+
     /** The current node map, as the Flutter `ComponentStore` holds it (a snapshot). */
     public var nodes: Map<String, ComponentNode> = page.nodesById
         internal set
 
     public var rootId: String? = page.components.firstOrNull()?.id
         internal set
+
+    /**
+     * Take [page] in place of the current one, the Flutter
+     * `ComponentStore.init`: every node [keep] does not name goes, the page's
+     * nodes come in, and its first node is the root.
+     */
+    public fun replace(page: PageResponse, keep: (String) -> Boolean = { false }) {
+        this.page = page
+        nodes = nodes.filterKeys(keep) + page.nodesById
+        rootId = page.components.firstOrNull()?.id
+    }
 
     /**
      * Apply one server-action mutation the way the Flutter `ComponentStore`

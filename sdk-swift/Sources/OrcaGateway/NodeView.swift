@@ -104,9 +104,14 @@ struct WidgetView: View {
         case "Wrap": WrapView(node: node, model: model)
         case "Padding": PaddingView(node: node, model: model)
         case "SizedBox": SizedBoxView(node: node, model: model)
-        case "SingleChildScrollView": ScrollNodeView(node: node, model: model)
+        case "SingleChildScrollView": scrolling(ScrollNodeView(node: node, model: model))
         case "ReorderableListView": ReorderableListNodeView(node: node, model: model)
         case "SubPage": SubPageNodeView(node: node, model: model)
+        case "PageView": scrolling(PagerView(node: node, model: model))
+        case "ListView": scrolling(ListNodeView(node: node, model: model))
+        case "GridView": scrolling(GridNodeView(node: node, model: model))
+        case "Scrollbar": ScrollbarView(node: node, model: model)
+        case "PullToRefresh": PullToRefreshView(node: node, model: model)
         case "Card": CardView(node: node, model: model)
         case "Text": TextNodeView(node: node)
         case "Divider": DividerView(node: node)
@@ -158,6 +163,12 @@ struct WidgetView: View {
             // A plugin or host widget; any other type draws nothing.
             if let build = model.widgets.builder(for: node.type) { build(node, model) } else { EmptyView() }
         }
+    }
+
+    /// A scroll kind with what it takes from a Scrollbar and a
+    /// PullToRefresh it is directly inside.
+    private func scrolling<V: View>(_ view: V) -> some View {
+        view.modifier(ScrollIndicators()).modifier(RefreshOnPull(node: node))
     }
 }
 

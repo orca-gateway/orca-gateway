@@ -148,4 +148,41 @@ final class RenderTreeTests: XCTestCase {
     func testEmptyPageHasNoTree() {
         XCTAssertNil(PageRenderer(page: page([])).tree(state: StoreState()))
     }
+
+    // MARK: A5.6 refetch
+
+    /// `replacing(with:keep:)` is the Flutter `ComponentStore.init` a refetch
+    /// runs (sdk/lib/src/state/component_store.dart): the nodes `keep` names
+    /// stay, every other node goes, the new page's nodes come in and win on a
+    /// shared id, its first node is the root, and `page` is the new page.
+    func testA5_6_ReplacingKeepsTheNodesKeepNamesAndTheNewPageWinsOnASharedId() throws {
+        func text(_ id: String, _ data: String) -> ComponentNode {
+            ComponentNode(id: id, type: "Text", kind: .primitive, childMode: .none, props: ["data": .string(data)])
+        }
+        let kept = text("k:0", "kept")
+        let first = page([
+            ComponentNode(id: "r", type: "Column", kind: .layout, childMode: .multi, children: ["a", "k:0"]),
+            text("a", "a"),
+            kept,
+            text("k:1", "old"),
+        ])
+        let shared = text("k:1", "new")
+        let next = PageResponse(pageId: "q", title: "Q", components: [
+            ComponentNode(id: "n", type: "Column", kind: .layout, childMode: .multi, children: ["k:0", "b"]),
+            text("b", "b"),
+            shared,
+        ])
+        let registry = WidgetRegistry()
+
+        let renderer = PageRenderer(page: first, registry: registry).replacing(with: next) { $0.hasPrefix("k:") }
+
+        XCTAssertEqual(Set(renderer.nodes.keys), ["n", "b", "k:0", "k:1"])
+        XCTAssertEqual(renderer.nodes["k:0"], kept)
+        XCTAssertEqual(renderer.nodes["k:1"], shared)
+        XCTAssertEqual(renderer.rootId, "n")
+        XCTAssertEqual(renderer.page, next)
+        XCTAssertTrue(renderer.registry === registry)
+        let tree = try XCTUnwrap(renderer.tree(state: StoreState()))
+        XCTAssertEqual(tree.children.map(\.id), ["k:0", "b"])
+    }
 }

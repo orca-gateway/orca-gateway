@@ -124,6 +124,7 @@ import java.util.Locale
  * joins the router, with the plugins, custom actions and host widgets its
  * OrcaApp was given. Use it from the main thread; [phase] is Compose state.
  * With DevTools on, a loaded page sends its `timing` once, on its first frame.
+ * A page's `refetchPage` action fetches it again into the same model, in place.
  *
  * A load cancelled mid-fetch (its page left the screen) leaves [phase] at
  * `Loading` and runs again on the next [loadIfNeeded]. After [close] it
@@ -173,6 +174,8 @@ public class OrcaPageLoader(
             val plugins = router?.plugins
             val registry = plugins?.registry ?: WidgetRegistry.shared
             val model = OrcaPageModel(page, store = ElmStore(StoreState(app = app)), registry = registry, client = client)
+            // Before the plugins: a custom `refetchPage` overrides it, as in Flutter.
+            model.executor.registerHandler("refetchPage") { _, _ -> refetch(model, client) }
             plugins?.install(model)
             router?.attach(model)
             val renderComplete = timing.elapsed()
@@ -193,6 +196,19 @@ public class OrcaPageLoader(
         } catch (e: Exception) {
             Phase.Failed(e.message ?: e.toString(), e)
         }
+    }
+
+    /**
+     * The `refetchPage` action (Flutter's `onRefetchPage`, orca_page.dart:276-297):
+     * fetch [path] again with the app state and show it in place in [model]
+     * ([OrcaPageModel.replacePage]). No loading phase and no effect; the
+     * action ends once the new tree is in, and a failed fetch throws out of
+     * it, the page staying as it was. Not through [reload], whose close
+     * would cancel the action awaiting this.
+     */
+    private suspend fun refetch(model: OrcaPageModel, client: OrcaClient) {
+        val page = client.fetchPage(path, router?.appState ?: model.store.state.app)
+        model.replacePage(page)
     }
 
     /** Cancel the loaded page's running actions, and drop a fetch still running. */
