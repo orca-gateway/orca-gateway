@@ -5,9 +5,10 @@ import XCTest
 
 /// T4.2: the three fallback policies and the 426 gate, on pages a real engine
 /// produced for the Swift caps vector (`t sdk-swift:record`, the
-/// capability-demo `degrade` page with a Checkbox iOS lacks). The engine
-/// shapes are pinned by engine/test/caps-policy-e2e.test.ts; these tests pin
-/// what the Swift renderer makes of them.
+/// capability-demo `degrade` page with an UnregisteredPluginWidget, a plugin
+/// widget no app registers, so no SDK advertises it). The engine shapes are
+/// pinned by engine/test/caps-policy-e2e.test.ts; these tests pin what the
+/// Swift renderer makes of them.
 final class DegradeTests: XCTestCase {
     func recorded(_ name: String) throws -> Data {
         try Fixtures.data("sdk-swift/Tests/Pages/\(name).json")
@@ -28,10 +29,10 @@ final class DegradeTests: XCTestCase {
     func testGracefulStripsTheNodeAndKeepsItsSiblings() throws {
         let tree = try tree("degrade-graceful")
         XCTAssertEqual(tree.type, "Scaffold")
-        XCTAssertNil(tree.first { $0.type == "Checkbox" || $0.type == "FallbackPrompt" })
+        XCTAssertNil(tree.first { $0.type == "UnregisteredPluginWidget" || $0.type == "FallbackPrompt" })
         let column = try XCTUnwrap(tree.first { $0.type == "Column" })
         XCTAssertEqual(column.children.map { $0.props["data"]?.stringValue },
-                       ["Above the checkbox.", "Below the checkbox."])
+                       ["Above the plugin widget.", "Below the plugin widget."])
     }
 
     func testWarnPrependsABannerAndKeepsThePage() throws {
@@ -43,14 +44,19 @@ final class DegradeTests: XCTestCase {
         XCTAssertEqual(banner.type, "FallbackPrompt")
         XCTAssertEqual(banner.props["severity"], "warn")
         XCTAssertEqual(banner.props["title"], "Some content needs an update")
+        // The banner names the one feature the engine found missing.
+        XCTAssertEqual(banner.props["body"]?.stringValue,
+                       "Parts of this screen use features that your current app version can't fully render "
+                           + "(widget.UnregisteredPluginWidget). "
+                           + "Please update when convenient for the full experience.")
         XCTAssertEqual(tree.children[1].type, "Scaffold")
-        // warn keeps the authored tree, Checkbox included; the client then
-        // draws it as its own "Unsupported content" prompt, as Flutter does.
-        let checkbox = try XCTUnwrap(tree.first { $0.node.degradedFrom == "Checkbox" })
-        XCTAssertEqual(checkbox.type, "FallbackPrompt")
-        XCTAssertEqual(checkbox.props["title"], "Unsupported content")
-        XCTAssertEqual(texts(tree).filter { $0.hasSuffix("checkbox.") },
-                       ["Above the checkbox.", "Below the checkbox."])
+        // warn keeps the authored tree, the plugin widget included; the client
+        // then draws it as its own "Unsupported content" prompt, as Flutter does.
+        let plugin = try XCTUnwrap(tree.first { $0.node.degradedFrom == "UnregisteredPluginWidget" })
+        XCTAssertEqual(plugin.type, "FallbackPrompt")
+        XCTAssertEqual(plugin.props["title"], "Unsupported content")
+        XCTAssertEqual(texts(tree).filter { $0.hasSuffix("plugin widget.") },
+                       ["Above the plugin widget.", "Below the plugin widget."])
     }
 
     func testRequireReplacesThePageWithOneBlockingPrompt() throws {

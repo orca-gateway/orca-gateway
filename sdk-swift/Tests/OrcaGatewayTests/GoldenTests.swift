@@ -38,8 +38,8 @@ final class GoldenTests: XCTestCase {
     }
 
     /// T4.1 and T4.2: the warn policy's banner over the page (with the
-    /// Checkbox drawn as its own prompt) and the require policy's blocking
-    /// prompt, in Flutter's colours.
+    /// UnregisteredPluginWidget, which no SDK draws, as its own prompt) and
+    /// the require policy's blocking prompt, in Flutter's colours.
     func testWarnPolicyPage() throws {
         let model = OrcaPageModel(page: try recordedPage("degrade-warn"), registry: WidgetRegistry())
         let image = render(NavigationStack { OrcaPageView(model: model) })
