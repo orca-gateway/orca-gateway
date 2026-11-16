@@ -4,6 +4,11 @@ import CoreGraphics
 import Foundation
 import SwiftUI
 import XCTest
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 import OrcaGateway
 @testable import OrcaVoiceRecorder
@@ -232,16 +237,86 @@ final class VoiceRecorderPluginTests: XCTestCase {
         XCTAssertEqual(h.made.map(\.calls), [[], []], "two recorders (memo, rec); drawing records nothing")
     }
 
-    func testC17_3_S_TheViewsTriggersFireThroughTheModelIntoTheNodesActions() async throws {
+    /// The plugin's VoiceRecorder for the node, on screen in a real window:
+    /// startRecording and a new level reach the node's onStateChange and
+    /// onAmplitudeChange through model.fire, the view's own subscription.
+    func testC17_3_S_OnScreenTheViewsTriggersFireThroughTheModelIntoTheNodesActions() throws {
         let h = Harness()
         let model = try model(["recorderId": "memo"])
-        let view = h.recorders.view(try XCTUnwrap(model.resolve("rec")), model)
+        let drawn = try XCTUnwrap(h.plugin.widgets["VoiceRecorder"])(try XCTUnwrap(model.resolve("rec")), model)
+        let hosted = Hosted(drawn)
+        defer { hosted.close() }
+        pump(until: { hosted.appeared })
+        XCTAssertTrue(hosted.appeared, "the VoiceRecorder never came on screen")
 
-        await view.fire(stateChange("recording"))?.value
-        await view.fire(amplitudeChange(-12.5))?.value
+        Task {
+            do { try await h.run(["type": "startRecording", "recorderId": "memo"]) }
+            catch { XCTFail("startRecording threw \(error)") }
+        }
+        pump(until: { model.store.state.page["recState"] == "recording" })
+        XCTAssertEqual(model.store.state.page["recState"], "recording",
+                       "onStateChange {state} did not reach the node's action through model.fire")
 
-        XCTAssertEqual(model.store.state.page["recState"], "recording")
-        XCTAssertEqual(model.store.state.page["level"], -12.5)
+        try XCTUnwrap(h.recorder("memo")?.onAmplitude, "startRecording did not sample the level")(-12.5)
+        pump(until: { model.store.state.page["level"] == -12.5 })
+        XCTAssertEqual(model.store.state.page["level"], -12.5,
+                       "onAmplitudeChange {amplitude} did not reach the node's action through model.fire")
+    }
+
+    /// Runs the main run loop until `done`, 3 s at most (as sdk-swift's
+    /// PagerTests wait), so SwiftUI draws and the fired actions run.
+    func pump(until done: () -> Bool, timeout: Double = 3) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !done() && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+    }
+
+    /// A view in a real window (UIKit or AppKit), as sdk-swift's
+    /// LifecycleTests host a node, kept on screen until `close`.
+    @MainActor final class Hosted {
+        final class Flag { var on = false }
+
+        private let flag: Flag
+        #if canImport(UIKit)
+        private let window: UIWindow
+        #elseif canImport(AppKit)
+        private let window: NSWindow
+        #endif
+
+        /// The view's onAppear ran.
+        var appeared: Bool { flag.on }
+
+        init(_ content: AnyView) {
+            let flag = Flag()
+            self.flag = flag
+            let root = content
+                .onAppear { flag.on = true }
+                .frame(width: 300, height: 300, alignment: .topLeading)
+            let size = CGRect(x: 0, y: 0, width: 300, height: 300)
+            #if canImport(UIKit)
+            let host = UIHostingController(rootView: root)
+            window = UIWindow(frame: size)
+            window.rootViewController = host
+            window.isHidden = false
+            host.view.frame = size
+            host.view.layoutIfNeeded()
+            #elseif canImport(AppKit)
+            window = NSWindow(contentRect: size, styleMask: [.titled], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            let host = NSHostingView(rootView: root)
+            host.frame = size
+            window.contentView = host
+            window.orderFront(nil)
+            window.contentView?.layoutSubtreeIfNeeded()
+            #endif
+        }
+
+        func close() {
+            #if canImport(UIKit)
+            window.isHidden = true
+            #elseif canImport(AppKit)
+            window.orderOut(nil)
+            #endif
+        }
     }
 
     /// The view drawn at scale 1: its size and its sRGB pixels, top row first.
