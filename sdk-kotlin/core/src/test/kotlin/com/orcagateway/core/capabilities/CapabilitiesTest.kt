@@ -59,12 +59,15 @@ class CapabilitiesTest {
      *
      * A3.1: native parity step 3 adds the 13 layout wrappers ([A3_1]), so the
      * pin moves from 31 to 44; Swift lands the same 13 in the same step.
+     *
+     * A4.x: native parity step 4 adds the 11 effect and touch wrappers ([A4]),
+     * so the pin moves from 44 to 55; Swift lands the same 11 in the same step.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame44WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame55WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(44, kotlin.size)
+        assertEquals(55, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -77,22 +80,45 @@ class CapabilitiesTest {
         assertTrue(kotlin.containsAll(s10), "missing: ${s10 - kotlin.toSet()}")
         assertTrue(GeneratedCapabilities.widgets.containsAll(s10), "not advertised: ${s10 - GeneratedCapabilities.widgets.toSet()}")
         assertTrue(kotlin.containsAll(A3_1), "missing: ${A3_1 - kotlin.toSet()}")
+        assertTrue(kotlin.containsAll(A4), "missing: ${A4 - kotlin.toSet()}")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
 
     /**
      * A3.1: Compose draws the 13 layout wrappers, so the generated vector
-     * advertises them (44 in all) and the core registry lets them through
-     * instead of degrading them; WidgetBuildersTest pins standard() to the
-     * same set.
+     * advertises them and the core registry lets them through instead of
+     * degrading them; WidgetBuildersTest pins standard() to the same set.
+     * The pin moved from 44 to 55 when native parity step 4 advertised its
+     * 11 effect and touch wrappers (A4.x).
      */
     @Test
     fun a3_1_theThirteenLayoutWrappersAreAdvertisedAndLetThrough() {
         val advertised = GeneratedCapabilities.widgets.toSet()
         assertEquals(emptySet(), A3_1 - advertised, "not advertised")
-        assertEquals(44, GeneratedCapabilities.widgets.size)
+        assertEquals(55, GeneratedCapabilities.widgets.size)
         assertEquals(emptySet(), A3_1 - WidgetRegistry.shared.types, "degraded by the core registry")
+    }
+
+    /**
+     * A4.x: Compose draws native parity step 4's 11 effect and touch wrappers,
+     * so capabilities.json lists each of them, the generated vector advertises
+     * each once, every one carries the manifest's android target, and the core
+     * registry lets them through; WidgetBuildersTest pins standard() to the
+     * same set.
+     */
+    @Test
+    fun a4_x_theElevenEffectAndTouchWrappersAreAdvertisedAndLetThrough() {
+        val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["widgets"])
+        assertEquals(emptySet(), A4 - listed, "not in capabilities.json")
+        for (wrapper in A4.sorted()) {
+            assertEquals(
+                1, GeneratedCapabilities.widgets.count { it == wrapper },
+                "$wrapper is not advertised exactly once",
+            )
+        }
+        assertEquals(emptySet(), A4 - manifestAndroidWidgets(), "a wrapper lacks the android target")
+        assertEquals(emptySet(), A4 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
     @Test
@@ -170,6 +196,12 @@ class CapabilitiesTest {
             "Align", "AspectRatio", "Baseline", "ConstrainedBox", "FittedBox", "Flexible",
             "FractionallySizedBox", "IntrinsicHeight", "IntrinsicWidth", "LimitedBox", "Offstage",
             "SafeArea", "Wrap",
+        )
+
+        /** Native parity step 4's effect and touch wrappers (A4.1-A4.5), sorted. */
+        val A4 = setOf(
+            "AbsorbPointer", "BackdropFilter", "BlurView", "ClipOval", "ClipRect", "ColorFiltered",
+            "DecoratedBox", "IgnorePointer", "InteractiveViewer", "Opacity", "RotatedBox",
         )
     }
 }

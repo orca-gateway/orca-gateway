@@ -4,19 +4,26 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.orcagateway.core.render.ResolvedNode
+import com.orcagateway.sdk.widgets.AbsorbPointerWidget
 import com.orcagateway.sdk.widgets.AlignWidget
 import com.orcagateway.sdk.widgets.AnimatedBuilderWidget
 import com.orcagateway.sdk.widgets.AppBarWidget
 import com.orcagateway.sdk.widgets.AspectRatioWidget
+import com.orcagateway.sdk.widgets.BackdropFilterWidget
 import com.orcagateway.sdk.widgets.BaselineWidget
+import com.orcagateway.sdk.widgets.BlurViewWidget
 import com.orcagateway.sdk.widgets.BottomNavItemWidget
 import com.orcagateway.sdk.widgets.BottomNavigationBarWidget
 import com.orcagateway.sdk.widgets.ButtonWidget
 import com.orcagateway.sdk.widgets.CardWidget
 import com.orcagateway.sdk.widgets.CenterWidget
+import com.orcagateway.sdk.widgets.ClipOvalWidget
 import com.orcagateway.sdk.widgets.ClipRRectWidget
+import com.orcagateway.sdk.widgets.ClipRectWidget
+import com.orcagateway.sdk.widgets.ColorFilteredWidget
 import com.orcagateway.sdk.widgets.ConstrainedBoxWidget
 import com.orcagateway.sdk.widgets.ContainerWidget
+import com.orcagateway.sdk.widgets.DecoratedBoxWidget
 import com.orcagateway.sdk.widgets.DividerWidget
 import com.orcagateway.sdk.widgets.DrawerWidget
 import com.orcagateway.sdk.widgets.ExpandedWidget
@@ -27,13 +34,17 @@ import com.orcagateway.sdk.widgets.FlexibleWidget
 import com.orcagateway.sdk.widgets.FractionallySizedBoxWidget
 import com.orcagateway.sdk.widgets.GestureDetectorWidget
 import com.orcagateway.sdk.widgets.IconWidget
+import com.orcagateway.sdk.widgets.IgnorePointerWidget
 import com.orcagateway.sdk.widgets.ImageWidget
+import com.orcagateway.sdk.widgets.InteractiveViewerWidget
 import com.orcagateway.sdk.widgets.IntrinsicHeightWidget
 import com.orcagateway.sdk.widgets.IntrinsicWidthWidget
 import com.orcagateway.sdk.widgets.LimitedBoxWidget
 import com.orcagateway.sdk.widgets.OffstageWidget
+import com.orcagateway.sdk.widgets.OpacityWidget
 import com.orcagateway.sdk.widgets.PaddingWidget
 import com.orcagateway.sdk.widgets.PositionedWidget
+import com.orcagateway.sdk.widgets.RotatedBoxWidget
 import com.orcagateway.sdk.widgets.SafeAreaWidget
 import com.orcagateway.sdk.widgets.ScaffoldWidget
 import com.orcagateway.sdk.widgets.ScrollWidget
@@ -100,14 +111,15 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 44 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 55 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
-         * S10's BottomNavigationBar, BottomNavItem and Drawer, and the 13
-         * layout wrappers of native parity step 3 (A3.1). Keep the two lists
-         * in step: the caps vector advertises what this draws
-         * (WidgetBuildersTest checks it).
+         * S10's BottomNavigationBar, BottomNavItem and Drawer, the 13 layout
+         * wrappers of native parity step 3 (A3.1) and the 11 effect and touch
+         * wrappers of native parity step 4 (A4.x). Keep the two lists in step:
+         * the caps vector advertises what this draws (WidgetBuildersTest
+         * checks it).
          */
         public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
             register("Scaffold") { node, model, modifier -> ScaffoldWidget(node, model, modifier) }
@@ -156,6 +168,17 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("Offstage") { node, model, modifier -> OffstageWidget(node, model, modifier) }
             register("SafeArea") { node, model, modifier -> SafeAreaWidget(node, model, modifier) }
             register("Wrap") { node, model, modifier -> WrapWidget(node, model, modifier) }
+            register("AbsorbPointer") { node, model, modifier -> AbsorbPointerWidget(node, model, modifier) }
+            register("BackdropFilter") { node, model, modifier -> BackdropFilterWidget(node, model, modifier) }
+            register("BlurView") { node, model, modifier -> BlurViewWidget(node, model, modifier) }
+            register("ClipOval") { node, model, modifier -> ClipOvalWidget(node, model, modifier) }
+            register("ClipRect") { node, model, modifier -> ClipRectWidget(node, model, modifier) }
+            register("ColorFiltered") { node, model, modifier -> ColorFilteredWidget(node, model, modifier) }
+            register("DecoratedBox") { node, model, modifier -> DecoratedBoxWidget(node, model, modifier) }
+            register("IgnorePointer") { node, model, modifier -> IgnorePointerWidget(node, model, modifier) }
+            register("InteractiveViewer") { node, model, modifier -> InteractiveViewerWidget(node, model, modifier) }
+            register("Opacity") { node, model, modifier -> OpacityWidget(node, model, modifier) }
+            register("RotatedBox") { node, model, modifier -> RotatedBoxWidget(node, model, modifier) }
         }
     }
 }
