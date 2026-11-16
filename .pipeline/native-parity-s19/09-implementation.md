@@ -3,20 +3,21 @@
 ## Front page
 
 ### In one breath
-group 5 of 6 · tasks: 2 green, 0 blocked · cases: C19.1-C19.7 green (C19.5: unit) · suites green
-T12 Swift: Flutter's five debug options on the host config, the logTimings line, the timing chip.
-T13 Kotlin: the same; both passed both reviews first time.
-Known difference: a page a host draws itself (not via OrcaApp): "-ms" on iOS, no chip on Android.
+group 6 of 6 · tasks: 2 green, 0 blocked · cases: C19.1-C19.7 green (C19.5 by hand) · all green
+T14 iOS, T15 Android: ORCA_OVERLAY and ORCA_BODIES demo switches; DevTools sections in the READMEs.
+T15 one rework: its README named an x-api-key header the app never sends (it sends Authorization).
+Hand checks on both devices: the chip, tap to expand, taps beside it reach the page; each event
+sent (traced rebuild, traced setState with affectedWidgets, bodies) validates against the schema.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-4 auto-decided: chip drawn at the loader (Kotlin) or page view (Swift), INFO log line, tap seam
+2 auto-decided: two demo switches only; events captured on :6363 (DevTools window control declined)
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 6 (ORCA_OVERLAY and ORCA_BODIES demo switches, the READMEs). (default: go)
+2. `A` approves the stage; then ship: rebase on origin/main and open the step 19 PR. (default: go)
 
 ## Appendix
 
@@ -160,7 +161,41 @@ from OrcaPage) · INFO level (Flutter's debugPrint lands as I/flutter) · the lo
 after DevTools starts late shows a real load where Flutter shows "-ms" (harmless)
 Review fit: pass · Review quality: pass
 
+### Group 6
+#### T14 · iOS demo switches, Swift README (3ff62a1)
+Files: examples/app-ios/OrcaCounter/OrcaCounterApp.swift · examples/app-ios/README.md · sdk-swift/README.md
+Cases: enables C19.5 hand/S and the iOS DevTools hand check (example builds, no warnings; core 398, SwiftUI 268)
+Changed: ORCA_OVERLAY → showOverlay, ORCA_BODIES → includeBodies (Self.isOn, off by default); the app README's DevTools
+section gains both with launch lines; sdk-swift/README.md gains a DevTools section (start/stop, the five options and
+what each gates, what is never gated, the bodies warning, the redacted headers, the three traced things).
+Decisions: the README names DevTools' own labels (Network › Body, Transform, Widgets, Prop pipelines) · no scheme edit
+Review fit: pass · Review quality: pass
+#### T15 · Android demo switches, Kotlin README (ffd2538, rework 4bf53ec)
+Files: examples/app-android/.../MainActivity.kt · examples/app-android/README.md · sdk-kotlin/README.md
+Cases: enables C19.5 hand/K and the Android DevTools hand check (assembleDebug green; core 399, sdk 385)
+Changed: ORCA_OVERLAY / ORCA_BODIES boolean extras into OrcaDebugConfig; the app README's DevTools table, `-S` explained,
+one adb line each; sdk-kotlin/README.md's DevTools sample and an options table, as T14.
+Decisions: no ORCA_LOGTIMINGS switch · the sample keeps includeBodies = false so the docs don't suggest it
+Review fit: the app README said an `x-api-key` header shows redacted; the app sends `Authorization: Bearer`, fixed
+(4bf53ec) · Review quality: pass
+
+### Hand checks (2026-11-16)
+- Android emulator-5584 (API 34, cold-booted after its system process hung), counter app with ORCA_OVERLAY and
+  ORCA_BODIES: chip "3027ms" bottom right; taps on + reach the page beside it; a tap expands "Load: 3027.4ms /
+  Components: 16 / Cache: -".
+- iOS 18.5 simulator FDE5D612: chip "62ms"; + works; a tap expands "Load: 62.3ms / Components: 16 / Cache: -".
+- DevTools: screen control of the DevTools window was declined, so a listener on :6363 captured what each app sent
+  and T1's validator checked every event: 9 events each (device_info, network with responseBody and Authorization
+  <redacted>, state_change, widget_rebuild with propTraces [state, input, toString], timing, setState action with
+  transformTrace [state, input, add] and affectedWidgets Text#5), 0 invalid on both. No requestBody: the app state
+  was empty, as Flutter. Screenshots and captures: scratchpad s19/hand/.
+
 ### Test run
+Group 6, final (..4bf53ec): engine `bun test` 770 pass · sdk `flutter test` 357 · devtools `flutter test` 20 ·
+`swift build --build-tests` 0 warnings (type-check scan at 80 ms: only TransformTests.swift:2328, untouched) · `swift test`
+core 398, SwiftUI 268 · `xcodebuild test` OrcaGateway-Package on iOS 18.5: core 398, SwiftUI 311, TEST SUCCEEDED ·
+examples/app-ios build SUCCEEDED, 0 warnings · `./gradlew build` core 399, sdk 385 · examples/app-android assembleDebug
+SUCCESSFUL · Files changed: the tasks' only (devtools' lock and analysis_options, rewritten by its run, restored).
 Group 5 (..7b85c9d): `swift build --build-tests` 0 warnings · `swift test` core 398, SwiftUI 268, 0 failures ·
 `./gradlew build` core 399, sdk 385, 0 failures · sdk `flutter test` 357 · Files changed: the tasks' only.
 Group 4 (..6977b2a): `swift build --build-tests` 0 warnings · `swift test` core 398, SwiftUI 261, 0 failures ·
