@@ -339,12 +339,11 @@ On the `custom` home page, tap "Go to Push Page" (or launch straight to it: add
 shows the buttons Request permission, Get token, Show notification, Subscribe to news and
 Unsubscribe from news, and the lines "Permission:" and "Token:" under them.
 
-The walk below has not been tried here yet. The permission dialog, the APNs line and the page above
-were seen on the simulator, and the `deeplink:` line in step 4 when the tap handler was called
-with the page's payload; the taps themselves were not.
+On the iOS 18.5 simulator, without Firebase, the walk goes like this:
 
 1. On the first launch, iOS asks whether "Orca Counter" may send you notifications: tap Allow.
-2. **Request permission.** No dialog this time; the line reads "Permission: granted".
+2. **Request permission.** No dialog this time; the line reads "Permission: granted", then DevTools
+   shows the "Firebase is not configured" error for the token part.
 3. **Show notification.** The banner "Orca push" with "Tap to open the map" drops in at the top,
    though the app is in front.
 4. **Tap the banner.** The app opens the "Map Integration" page, and the log above shows
@@ -353,7 +352,8 @@ with the page's payload; the taps themselves were not.
    not configured" error above.
 
 After "Don't Allow", the line reads "Permission: denied" and the banner does not show. To allow it
-later, turn on Allow Notifications in the simulator's Settings › Notifications › Orca Counter.
+later, turn on Allow Notifications in the simulator's Settings › Notifications › Orca Counter. This
+part follows the plugin's code.
 
 ## Version check and sessions
 

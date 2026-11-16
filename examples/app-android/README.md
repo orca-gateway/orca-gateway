@@ -377,14 +377,14 @@ On the `custom` home page, tap "Go to Push Page" (or start the app on it directl
 The "Push Notifications" page shows the buttons Request permission, Get token, Show notification,
 Subscribe to news and Unsubscribe from news, and the lines "Permission:" and "Token:" under them.
 
-The walk below has not been tried here yet. It follows the plugin's code and the Flutter plugin.
+On the API 34 Google Play emulator, without Firebase, the walk goes like this:
 
 1. **Request permission.** On the API 34 emulator Android asks whether to allow Orca Counter to send
    you notifications: allow it. The line reads "Permission: granted".
 2. **Show notification.** "Orca push" with "Tap to open the map" drops in at the top of the screen
    (the channel's importance is high), then stays in the notification shade: pull the shade down.
-3. **Tap "Orca push".** The shade closes and the app opens the "Map Integration" page, and
-   `adb logcat -s OrcaCounter` shows
+3. **Tap "Orca push".** The shade closes, the notification is gone from it, and the app opens the
+   "Map Integration" page; `adb logcat -s OrcaCounter` shows
    `deeplink: incoming=orcacounter://open/map resolvedLocation=/map wasRedirected=false isColdStart=false`.
 
 ## Offline, force update and sessions
