@@ -73,6 +73,52 @@ struct RouteEntrance: Equatable {
     }
 }
 
+/// The Hero a push flies from: the tag of the Hero around the widget whose
+/// action navigated, and the route that widget's page is. Also the id that
+/// Hero marks itself with as a zoom source, so the same tag on the pushed
+/// page is another source.
+struct HeroSource: Hashable, Sendable {
+    let route: OrcaRoute.ID
+    let tag: String
+}
+
+/// How a pushed route comes in.
+enum RoutePush: Equatable {
+    /// The system's zoom out of the Hero with this tag (iOS 18 and up).
+    case zoom(String)
+    /// The system animation off, the page animating its own content in
+    /// (`RouteEntrance`).
+    case entrance
+    /// The system push.
+    case system
+
+    /// The zoom transition exists: iOS 18 and up, never macOS.
+    static func zoomAvailable(isIOS: Bool, osMajor: Int) -> Bool {
+        isIOS && osMajor >= 18
+    }
+
+    /// The zoom transition exists where this runs.
+    static var zoomAvailable: Bool {
+        #if os(iOS)
+        zoomAvailable(isIOS: true, osMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion)
+        #else
+        false
+        #endif
+    }
+
+    /// The push of a route. `heroTag`: the Hero the navigation came from,
+    /// nil or empty for none. `entranceHonoured`: the route's transition is
+    /// one the page plays itself (`fade`, `slideUp`). Where the zoom exists
+    /// a Hero wins over the route's transition, and reduced motion is the
+    /// system's to honour inside its zoom; without one, reduced motion
+    /// leaves the system push.
+    static func decide(heroTag: String?, entranceHonoured: Bool, reduceMotion: Bool,
+                       zoomAvailable: Bool) -> RoutePush {
+        if zoomAvailable, let heroTag, !heroTag.isEmpty { return .zoom(heroTag) }
+        return entranceHonoured && !reduceMotion ? .entrance : .system
+    }
+}
+
 /// The navigation stack of an Orca app, the Swift side of Flutter's GoRouter
 /// wiring (sdk/lib/src/navigation/navigation_handler.dart):
 /// - every route is its own page fetch with its own page state;
@@ -104,6 +150,17 @@ struct RouteEntrance: Equatable {
 /// iOS 16 may not obey the transaction and play its push as well; a route
 /// the host or the system writes into `stack` itself is not animated here;
 /// the first page of a stack never is.
+///
+/// Hero: a `navigate` that pushes, fired by a widget inside a Hero with a
+/// tag, records that Hero on the pushed route (`heroSource(of:)`) for as
+/// long as the route is on the stacks. On iOS 18 and up that push is the
+/// system's zoom out of the Hero, also for a `fade` or `slideUp` route,
+/// whose own entrance is skipped for that push (`RoutePush.decide`). Below
+/// iOS 18 and on macOS the record changes nothing. A `go`, a deep link, the
+/// boot, a tab change and a push the host makes record none. Known limits:
+/// the whole page zooms, which is not Flutter's flight of the one widget,
+/// and it zooms whether or not the pushed page has a Hero of that tag (the
+/// page is not loaded when the push begins).
 @MainActor
 public final class OrcaRouter: ObservableObject {
     /// The page under every pushed route: with tabs, the current tab's root.
@@ -184,6 +241,14 @@ public final class OrcaRouter: ObservableObject {
     /// The entrance of every route on the stacks that was pushed with the
     /// system animation off, by route id; it stays while the route does.
     private var entrances: [UUID: RouteEntrance] = [:]
+    /// The zoom transition exists on this system (`RoutePush.zoomAvailable`).
+    /// Tests set it.
+    var zoomAvailable = RoutePush.zoomAvailable
+    /// The Hero each route on the stacks was pushed from, by route id; it
+    /// stays while the route does.
+    private var heroSources: [UUID: HeroSource] = [:]
+    /// The Hero tag of the `navigate` that is pushing right now.
+    private var pushingHeroTag: String?
 
     private var loaders: [UUID: OrcaPageLoader] = [:]
     /// The stacks of a router made with a config; nil in path mode.
@@ -295,17 +360,39 @@ public final class OrcaRouter: ObservableObject {
         entrances[route.id]?.look(at: ms, reduceMotion: reduceMotion) ?? (1, 0, 0, 1)
     }
 
-    /// Where a push is decided. `body` writes the stacks; `pushed` is the
-    /// route it leaves on top when that route is new to the stacks and lies
-    /// over another page, else nil. A `fade` or `slideUp` route (what iOS
-    /// honours of `TransitionSpec`) is stamped with an entrance and written
-    /// with the system animation off; anything else, and reduced motion, is
-    /// written as before.
+    /// The tag of the Hero a route was pushed from; nil for a route no Hero
+    /// pushed.
+    func heroTag(of id: OrcaRoute.ID) -> String? {
+        heroSources[id]?.tag
+    }
+
+    /// The Hero a route was pushed from, with the route it is on.
+    func heroSource(of id: OrcaRoute.ID) -> HeroSource? {
+        heroSources[id]
+    }
+
+    /// The Hero a route zooms out of and back into: its `heroSource` where
+    /// the zoom exists, else nil.
+    func zoomSource(of id: OrcaRoute.ID) -> HeroSource? {
+        zoomAvailable ? heroSources[id] : nil
+    }
+
+    /// Where a push is decided (`RoutePush.decide`). `body` writes the
+    /// stacks; `pushed` is the route it leaves on top when that route is new
+    /// to the stacks and lies over another page, else nil. The Hero of the
+    /// `navigate` under way is recorded on it. A `fade` or `slideUp` route
+    /// (what iOS honours of `TransitionSpec`) is stamped with an entrance
+    /// and written with the system animation off; a zoom, anything else, and
+    /// reduced motion, is written as before.
     private func writeStacks(pushed: OrcaRoute?, _ body: () -> Void) {
-        let spec = pushed.map { TransitionSpec.spec(for: $0.transition) }
-        guard let pushed, let spec, !reduceMotion, spec.honoured(on: .iOS) else {
-            return body()
-        }
+        let tag = pushingHeroTag
+        pushingHeroTag = nil
+        guard let pushed else { return body() }
+        if let tag, !tag.isEmpty { heroSources[pushed.id] = HeroSource(route: top.id, tag: tag) }
+        let spec = TransitionSpec.spec(for: pushed.transition)
+        let push = RoutePush.decide(heroTag: tag, entranceHonoured: spec.honoured(on: .iOS),
+                                    reduceMotion: reduceMotion, zoomAvailable: zoomAvailable)
+        guard push == .entrance else { return body() }
         entrances[pushed.id] = RouteEntrance(spec: spec, startMs: frameClock())
         var transaction = Transaction()
         transaction.disablesAnimations = true
@@ -313,13 +400,21 @@ public final class OrcaRouter: ObservableObject {
     }
 
     public func navigate(to path: String, replace: Bool = false) {
+        navigate(to: path, replace: replace, heroTag: nil)
+    }
+
+    /// `navigate` from a page's action: `heroTag` is the tag of the Hero
+    /// around the widget that fired it, recorded on the route a push adds.
+    func navigate(to path: String, replace: Bool, heroTag: String?) {
         guard !path.isEmpty else { return }
         if shell != nil {
             // A push adds one page, the one asked for; `go` shows its chain.
             if replace {
                 shellChanged(shell?.go(path, appState: appState), .replace)
             } else {
+                pushingHeroTag = heroTag
                 shellChanged(shell?.push(path, appState: appState), .push)
+                pushingHeroTag = nil
             }
             return
         }
@@ -330,7 +425,11 @@ public final class OrcaRouter: ObservableObject {
             stack = Array(routes.dropFirst())
         } else {
             pendingType = .push
-            // Without a config no route has a transition: the system push.
+            if let heroTag, !heroTag.isEmpty {
+                heroSources[routes[0].id] = HeroSource(route: top.id, tag: heroTag)
+            }
+            // Without a config no route has a transition: the system push,
+            // or the zoom out of the Hero.
             stack.append(routes[0])
         }
     }
@@ -517,6 +616,7 @@ public final class OrcaRouter: ObservableObject {
         loaders = loaders.filter { live.contains($0.key) }
         if let asked = pageDrawerRequest, !live.contains(asked) { pageDrawerRequest = nil }
         entrances = entrances.filter { live.contains($0.key) }
+        heroSources = heroSources.filter { live.contains($0.key) }
 
         let visible = (shell.currentTab.map { tabs[$0] } ?? []) + over
         let sync = {
@@ -622,6 +722,7 @@ public final class OrcaRouter: ObservableObject {
         loaders = loaders.filter { live.contains($0.key) }
         if let asked = pageDrawerRequest, !live.contains(asked) { pageDrawerRequest = nil }
         entrances = entrances.filter { live.contains($0.key) }
+        heroSources = heroSources.filter { live.contains($0.key) }
         handTopTheAppState()
         // A change that `navigate` and `goBack` did not start came through
         // the `NavigationStack` path: a back swipe when the stack shrank.
@@ -655,8 +756,10 @@ public final class OrcaRouter: ObservableObject {
     func perform(_ effect: ActionEffect) -> Bool {
         switch effect.type {
         case "navigate":
+            // Fired by a widget inside a Hero, the push flies from it.
             navigate(to: effect.payload["route"]?.stringValue ?? "",
-                     replace: effect.payload["replace"]?.boolValue ?? false)
+                     replace: effect.payload["replace"]?.boolValue ?? false,
+                     heroTag: OrcaPageModel.firingHeroTag)
         case "goBack":
             goBack()
         case "switchTab":

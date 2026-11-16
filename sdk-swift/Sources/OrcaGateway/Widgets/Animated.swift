@@ -380,14 +380,36 @@ extension EnvironmentValues {
     }
 }
 
+/// The namespace the app's Heroes and zooming pages meet in, set by the
+/// view that draws the router; nil for a page drawn outside `OrcaApp`.
+private struct OrcaHeroNamespaceKey: EnvironmentKey {
+    static let defaultValue: Namespace.ID? = nil
+}
+
+extension EnvironmentValues {
+    var orcaHeroNamespace: Namespace.ID? {
+        get { self[OrcaHeroNamespaceKey.self] }
+        set { self[OrcaHeroNamespaceKey.self] = newValue }
+    }
+}
+
 /// Flutter `Hero` (`_buildHero`): draws its child; with no `tag`, or an
-/// empty one, it is the child alone. The flight between two pages is not
-/// drawn here: the push is the route's own. The tag is on `tag(of:)` and,
-/// for the widgets below, in `orcaHeroTag`.
+/// empty one, it is the child alone. The tag is on `tag(of:)` and, for the
+/// widgets below, in `orcaHeroTag`: a `navigate` fired below a Hero records
+/// it on the route it pushes (`OrcaRouter.heroSource(of:)`).
+///
+/// The flight: on iOS 18 and up, inside `OrcaApp`, a Hero with a tag is the
+/// source of the system's zoom transition (`HeroSource`: its page's route
+/// and its tag), and the route pushed from it zooms out of it and back into
+/// it (`HeroZoom`). The whole pushed page zooms, which is not Flutter's
+/// flight of the one widget. Below iOS 18, on macOS and outside `OrcaApp`
+/// nothing is marked and the push is the route's own.
 @MainActor
 struct HeroView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
+    @Environment(\.orcaHeroNamespace) private var namespace
+    @Environment(\.orcaPage) private var page
 
     /// The node's hero tag; nil when it has none or an empty one.
     static func tag(of node: ResolvedNode) -> String? {
@@ -395,9 +417,56 @@ struct HeroView: View {
         return tag
     }
 
+    /// What this Hero is the zoom source of; nil without a tag and outside
+    /// `OrcaApp`.
+    private var source: HeroSource? {
+        guard let tag = Self.tag(of: node), let page else { return nil }
+        return HeroSource(route: page.route.id, tag: tag)
+    }
+
     var body: some View {
         ChildView(node: node, model: model)
             .environment(\.orcaHeroTag, Self.tag(of: node))
+            .modifier(HeroZoomSource(source: source, namespace: namespace))
+    }
+}
+
+/// Marks a Hero as the view a pushed page zooms out of (iOS 18 and up);
+/// the content alone everywhere else.
+private struct HeroZoomSource: ViewModifier {
+    let source: HeroSource?
+    let namespace: Namespace.ID?
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        if #available(iOS 18.0, *), let source, let namespace {
+            content.matchedTransitionSource(id: source, in: namespace)
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+}
+
+/// A pushed page that zooms out of the Hero it was pushed from, and back
+/// into it when popped (iOS 18 and up; the system honours reduced motion).
+/// With no `source`, and everywhere else, the content alone: the plain push.
+struct HeroZoom: ViewModifier {
+    let source: HeroSource?
+    @Environment(\.orcaHeroNamespace) private var namespace
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        if #available(iOS 18.0, *), let source, let namespace {
+            content.navigationTransition(.zoom(sourceID: source, in: namespace))
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
     }
 }
 #endif

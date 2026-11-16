@@ -186,7 +186,33 @@ public final class OrcaPageModel: ObservableObject {
                      eventData: [String: JSONValue]? = nil) -> Task<Void, Never>? {
         guard !isInert, let action = node.actions[trigger] else { return nil }
         let source = ActionSource(widgetId: node.id, trigger: trigger)
-        return Task { await run(action, eventData: eventData, source: source) }
+        // The Hero around the node, as it is now: what a `navigate` of this
+        // run flies from (`OrcaRouter.perform`).
+        let hero = heroTag(enclosing: node.id)
+        return Task {
+            await Self.$firingHeroTag.withValue(hero) {
+                await run(action, eventData: eventData, source: source)
+            }
+        }
+    }
+
+    /// The tag of the Hero around the widget whose trigger the current task
+    /// runs (`fire`); nil outside such a run and outside a Hero.
+    @TaskLocal static var firingHeroTag: String?
+
+    /// The tag of the nearest Hero above node `id`, as `orcaHeroTag` gives
+    /// it to the views below a Hero: nil when there is none, and when the
+    /// nearest one has no tag or an empty one.
+    func heroTag(enclosing id: String) -> String? {
+        var seen: Set<String> = [id]
+        var current = id
+        // A slot's widget is listed in its node's `children` as well.
+        while let parent = renderer.nodes.values.first(where: { $0.children.contains(current) }),
+              seen.insert(parent.id).inserted {
+            if parent.type == "Hero" { return resolve(parent.id).flatMap(HeroView.tag(of:)) }
+            current = parent.id
+        }
+        return nil
     }
 
     /// Run one action to the end; `source` is the widget and trigger that

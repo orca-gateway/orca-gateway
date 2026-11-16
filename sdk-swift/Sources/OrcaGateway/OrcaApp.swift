@@ -375,6 +375,8 @@ private struct RouterRoot: View {
     @ObservedObject var router: OrcaRouter
     @State private var drawers = DrawerHost()
     @OrcaReduceMotion private var reduceMotion
+    /// Where a Hero and the page pushed from it meet for the zoom.
+    @Namespace private var heroes
 
     var body: some View {
         ZStack {
@@ -386,6 +388,7 @@ private struct RouterRoot: View {
                 }
             }
             .environment(\.orcaDrawerHost, drawers)
+            .environment(\.orcaHeroNamespace, heroes)
             DrawerHostLayer(host: drawers)
         }
         // The router decides each push; with reduced motion all are the
@@ -434,6 +437,9 @@ extension OrcaRoute {
 /// `slideUp` transition, `OrcaRouter.entrance(of:)`) animates its content in
 /// here, in a tab's stack as in the single one; every other route is drawn
 /// as it is.
+///
+/// A route pushed from inside a Hero zooms out of it on iOS 18 and up
+/// (`OrcaRouter.zoomSource(of:)`, `HeroZoom`); such a route has no entrance.
 @MainActor
 struct RoutePage: View {
     let router: OrcaRouter
@@ -452,7 +458,7 @@ struct RoutePage: View {
         if let entrance = router.entrance(of: route.id) {
             page.modifier(RouteEntranceEffect(entrance: entrance))
         } else {
-            page
+            page.modifier(HeroZoom(source: router.zoomSource(of: route.id)))
         }
     }
 
