@@ -35,6 +35,7 @@ import com.orcagateway.core.client.StaticFlowManager
 import com.orcagateway.core.client.preload
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.navigation.DeeplinkEvent
+import com.orcagateway.plugins.voicerecorder.VoiceRecorderPlugin
 import com.orcagateway.sdk.OrcaApp
 import com.orcagateway.sdk.OrcaPlugin
 import com.orcagateway.sdk.client.OkHttpTransport
@@ -72,8 +73,10 @@ import java.util.Locale
  * The app opens `orcacounter://` links (see "Deep links" in the README) and
  * logs one `deeplink:` line for each under the tag `OrcaCounter`.
  *
- * Two plugins (DemoPlugins.kt) draw the ColoredBadge and run the device
- * actions of the `custom` app: start it with ORCA_APP_ID `custom`.
+ * Three plugins serve the `custom` app (start it with ORCA_APP_ID `custom`):
+ * two of this app's (DemoPlugins.kt) draw the ColoredBadge and run the device
+ * actions, and the voice recorder's (plugins/orca_voice_recorder/android)
+ * draws the VoiceRecorder of its Voice Page and records and plays back.
  *
  * Five more extras try OrcaApp's shell; without them the app is as before.
  * ORCA_API_KEY is the key sent (default `demo-key`; any other gets the
@@ -103,7 +106,11 @@ class MainActivity : ComponentActivity() {
         val sessions = intent.getBooleanExtra("ORCA_SESSIONS", false)
         // Only with a config: a path has none to preload, and the extra is then ignored.
         val preloadFirst = path == null && intent.getBooleanExtra("ORCA_PRELOAD", false)
-        val plugins = listOf(BadgePlugin(), DeviceActionsPlugin(window.decorView))
+        val plugins = listOf(
+            BadgePlugin(),
+            DeviceActionsPlugin(window.decorView),
+            VoiceRecorderPlugin(applicationContext),
+        )
         // No scheme (null): the theme's own, here and in OrcaApp.
         val scheme = when (setting("ORCA_SCHEME")) {
             "dark" -> darkColorScheme()
