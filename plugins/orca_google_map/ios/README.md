@@ -71,9 +71,9 @@ struct MyApp: App {
 ## No Google key
 
 MapKit draws the map, so the package brings no Google SDK, and the app needs no Google Maps key.
-The Flutter plugin's `orca_plugin.yaml` asks for a `GOOGLE_MAPS_IOS_API_KEY` in `Info.plist` and a
-`GMSServices.provideAPIKey` call in the app delegate, which `orca plugin add` writes into a Flutter
-app: Flutter's map on iOS is Google's. A native app adds neither.
+The Flutter plugin's `orca_plugin.yaml` asks for a `GOOGLE_MAPS_IOS_API_KEY` in `Info.plist`, which
+`orca plugin add` writes into a Flutter app, and a `GMSServices.provideAPIKey` call in its app
+delegate: Flutter's map on iOS is Google's. A native app adds neither.
 
 ## Location
 
