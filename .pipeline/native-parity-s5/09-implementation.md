@@ -206,6 +206,62 @@ each scroll end (iOS 18). The scroll-end test gained a thumbVisibility-false con
 Decided (main session): iOS cannot keep its system indicator shown, so thumbVisibility flashes it (no timer per view);
 thickness is not settable on iOS (documented). The flash tests read UIKit's private indicator view (CI pins iOS 18.5).
 
+### Group 7
+Commits: D1 e7ccb2b (ahead of its group), K-pull f6a983b, S-pull 22c08a2 then its fix cd57d64 (staged by path).
+Nothing pushed. K-pull and S-pull reviewed (fit and quality); each went back once. Group 7 approved under the
+standing rule.
+
+#### Task D1 · Demo page lists on parity-a
+Files: `examples/server/parity-a.ts` · `examples/server/index.ts` · `engine/test/parity-a-lists.test.ts` (new)
+Cases: A5.x eng → the shape case green; "A5 each native vector gets the lists page whole" red by plan until G8, green
+after S-caps (2/2). Changed: page `lists` per D7: a 1,000-row ListView counting the rows it builds, horizontal and
+reversed lists, a 2-column GridView, three PageViews (onScrollEnd offset shown, vertical, free), a Scrollbar beside a
+list without one, and a PullToRefresh whose onRefresh is RefetchPage beside a server fetch count, an app-state counter
+(kept) and a page-state counter (reset). The fetch count changes per fetch (cachePolicy defaults to "none").
+
+#### Task K-pull · Kotlin PullToRefresh; Scrollbar on lists
+Files: `sdk-kotlin/sdk/.../widgets/Refresh.kt` (new) · `.../RefreshTest.kt` (new) · `.../widgets/Lists.kt` ·
+`.../widgets/Pager.kt` · `.../widgets/ScrollbarTest.kt`
+Cases: A5.5 kt (8), A5.7 kt on ListView, GridView and PageView (6) → green; `./gradlew build` sdk 488, core 427.
+Changed: PullToRefreshWidget a material3 PullToRefreshBox, spinner while the fired Job runs, colours from the props,
+the circle resting at displacement + 4. EdgeStart (reset on each finger down) lets only a drag begun at the top start
+it, as Flutter's onEdge, and takes only leftover going down, so the bottom stretch stays. LazyScrollReports replaces
+LazyScrollTriggers and PageTriggers: onScroll* plus the Scrollbar report; the eager fallbacks clear the Scrollbar local.
+Rework (review): EdgeStart took overscroll both ways; its flag could outlive a refresh into the next gesture; the
+eager fallbacks passed the Scrollbar local down.
+Decided: a vertical list nested in the wrapped one also starts it (Compose's nested scroll does not say where a scroll
+came from; tested, documented, q9); Compose's 160 dp pull threshold kept (Flutter: a sixth of the height); a drag
+begun below the top that passes it shows no top stretch (documented).
+
+#### Task S-pull · Swift PullToRefresh through refreshable
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Refresh.swift` (new) · `NodeView.swift` · `.../RefreshTests.swift` (new)
+Cases: A5.5 sw → green: 9 iOS-hosted `testA5_5…` plus 1 macOS; `swift test` UI 308 / core 420; iOS scheme UI 401 /
+core 420, goldens unchanged. Red first each pass.
+Changed: `orcaRefresh` set by PullToRefreshView; RefreshOnPull adds `refreshable` to the vertical scroll view directly
+inside (a PageView only vertical and free; a ListView/GridView only when it has a scroll view, not unbounded) and
+clears it for scroll views nested inside; the action awaits the fired Task. NodeView routes the four scroll kinds
+through one helper (ScrollIndicators, then RefreshOnPull). Depth 0 holds on iOS (nested views get no control).
+Rework (review): an unbounded list has no ScrollView, so `refreshable` passed on to a scroll view nested in it.
+Decided (main session): UIRefreshControl also refreshes a drag begun below the top that carries past it, where
+Flutter's Material RefreshIndicator (onEdge, on every platform) does not; kept native, documented. Colour, background
+and displacement are not settable through refreshable (documented).
+
+### Group 8
+Commits: K-caps 38368d7, S-caps 7d92ba3 (staged by path). Nothing pushed. Self-reviewed (mechanical). Group 8 approved
+under the standing rule.
+
+#### Task K-caps · Kotlin registers and advertises the five
+Files: `sdk-kotlin/capabilities.json` · `.../capabilities/Generated.kt` · `.../CapabilitiesTest.kt` · `.../WidgetBuilders.kt`
+Cases: A5.x caps unit kt → green (`a5_x_theFiveScrollWidgetsAreAdvertisedAndLetThrough`, red first); pins 55 → 60;
+c1 red by plan until S-caps, green after. standard() registers the five; Generated.kt from the generator (hash
+a954169b…), Generated.swift byte-identical.
+
+#### Task S-caps · Swift advertises the five widgets
+Files: `sdk-swift/capabilities.json` · `.../Capabilities/Generated.swift` · `.../CapabilitiesTests.swift` ·
+`.../StructureWidgetTests.swift`
+Cases: A5.x caps unit sw → green (`testA5TheFiveScrollWidgetsAreAdvertised`, red first); pins 55 → 60; same hash as
+Kotlin; Generated.kt byte-identical. `bun test test/parity-a-lists.test.ts` 2/2: no native vector drops a node.
+
 ### Test run
 engine `bun test` 755/0 · `flutter test` 352 pass · Swift core 397, 2 expected reds · Kotlin core 398, 2 expected reds
 
