@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 2 of 7 · tasks: 4 green, 0 blocked · the two pure cores and the static overlay widgets
-S-core / K-core: DialogStack (the Dialog's subtree, heightFactor ?? 0.5) and one SnackbarQueue FIFO.
-S-static / K-static: BottomSheet, the Scaffold slot (the FAB lifted), SnackBar, an inert Dialog.
+group 3 of 7 · tasks: 3 green, 0 blocked · one snackbar queue per app; Tooltip, SnackBar on iOS
+S-queue / K-queue: snackbars, toasts and refused messages wait their turn, kept across a navigate.
+D2: iOS pages may use Tooltip and SnackBar; the registry is regenerated, the checks follow.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-A swipe removes a snackbar at once, as Flutter does (the design said "starts leaving"; corrected).
-SnackBar texts take an enclosing DefaultTextStyle under their own, as Flutter (review finding).
+`toast` on both page models is now a read-only view of the queue's head (it was settable).
+Kotlin with no Scaffold: a snackbar is queued and timed but not drawn, as Flutter in release.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 3, one snackbar queue at the router, Tooltip and SnackBar on iOS. (default: go)
+2. Next: group 4, the M3 snackbar bar in the Scaffold and above the tab bar. (default: go)
 
 ## Appendix
 
@@ -61,6 +61,41 @@ already ran ahead of the kinds check).
 Changed: both kinds join `kinds`; with no handler they fall to the existing default (no state, no effect, reported to
 DevTools as Flutter's built-in handlers are, AE:180-204); a page handler runs and is awaited (OP:323-374, D5).
 Decided: no explicit switch branch (the default covers it). Not done: README's kind count (S-caps, G7).
+
+### Group 3
+Commits: D2 2acf9405, K-queue ed8ab357, S-queue fd77ece9 (staged by path). Nothing pushed. D2 went back once
+(the off-target "once" test had lost its two-hit check; restored with a test-only registry entry; rechecked: pass).
+The queues were reviewed as twins: K pass; S went back once (its `toast` was no longer observable; now it publishes
+once per head-item change, as Kotlin's Compose state; rechecked: pass).
+
+#### Task D2 · Tooltip and SnackBar target iOS
+Files: `engine/src/components/layout/tooltip.ts`, `structure/snack-bar.ts`, `engine/test/widget-targets.test.ts`,
+`target-check.test.ts`, `sdk-swift/Tests/OrcaGatewayCoreTests/CapabilitiesTests.swift`; regenerated
+`engine/src/core/widget-registry-gen.ts`, `schema/widget-registry.json` (a rerun leaves them byte-identical).
+Cases: A8.3 eng, A8.5 eng (both on all four targets), IOS_ORPHANS [], the off-target examples from Video plus a
+test-only AndroidOnly entry (two different hits, each once), Swift's orphan check flipped (both carry ios, neither
+advertised until S-caps). Red first; engine 840 → 842, Swift core 660.
+Decided: no built-in widget is off iOS now (only Video is partial: android, ios). The native capability generators
+were run once to check and changed nothing. The cloud's Go registry is the user's follow-up (D2).
+
+#### Task S-queue / K-queue · one snackbar queue at the router
+Files: Swift `Navigation/OrcaRouter.swift`, `OrcaPageModel.swift`, `OrcaApp.swift`, `PageModelTests.swift`,
+`SnackbarQueueHostTests.swift` (new); Kotlin `navigation/OrcaRouter.kt`, `OrcaPageModel.kt`, `OrcaPageView.kt`,
+`PageModelTest.kt`, `CounterPageTest.kt`.
+Cases: A8.4: two in a row one after the other; a toast between two snackbars waits its turn; a bar across a navigate
+keeps its time; a refused server action's message joins as a 4000 ms snackbar (action_executor.dart:721-724). Swift
+adds back, tab switch, a router-less page and the head-change publish; Kotlin adds "no Scaffold: queued, not drawn"
+(its tab and router-less cases hold by construction: every page attaches, each model owns a queue). Swift UI 595 →
+603, iOS scheme 15/15; Kotlin sdk 826 → 830. Red first.
+Changed: the router owns the app's one queue (Flutter's root ScaffoldMessenger) and `attach` hands it to each page;
+perform queues showSnackbar (?? 4000) and showToast (?? 2000); `toast` is a read-only head. Swift: OrcaSnackbars with an
+injectable clock and its own wake; ToastView draws the head in the old look until S-bar. Kotlin: the queue as Compose
+state ticked by withFrameMillis from any page on screen; a toast becomes an Android Toast on its turn; a snackbar goes
+to the root Scaffold's host until K-bar; the page-bottom host is gone.
+Baseline tests edited (reviewed: none tests less): CounterPageTest's bar flips to "queued, not drawn" (planned, D8)
+and one advance 4000 → 4500 (250 in, 4000, 250 out); Swift PageModelTests gain the queued-item checks.
+Nits left as is: Kotlin copies the queue's items every busy frame; the twin types have different internal names.
+Moved to S-bar (G4): the Swift shell tree never attaches to the router, so a shell's snackbar goes to its own queue.
 
 ### Group 2
 Commits: S-core 6261ac68, K-core b82f6ca3, S-static 826baa06, K-static 99760366 (staged by path). Nothing pushed. The cores
@@ -107,6 +142,11 @@ caps are S-caps / K-caps (G7); a snackbar over the slot is S-bar / K-bar (G4).
 Nits left as is: Swift's line keeping a DTS italic has no case of its own (Kotlin pins italic); Kotlin's touch box
 covers the cut corners (16 on the sheet, 4 on the bar) where Flutter's BoxDecoration.hitTest lets them through; a
 label wider than the whole bar is ellipsised on Kotlin, overflows on Swift and Flutter.
+
+### Test run (group 3, all three tasks' final files)
+engine `bun test` 842 pass · Flutter 547 pass, analyze clean · `swift test` UI 603, core 660 · iOS scheme on
+SnackbarQueueHostTests and PageModelTests 15/15 · Kotlin `./gradlew cleanTest :sdk:cleanTestDebugUnitTest build
+--no-build-cache` core 677, sdk 830, lint clean · gen-widget-registry leaves no diff.
 
 ### Test run (group 2, all four tasks' final files)
 engine `bun test` 840 pass · Flutter 547 pass, analyze clean · `swift test` UI 595, core 660 · iOS scheme on
