@@ -21,8 +21,7 @@ public struct ActionReducer: Sendable {
     ) -> (StoreState, [ActionEffect]) {
         switch action {
         case .setState(let a):
-            let value = state.resolver(eventData: eventData).resolve(a.value)
-            return (state.setting(a.key, value, in: a.scope ?? .page), [])
+            return (setState(state, a, eventData: eventData).state, [])
 
         case .actionGroup(let group):
             // Sequential: each action sees the state the previous one wrote.
@@ -53,6 +52,22 @@ public struct ActionReducer: Sendable {
         default:
             return (state, [])
         }
+    }
+
+    /// A setState's next state. `traced` (DevTools on) resolves a transform
+    /// value once with its trace, which comes back with the state, as
+    /// Flutter's setState handler does under OrcaDebug; any other value, or
+    /// `traced` false, resolves as `reduce` does and traces nothing.
+    func setState(
+        _ state: StoreState, _ a: Action.SetState, eventData: [String: JSONValue]?, traced: Bool = false
+    ) -> (state: StoreState, trace: [TraceStep]) {
+        let resolver = state.resolver(eventData: eventData)
+        let scope = a.scope ?? .page
+        guard traced, case .object(let map) = a.value, map["type"]?.stringValue == "transform" else {
+            return (state.setting(a.key, resolver.resolve(a.value), in: scope), [])
+        }
+        let (value, trace) = resolver.resolveWithTrace(a.value)
+        return (state.setting(a.key, value, in: scope), trace)
     }
 
     /// This reducer as the store's `Reducer` (no event data).

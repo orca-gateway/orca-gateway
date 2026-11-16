@@ -3,11 +3,13 @@ package com.orcagateway.core.render
 import com.orcagateway.core.capabilities.GeneratedCapabilities
 import com.orcagateway.core.debug.DevToolsEvent
 import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.core.debug.TraceStep
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.json.SwiftText
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
 import com.orcagateway.core.models.PageResponse
+import com.orcagateway.core.resolver.ValueResolver
 import com.orcagateway.core.state.StoreState
 
 /**
@@ -166,6 +168,12 @@ public class PageRenderer(
     /**
      * [animationProgress] is the enclosing AnimatedBuilder's value (0..1),
      * which `tween` and `tweenSequence` props interpolate by.
+     *
+     * While DevTools is on, a node with watches has each object prop (a
+     * Value or a map holding them) resolved with its trace, and the props
+     * that traced steps are reported as one `widget_rebuild`, on every
+     * resolution, the first included: Flutter's WatchBuilder
+     * (component_renderer.dart:206-228). The props are the same either way.
      */
     public fun resolve(
         id: String,
@@ -176,7 +184,11 @@ public class PageRenderer(
         val source = nodes[id] ?: return null
         val node = node(id) ?: return null
         val resolver = state.resolver(eventData, animationProgress)
-        val props = node.props.mapValues { resolver.resolveDeep(it.value) }
+        val props = if (OrcaDebug.isEnabled && node.watches.isNotEmpty()) {
+            tracedProps(node, resolver)
+        } else {
+            node.props.mapValues { resolver.resolveDeep(it.value) }
+        }
 
         var childIds: List<String> = emptyList()
         val slots = LinkedHashMap<String, String>()
@@ -195,6 +207,21 @@ public class PageRenderer(
             slots = slots, actions = node.actions ?: emptyMap(), watches = node.watches,
             degradedFrom = if (node.type == source.type) null else source.type,
         )
+    }
+
+    /** [node]'s props resolved, its object props with their traces, and the non-empty traces reported. */
+    private fun tracedProps(node: ComponentNode, resolver: ValueResolver): Map<String, JsonValue> {
+        val traces = LinkedHashMap<String, List<TraceStep>>()
+        val props = node.props.mapValues { (key, raw) ->
+            if (raw !is JsonValue.Object) return@mapValues resolver.resolveDeep(raw)
+            val (value, steps) = resolver.resolveWithTrace(raw)
+            if (steps.isNotEmpty()) traces[key] = steps
+            value
+        }
+        if (traces.isNotEmpty()) {
+            OrcaDebug.report { DevToolsEvent.widgetRebuild(node.id, node.type, node.watches, traces) }
+        }
+        return props
     }
 
     /**

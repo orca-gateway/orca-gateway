@@ -36,14 +36,16 @@ final class CapabilitiesTests: XCTestCase {
     }
 
     /// A3.1: native parity step 3's 13 layout wrappers are drawn by SwiftUI,
-    /// so the generated vector advertises them, 51 widgets in all (with step 12's 5 animated ones and step 13's ReorderableListView and SubPage), each once
-    /// and sorted like capabilities.json.
-    func testA3_1TheThirteenLayoutWrappersAreAdvertisedFiftyOneInAll() throws {
+    /// so the generated vector advertises them, each once and sorted like
+    /// capabilities.json. The pin is 62: with step 12's 5 animated widgets
+    /// (49), then native parity step 4's 11 effect and touch wrappers (A4.x),
+    /// then step 13's ReorderableListView and SubPage.
+    func testA3_1TheThirteenLayoutWrappersAreAdvertisedSixtyTwoInAll() throws {
         let advertised = Set(GeneratedCapabilities.widgets)
         XCTAssertEqual(Self.a3_1.subtracting(advertised), [], "not advertised")
         XCTAssertTrue(Self.a3_1.isSubset(of: try manifestIOSWidgets()), "a wrapper lacks the ios target")
-        XCTAssertEqual(GeneratedCapabilities.widgets.count, 51)
-        XCTAssertEqual(advertised.count, 51)
+        XCTAssertEqual(GeneratedCapabilities.widgets.count, 62)
+        XCTAssertEqual(advertised.count, 62)
         XCTAssertEqual(GeneratedCapabilities.widgets, GeneratedCapabilities.widgets.sorted())
     }
 
@@ -52,6 +54,27 @@ final class CapabilitiesTests: XCTestCase {
         "Align", "AspectRatio", "Baseline", "ConstrainedBox", "FittedBox", "Flexible",
         "FractionallySizedBox", "IntrinsicHeight", "IntrinsicWidth", "LimitedBox", "Offstage",
         "SafeArea", "Wrap",
+    ]
+
+    /// A4.x: native parity step 4's 11 effect and touch wrappers are drawn by
+    /// SwiftUI, so capabilities.json lists each of them and the generated
+    /// vector advertises each, once, every one carrying the manifest's ios
+    /// target.
+    func testA4TheElevenEffectAndTouchWrappersAreAdvertised() throws {
+        let implemented = try Fixtures.json("sdk-swift/capabilities.json")
+        let listed = Set((implemented["widgets"].arrayValue ?? []).compactMap(\.stringValue))
+        XCTAssertEqual(Self.a4.subtracting(listed), [], "not in capabilities.json")
+        for wrapper in Self.a4.sorted() {
+            XCTAssertEqual(GeneratedCapabilities.widgets.filter { $0 == wrapper }.count, 1,
+                           "\(wrapper) is not advertised exactly once")
+        }
+        XCTAssertTrue(Self.a4.isSubset(of: try manifestIOSWidgets()), "a wrapper lacks the ios target")
+    }
+
+    /// Native parity step 4's effect and touch wrappers (A4.1-A4.5).
+    static let a4: Set<String> = [
+        "AbsorbPointer", "BackdropFilter", "BlurView", "ClipOval", "ClipRect", "ColorFiltered",
+        "DecoratedBox", "IgnorePointer", "InteractiveViewer", "Opacity", "RotatedBox",
     ]
 
     func testActionKindsMatchTheImplementedList() throws {

@@ -11,6 +11,25 @@ public fun interface DevToolsReporter {
 }
 
 /**
+ * What the core sends while a reporter is set: the four fields of Flutter's
+ * `OrcaDebugConfig` (sdk/lib/src/debug/orca_debug.dart) the core reads, with
+ * Flutter's names and defaults. `showOverlay` is the UI layer's.
+ */
+public data class OrcaDebugOptions(
+    /** Off: the store sends no `state_change`. */
+    public val captureStateChanges: Boolean = true,
+    /** Off: the client sends no `network` event; its `error` events still go. */
+    public val captureNetworkRequests: Boolean = true,
+    /**
+     * On: a `network` event carries `requestBody` and `responseBody`. Off by
+     * default, as bodies can hold user data; there is no size cap.
+     */
+    public val includeBodies: Boolean = false,
+    /** On: the UI layer also writes the `timing` event to the platform log. */
+    public val logTimings: Boolean = false,
+)
+
+/**
  * Where DevTools events go, the Flutter `OrcaDebug.instance`: nowhere until
  * a [reporter] is set, and then the client, the store, the executor, the
  * renderer and the views send their events to it. Building an event costs
@@ -20,6 +39,14 @@ public object OrcaDebug {
     /** Read and set from any thread; a single reference, so volatile is enough. */
     @Volatile
     public var reporter: DevToolsReporter? = null
+
+    /**
+     * What is sent, read on every event; settable from any thread. Starting
+     * DevTools copies the host's config in (`options = OrcaDebugOptions(...)`),
+     * stopping it puts the defaults back (`options = OrcaDebugOptions()`).
+     */
+    @Volatile
+    public var options: OrcaDebugOptions = OrcaDebugOptions()
 
     public val isEnabled: Boolean get() = reporter != null
 

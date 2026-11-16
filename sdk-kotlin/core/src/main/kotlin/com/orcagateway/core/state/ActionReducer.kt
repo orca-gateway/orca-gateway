@@ -1,5 +1,7 @@
 package com.orcagateway.core.state
 
+import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.core.debug.TraceStep
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.StateScope
@@ -23,10 +25,7 @@ public class ActionReducer {
         action: Action,
         eventData: Map<String, JsonValue>? = null,
     ): Pair<StoreState, List<ActionEffect>> = when (action) {
-        is Action.SetState -> {
-            val value = state.resolver(eventData).resolve(action.value)
-            state.setting(action.key, value, action.scope ?: StateScope.Page) to emptyList()
-        }
+        is Action.SetState -> setState(state, action, eventData).first to emptyList()
 
         is Action.ActionGroup -> {
             // Sequential: each action sees the state the previous one wrote.
@@ -64,6 +63,28 @@ public class ActionReducer {
         }
 
         else -> state to emptyList()
+    }
+
+    /**
+     * A setState's next state, and its value's trace when that value is a
+     * transform and DevTools is on: Dart's setState handler
+     * (action_executor.dart:255-269), which resolves such a value once with
+     * `resolveWithTrace` instead of the plain resolve (the same value). Any
+     * other value, or DevTools off: the plain resolve and no trace.
+     */
+    internal fun setState(
+        state: StoreState,
+        action: Action.SetState,
+        eventData: Map<String, JsonValue>?,
+    ): Pair<StoreState, List<TraceStep>> {
+        val resolver = state.resolver(eventData)
+        val raw = action.value
+        val (value, trace) = if (OrcaDebug.isEnabled && raw.objectValue?.get("type")?.stringValue == "transform") {
+            resolver.resolveWithTrace(raw)
+        } else {
+            resolver.resolve(raw) to emptyList()
+        }
+        return state.setting(action.key, value, action.scope ?: StateScope.Page) to trace
     }
 
     /** This reducer as the store's [Reducer] (no event data). */

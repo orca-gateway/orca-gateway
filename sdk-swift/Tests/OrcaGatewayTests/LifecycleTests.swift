@@ -171,6 +171,191 @@ final class LifecycleTests: XCTestCase {
         XCTAssertEqual(lines.first?.level, .error)
     }
 
+    // MARK: C19 DevTools on the page
+
+    /// C19.6: with DevTools on, a debugLog still writes its system log line
+    /// and still reaches the effect handler, and DevTools hears its generic
+    /// `action` event only (Flutter sends no log event; the schema has none).
+    func testC19_6_withDevToolsOnADebugLogIsLoggedAndDevToolsHearsItsActionEventOnly() async throws {
+        let recorder = DevToolsHookTests.Recorder()
+        OrcaDebug.reporter = recorder
+        defer { OrcaDebug.reporter = nil }
+        let model = OrcaPageModel(page: PageResponse(pageId: "p", title: "P"))
+        var handled: [ActionEffect] = []
+        model.effectHandler = { handled.append($0) }
+        let since = Date().addingTimeInterval(-1)
+        let tag = "devtools-\(UUID().uuidString)"
+        let log = Action.debugLog(.init(level: "info", message: "hi", tag: tag))
+        await model.run(log)
+        XCTAssertEqual(handled, [ActionEffect("debugLog", ["level": "info", "tag": .string(tag), "message": "hi"])])
+
+        let store = try OSLogStore(scope: .currentProcessIdentifier)
+        let entries = try store.getEntries(at: store.position(date: since),
+                                           matching: NSPredicate(format: "subsystem == %@", "com.orcagateway"))
+        let lines = entries.compactMap { $0 as? OSLogEntryLog }.filter { $0.category == tag }
+        XCTAssertEqual(lines.map(\.composedMessage), ["hi"], "the debugLog line")
+        XCTAssertEqual(lines.first?.level, .info)
+
+        XCTAssertEqual(recorder.events.map(\.type), ["action"])
+        var payload = try XCTUnwrap(recorder.events.first?.payload)
+        XCTAssertNotNil(payload.removeValue(forKey: "durationMs")?.doubleValue)
+        XCTAssertEqual(payload, [
+            "actionType": "debugLog", "family": "custom", "pageId": "p", "data": log.json,
+        ])
+    }
+
+    /// C19.2: a page's setState lists the page's own nodes watching its key,
+    /// in the order the page sent them (8 before 5 here), then a node a
+    /// server action added; a node watching another key is not listed.
+    func testC19_2_aPagesSetStateListsItsNodesWatchingTheKey() async throws {
+        let recorder = DevToolsHookTests.Recorder()
+        OrcaDebug.reporter = recorder
+        defer { OrcaDebug.reporter = nil }
+        func node(_ id: String, _ type: String, _ watches: [String], children: [String] = []) -> JSONValue {
+            ["id": .string(id), "type": .string(type), "kind": "layout", "childMode": "multi",
+             "props": [:], "children": .array(children.map { .string($0) }),
+             "watches": .array(watches.map { .string($0) })]
+        }
+        let model = try OrcaPageModel(page: JSONValue.object([
+            "pageId": "home", "title": "Home", "state": [Self.zero("count")],
+            "components": [
+                node("0", "Column", [], children: ["8", "3", "5"]),
+                node("8", "Container", ["count", "theme"]),
+                node("3", "Text", ["theme"]),
+                node("5", "Text", ["count"]),
+            ],
+        ]).decode(PageResponse.self))
+        let increment = try Self.count("count").decode(Action.self)
+        func watchers() -> JSONValue? {
+            recorder.of("action").last { $0.payload["actionType"] == "setState" }?.payload["affectedWidgets"]
+        }
+
+        await model.run(increment)
+        XCTAssertEqual(model.store.value("count"), 1)
+        let container: JSONValue = ["id": "8", "type": "Container", "watches": ["count", "theme"]]
+        let text: JSONValue = ["id": "5", "type": "Text", "watches": ["count"]]
+        XCTAssertEqual(watchers(), [container, text])
+
+        let added = ComponentNode(id: "20", type: "Text", kind: .primitive, childMode: .none, watches: ["count"])
+        model.apply(.add(parentId: "0", components: [added], position: 0))
+        await model.run(increment)
+        XCTAssertEqual(watchers(), [container, text, ["id": "20", "type": "Text", "watches": ["count"]]])
+    }
+
+    /// C19.2: after server actions change the tree, the watchers come in
+    /// Flutter's node map order (component_store.dart): an added node goes
+    /// to the end in the order sent, whatever its id or child position; an
+    /// update keeps its place; a replace removes the target's subtree first,
+    /// so a replacement reusing the target's id moves to the end; a deleted
+    /// node drops out.
+    func testC19_2_nodesServerActionsChangedKeepFluttersNodeMapOrder() async throws {
+        let recorder = DevToolsHookTests.Recorder()
+        OrcaDebug.reporter = recorder
+        defer { OrcaDebug.reporter = nil }
+        func node(_ id: String, _ type: String = "Text", _ watches: [String] = ["count"],
+                  children: [String] = []) -> ComponentNode {
+            ComponentNode(id: id, type: type, kind: children.isEmpty ? .primitive : .layout,
+                          childMode: children.isEmpty ? .none : .multi, children: children, watches: watches)
+        }
+        let model = OrcaPageModel(page: PageResponse(
+            pageId: "home", title: "Home", state: [StateDefinition(key: "count", scope: .page, initial: 0)],
+            components: [
+                node("0", "Column", [], children: ["8", "3", "5"]),
+                node("8", "Container", ["count", "theme"]), node("3", "Text", ["theme"]), node("5"),
+            ]))
+        let increment = try Self.count("count").decode(Action.self)
+        func watchers() async -> [JSONValue] {
+            await model.run(increment)
+            let last = recorder.of("action").last { $0.payload["actionType"] == "setState" }
+            return last?.payload["affectedWidgets"]?.arrayValue ?? []
+        }
+        func ids() async -> [String] {
+            await watchers().compactMap { $0["id"].stringValue }
+        }
+
+        // Two adds whose ids sort opposite to their arrival, the second at
+        // child position 0, then one subtree of 11 nodes watching at _2, _10.
+        model.apply(.add(parentId: "0", components: [node("item-42_0")], position: nil))
+        model.apply(.add(parentId: "0", components: [node("item-17_0")], position: 0))
+        let subtree = (1...10).map { "item-9_\($0)" }
+        model.apply(.add(parentId: "0", components: [node("item-9_0", "Column", [], children: subtree)]
+            + subtree.map { node($0, "Text", $0 == "item-9_2" || $0 == "item-9_10" ? ["count"] : ["theme"]) },
+            position: 1))
+        let watching = await ids()
+        XCTAssertEqual(watching, ["8", "5", "item-42_0", "item-17_0", "item-9_2", "item-9_10"])
+
+        model.apply(.update(id: "item-42_0", props: ["data": "updated"]))
+        model.apply(.replace(targetId: "8", components: [node("8")]))
+        let replaced = await watchers()
+        XCTAssertEqual(replaced.compactMap { $0["id"].stringValue },
+                       ["5", "item-42_0", "item-17_0", "item-9_2", "item-9_10", "8"])
+        XCTAssertEqual(replaced.last, ["id": "8", "type": "Text", "watches": ["count"]], "the current node 8")
+
+        model.apply(.delete(id: "5"))
+        model.apply(.delete(id: "item-9_0"))
+        let deleted = await ids()
+        XCTAssertEqual(deleted, ["item-42_0", "item-17_0", "8"])
+    }
+
+    /// C19.2 with a SubPage (step 13): the nodes of a mounted sub-page are in
+    /// the host's store, so a setState on a key they watch lists them, in
+    /// Flutter's node map order: at the end, in the order the sub-page sent
+    /// them, after the nodes the page already had. A replace takes the old
+    /// page's nodes out and puts the new ones at the end; a SubPage node
+    /// that leaves takes its pages' nodes out of the list.
+    func testC19_2_theNodesOfAMountedSubPageAreListedInNodeMapOrder() async throws {
+        let recorder = DevToolsHookTests.Recorder()
+        OrcaDebug.reporter = recorder
+        defer { OrcaDebug.reporter = nil }
+        func node(_ id: String, _ type: String = "Text", _ watches: [String] = ["count"],
+                  children: [String] = []) -> ComponentNode {
+            ComponentNode(id: id, type: type, kind: children.isEmpty ? .primitive : .layout,
+                          childMode: children.isEmpty ? .none : .multi, children: children, watches: watches)
+        }
+        func subPage(_ ids: [String]) -> PageResponse {
+            PageResponse(
+                pageId: "detail", title: "Detail", state: [StateDefinition(key: "count", scope: .page, initial: 0)],
+                components: [node("0", "Column", [], children: ids)] + ids.map {
+                    // The node reads the page's count, so its watch is the sub-page's key.
+                    ComponentNode(id: $0, type: "Text", kind: .primitive, childMode: .none,
+                                  props: ["data": ["type": "state", "key": "count", "scope": "page"]],
+                                  watches: ["count"])
+                })
+        }
+        let model = OrcaPageModel(page: PageResponse(
+            pageId: "home", title: "Home", state: [],
+            components: [
+                node("0", "Column", [], children: ["1", "detail", "9"]),
+                node("1", "Text", ["detail:count"]), node("detail", "SubPage", []),
+                node("9", "Text", ["detail:count"]),
+            ]))
+        let increment = try Self.count("detail:count").decode(Action.self)
+        func ids() async -> [String] {
+            await model.run(increment)
+            let last = recorder.of("action").last { $0.payload["actionType"] == "setState" }
+            return (last?.payload["affectedWidgets"]?.arrayValue ?? []).compactMap { $0["id"].stringValue }
+        }
+
+        try model.mountSubPage("detail", mode: "replace", page: subPage(["7", "2"]))
+        let mounted = await ids()
+        XCTAssertEqual(mounted, ["1", "9", "detail:7", "detail:2"])
+
+        model.apply(.add(parentId: "0", components: [node("30", "Text", ["detail:count"])], position: nil))
+        try model.mountSubPage("detail", mode: "replace", page: subPage(["2", "5"]))
+        let replaced = await ids()
+        XCTAssertEqual(replaced, ["1", "9", "30", "detail:2", "detail:5"])
+
+        try model.mountSubPage("detail", mode: "join", page: subPage(["4"]))
+        let joined = await ids()
+        XCTAssertEqual(joined, ["1", "9", "30", "detail:2", "detail:5"], "a joined page has its own count")
+
+        _ = model.subPage("detail")
+        model.apply(.delete(id: "detail"))
+        let left = await ids()
+        XCTAssertEqual(left, ["1", "9", "30"])
+        XCTAssertTrue(model.renderer.nodes.keys.allSatisfy { !$0.hasPrefix("detail") })
+    }
+
     // MARK: helpers
 
     /// The node runs `trigger` once on its first build; its own state change

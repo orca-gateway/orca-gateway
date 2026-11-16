@@ -29,7 +29,8 @@ struct ScaffoldView: View {
     @Environment(\.orcaSafeAreaTaken) private var taken
 
     var body: some View {
-        let appBar = node.slots["appBar"].flatMap(model.resolve)
+        // The appBar slot has no NodeView: this is its build.
+        let appBar = node.slots["appBar"].flatMap { model.resolve($0, animationProgress: nil) }
         let drawers = ScaffoldDrawers(node: node, model: model, host: drawerHost,
                                       router: page?.router, route: page?.route.id)
         ZStack(alignment: .bottomTrailing) {

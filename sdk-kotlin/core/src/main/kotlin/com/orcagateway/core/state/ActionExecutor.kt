@@ -4,6 +4,7 @@ import com.orcagateway.core.client.ActionClient
 import com.orcagateway.core.client.OrcaActionException
 import com.orcagateway.core.debug.DevToolsEvent
 import com.orcagateway.core.debug.OrcaDebug
+import com.orcagateway.core.debug.TraceStep
 import com.orcagateway.core.json.DartFormat
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
@@ -79,6 +80,16 @@ public class ActionExecutor(
      */
     public var onUpdateSubPage: (suspend (subPageId: String, pageId: String, params: Map<String, JsonValue>?, mode: String) -> Unit)? = null
 
+    /**
+     * The page's current nodes in the order the page sent them (Flutter's
+     * `componentStore.nodeMap`), set by the page that owns this executor
+     * (the UI's page model, from its renderer). While DevTools is on, a
+     * `setState` reads it after writing the state and lists the nodes whose
+     * `watches` hold its key as the event's `affectedWidgets`. Never called
+     * while DevTools is off; null lists none.
+     */
+    public var pageNodes: (() -> Collection<ComponentNode>)? = null
+
     private val reducer = ActionReducer()
     private var eventData: Map<String, JsonValue>? = null
     private val handlers = HashMap<String, OrcaActionHandler>()
@@ -96,6 +107,15 @@ public class ActionExecutor(
      * `Sequential(Once(a), Once(b))` b never runs.
      */
     private val firedOnceKeys = HashSet<String>()
+
+    /**
+     * What the setState being run adds to its own `action` event while
+     * DevTools is on (Dart `_lastTransformTrace`, `_lastAffectedWidgets`):
+     * cleared before each run's handler and after its report, so an
+     * enclosing action reports neither.
+     */
+    private var transformTrace: List<TraceStep> = emptyList()
+    private var affectedWidgets: List<JsonValue> = emptyList()
 
     /**
      * Run [handler] for every action of [type] (Dart `registerHandler`,
@@ -147,7 +167,8 @@ public class ActionExecutor(
     /**
      * Every action run, nested ones too, is a DevTools `action` event, sent
      * when it finishes (so children before their group) or throws. A
-     * cancelled run is not a failure and did not finish: no event.
+     * cancelled run is not a failure and did not finish: no event. A
+     * setState's own event carries its transform trace and affected widgets.
      */
     private suspend fun run(action: Action) {
         val kind = action.kind
@@ -155,6 +176,8 @@ public class ActionExecutor(
         if (handler == null && kind !in kinds) return
         if (!OrcaDebug.isEnabled) return dispatch(action, handler)
         val start = OrcaDebug.now()
+        transformTrace = emptyList()
+        affectedWidgets = emptyList()
         var cancelled = false
         try {
             dispatch(action, handler)
@@ -163,8 +186,17 @@ public class ActionExecutor(
             throw e
         } finally {
             if (!cancelled) {
-                OrcaDebug.report { DevToolsEvent.action(action, pageId = store.pageId ?: "", durationMs = OrcaDebug.now() - start) }
+                val trace = transformTrace
+                val affected = affectedWidgets
+                OrcaDebug.report {
+                    DevToolsEvent.action(
+                        action, pageId = store.pageId ?: "", durationMs = OrcaDebug.now() - start,
+                        transformTrace = trace, affectedWidgets = affected,
+                    )
+                }
             }
+            transformTrace = emptyList()
+            affectedWidgets = emptyList()
         }
     }
 
@@ -177,7 +209,16 @@ public class ActionExecutor(
 
     private suspend fun handle(action: Action) {
         when (action) {
-            is Action.SetState, is Action.ShowSnackbar, is Action.ShowToast -> {
+            is Action.SetState -> {
+                val (next, trace) = reducer.setState(store.state, action, eventData)
+                store.commit(next)
+                if (OrcaDebug.isEnabled) {
+                    transformTrace = trace
+                    affectedWidgets = watchers(action.key)
+                }
+            }
+
+            is Action.ShowSnackbar, is Action.ShowToast -> {
                 val (next, effects) = reducer.reduce(store.state, action, eventData)
                 store.commit(next)
                 for (effect in effects) emit(effect)
@@ -294,6 +335,24 @@ public class ActionExecutor(
             }
 
             else -> return
+        }
+    }
+
+    /**
+     * The page's nodes whose `watches` hold [key] exactly (no dotted path or
+     * prefix), each `{id, type, watches}` in the page's order (Dart's
+     * setState, action_executor.dart:280-298); none without [pageNodes].
+     */
+    private fun watchers(key: String): List<JsonValue> {
+        val nodes = pageNodes?.invoke() ?: return emptyList()
+        return nodes.filter { key in it.watches }.map { node ->
+            JsonValue.Object(
+                linkedMapOf(
+                    "id" to JsonValue.String(node.id),
+                    "type" to JsonValue.String(node.type),
+                    "watches" to JsonValue.Array(node.watches.map(JsonValue::String)),
+                ),
+            )
         }
     }
 

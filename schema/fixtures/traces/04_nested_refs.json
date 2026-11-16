@@ -1,0 +1,89 @@
+{
+  "name": "nested-refs",
+  "description": "resolveWithTrace walks nested values (resolveDeep). Item 1, a conditional: it records nothing itself; its predicate's state ref and the chosen branch's app-state ref do, in that order. Item 2, a plain data map: its static entry records nothing and its literal stays; its transform reads a missing key (`out` \"null\", and the `input` step after it), then add resolves its `by`, a state ref, before its own step, which has no `in` because the value before it is null (add counts null as 0). Each plain map holds one entry that records steps, so the trace order never depends on map key order.",
+  "state": {
+    "page": {
+      "count": 2
+    },
+    "app": {
+      "user": "ana"
+    }
+  },
+  "value": [
+    {
+      "type": "conditional",
+      "branches": [
+        {
+          "when": {
+            "op": "gt",
+            "left": {
+              "type": "state",
+              "key": "count",
+              "scope": "page"
+            },
+            "right": {
+              "type": "static",
+              "value": 0
+            }
+          },
+          "then": {
+            "type": "state",
+            "key": "user",
+            "scope": "app"
+          }
+        }
+      ],
+      "else": {
+        "type": "static",
+        "value": "guest"
+      }
+    },
+    {
+      "border": {
+        "width": {
+          "type": "transform",
+          "input": {
+            "type": "state",
+            "key": "missing",
+            "scope": "page"
+          },
+          "by": [
+            {
+              "type": "add",
+              "by": {
+                "type": "state",
+                "key": "count",
+                "scope": "page"
+              }
+            }
+          ]
+        },
+        "style": {
+          "type": "static",
+          "value": "solid"
+        },
+        "radius": 4
+      }
+    }
+  ],
+  "expected": {
+    "value": [
+      "ana",
+      {
+        "border": {
+          "width": 2,
+          "style": "solid",
+          "radius": 4
+        }
+      }
+    ],
+    "trace": [
+      { "op": "state", "in": "count", "out": "2" },
+      { "op": "state", "in": "user", "out": "ana" },
+      { "op": "state", "in": "missing", "out": "null" },
+      { "op": "input", "out": "null" },
+      { "op": "state", "in": "count", "out": "2" },
+      { "op": "add", "out": "2" }
+    ]
+  }
+}

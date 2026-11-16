@@ -336,16 +336,48 @@ OrcaDebug.start(
         host = "10.0.2.2",     // the Mac running DevTools, as the emulator sees it
         appName = "My Shop",
         appVersion = "1.4.0",  // your versionName; the SDK takes no Context for it
+        showOverlay = true,    // the load chip on each page
+        logTimings = true,     // one logcat line per page load
+        includeBodies = false, // the default; read the note below before turning it on
     ),
 )
 ```
 
 The SDK then sends DevTools (port 6363) its network requests, page timing, state changes, actions,
 rebuilds and errors, and reconnects when DevTools restarts. A second `start` replaces the
-connection; `OrcaDebug.stop()` ends it. On a device, set `host` to the Mac's address, or run
-`adb reverse tcp:6363 tcp:6363` and use `localhost`. The connection is plain `ws://`, so the
-build must allow cleartext traffic (debug builds only). The example app reads both settings from
-intent extras; see [`examples/app-android`](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android).
+connection and its options; `OrcaDebug.stop()` ends it and puts the options back to their
+defaults. On a device, set `host` to the Mac's address, or run `adb reverse tcp:6363 tcp:6363` and
+use `localhost`. The connection is plain `ws://`, so the build must allow cleartext traffic (debug
+builds only). The example app reads its DevTools settings from intent extras; see
+[`examples/app-android`](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-android).
+
+Five options, with Flutter's names and defaults, choose what goes:
+
+| Option | Default | What it does |
+|---|---|---|
+| `showOverlay` | `false` | draws a chip at the bottom right of each server page with its load time (request start to render complete); a tap shows `Load`, `Components` (the page's node count) and `Cache` (always `-`) |
+| `logTimings` | `false` | also writes each page's `timing` event to logcat, tag `OrcaGateway`: `[OrcaDebug] Timing: <pageId> - <path>` |
+| `captureStateChanges` | `true` | off: no `state_change` events |
+| `captureNetworkRequests` | `true` | off: no `network` events; a failed request still sends its `error` event |
+| `includeBodies` | `false` | on: `network` events carry `requestBody` (for a page, the app state it sent; for other requests, their body, if any) and `responseBody` (the JSON, else the raw text) |
+
+Actions, rebuilds, timing and errors are never gated: they go whenever DevTools is on. The
+`authorization`, `cookie`, `set-cookie`, `x-api-key` and `proxy-authorization` headers are always
+sent as `<redacted>`.
+
+Bodies can hold tokens and user data, and their size is not capped, so `includeBodies` stays off
+unless you ask for it.
+
+DevTools also shows how a value was made, as the Flutter SDK sends it:
+
+- **Rebuilds.** Each time a widget that watches state is built (the first build included), its
+  `widget_rebuild` event carries the trace of each prop built from a value: the state it read, a
+  transform's input, then each step with its input and output.
+- **setState.** Its `action` event carries `transformTrace`, the same steps for a transform value,
+  and `affectedWidgets`, the page's widgets whose `watches` hold the key (id, type, watches). In
+  DevTools: the action's Transform and Widgets tabs; pick a widget for its prop traces.
+- **debugLog.** It shows as its `action` event (family `custom`), and its line goes to logcat under
+  the action's tag (`orca` when it has none).
 
 ## Sessions, analytics and version check
 

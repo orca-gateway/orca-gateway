@@ -14,6 +14,9 @@ import com.orcagateway.core.client.HttpRequest
 import com.orcagateway.core.client.HttpResponse
 import com.orcagateway.core.client.HttpTransport
 import com.orcagateway.core.client.OrcaClient
+import com.orcagateway.core.debug.DevToolsEvent
+import com.orcagateway.core.debug.DevToolsReporter
+import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
@@ -60,7 +63,9 @@ private fun counters(vararg keys: String): List<StateDefinition> =
  * component_renderer.dart:230-255: onInit and onVisible once per mount, the
  * app triggers from a test lifecycle, `once` per widget and trigger on a
  * tap, and a debugLog effect printed and handed on. Each trigger counts its
- * fires in a page state key.
+ * fires in a page state key. With DevTools on (C19.2, C19.6): a tapped
+ * setState lists the page's watchers of its key, and a debugLog goes to
+ * DevTools as its action event only.
  */
 @RunWith(RobolectricTestRunner::class)
 class LifecycleTest {
@@ -290,5 +295,83 @@ class LifecycleTest {
         val line = ShadowLog.getLogsForTag("lifecycle-test").single()
         assertEquals(Log.WARN, line.type)
         assertTrue("hello" in line.msg && "\"n\":3" in line.msg, line.msg)
+    }
+
+    /** Every DevTools event reported while [block] runs, the reporter reset after. */
+    private fun reported(block: () -> Unit): List<DevToolsEvent> {
+        val events = ArrayList<DevToolsEvent>()
+        OrcaDebug.reporter = DevToolsReporter { event -> synchronized(events) { events += event } }
+        try {
+            block()
+        } finally {
+            OrcaDebug.reporter = null
+        }
+        return synchronized(events) { events.toList() }
+    }
+
+    /**
+     * C19.2 (kt): a rendered page's tapped setState reports the page's own
+     * nodes watching its key, in the order the page sent them (8 before 5),
+     * with its transform's trace: the page model wires the executor's hook.
+     */
+    @Test
+    fun c19_2_kt_aRenderedPagesSetStateReportsThePagesWatchers() {
+        val model = model(
+            column("0", "w8", "b", "w5"),
+            watcher("w8", shows = "taps", actions = emptyMap()),
+            button("b", "ElevatedButton", "lb", mapOf("onTap" to count("taps"))),
+            text("lb", "Tap"),
+            watcher("w5", shows = "taps", actions = emptyMap()),
+            state = counters("taps"),
+        )
+        val events = reported {
+            show(model)
+            compose.onNodeWithText("Tap").performClick()
+            compose.waitForIdle()
+        }
+
+        assertEquals(1, model.value("taps"))
+        val setState = events.single { it.type == "action" }.payload
+        assertEquals(
+            JsonValue.arr(
+                JsonValue.obj("id" to "w8", "type" to "Text", "watches" to listOf("taps")),
+                JsonValue.obj("id" to "w5", "type" to "Text", "watches" to listOf("taps")),
+            ),
+            setState["affectedWidgets"],
+        )
+        assertEquals(
+            JsonValue.arr(
+                JsonValue.obj("op" to "state", "in" to "taps", "out" to "0"),
+                JsonValue.obj("op" to "input", "out" to "0"),
+                JsonValue.obj("op" to "add", "in" to "0", "out" to "1"),
+            ),
+            setState["transformTrace"],
+        )
+    }
+
+    /**
+     * C19.6 (kt): with DevTools on, a debugLog still prints its line through
+     * android.util.Log at its level under its tag, and reaches DevTools as
+     * its `action` event (debugLog, family custom, data = the action) and
+     * nothing else.
+     */
+    @Test
+    fun c19_6_kt_aDebugLogReachesDevToolsAsItsActionEventAndTheLog() {
+        ShadowLog.clear()
+        val model = OrcaPageModel(page(text("t", "x")))
+        val log = Action.DebugLog(level = "error", message = JsonValue.String("boom"), tag = "c19-6", data = JsonValue.obj("n" to 3))
+        val events = reported {
+            compose.runOnIdle { model.fire("onTap", model.resolve("t")!!.copy(actions = mapOf("onTap" to log))) }
+            compose.waitForIdle()
+        }
+
+        val line = ShadowLog.getLogsForTag("c19-6").single()
+        assertEquals(Log.ERROR, line.type)
+        assertTrue("boom" in line.msg && "\"n\":3" in line.msg, line.msg)
+        assertEquals(listOf("action"), events.map { it.type }, "one event, no other type")
+        val payload = events.single().payload
+        assertEquals(JsonValue.String("debugLog"), payload["actionType"])
+        assertEquals(JsonValue.String("custom"), payload["family"])
+        assertEquals(log.json, payload["data"])
     }
 }

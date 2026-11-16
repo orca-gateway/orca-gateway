@@ -23,6 +23,9 @@ public struct ValueResolver {
     /// Progress of a targeted animation by id (Dart's AnimationRegistry).
     public var animationProgressFor: ((String) -> Double?)?
     public var transforms: TransformRegistry
+    /// Set only on the copy a `resolveWithTrace` call resolves with; nil on
+    /// every other path, which then records nothing.
+    private var recorder: TraceRecorder?
 
     public init(
         state: [String: JSONValue],
@@ -91,16 +94,38 @@ public struct ValueResolver {
         }
     }
 
+    /// Resolve deep (as `resolveDeep`) and return every step taken, the
+    /// Flutter `resolveWithTrace` DevTools shows: a state ref
+    /// `{state, in: key, out}`, an event ref `{event, in: key, out}`, a
+    /// transform `{input, out}` after its input resolved, then
+    /// `{<op>, in, out}` per known op. Static, conditional and tween values
+    /// record nothing themselves; the refs inside them do. Texts are Dart's
+    /// `'$x'`; `in` is nil when the input is null. Not reentrant, as in
+    /// Flutter: calling it again while it resolves (from a transform) is a
+    /// programming error.
+    public func resolveWithTrace(_ raw: JSONValue) -> (value: JSONValue, trace: [TraceStep]) {
+        assert(recorder == nil, "resolveWithTrace is not reentrant")
+        let recorder = TraceRecorder()
+        var traced = self
+        traced.recorder = recorder
+        let value = traced.resolveDeep(raw)
+        return (value, recorder.steps)
+    }
+
     // MARK: kinds
 
     private func resolveState(_ map: [String: JSONValue]) -> JSONValue {
         guard let key = map["key"]?.stringValue else { return .null }
-        return StatePath.lookup(state, key)
+        let value = StatePath.lookup(state, key)
+        recorder?.add("state", .string(key), value)
+        return value
     }
 
     private func resolveEvent(_ map: [String: JSONValue]) -> JSONValue {
         guard let key = map["key"]?.stringValue, let eventData else { return .null }
-        return eventData[key] ?? .null
+        let value = eventData[key] ?? .null
+        recorder?.add("event", .string(key), value)
+        return value
     }
 
     private func resolveConditional(_ map: [String: JSONValue]) -> JSONValue {
@@ -119,11 +144,14 @@ public struct ValueResolver {
     private func resolveTransform(_ map: [String: JSONValue]) -> JSONValue {
         var current = resolve(map["input"] ?? .null)
         guard case .array(let pipeline)? = map["by"] else { return current }
+        recorder?.add("input", .null, current)
         for step in pipeline {
             guard case .object(let def) = step, let type = def["type"]?.stringValue,
                 let op = transforms[type]
             else { continue }
-            current = op(def, current, self)
+            let next = op(def, current, self)
+            recorder?.add(type, current, next)
+            current = next
         }
         return current
     }
@@ -270,6 +298,18 @@ public struct ValueResolver {
             // Dart's compareTo puts NaN above everything, itself included.
             return a.isNaN ? (b.isNaN ? 0 : 1) : -1
         }
+    }
+}
+
+/// The steps of one `resolveWithTrace` call (Dart `_activeTrace`), shared by
+/// the copies of the resolver its transforms receive.
+private final class TraceRecorder {
+    var steps: [TraceStep] = []
+
+    /// Dart `TransformTrace.toJson`: `in` only when the input is not null.
+    func add(_ op: String, _ input: JSONValue, _ output: JSONValue) {
+        steps.append(TraceStep(
+            op: op, in: input.isNull ? nil : DartFormat.string(input), out: DartFormat.string(output)))
     }
 }
 
