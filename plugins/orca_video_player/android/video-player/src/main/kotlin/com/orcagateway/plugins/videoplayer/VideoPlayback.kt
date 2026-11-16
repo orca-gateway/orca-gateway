@@ -75,8 +75,6 @@ internal data class VideoValue(
     val isLooping: Boolean = false,
     val volume: Double = 1.0,
     val speed: Double = 1.0,
-    /** Set when the player failed (video_player's `VideoPlayerValue.erroneous`). */
-    val error: String? = null,
 ) {
     /** video_player's `aspectRatio`: width over height once initialized with a size, else 1. */
     val aspectRatio: Float
@@ -137,7 +135,7 @@ internal class VideoController(
     private val events = object : VideoPlayback.Events {
         override fun prepared(durationMs: Long, width: Int, height: Int) {
             if (disposed) return
-            update(value.copy(durationMs = durationMs, width = width, height = height, isInitialized = true, error = null))
+            update(value.copy(durationMs = durationMs, width = width, height = height, isInitialized = true))
             applyLooping()
             applyVolume()
             applyPlayPause()
@@ -151,10 +149,10 @@ internal class VideoController(
             update(value.copy(width = width, height = height))
         }
 
-        /** The value turns erroneous; only a failure before the player is ready reaches [initialize]'s onError. */
+        /** The value resets, as video_player's turns erroneous; only a failure before the player is ready reaches [initialize]'s onError. */
         override fun failed(message: String) {
             if (disposed) return
-            update(VideoValue(error = message))
+            update(VideoValue())
             stopTicks()
             val (_, onError) = initializing ?: return
             initializing = null
