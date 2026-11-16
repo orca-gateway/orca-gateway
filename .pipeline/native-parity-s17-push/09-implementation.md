@@ -3,23 +3,24 @@
 ## Front page
 
 ### In one breath
-group 4 of 5 · tasks: 4 green, 0 blocked · cases: 16 of 20 green · engine bun test: 843 pass
-T13 Android demo: the push build, taps through its own deep-link path, Firebase file optional.
-T14 Android README: install, register, the five actions, Firebase as the app's; the server row.
-T16 Swift token and topics on Firebase Messaging from 12.17.0; the APNs token handed on arrival.
-T19 the yaml now says a tap without a payload hands "", as Flutter does.
-Rebased onto main 4a7f389 (PR #52), no conflict. Two review findings (T16), both fixed.
+group 5 of 5 · tasks: 5 green, 0 blocked · cases: 20 of 20 green · engine bun test: 843 pass
+T12 iOS demo: links push and FirebaseCore, taps open their orcacounter:// link, Firebase optional.
+T15 User_Actions: the push Swift mirror and a Firebase + APNs walkthrough; CLAUDE.md rows 17-18.
+T17 iOS demo: Firebase's swizzling off, its plist and Package.resolved git-ignored.
+T18 iOS README and the pub README's native section; the Flutter facts there fixed.
+T20 (added) Android demo: its own small icon, so notifications post; seen in the shade.
+Hand check: on both demos a shown notification's tap routes to /map; token and topics need Firebase.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-10 auto-decided (minor, your standing rule); one is the parent session's: Firebase iOS 12.17.0+,
-its deprecation warning accepted.
+9 auto-decided (minor, your standing rule): the tap via the app's own link, swizzling off,
+the demo's own notification icon, among others.
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 5 of 5, T12 iOS demo, T15 walkthroughs, T17 iOS plist, T18 iOS README? (default: go)
+2. `A` approves the stage; stage 10 opens the push PR. (default: go)
 
 ## Appendix
 
@@ -205,6 +206,68 @@ not in the repo (both minor, auto-decided)
 Review fit: pass · Review quality: pass
 Added at group 4 from T14's needs: line.
 
+### Group 5
+T20 was added at this group from the Android hand check (no small icon); T12, T15, T17, T18 are 08's.
+#### T12 · iOS demo links push, routes taps (638de6e4; 864784e8 rework)
+Files: IOS/OrcaCounter.xcodeproj/project.pbxproj · IOS/OrcaCounter/OrcaCounterApp.swift · IOS/README.md ·
+IOS/OrcaCounter.entitlements (new) · IOS/OrcaPushNotification (new, a symlink to ../../plugins/orca_push_notification/ios)
+Cases: C17.4/hand-S → green (red first "Unable to resolve module dependency: 'OrcaPushNotification'", 'FirebaseCore';
+`xcodebuild clean build` BUILD SUCCEEDED, the app's files 0 warnings; CI form and device build succeed; push `swift test`
+32; launch-readmes 6; on FDE5D612 an 80-byte APNs token without Firebase, a made-up plist configured with no crash)
+Changed: the local package and FirebaseCore from 12.17.0; one `static let push` in OrcaApp's plugins; an AppDelegate
+configures Firebase only when the plist is bundled, initializes the plugin, forwards the APNs token; aps-environment
+development; README "### Push notifications", the walk untried
+Decisions: a tap opens its orcacounter:// payload with UIApplication.shared.open, so .onOpenURL routes it; "" and other
+schemes open nothing · FirebaseCore linked explicitly · the README links Firebase's pages (all minor, auto-decided)
+Review fit: pass · Review quality: two past-tense testing notes in the push section, fixed
+#### T15 · Walkthroughs and release table, outside the repo (not in git, not in the PR)
+Files: /Users/amrebada/workspace/orca-gateway/docs/User_Actions.md (+175) · /Users/amrebada/workspace/orca-gateway/
+CLAUDE.md (+7 −4); before copies, diffs and check.py in SC/s17p/t15
+Cases: P-docs → green (`python3 -I check.py` 289 of 289, red first 136 of 284; it runs release.sh's functions, reads
+swift-mirror.sh, the workflows, Package.swift, the POMs, both demos' Firebase wiring, the errors, DevTools' views, holds
+45 Firebase and Apple steps against their pages, and finds no secret written)
+Changed: User_Actions gains "the orca_push_notification Swift mirror" (the map's 7 steps, rows 9 and 10 first, then
+`17,18`) and "push notifications with Firebase": the project, both apps and their files, the APNs key and its upload,
+Xcode's capability, a test message, the failures, what is secret · CLAUDE.md rows 17-18, "1-18", `17,18`, the pre-req
+Decisions: both after the Maps key section · a full Firebase walkthrough (none existed) · the test copies the token from
+DevTools, so it runs on the emulator or simulator, the walk marked untried (all minor, auto-decided)
+Review fit: pass · Review quality: the simulator bullet sent the reader to an iPhone, where DevTools reads no token, fixed
+#### T17 · The iOS demo's optional Firebase plist (c2d2b0c6)
+Files: IOS/.gitignore · IOS/Info.plist
+Cases: P-firebase/S → green (SC/s17p/t17-check.sh 11 of 11, red first 4 of 11; after T12, `xcodebuild
+-resolvePackageDependencies` firebase-ios-sdk 12.19.3, its Package.resolved ignored, `git status` clean; the simulator
+build BUILD SUCCEEDED with the one accepted warning; the built Info.plist has the key false and keeps the scheme)
+Changed: .gitignore ignores OrcaCounter/GoogleService-Info.plist and the project's Package.resolved, a comment each ·
+Info.plist `FirebaseAppDelegateProxyEnabled` `<false/>` in key order
+Decisions: proxy NO, as the yaml asks: nothing swizzled, the app delegate forwards the token, the plugin's notification
+delegate runs unwrapped · Package.resolved ignored, as every Swift package here does, so CI resolves the newest 12.x ·
+the plist's exact path, no glob (all minor, auto-decided)
+Review fit: pass · Review quality: pass
+#### T18 · iOS and pub READMEs (c50bf9f7)
+Files: PN/ios/README.md (new) · PN/README.md
+Cases: P-readme/S → green (SC/s17p/t18/check-readme.ts 205 of 205, red first 130 of 177, 9 mutations each red; against
+the yaml, the Swift sources, Package.swift, the SDK, release.sh, the mirror script, both workflows, custom.ts,
+firebase-ios-sdk 12.19.3 and the Flutter packages; links 200; Swift snippets build, strict concurrency, warnings as errors
+but the accepted one; the Dart snippet analyzes clean; pub dry run as at baseline, no ios/ or android/ in the archive)
+Changed: the iOS README in the map's shape: install, one PushNotificationPlugin() initialized in a SwiftUI app delegate
+that forwards the APNs token, the host's notification delegate replaced, Firebase as the app's (plist, configure(), proxy
+NO), capability and APNs key, the five actions, both failures, the deprecation, differences · the pub README's "## Native
+apps" section, its Flutter facts fixed (class name, versions, initialize)
+Decisions: Differences says a launch tap should reach onNotificationTap, unseen · pages linked (both minor, auto-decided)
+Review fit: pass · Review quality: pass
+#### T20 · The Android demo gets a small icon (236009b3; f544972e rework)
+Files: AND/app/src/main/AndroidManifest.xml · AND/app/src/main/res/drawable/ic_launcher.xml (new) · PN/android/README.md
+Cases: C17.4/hand-K → green (red at the hand check: Show notification posted nothing, DevTools "IllegalArgumentException:
+Invalid notification (no valid small icon)"; `:app:assembleDebug :app:lintDebug` BUILD SUCCESSFUL, lint 0 errors and
+the 2 baseline warnings, nothing suppressed; on emulator-5584 the notification listed with the app's own icon resource,
+a "+" in a circle in the shade, and its tap logged the deep-link line for /map)
+Changed: `<application android:icon="@drawable/ic_launcher">`, a one-path vector (a circle with a plus cut out) · the
+README: an app without android:icon gets that failure (Flutter's initialize fails instead), the status bar draws only the
+icon's shape, an adaptive small icon crashes System UI on Android 8.0
+Decisions: the demo's own vector over the framework's sym_def_app_icon, an adaptive icon from API 26 within minSdk 24
+(minor, auto-decided; the first pass used the framework icon)
+Review fit: pass · Review quality: pass
+
 ### Test run
 Group 1, after T1-T3 (SC/s17p/g1run), on 45b32680: cli `dart test` 54 pass (51 + T1's 3), `dart analyze` no issues ·
 engine `bun test` 828 pass, 0 fail · push android `./gradlew build --continue` BUILD SUCCESSFUL · map, video, voice
@@ -235,8 +298,17 @@ iOS 18.5 simulator 30, TEST SUCCEEDED · map ios 28, video ios 26, voice ios 24 
 After T16's quality rework 0837fbc4 (the adapter only): push ios `swift test` 32, the one accepted warning, `xcodebuild test`
 30, TEST SUCCEEDED.
 
+Group 5, after T12, T15, T17, T18, T20 (SC/s17p/g5run), on f544972e: cli `dart test` 57 pass, `dart analyze` no
+issues · engine `bun test` 843 pass, 0 fail (launch-readmes 6) · push, map, video, voice android BUILD SUCCESSFUL ·
+the Android demo `:app:assembleDebug :app:lintDebug` BUILD SUCCESSFUL, lint the 2 baseline warnings (AndroidGradlePluginVersion,
+UseKtx), none in T20's files · the iOS demo in CI's form (`xcodebuild build`, CODE_SIGNING_ALLOWED=NO, the iOS 18.5
+simulator) BUILD SUCCEEDED, its one Swift warning the accepted token(completion:) deprecation · sdk-kotlin BUILD
+SUCCESSFUL · sdk-swift 640 pass · push ios `swift test` 32 with firebase-ios-sdk 12.19.3, `xcodebuild test` 30, TEST
+SUCCEEDED · map ios 28, video ios 26, voice ios 24 · release.sh and swift-mirror.sh `bash -n`, both workflows parse ·
+the generators leave no diff. T15's files are outside the repo: its check.py 289 of 289. Failures: none.
+
 ### Blocked
-none (group 3: T7 was blocked twice, once per lens; each one retry passed: its review lines. Group 4: none)
+none (group 3: T7 was blocked twice, once per lens; each one retry passed: its review lines. Groups 4 and 5: none)
 
 ### Not done
 none
@@ -269,4 +341,11 @@ T11 9bd3c1ad→8f303983
 - The iOS demo (T12) configures Firebase only when its git-ignored GoogleService-Info.plist exists, as the Android demo
   applies google-services only with its file; without them the token and topic actions fail, local notifications work.
 - The :8094 example server predates /push (T13 saw a 404): restart it before the hand checks.
-- The Android walk in examples/app-android/README.md is marked untried until the stage 10 hand check runs it.
+- Both demo READMEs mark their push walks untried. The hand check (SC/s17p/hand/hand-push.md) saw on both: the
+  permission granted, a notification shown, its tap logging the deep-link line for /map; not the token or topics (no
+  Firebase project) and not an iOS tap that launches the app. Stage 10 marks the walks seen for what was seen.
+- PR #53 (the map's org.apache.http.legacy entry) is not on this branch: on the keyed Android demo /map still crashes
+  after the tap until #53 merges. Rebase onto main after it, if it has merged.
+- Follow-ups, outside this slice: the CLI's PlistPatcher knows `bool`, not the yaml's `type: boolean`, so `orca plugin
+  add` writes FirebaseAppDelegateProxyEnabled as a string for Flutter apps; register(completion:) once Firebase's
+  installation-ID registration is no longer opt-in.
