@@ -867,6 +867,98 @@ class TabShellScreenTest {
         assertEquals(listOf("home", "home/up"), pages.pages, "the leaving page is not requested again")
     }
 
+    /** A scale route grows about the centre of the page area, and a pop shrinks it back: the scale is drawn. */
+    @Test
+    fun b12_6_k_aScalePushInsideATabGrowsFromItsCentreAndAPopShrinksItBack() {
+        val router = showMoving(ShellPages())
+        fun width(): Float = compose.onNode(hasText("home/scale page")).fetchSemanticsNode().boundsInRoot.width
+
+        router.go("/home/scale")
+        compose.mainClock.advanceTimeBy(500)
+        val mid = assertNotNull(motion(), "a run is live at half time")
+        assertEquals(0.5, mid.scale, 0.1)
+        assertEquals(still, mid.copy(scale = 1.0), "a scale only scales")
+        assertTrue(shown("home page"), "the previous top is still placed mid-run")
+        val midWidth = width()
+
+        compose.mainClock.advanceTimeBy(1_000)
+        assertNull(motion())
+        assertFalse(shown("home page"))
+        val full = width()
+        assertEquals(0.5f, midWidth / full, 0.1f, "the entering page is drawn at half its size mid-run")
+
+        onUi { router.goBack() }
+        compose.mainClock.advanceTimeBy(250)
+        assertEquals(0.75, assertNotNull(motion()).scale, 0.1)
+        assertEquals(0.75f, width() / full, 0.1f)
+        assertTrue(shown("home page"))
+        compose.mainClock.advanceTimeBy(1_000)
+        assertNull(motion())
+        assertEquals(0, compose.onAllNodes(hasText("home/scale page")).fetchSemanticsNodes().size)
+    }
+
+    /** A type the SDK does not know is `slide` (Dart's `'slide' || _`): the page comes in from the left. */
+    @Test
+    fun b12_6_k_anUnknownTypeInsideATabSlidesInFromTheLeft() {
+        val router = showMoving(ShellPages())
+
+        router.go("/home/odd")
+        compose.mainClock.advanceTimeBy(500)
+        val mid = assertNotNull(motion())
+        assertEquals(-0.5, mid.offsetXFraction, 0.1)
+        assertEquals(still, mid.copy(offsetXFraction = 0.0))
+        val left = compose.onNode(hasText("home/odd page")).fetchSemanticsNode().positionInRoot.x
+
+        compose.mainClock.advanceTimeBy(1_000)
+        assertNull(motion())
+        val rest = compose.onNode(hasText("home/odd page")).fetchSemanticsNode().positionInRoot.x
+        assertTrue(rest - left > 100f, "the entering page is drawn to the left mid-run, by ${rest - left} px")
+    }
+
+    /**
+     * A pop while the push is still running goes back from where the page
+     * is (Flutter's controller reversed), in the time the push had run: no
+     * jump to the page in place, no whole run backwards.
+     */
+    @Test
+    fun b12_6_k_aPopDuringAPushInsideATabGoesBackFromWhereThePageIs() {
+        val pages = ShellPages()
+        val router = showMoving(pages)
+
+        router.go("/home/fade")
+        compose.mainClock.advanceTimeBy(300)
+        val pushed = assertNotNull(motion()).opacity
+        assertEquals(0.3, pushed, 0.05)
+
+        onUi { router.goBack() }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(pushed, assertNotNull(motion(), "the page leaves from where it is").opacity, 0.05, "no jump at the pop")
+        assertTrue(shown("home page"))
+
+        compose.mainClock.advanceTimeBy(150)
+        assertEquals(pushed - 0.15, assertNotNull(motion()).opacity, 0.05)
+
+        // 300 ms of push are 300 ms of pop, not the route's 1000.
+        compose.mainClock.advanceTimeBy(200)
+        assertNull(motion(), "the run back is over after the time the push had run")
+        assertEquals(0, compose.onAllNodes(hasText("home/fade page")).fetchSemanticsNodes().size, "the popped page left")
+        assertTrue(shown("home page"))
+
+        // The same for a slide, and a push after it plays whole again.
+        router.go("/home/up")
+        compose.mainClock.advanceTimeBy(300)
+        val risen = assertNotNull(motion()).offsetYFraction
+        assertEquals(0.7, risen, 0.05)
+        onUi { router.goBack() }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(risen, assertNotNull(motion()).offsetYFraction, 0.05, "no jump at the pop")
+        compose.mainClock.advanceTimeBy(350)
+        assertNull(motion())
+        router.go("/home/up")
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(0.5, assertNotNull(motion()).offsetYFraction, 0.1)
+    }
+
     /** `none` and no transition: the shell swaps the pages at once, as before. */
     @Test
     fun b12_6_k_noneAndAbsentSwapAtOnceInsideATab() {
@@ -935,8 +1027,8 @@ private fun moving(type: String, duration: Int = 1_000) = RouteTransitionDef(typ
 
 /**
  * The tabs of [tabConfig] with a route per transition under `home`
- * (`home/fade`, `home/up`, `home/none` with the type `none`, `home/plain`
- * with none), a fade on the root of the `search` tab and on `settings`.
+ * (`home/fade`, `home/up`, `home/scale`, `home/odd` with a type no SDK
+ * knows, `home/none` with the type `none`, `home/plain` with none), a fade on the root of the `search` tab and on `settings`.
  */
 private val movingConfig = NavConfig(
     initialRoute = "/home",
@@ -954,6 +1046,8 @@ private val movingConfig = NavConfig(
                     children = listOf(
                         NavRoute("home/fade", transition = moving("fade")),
                         NavRoute("home/up", transition = moving("slideUp")),
+                        NavRoute("home/scale", transition = moving("scale")),
+                        NavRoute("home/odd", transition = moving("zoomAndSpin")),
                         NavRoute("home/none", transition = moving("none", duration = 5_000)),
                         NavRoute("home/plain"),
                     ),

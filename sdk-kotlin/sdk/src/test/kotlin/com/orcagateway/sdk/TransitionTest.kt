@@ -42,7 +42,7 @@ private class TransitionPages : HttpTransport {
         get() = OrcaClient(URI("http://stub.invalid"), appId = "fixture-app", device = DeviceInfo(osVersion = "test"), transport = this)
 }
 
-/** One stack: `home`, a route per transition kind (one second, linear), `plain` with none and `none` with the type `none`. */
+/** One stack: `home`, a route per transition kind and `odd` with an unknown type (one second, linear), `plain` with none and `none` with the type `none`. */
 private val transitionConfig = NavConfig(
     initialRoute = "/home",
     flows = listOf(
@@ -54,6 +54,9 @@ private val transitionConfig = NavConfig(
                 NavRoute("up", transition = RouteTransitionDef("slideUp", RUN_MS, "linear")),
                 NavRoute("right", transition = RouteTransitionDef("slideRight", RUN_MS, "linear")),
                 NavRoute("left", transition = RouteTransitionDef("slide", RUN_MS, "linear")),
+                NavRoute("scale", transition = RouteTransitionDef("scale", RUN_MS, "linear")),
+                // A type no SDK knows: Flutter plays `slide` for it.
+                NavRoute("odd", transition = RouteTransitionDef("zoomAndSpin", RUN_MS, "linear")),
                 NavRoute("plain"),
                 // Longer than the NavHost's own 700 ms: were it played, the page under would still be there after it.
                 NavRoute("none", transition = RouteTransitionDef("none", 5_000, "linear")),
@@ -96,6 +99,9 @@ class TransitionTest {
 
     /** Where the text is drawn, in pixels from the top left of the screen. */
     private fun position(text: String) = compose.onNode(hasText(text)).fetchSemanticsNode().positionInRoot
+
+    /** How wide the text is drawn, in pixels: its laid out width times the scale it is drawn with. */
+    private fun width(text: String): Float = compose.onNode(hasText(text)).fetchSemanticsNode().boundsInRoot.width
 
     /** On the main thread, and seen by the composition; the clock does not move. */
     private fun onUi(block: () -> Unit) {
@@ -228,6 +234,65 @@ class TransitionTest {
 
         compose.mainClock.advanceTimeBy(1_000)
         assertEquals(0, count("fade page"))
+    }
+
+    /** `scale` grows from nothing about the centre of the page, and a pop shrinks it back. */
+    @Test
+    fun b12_6_k_aScaleRouteGrowsFromItsCentreAndAPopShrinksItBack() {
+        val router = show()
+        val home = position("home page")
+        val root = requireNotNull(view)
+
+        router.go("/scale")
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(home, position("home page"), "the page under stands still")
+        val midWidth = width("scale page")
+        val mid = position("scale page")
+
+        compose.mainClock.advanceTimeBy(1_000)
+        assertEquals(0, count("home page"))
+        val full = width("scale page")
+        val rest = position("scale page")
+        assertEquals(0.5f, midWidth / full, 0.1f, "half the size at half time (linear)")
+        // About the centre: the text is half as far from it, on both axes.
+        assertEquals(0.5f, (mid.x - root.width / 2f) / (rest.x - root.width / 2f), 0.1f)
+        assertEquals(0.5f, (mid.y - root.height / 2f) / (rest.y - root.height / 2f), 0.1f)
+
+        onUi { router.goBack() }
+        compose.mainClock.advanceTimeBy(250)
+        assertEquals(home, position("home page"), "the page under is there at once, still")
+        assertEquals(0.75f, width("scale page") / full, 0.1f, "a quarter gone at a quarter of the run")
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(0.25f, width("scale page") / full, 0.1f)
+
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(0, count("scale page"))
+        assertEquals(home, position("home page"))
+    }
+
+    /** A type the SDK does not know is `slide` (Dart's `'slide' || _`): in from the left, out to the left. */
+    @Test
+    fun b12_6_k_anUnknownTypeSlidesInFromTheLeftAsSlide() {
+        val router = show()
+        val home = position("home page")
+        val width = requireNotNull(view).width
+
+        router.go("/odd")
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(home, position("home page"), "the page under stands still")
+        val mid = position("odd page")
+
+        compose.mainClock.advanceTimeBy(1_000)
+        assertEquals(0, count("home page"))
+        val rest = position("odd page")
+        assertEquals(-width * 0.5f, mid.x - rest.x, width * 0.1f)
+        assertEquals(rest.y, mid.y)
+
+        onUi { router.goBack() }
+        compose.mainClock.advanceTimeBy(250)
+        assertEquals(-width * 0.25f, position("odd page").x - rest.x, width * 0.1f)
+        compose.mainClock.advanceTimeBy(1_000)
+        assertEquals(0, count("odd page"))
     }
 
     /** `none` and no transition are the NavHost's own animation (700 ms), not the route's duration and not a cut. */

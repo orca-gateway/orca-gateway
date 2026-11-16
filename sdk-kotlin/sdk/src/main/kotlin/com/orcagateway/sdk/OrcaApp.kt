@@ -577,6 +577,9 @@ private fun OrcaNavHost(router: OrcaRouter, modifier: Modifier) {
  * only the entering page moves, the page under it stays still and visible,
  * and a pop plays the same run backwards, with the same duration and curve.
  * A route with none, or with `none`, keeps the NavHost's own animation.
+ * Only a push plays a route's transition: a `go` or a replace that leaves
+ * the route alone at the bottom of the stack shows it at once, where
+ * Flutter animates it in (the Swift SDK does as here).
  * With reduced motion ([orcaReduceMotion]) a route's transition is not
  * played: the page is there at once.
  */

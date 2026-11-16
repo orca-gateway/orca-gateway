@@ -274,7 +274,9 @@ private fun TabBar(router: OrcaRouter) {
  * A route's transition is played here too ([ShellMotion]): the page pushed
  * on a tab, or over the shell, comes in over the previous top, which stays
  * placed until the run ends, and a popped page stays drawn while the same
- * run plays backwards over the page under it. The moving page is drawn as
+ * run plays backwards over the page under it. A pop while the page is
+ * still coming in takes it back from where it is, in the time it had run.
+ * The moving page is drawn as
  * the core's [TransitionSpec] samples it on each frame. A change of tab
  * moves nothing, and neither does a route with no transition or `none`.
  * With reduced motion ([orcaReduceMotion]) nothing is played.
@@ -306,7 +308,7 @@ private fun KeptPages(router: OrcaRouter) {
         do {
             val over = withFrameNanos { nanos ->
                 if (start < 0) start = nanos
-                motion.elapsedMs = (nanos - start) / NANOS_PER_MILLI
+                motion.elapsedMs = run.fromMs + (nanos - start) / NANOS_PER_MILLI
                 run.spec.isOver(motion.elapsedMs, reduceMotion = false)
             }
         } while (!over)
@@ -367,8 +369,12 @@ private fun KeptPages(router: OrcaRouter) {
  * composition and starts a run when it changed by a push or a pop.
  */
 private class ShellMotion {
-    /** One run: [route] moves (in on a push, out when [leaving]) over the page of the route [under]. */
-    class Run(val route: OrcaRoute, val under: UUID, val leaving: Boolean, val spec: TransitionSpec) {
+    /**
+     * One run: [route] moves (in on a push, out when [leaving]) over the
+     * page of the route [under]. Its first frame is [fromMs] into the
+     * transition: more than 0 for a pop of a page that was still coming in.
+     */
+    class Run(val route: OrcaRoute, val under: UUID, val leaving: Boolean, val spec: TransitionSpec, val fromMs: Double = 0.0) {
         /** The moving page [elapsedMs] into the run. */
         fun at(elapsedMs: Double): PageMotion =
             if (leaving) spec.leaving(elapsedMs, reduceMotion = false) else spec.entering(elapsedMs, reduceMotion = false)
@@ -378,7 +384,7 @@ private class ShellMotion {
     var run: Run? by mutableStateOf(null)
         private set
 
-    /** The time since the run's first frame. */
+    /** How far into its transition the run is: [Run.fromMs] and the time since its first frame. */
     var elapsedMs: Double by mutableDoubleStateOf(0.0)
 
     private var lastTop: OrcaRoute? = null
@@ -389,8 +395,10 @@ private class ShellMotion {
      * root of a stack), and the routes on the stacks are [live]. A push (the
      * route on top was on no stack before and lies over another page) plays
      * the new route's transition; a pop (the old top gone, the new one
-     * known) plays the old top's backwards; anything else (the first page,
-     * a change of tab, the root of a stack) ends a run and starts none.
+     * known) plays the old top's backwards, from where that page is when
+     * it was still coming in (Flutter's controller reversed: as long back
+     * as it came); anything else (the first page, a change of tab, the root
+     * of a stack) ends a run and starts none.
      * Nothing is played for a transition that has no run
      * ([TransitionSpec.runMs]).
      */
@@ -401,10 +409,16 @@ private class ShellMotion {
             val popped = last.id !in live && top.id in lastLive
             val next = when {
                 pushed -> Run(top, checkNotNull(under), leaving = false, TransitionSpec.of(top.transition))
-                popped -> Run(last, top.id, leaving = true, TransitionSpec.of(last.transition))
+                popped -> {
+                    val spec = TransitionSpec.of(last.transition)
+                    val entering = run?.takeIf { !it.leaving && it.route === last }
+                    // What is left of the way in is already behind on the way out.
+                    val from = if (entering == null) 0.0 else (spec.runMs(reduceMotion) - elapsedMs).coerceAtLeast(0.0)
+                    Run(last, top.id, leaving = true, spec, from)
+                }
                 else -> null
             }
-            elapsedMs = 0.0
+            elapsedMs = next?.fromMs ?: 0.0
             run = next?.takeIf { it.spec.runMs(reduceMotion) > 0.0 }
         }
         lastTop = top
