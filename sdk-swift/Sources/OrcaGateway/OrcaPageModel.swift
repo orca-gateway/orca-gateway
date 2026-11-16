@@ -56,11 +56,16 @@ public final class OrcaPageModel: ObservableObject {
 
     public var page: PageResponse { renderer.page }
 
+    /// A read of a node's props by another view (a Row reading its
+    /// Flexible's flex, an AppBar its title's text): never reported to
+    /// DevTools, which hears a node's own build only (Flutter's WatchBuilder).
     public func resolve(_ id: String) -> ResolvedNode? {
-        renderer.resolve(id, state: store.state)
+        renderer.resolve(id, state: store.state, reportsRebuild: false)
     }
 
-    /// Resolve under an AnimatedBuilder: `tween` props take `animationProgress`.
+    /// The node's own build (NodeView's body; a slot drawn without one): a
+    /// watching node reports its `widget_rebuild` while DevTools is on.
+    /// Under an AnimatedBuilder `tween` props take `animationProgress`.
     public func resolve(_ id: String, animationProgress: Double?) -> ResolvedNode? {
         renderer.resolve(id, state: store.state, animationProgress: animationProgress)
     }

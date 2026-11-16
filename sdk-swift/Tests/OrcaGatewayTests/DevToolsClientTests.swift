@@ -1,6 +1,7 @@
 #if canImport(SwiftUI) && canImport(Network)
 import Foundation
 import Network
+import SwiftUI
 import XCTest
 
 @testable import OrcaGateway
@@ -231,8 +232,8 @@ final class DevToolsHookTests: XCTestCase {
 
     /// C19.1: the pin moved to Flutter's truth. The observer only redraws
     /// (it used to report an empty `propTraces` before the node resolved
-    /// again); the redraw resolves the node, as NodeView's body does on the
-    /// new revision, and that resolution reports the traced props.
+    /// again); the redraw resolves the node through NodeView's entry (the
+    /// node's own build), and that resolution reports the traced props.
     func testC19_1_aWatchingNodeReportsItsTracedRebuild() async throws {
         let model = OrcaPageModel(page: try recordedPage("counter-home"))
         let count = NodeObserver(model: model, id: "5")
@@ -240,7 +241,7 @@ final class DevToolsHookTests: XCTestCase {
         await model.fire("onTap", on: try XCTUnwrap(model.resolve("11")))?.value
         XCTAssertEqual(count.revision, 1)
         XCTAssertEqual(recorder.of("widget_rebuild"), [], "the observer only redraws")
-        XCTAssertEqual(model.resolve("5")?["data"], "1")
+        XCTAssertEqual(model.resolve("5", animationProgress: nil)?["data"], "1")
         XCTAssertEqual(recorder.of("widget_rebuild"), [
             .widgetRebuild(widgetId: "5", widgetType: "Text", watches: ["count"], propTraces: ["data": [
                 TraceStep(op: "state", in: "count", out: "1"), TraceStep(op: "input", out: "1"),
@@ -251,6 +252,61 @@ final class DevToolsHookTests: XCTestCase {
             .stateChange(scope: .page, pageId: "home", key: "count", oldValue: 0, newValue: 1),
         ])
         XCTAssertEqual(recorder.of("action").first?.payload["pageId"], "home")
+    }
+
+    /// C19.1: DevTools hears a node's own build, once per build, and never a
+    /// parent reading the node's props (Flutter reports from the node's
+    /// WatchBuilder build only, component_renderer.dart:63-77, 206-228). The
+    /// AppBar reads its title's text for the back button through
+    /// `resolve(_:)`; the title's NodeView builds it through
+    /// `resolve(_:animationProgress:)`. Drawn, the Row reads its Flexible's
+    /// flex and fit and the Flexible builds once; the Scaffold's AppBar has
+    /// no NodeView, its build is the Scaffold reading its slot.
+    func testC19_1_aWatchedNodeReportsOncePerBuildNeverOnItsParentsRead() throws {
+        let count: JSONValue = ["type": "state", "key": "count", "scope": "page"]
+        let toText: JSONValue = ["type": "transform", "input": count, "by": [["type": "toString"]]]
+        func node(_ id: String, _ type: String, _ kind: String, _ childMode: String,
+                  _ props: [String: JSONValue], children: [JSONValue] = [], watched: Bool = false) -> JSONValue {
+            ["id": .string(id), "type": .string(type), "kind": .string(kind), "childMode": .string(childMode),
+             "props": .object(props), "children": .array(children), "watches": watched ? ["count"] : []]
+        }
+        let model = OrcaPageModel(page: try JSONValue.object([
+            "pageId": "p", "title": "T", "state": [["key": "count", "scope": "page", "initial": 1]],
+            "components": [
+                node("0", "Scaffold", "structure", "none", ["appBar": "1", "body": "3"], children: ["1", "3"]),
+                node("1", "AppBar", "structure", "none", ["title": "2", "elevation": count],
+                     children: ["2"], watched: true),
+                node("2", "Text", "primitive", "none", ["data": toText], watched: true),
+                node("3", "Row", "layout", "multi", [:], children: ["4"]),
+                node("4", "Flexible", "layout", "single", ["flex": count, "fit": "loose"],
+                     children: ["5"], watched: true),
+                node("5", "Text", "primitive", "none", ["data": "x"]),
+            ],
+        ]).decode(PageResponse.self))
+        OrcaDebug.reporter = recorder
+        func rebuilds(_ id: String) -> [DevToolsEvent] {
+            recorder.of("widget_rebuild").filter { $0.payload["widgetId"] == .string(id) }
+        }
+        let state = TraceStep(op: "state", in: "count", out: "1")
+
+        XCTAssertEqual(model.resolve("2")?["data"], "1")
+        XCTAssertEqual(recorder.of("widget_rebuild"), [], "the AppBar's read of its title")
+        XCTAssertEqual(model.resolve("2", animationProgress: nil)?["data"], "1")
+        XCTAssertEqual(rebuilds("2"), [.widgetRebuild(
+            widgetId: "2", widgetType: "Text", watches: ["count"], propTraces: ["data": [
+                state, TraceStep(op: "input", out: "1"), TraceStep(op: "toString", in: "1", out: "1"),
+            ]]),
+        ])
+
+        let renderer = ImageRenderer(content: NodeView(id: "0", model: model).frame(width: 300, height: 200))
+        renderer.scale = 1
+        XCTAssertNotNil(renderer.cgImage)
+        XCTAssertEqual(rebuilds("4"), [.widgetRebuild(
+            widgetId: "4", widgetType: "Flexible", watches: ["count"], propTraces: ["flex": [state]]),
+        ], "the Flexible's build, not the Row's reads of its flex and fit")
+        XCTAssertEqual(rebuilds("1"), [.widgetRebuild(
+            widgetId: "1", widgetType: "AppBar", watches: ["count"], propTraces: ["elevation": [state]]),
+        ], "the Scaffold's read of its appBar slot is the AppBar's build")
     }
 
     func testALoadedPageReportsItsTimingOnce() async throws {
