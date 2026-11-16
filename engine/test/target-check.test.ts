@@ -7,11 +7,11 @@ import { Text } from "../src/components";
 describe("findOffTargetWidgets", () => {
   test("names each widget type a declared target cannot render, once", () => {
     const hits = findOffTargetWidgets(
-      [{ type: "Column" }, { type: "FloatingActionButton" }, { type: "Text" }, { type: "FloatingActionButton" }, { type: "SnackBar" }],
+      [{ type: "Column" }, { type: "Tooltip" }, { type: "Text" }, { type: "Tooltip" }, { type: "SnackBar" }],
       ["ios"],
     );
     expect(hits).toEqual([
-      { type: "FloatingActionButton", missing: ["ios"] },
+      { type: "Tooltip", missing: ["ios"] },
       { type: "SnackBar", missing: ["ios"] },
     ]);
   });
@@ -26,8 +26,9 @@ describe("findOffTargetWidgets", () => {
   });
 
   test("a widget missing several targets lists all of them", () => {
-    const hits = findOffTargetWidgets([{ type: "Checkbox" }], ["android", "ios"]);
-    expect(hits).toEqual([{ type: "Checkbox", missing: ["ios"] }]);
+    // Video is on android and ios only.
+    const hits = findOffTargetWidgets([{ type: "Video" }], ["flutter", "web"]);
+    expect(hits).toEqual([{ type: "Video", missing: ["flutter", "web"] }]);
   });
 });
 
