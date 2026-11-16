@@ -71,14 +71,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         startDevTools()
-        val client = OrcaClient(
+        val built = OrcaClient(
             baseUrl = URI(setting("ORCA_SERVER_URL", DEFAULT_SERVER)),
             appId = setting("ORCA_APP_ID", "counter"),
             apiKey = setting("ORCA_API_KEY", "demo-key"),
             transport = OkHttpTransport(),
-            timeoutMillis = setting("ORCA_TIMEOUT")?.toDoubleOrNull()?.let { (it * 1000).toLong() }
-                ?.takeIf { it > 0 } ?: DEFAULT_TIMEOUT_MILLIS,
         )
+        // No ORCA_TIMEOUT: the client keeps its own default.
+        val timeoutMillis = setting("ORCA_TIMEOUT")?.toDoubleOrNull()?.let { (it * 1000).toLong() }
+        val client = timeoutMillis?.takeIf { it > 0 }?.let { built.copy(timeoutMillis = it) } ?: built
         // The default app, `counter`, has no navigation config: it starts at a path.
         // No path (null) is how a host asks OrcaApp to boot from the server's config.
         val path = if (setting("ORCA_BOOT", "path") == "config") null else setting("ORCA_PATH", "home")
@@ -170,9 +171,6 @@ class MainActivity : ComponentActivity() {
 
         /** DevTools on that computer, as the emulator sees it. */
         const val DEFAULT_DEVTOOLS_HOST = "10.0.2.2"
-
-        /** The SDK's own request timeout, 30 s (`OrcaClient.timeoutMillis`). */
-        const val DEFAULT_TIMEOUT_MILLIS = 30_000L
     }
 }
 
