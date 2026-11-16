@@ -99,11 +99,18 @@ struct MapKitView {
             return view
         }
 
+        /// White on red. UIKit's annotation view draws a symbol's CGImage,
+        /// which drops the palette (a black disc), so the symbol is drawn
+        /// into a bitmap once; AppKit's keeps it.
         #if canImport(UIKit)
         private static let pin = UIImage(
             systemName: "mappin.circle.fill",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 28)
                 .applying(UIImage.SymbolConfiguration(paletteColors: [.white, .systemRed])))
+            .map { symbol in
+                UIGraphicsImageRenderer(size: symbol.size).image { _ in symbol.draw(at: .zero) }
+                    .withRenderingMode(.alwaysOriginal)
+            }
         #elseif canImport(AppKit)
         private static let pin = NSImage(systemSymbolName: "mappin.circle.fill", accessibilityDescription: "Marker")?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 28, weight: .regular)

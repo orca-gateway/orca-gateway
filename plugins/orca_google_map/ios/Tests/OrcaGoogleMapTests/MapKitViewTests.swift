@@ -189,6 +189,30 @@ final class MapKitViewTests: XCTestCase {
         XCTAssertGreaterThan(pin.bounds.width, 20)
     }
 
+    /// Google's default marker, which Flutter draws, is red: the pin is a
+    /// white glyph on a red disc, its palette kept (an image drawn as a
+    /// template loses it, the disc drawn black).
+    func testC17_1_S_TheMarkersPinIsWhiteOnARedDiscAsGooglesDefaultMarkerIs() throws {
+        let screen = Screen(try page())
+        defer { screen.hosted.close() }
+        let map = try screen.map(self)
+        _ = try middle(of: "marker1", on: map)
+        let pin = try XCTUnwrap(map.view(for: try annotation(map, "marker1")), "marker1 is not on screen")
+        let image = try XCTUnwrap(pin.image, "an invisible pin")
+        #if canImport(UIKit)
+        XCTAssertEqual(image.renderingMode, .alwaysOriginal, "the pin is drawn as a template")
+        #elseif canImport(AppKit)
+        XCTAssertFalse(image.isTemplate, "the pin is drawn as a template")
+        #endif
+
+        // The disc left of the glyph, halfway down, as the view draws it.
+        let disc = try colour(of: pin, at: CGPoint(x: pin.bounds.width * 0.22, y: pin.bounds.height / 2))
+        XCTAssertGreaterThan(disc.alpha, 0.9, "nothing drawn on the disc")
+        XCTAssertGreaterThan(disc.red, 0.7, "the disc is not red: \(disc)")
+        XCTAssertLessThan(disc.green, 0.4, "the disc is not red: \(disc)")
+        XCTAssertLessThan(disc.blue, 0.4, "the disc is not red: \(disc)")
+    }
+
     func testC17_1_S_MapTypeAndMarkersFollowThePropsAndTheCameraDoesNot() throws {
         let screen = Screen(try page())
         defer { screen.hosted.close() }
@@ -408,6 +432,32 @@ final class MapKitViewTests: XCTestCase {
     }
 
     // MARK: Helpers
+
+    /// The colour `view`'s layer draws at `point` (from its top left), its
+    /// components 0 to 1, unpremultiplied.
+    func colour(of view: MKAnnotationView, at point: CGPoint) throws
+        -> (red: Double, green: Double, blue: Double, alpha: Double) {
+        #if canImport(UIKit)
+        let layer = view.layer
+        #elseif canImport(AppKit)
+        let layer = try XCTUnwrap(view.layer, "the pin has no layer")
+        #endif
+        let scale: CGFloat = 2
+        let width = Int(view.bounds.width * scale), height = Int(view.bounds.height * scale)
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+        // Top left first, as the view's coordinates.
+        context.translateBy(x: 0, y: CGFloat(height))
+        context.scaleBy(x: scale, y: -scale)
+        layer.render(in: context)
+        let pixels = try XCTUnwrap(context.data).assumingMemoryBound(to: UInt8.self)
+        let offset = Int(point.y * scale) * width * 4 + Int(point.x * scale) * 4
+        let alpha = Double(pixels[offset + 3]) / 255
+        func component(_ index: Int) -> Double { alpha > 0 ? Double(pixels[offset + index]) / 255 / alpha : 0 }
+        return (component(0), component(1), component(2), alpha)
+    }
 
     /// The middle of the marker `id`'s pin, once MapKit has put it there and
     /// shown it.
