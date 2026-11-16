@@ -172,10 +172,8 @@ struct VideoPlayerValue: Equatable {
     var isInitialized = false
     var isPlaying = false
     var isLooping = false
-    var isCompleted = false
     var volume = 1.0
     var playbackSpeed = 1.0
-    var errorDescription: String?
 
     /// Width over height; 1 until initialized or without a size.
     var aspectRatio: Double {
@@ -215,7 +213,6 @@ final class VideoController {
                 next.duration = duration
                 next.size = size
                 next.isInitialized = true
-                next.isCompleted = false
                 value = next
                 playback.setLooping(value.isLooping)
                 playback.setVolume(value.volume)
@@ -223,7 +220,7 @@ final class VideoController {
                 pending?.ready()
                 pending = nil
             case let .failed(message):
-                value = VideoPlayerValue(errorDescription: message)
+                value = VideoPlayerValue()
                 pending?.error(message)
                 pending = nil
             case let .position(position):
@@ -233,7 +230,6 @@ final class VideoController {
                 updatePosition(position)
             case .ended:
                 pause()
-                value.isCompleted = true
                 seek(to: value.duration)
             }
         }
@@ -302,11 +298,7 @@ final class VideoController {
 
     /// The platform may report a position past the duration: clamped.
     private func updatePosition(_ milliseconds: Int) {
-        let position = min(milliseconds, value.duration)
-        var next = value
-        next.position = position
-        next.isCompleted = position == value.duration
-        value = next
+        value.position = min(milliseconds, value.duration)
     }
 }
 
