@@ -3,11 +3,11 @@
 ## Front page
 
 ### In one breath
-group 7 of 7 · tasks: 3 green, 1 blocked · cases: C14.1-C14.5 green, C14.6 in code in all 3 SDKs
+group 7 of 7 · tasks: 4 green, 0 blocked · cases: C14.1-C14.6 green, C14.6 by hand on both devices
 T15, T16: OrcaApp restores the app entry before the first route; pages and the shell save into it.
 T19, T20: a Saved state section in both SDK READMEs (one order), hand checks, step 18's error text.
-T20 blocked on a wording nit: two Kotlin sentences on file reads that Swift's section does not say.
-C14.6 by hand on the Android emulator is running; the iOS simulator follows, then the step 14 PR.
+T20's retry dropped two sentences Swift's section does not say; both reviews pass.
+By hand: save, session, forget and visits behave as the READMEs say on iOS and Android.
 
 ### New for you
 nothing new
@@ -16,8 +16,8 @@ nothing new
 3 auto-decided: a router without savedState saves nothing · docs in Swift's order · README counts
 
 ### Questions for you
-1. T20 blocked: retry once with the re-review's fix (drop the two sentences). (default: retry once)
-2. A approves the stage after the retry; the hand check and the PR follow. (default: go)
+1. Blocked tasks: none. (default: none)
+2. A approves the stage; the step 14 PR follows. (default: go)
 
 ## Appendix
 
@@ -231,7 +231,7 @@ tab bar/drawer the same SavedState; the docs say so in both SDKs' order (Swift's
 Group 7 started on 07ffffb, after the rebase onto main 644d5d8 (steps 12-13: sub-pages, animation, reorder), which added
 U6 (restore after every seed, as Flutter's initPage at orca_page.dart:180 and :297) and U7 (sub-pages: no own entry).
 
-#### T15 · SwiftUI restore at boot, page load (fa6f423, cbf2898; to fold into one)
+#### T15 · SwiftUI restore at boot, page load (62b426d)
 Files: sdk-swift/Sources/OrcaGateway/OrcaApp.swift · Navigation/OrcaRouter.swift · OrcaPageModel.swift ·
 Navigation/TabShellView.swift (added in the rework) · Tests/OrcaGatewayTests/SavedStateBootTests.swift (new)
 Cases: C14.6/S-UI → 11 testC14_6_… tests, red first; `swift test` SwiftUI 464, core 560, 0 warnings; simulator 532 + 560
@@ -246,7 +246,7 @@ Review fit: pass (over both commits; the rework came from the digest's own Not-d
 tab bar's and drawer's actions no saved state, where Flutter's shell saves through the app's StateManager) · Review
 quality: pass
 
-#### T16 · Compose restore at boot, page load (66249f8)
+#### T16 · Compose restore at boot, page load (13f46d6)
 Files: sdk-kotlin/sdk/src/main/kotlin/com/orcagateway/sdk/OrcaApp.kt · navigation/OrcaRouter.kt · OrcaPageModel.kt ·
 navigation/TabShellScreen.kt (added at the main session's request) · sdk/src/test/.../SavedStateBootTest.kt (new)
 Cases: C14.6/K-UI → 8 c14_6_… tests, red first (turning off either restore turns 2 and 4 red); `./gradlew build
@@ -259,7 +259,7 @@ Decisions: one seed per model (a reload makes a new model) covers U6 · U4: the 
 Dispatchers.IO; the online boot and a page restore read one small file on the main thread, once · router default as Swift
 Review fit: pass · Review quality: pass
 
-#### T19 · Swift docs: saved state, boot error text (35b01bf, b762ec8; to fold into one)
+#### T19 · Swift docs: saved state, boot error text (c359797)
 Files: sdk-swift/README.md · examples/app-ios/README.md
 Cases: C14.6/hand-S docs → fences and tables intact; every name checked against fa6f423 and the core
 Changed: a "Saved state" section after Offline (A snapshot, Local or session, Forget, Where with the failure rule, When
@@ -270,7 +270,7 @@ Decisions: the hand check reopens home with "Back home" (back shows the page as 
 Review fit: pass · Review quality: bullet order and a name differ from Kotlin's, fixed on the Kotlin side (T20's rework,
 decision saved-state-docs-order), then pass
 
-#### T20 · Kotlin docs, server README, template (200a0be, 5325e0d, 8acdecd, 36ce06f; to fold into one)
+#### T20 · Kotlin docs, server README, template (f5182e8)
 Files: sdk-kotlin/README.md · examples/app-android/README.md · examples/server/README.md · engine/templates/CLAUDE.md
 Cases: C14.6/hand-K docs → fences and tables intact; names checked against 66249f8; PersistState :379 in action.ts
 Changed: a "Saved state" section, now in Swift's order and names, with the router path (`OrcaRouter(client, config,
@@ -279,8 +279,9 @@ the demo README's hand check (am start -S, run-as to read the entries) and its s
 → "Connection Failed" · the server README's `saved-state.ts` row · the template's PersistState import and table row
 Decisions: savedState documented on OrcaApp(client) and the router · no shell line (true without one)
 Review fit: pass · Review quality: the section did not follow Swift's (order, names, three Flutter mentions, no failure
-rule), reworked in 36ce06f; the re-review still finds two sentences on how files are read (:309-310 and ", and reads
-every entry once at boot" at :324) that Swift's section does not say, blocked
+rule), reworked; the re-review still found two sentences on how files are read that Swift's section does not say,
+blocked at the group 7 card; retried with the re-review's fix (question 1's default, standing rule): fit pass,
+quality pass
 
 ### Test run
 Group 1 (..6835ab0): sdk `flutter test` 364, `flutter analyze` clean · engine `bun test` 751 · Swift and Kotlin
@@ -302,21 +303,32 @@ After the rebase onto main 644d5d8 (steps 12 and 13 merged, ..7d05db9): engine 7
 core 560, SwiftUI 453 (521 on the iOS 18.5 simulator), 0 warnings · Kotlin core 572, sdk 600 · 25 action kinds advertised
 in both SDKs, one hash (2794034f…), 31 action fixtures · generators: no drift.
 
-Group 7 (..36ce06f): engine 797 · Flutter 515, analyze clean · Swift core 560, SwiftUI 464 (532 on the iOS 18.5
+Group 7 (..adac6a8, then each task folded into one commit, the same tree): engine 797 · Flutter 515, analyze clean · Swift core 560, SwiftUI 464 (532 on the iOS 18.5
 simulator, TEST SUCCEEDED), 0 warnings · Kotlin core 572, sdk 608, BUILD SUCCESSFUL · generators: no drift (the one
 changed file is .pipeline/native-parity-s14/decisions.jsonl) · no stray file.
 
 ### Hand check (both devices, 2026-11-16; server :8094, static-flows at version 4)
 1 nothing saved, server down: the boot error with "No network and no cached config available" (iOS "Could not
-start the app", Android "Could not load this app") · 2 first online boot: Home; /version + /config, no page
+start the app", Android "Could not load this app"; before step 18 merged: redone below) · 2 first online boot: Home; /version + /config, no page
 request · 3 relaunch: /version only · 4 server down: Home from the saved config, About (never shown) opens, Profile
 (dynamic) "Could not load this page" · 5 ORCA_PRELOAD offline: Home · 6 ORCA_PRELOAD nothing saved: the host's
 plain line · 7 version 4 → 5: /version + /config, then /version only. Screenshots: scratchpad s14/hand/.
 
+### Hand check C14.6 and C14.2 step 1 again (both devices, 2026-11-16, demo builds of ..adac6a8; server :8094)
+C14.6, the `saved-state` app as the demo READMEs give it, path mode and config mode (Android both, iOS path, config
+for step 6): 1 "+1" x3 → Count 3, relaunch → 0, nothing saved · 2 "+1" x3, Save on device, "+1" → Count 4 (iOS 5),
+`orca_saved_page_home` {"count":3}, relaunch → Count 3 · 3 "+1", Save for this session → the device file is gone;
+Leave, Back home → the session copy 4; relaunch → 0 · 4 save 2, relaunch → 2, Forget → "Count:" empty and the file gone,
+leave and back → 0, relaunch → 0; a session copy forgets too · 5 "+1 and save" x2 → Visits 2, `orca_saved_app`
+{"visits":2}, leave and back → 2, relaunch → 2; iOS config boot: /config then /page/home, Visits 2 before the first page.
+C14.2 step 1 (nothing saved: a fresh install; server unreachable; ORCA_OFFLINE): both show Flutter's screen "Something
+Went Wrong" / "An unexpected error occurred. Please try again." with "Try again".
+The host was heavily loaded (load 15-20): Android showed "isn't responding" dialogs twice; the scripted run waited
+them out, every step was then read from the screen. Screenshots and logs: scratchpad s14/hand/ (android-saved-*,
+ios-saved-6-config-visits, ios-c14-2-nothing-saved, android-saved-c14-2-nothing-saved, and-saved-*.log).
+
 ### Blocked
-T20 · after one rework pass the quality re-review still finds two sentences in sdk-kotlin/README.md's Saved state
-section (:309-310 "Each file is read once, the first time it is needed, and written at every change.", and ", and reads
-every entry once at boot" at :324) that Swift's reference section does not say · tried: one rework pass (36ce06f)
+none (T20 was blocked at the group 7 card on two sentences of its Saved state section; the retry removed them)
 
 ### Not done
 none
@@ -332,4 +344,10 @@ none
   macOS (fails about 1 run in 4, also on the unchanged baseline), green on the simulator.
 - New public API: Swift OrcaApp(preloadedConfig:staticFlowManager:), FileKeyValueStore.applicationSupport(), core
   preload/PreloadResult/OfflineBootError/StaticFlowManager/FileKeyValueStore; Kotlin the same, offlineStore(context).
-- Rows C14.1-C14.5 tick with this branch; C14.6 waits on decision 3 (G5-G7), so the step's PR waits too.
+- Rows C14.1-C14.6 tick with this branch (C14.6 by hand on both devices, above).
+- New public API in group 7: Swift OrcaApp(client:) `savedState:`, OrcaRouter `savedState:` and `savedState`; Kotlin
+  OrcaApp(client) `savedState =`, OrcaRouter `savedState`, OrcaPageModel's `savedState` parameter. A router built
+  without one saves and restores nothing (both SDKs).
+- Follow-ups seen, not this step's: sdk-swift/README.md says "A config with tabs runs as one stack" (stale since the
+  tab shell); tests that boot OrcaApp(client:) without a savedState read (never write) orca_saved_* in the test host's
+  Application Support, as the device id store already does.
