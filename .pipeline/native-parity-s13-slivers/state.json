@@ -4,9 +4,9 @@
   "idea": "Native parity step 13, second part (Phase B): CustomScrollView, SliverAppBar, SliverList, SliverGrid and SliverToBoxAdapter on sdk-swift and sdk-kotlin, on top of Phase A step 5 (ListView, GridView). Rows B13.1 and B13.2.",
   "kind": "feature",
   "created_at": "2026-11-16T11:36:00Z",
-  "updated_at": "2026-11-16T11:37:26Z",
+  "updated_at": "2026-11-16T13:06:34Z",
   "active_session": "fe23fb0a-f62c-4a83-a51f-655a2e0bf8ff",
-  "current": "09",
+  "current": "10",
   "stages": {
     "01": {
       "status": "skipped",
@@ -44,7 +44,11 @@
       "approved_with": "auto-approved under the standing gate rule (minor: the plan's step, no new dependency or public API; the bar drawn by the SDK is said in the PR for the user to overturn)"
     },
     "09": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/09-r1.md",
+      "approved_at": "2026-11-16T13:06:34Z",
+      "approved_with": "auto-approved under the standing gate rule (minor: all tasks green and reviewed; the SDK-drawn bar is said in the PR for the user to overturn)"
     },
     "10": {
       "status": "pending"
