@@ -2,11 +2,13 @@
 //
 // `targets` generalises the Epic 38 `isSupportedOnWeb` bit: the list of
 // platforms whose Orca SDK renders the widget natively. Every widget carries
-// it, the default is all four platforms, and the four widgets with no iOS
+// it, the default is all four platforms, and the two widgets with no iOS
 // counterpart omit "ios" so a SwiftUI client degrades them via the caps
 // vector instead of guessing. Drawer left that list in native-parity-s10
 // (B10.C-S): the iOS SDK draws it as a side panel. Checkbox and Radio left
 // it in native-parity-s6 (A6.1, A6.2): the iOS SDK draws them.
+// FloatingActionButton and InkWell left it in native-parity-s6 too (A6.5,
+// A6.6): the iOS SDK draws them.
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -14,7 +16,7 @@ import { WIDGET_REGISTRY } from "../src/core/widget-registry-gen";
 
 const MANIFEST = join(import.meta.dir, "../../schema/widget-registry.json");
 const ALL = ["flutter", "web", "android", "ios"];
-const IOS_ORPHANS = ["FloatingActionButton", "InkWell", "SnackBar", "Tooltip"];
+const IOS_ORPHANS = ["SnackBar", "Tooltip"];
 // Widgets only the native SDKs draw so far; Flutter and web degrade them.
 const NATIVE_ONLY = ["Video"];
 
@@ -57,6 +59,18 @@ describe("widget targets", () => {
     expect(manifest.widgets.find((w) => w.type === "Radio")?.targets).toEqual(ALL);
     expect([...WIDGET_REGISTRY.Radio.targets]).toEqual(ALL);
     expect(IOS_ORPHANS).not.toContain("Radio");
+  });
+
+  test("A6.5 eng FloatingActionButton targets all four platforms, ios included, in the manifest and the TS registry", () => {
+    expect(manifest.widgets.find((w) => w.type === "FloatingActionButton")?.targets).toEqual(ALL);
+    expect([...WIDGET_REGISTRY.FloatingActionButton.targets]).toEqual(ALL);
+    expect(IOS_ORPHANS).not.toContain("FloatingActionButton");
+  });
+
+  test("A6.6 eng InkWell targets all four platforms, ios included, in the manifest and the TS registry", () => {
+    expect(manifest.widgets.find((w) => w.type === "InkWell")?.targets).toEqual(ALL);
+    expect([...WIDGET_REGISTRY.InkWell.targets]).toEqual(ALL);
+    expect(IOS_ORPHANS).not.toContain("InkWell");
   });
 
   test("isSupportedOnWeb is derived from targets", () => {
