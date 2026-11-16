@@ -68,7 +68,7 @@ The same app draws any app on the example server. Pass `APP` and `PAGE` to the r
 | Counter (default) | `counter` | `home` | state, a snackbar |
 | Basic actions | `basic-actions` | `home`, `about`, `product`, `ecommerce`, `checkout` | navigation, back, URL, clipboard, share, toasts |
 | Server actions | `server-actions` | `shop` | actions that run on the server and change the page |
-| Capability demo | `capability-demo` | `degrade` | the three fallback policies, on a CustomScrollView (holding a SliverToBoxAdapter) this SDK does not draw: left out with its text kept (`graceful`), a warning banner above the page (`warn`), or a blocking prompt instead of the page (`require`) |
+| Capability demo | `capability-demo` | `degrade` | the three fallback policies, on a plugin widget no app registers: left out (`graceful`), a warning banner above the page naming it (`warn`), or a blocking prompt instead of the page (`require`) |
 | Native widgets | `native-widgets` | `home` | the ten widgets of S9: Icon, Image, Container, Expanded, Spacer, TextField, Stack, Positioned, ClipRRect, GestureDetector (the images come from picsum.photos) |
 | Todo | `todo` | `home` | add, tick, delete |
 | Custom extensions | `custom` | `home` | a widget and actions from the app's plugins; see [Plugins](#plugins) |
