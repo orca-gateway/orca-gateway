@@ -37,16 +37,17 @@ final class CapabilitiesTests: XCTestCase {
 
     /// A3.1: native parity step 3's 13 layout wrappers are drawn by SwiftUI,
     /// so the generated vector advertises them, each once and sorted like
-    /// capabilities.json. The pin is 63: with step 12's 5 animated widgets
+    /// capabilities.json. The pin is 68: with step 12's 5 animated widgets
     /// (49), then native parity step 4's 11 effect and touch wrappers (A4.x,
     /// 60), then step 13's ReorderableListView and SubPage, then S18's
-    /// UnsupportedWidgetPlaceholder.
-    func testA3_1TheThirteenLayoutWrappersAreAdvertisedSixtyThreeInAll() throws {
+    /// UnsupportedWidgetPlaceholder (63), then native parity step 5's five
+    /// scroll widgets (A5.x).
+    func testA3_1TheThirteenLayoutWrappersAreAdvertisedSixtyEightInAll() throws {
         let advertised = Set(GeneratedCapabilities.widgets)
         XCTAssertEqual(Self.a3_1.subtracting(advertised), [], "not advertised")
         XCTAssertTrue(Self.a3_1.isSubset(of: try manifestIOSWidgets()), "a wrapper lacks the ios target")
-        XCTAssertEqual(GeneratedCapabilities.widgets.count, 63)
-        XCTAssertEqual(advertised.count, 63)
+        XCTAssertEqual(GeneratedCapabilities.widgets.count, 68)
+        XCTAssertEqual(advertised.count, 68)
         XCTAssertEqual(GeneratedCapabilities.widgets, GeneratedCapabilities.widgets.sorted())
     }
 
@@ -87,6 +88,25 @@ final class CapabilitiesTests: XCTestCase {
         XCTAssertTrue(GeneratedCapabilities.widgets.contains("UnsupportedWidgetPlaceholder"), "not advertised")
         XCTAssertTrue(WidgetRegistry.shared.supports("UnsupportedWidgetPlaceholder"), "the standard registry degrades it")
     }
+
+    /// A5.x: native parity step 5's five scroll widgets are drawn by SwiftUI
+    /// (A5.1-A5.5, A5.7), so capabilities.json lists each of them, the
+    /// generated vector advertises each, once, every one carrying the
+    /// manifest's ios target, and the standard registry lets them through.
+    func testA5TheFiveScrollWidgetsAreAdvertised() throws {
+        let implemented = try Fixtures.json("sdk-swift/capabilities.json")
+        let listed = Set((implemented["widgets"].arrayValue ?? []).compactMap(\.stringValue))
+        XCTAssertEqual(Self.a5.subtracting(listed), [], "not in capabilities.json")
+        for widget in Self.a5.sorted() {
+            XCTAssertEqual(GeneratedCapabilities.widgets.filter { $0 == widget }.count, 1,
+                           "\(widget) is not advertised exactly once")
+        }
+        XCTAssertTrue(Self.a5.isSubset(of: try manifestIOSWidgets()), "a widget lacks the ios target")
+        XCTAssertEqual(Self.a5.subtracting(WidgetRegistry.shared.types), [], "degraded by the standard registry")
+    }
+
+    /// Native parity step 5's scroll widgets (A5.1-A5.5, A5.7).
+    static let a5: Set<String> = ["GridView", "ListView", "PageView", "PullToRefresh", "Scrollbar"]
 
     func testActionKindsMatchTheImplementedList() throws {
         let implemented = try Fixtures.json("sdk-swift/capabilities.json")
