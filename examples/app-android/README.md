@@ -5,9 +5,10 @@ same Bun server as the Flutter and iOS examples. The SDK's alpha is on Maven Cen
 `com.orcagateway:sdk`, but this example does not use it: its Gradle build includes
 `../../sdk-kotlin` (`includeBuild` in `settings.gradle.kts`), so it builds the SDK from source and an
 SDK change shows up on the next build. Your own app installs the published artifact instead; see
-"Install" in [`sdk-kotlin/README.md`](../../sdk-kotlin/README.md#install). The voice recorder plugin
-comes from source the same way: the build also includes `../../plugins/orca_voice_recorder/android`
-(see [Plugins](#plugins)).
+"Install" in [`sdk-kotlin/README.md`](../../sdk-kotlin/README.md#install). The voice recorder and
+video player plugins come from source the same way: the build also includes
+`../../plugins/orca_voice_recorder/android` and `../../plugins/orca_video_player/android` (see
+[Plugins](#plugins)).
 
 ## Run it
 
@@ -155,13 +156,16 @@ the login page while logged out (`wasRedirected=true`).
 
 ## Plugins
 
-The app registers three plugins. Two are its own ([`DemoPlugins.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/DemoPlugins.kt)),
+The app registers four plugins. Two are its own ([`DemoPlugins.kt`](app/src/main/kotlin/com/orcagateway/examples/counter/DemoPlugins.kt)),
 as the Flutter example has them: `BadgePlugin` draws the `ColoredBadge` widget of the example server's
 `custom` app, and `DeviceActionsPlugin` runs its actions `hapticFeedback`, `showConfetti`, `rateApp`
 and `processPayment`. The third is the voice recorder package's `VoiceRecorderPlugin`
 ([`plugins/orca_voice_recorder/android`](../../plugins/orca_voice_recorder/android)), which draws the
 `VoiceRecorder` of the same app's Voice Page and records and plays back (see
-[The voice recorder](#the-voice-recorder) below). Start the server (step 1 above), then the app on
+[The voice recorder](#the-voice-recorder) below). The fourth is the video player package's
+`VideoPlayerPlugin` ([`plugins/orca_video_player/android`](../../plugins/orca_video_player/android)),
+which plays the `VideoPlayer` of the app's Video Page and runs its playback actions (see
+[The video player](#the-video-player) below). Start the server (step 1 above), then the app on
 `custom`:
 
 ```bash
@@ -211,6 +215,39 @@ The "Voice Recorder" page shows a grey dot over "Ready", the buttons Start, Stop
    "Duration:" its length in ms.
 3. **Play.** The recording plays back. A playback that fails logs a line under the tag
    `OrcaVoiceRecorder` (`adb logcat -s OrcaVoiceRecorder`).
+
+### The video player
+
+`settings.gradle.kts` includes `../../plugins/orca_video_player/android` too, so the build substitutes
+`com.orcagateway:orca-video-player` from source on the same `sdk-kotlin` build. Its directory is also
+called `android`, and two included builds cannot share the build path `:android`, so this one takes its
+root project's name, `orca-video-player-android`. `MainActivity` adds `VideoPlayerPlugin()` to its
+plugins. The app's own manifest is unchanged: the player needs only `INTERNET`, which comes from the
+library's manifest through the manifest merger and is granted at install, so nothing is asked.
+
+The page streams the video_player package's example video (`butterfly.mp4` from
+`flutter.github.io`, over https), so the emulator must be online. Without the network the player
+shows "Video failed to load" in its place.
+
+On the `custom` home page, tap "Go to Video Page" (or start the app on it directly:
+`adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --es ORCA_APP_ID custom --es ORCA_PATH video`).
+The "Video Player" page shows a small grey circle while the video loads, then the video with a dark
+round button and a white ▶ over it. Under it are the buttons Play, Pause and Seek 0, then Volume 0.5
+and Speed 1.5, and the lines "Position: 0 ms" and "Finished: false". Then:
+
+1. **Tap the video.** It plays and the ▶ goes away; "Position:" counts up in steps of about 100 ms
+   (the player's `onProgress`, kept in page state). Tap it again: it pauses and the ▶ comes back.
+   Only these taps fire `onPlay` and `onPause`, as in the Flutter plugin.
+2. **Play and Pause.** The buttons do the same through the `playVideo` and `pauseVideo` actions, the
+   ▶ included. "Position:" moves only while the video plays.
+3. **Seek 0.** The video goes back to its start; while it plays, "Position:" starts again from about
+   0 ms.
+4. **Volume 0.5 and Speed 1.5.** The sound drops to half (the emulator plays it on the Mac's
+   speakers). The video plays one and a half times as fast, and "Position:" climbs that much faster;
+   a speed set while paused applies on the next play.
+5. **The end.** The clip is 7.5 s long. At its end the video stops on its last frame, the ▶ comes
+   back and the line reads "Finished: true". Play or a tap starts it again from 0; "Finished:" stays
+   true.
 
 ## Offline, force update and sessions
 

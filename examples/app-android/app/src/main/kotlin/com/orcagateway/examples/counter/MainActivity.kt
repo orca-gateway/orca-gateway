@@ -35,6 +35,7 @@ import com.orcagateway.core.client.StaticFlowManager
 import com.orcagateway.core.client.preload
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.navigation.DeeplinkEvent
+import com.orcagateway.plugins.videoplayer.VideoPlayerPlugin
 import com.orcagateway.plugins.voicerecorder.VoiceRecorderPlugin
 import com.orcagateway.sdk.OrcaApp
 import com.orcagateway.sdk.OrcaPlugin
@@ -73,10 +74,12 @@ import java.util.Locale
  * The app opens `orcacounter://` links (see "Deep links" in the README) and
  * logs one `deeplink:` line for each under the tag `OrcaCounter`.
  *
- * Three plugins serve the `custom` app (start it with ORCA_APP_ID `custom`):
+ * Four plugins serve the `custom` app (start it with ORCA_APP_ID `custom`):
  * two of this app's (DemoPlugins.kt) draw the ColoredBadge and run the device
- * actions, and the voice recorder's (plugins/orca_voice_recorder/android)
- * draws the VoiceRecorder of its Voice Page and records and plays back.
+ * actions, the voice recorder's (plugins/orca_voice_recorder/android) draws
+ * the VoiceRecorder of its Voice Page and records and plays back, and the
+ * video player's (plugins/orca_video_player/android) plays the VideoPlayer
+ * of its Video Page and runs the page's playback buttons.
  *
  * Five more extras try OrcaApp's shell; without them the app is as before.
  * ORCA_API_KEY is the key sent (default `demo-key`; any other gets the
@@ -110,6 +113,7 @@ class MainActivity : ComponentActivity() {
             BadgePlugin(),
             DeviceActionsPlugin(window.decorView),
             VoiceRecorderPlugin(applicationContext),
+            VideoPlayerPlugin(),
         )
         // No scheme (null): the theme's own, here and in OrcaApp.
         val scheme = when (setting("ORCA_SCHEME")) {
