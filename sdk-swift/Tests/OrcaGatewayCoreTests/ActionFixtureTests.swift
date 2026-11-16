@@ -20,7 +20,7 @@ final class ActionFixtureTests: XCTestCase {
         func append(_ effect: JSONValue) { list.append(effect) }
     }
 
-    @MainActor func testAllTwentySixActionFixturesPass() async throws {
+    @MainActor func testAllTwentyEightActionFixturesPass() async throws {
         let files = try Fixtures.files("actions")
         XCTAssertEqual(files.count, 28)
         for (name, fx) in files { try await run(name, fx) }

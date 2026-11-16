@@ -130,8 +130,10 @@ public final class OrcaPageModel: ObservableObject {
     /// The pages mounted in this page's SubPages (their nodes are in
     /// `renderer`, their state in `store`, both under the pages' prefixes).
     public private(set) var subPages = SubPageRegistry()
-    /// The SubPage views on screen, by node id: what `updateSubPage` reaches.
-    private var subPageViews: [String: SubPageSeat] = [:]
+    /// What each SubPage node drawn so far holds besides its pages, by node
+    /// id, for as long as the node is in the page: what `updateSubPage`
+    /// reaches, and what a view built again for the node takes up.
+    private var subPageControllers: [String: SubPageController] = [:]
     /// On a frozen copy, the roots each SubPage was drawing.
     let frozenSubPageRoots: [String: [String]]
 
@@ -373,18 +375,13 @@ public final class OrcaPageModel: ObservableObject {
     func apply(_ mutation: ComponentMutation) {
         guard !isInert else { return }
         renderer.apply(mutation)
+        // S8: a SubPage node the mutation took out takes its pages with it.
+        sweepSubPages()
         structureRevision += 1
     }
 }
 
 // MARK: - Sub-pages
-
-/// A SubPage view on screen: its controller, and the token its cleanup names
-/// it by once the controller is gone.
-private struct SubPageSeat {
-    let token: UUID
-    weak var controller: SubPageController?
-}
 
 /// A SubPage cannot fetch: the page was built without a client.
 struct SubPageWithoutClient: LocalizedError {
@@ -392,27 +389,30 @@ struct SubPageWithoutClient: LocalizedError {
 }
 
 extension OrcaPageModel {
-    /// The view of the SubPage node `key`, while it is on screen.
+    /// The controller of the SubPage node `key`: nil when the node was never
+    /// drawn or is no longer in the page.
     func subPageView(_ key: String) -> SubPageController? {
-        subPageViews[key]?.controller
+        renderer.nodes[key] == nil ? nil : subPageControllers[key]
     }
 
-    /// The SubPage view of `controller` is on screen: `updateSubPage` reaches it from now on.
-    func subPageAppeared(_ controller: SubPageController) {
-        guard !isInert else { return }
-        subPageViews[controller.key] = SubPageSeat(token: controller.token, controller: controller)
+    /// The controller of the SubPage node `key`, made the first time the
+    /// node is drawn. It lives as long as the node, not as long as a view:
+    /// every view of the node shares it.
+    func subPage(_ key: String) -> SubPageController {
+        if let known = subPageControllers[key] { return known }
+        let made = SubPageController(key: key, model: self)
+        subPageControllers[key] = made
+        return made
     }
 
-    /// The SubPage view named by `token` is gone (contract S8): the nodes of
-    /// its pages leave the node store, its state keys stay. A newer view of
-    /// the same SubPage keeps what is mounted.
-    func subPageLeft(_ key: String, token: UUID) {
-        guard subPageViews[key]?.token == token else { return }
-        subPageViews[key] = nil
-        let prefixes = subPages.unmount(key)
-        guard !prefixes.isEmpty else { return }
-        renderer.removePages(under: prefixes)
-        structureRevision += 1
+    /// Contract S8: every SubPage whose node is no longer in the store is
+    /// forgotten, its fetch cancelled, and the nodes of its pages leave the
+    /// store (a SubPage among them goes the same way). Its state keys stay.
+    private func sweepSubPages() {
+        while let key = subPageControllers.keys.first(where: { renderer.nodes[$0] == nil }) {
+            subPageControllers.removeValue(forKey: key)?.cancel()
+            renderer.removePages(under: subPages.unmount(key))
+        }
     }
 
     /// The fetch of a sub-page (contract S4): the normal page route, with
@@ -432,15 +432,21 @@ extension OrcaPageModel {
         var next = subPages
         let change = next.mount(
             key, mode: mode, response: try JSONValue(encoding: page), pageStateKeys: store.state.page.keys)
+        // A SubPage of a page that leaves goes with it, even when the new
+        // page has a node of the same id: that one starts anew.
+        var without = renderer
+        without.removePages(under: change.removedPrefixes)
+        let gone = subPageControllers.keys.filter { without.nodes[$0] == nil }
         try renderer.apply(change)
         subPages = next
+        for key in gone { subPageControllers.removeValue(forKey: key)?.cancel() }
         store.commit(store.state.applying(change))
         structureRevision += 1
         return change.prefix
     }
 
     /// The `updateSubPage` action (contract S7). A `subPageId` that names no
-    /// SubPage on screen does nothing; a fetch that fails throws to the
+    /// SubPage of the page (or one never drawn) does nothing; a fetch that fails throws to the
     /// action chain.
     func updateSubPage(_ subPageId: String, pageId: String, params: [String: JSONValue]?, mode: String)
         async throws {

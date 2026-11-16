@@ -422,6 +422,161 @@ final class SubPageTests: XCTestCase {
         XCTAssertEqual(SubPageNodeView.frozenRoots(of: "detail", in: frozen), ["detail:0"])
     }
 
+    // MARK: the SubPage follows its node, not its view
+
+    /// S7, S8: the pages belong to the SubPage node. A view of it that is
+    /// taken down and built again (the host page covered by a push and shown
+    /// again) fetches nothing, even a fetch that would now fail, and draws
+    /// what an earlier updateSubPage mounted.
+    func test_B13_5_hidingAndShowingTheHostAgainFetchesNothingAndKeepsTheMounts() throws {
+        let stub = SubPagePages()
+        let stage = try Stage(stub, subPage: ["pageId": "a"])
+        defer { stage.close() }
+        stage.wait("page a") { stage.model.renderer.nodes["detail:7"] != nil }
+        try stage.tap("replace")
+        stage.wait("page b") { stage.model.renderer.nodes["detail:1"]?.props["data"] == "B" }
+        stage.model.store.dispatch(["detail:name": "mine"])
+        let mounted = stage.model.subPages
+
+        stage.hide()
+        stage.pump(0.3)
+        XCTAssertEqual(stage.model.subPages, mounted, "hiding the host unmounted the sub-page")
+        XCTAssertEqual(stage.model.renderer.nodes["detail:1"]?.props["data"], "B")
+
+        // Any fetch from here on fails: a view that fetched again would draw the error.
+        stub.breakPages()
+        stage.show()
+        stage.pump(0.5)
+        XCTAssertEqual(stub.pagePaths, ["a", "b?from=host"], "the view built again fetched")
+        XCTAssertEqual(stage.model.subPages, mounted)
+        XCTAssertEqual(stage.drawing, .pages(["detail:0"]))
+        XCTAssertEqual(stage.model.renderer.nodes["detail:1"]?.props["data"], "B", "the first page came back")
+        XCTAssertEqual(stage.model.store.state.page, ["count": 1, "detail:name": "mine"])
+    }
+
+    /// S8 follows the node: with no view showing the SubPage, its pages stay
+    /// until its node is deleted, and go then.
+    func test_B13_4_aSubPageWhoseNodeIsDeletedWhileNoViewShowsItIsUnmounted() throws {
+        let stage = try Stage(SubPagePages(), subPage: ["pageId": "a"])
+        defer { stage.close() }
+        stage.wait("page a") { stage.model.renderer.nodes["detail:7"] != nil }
+
+        stage.hide()
+        stage.pump(0.3)
+        XCTAssertEqual(stage.model.subPages.prefixes, ["detail:"], "the view leaving unmounted the sub-page")
+        XCTAssertNotNil(stage.model.renderer.nodes["detail:7"])
+
+        try stage.tap("remove")
+        stage.wait("the unmount") { stage.model.subPages.prefixes.isEmpty }
+        XCTAssertEqual(stage.model.renderer.nodes.keys.filter { $0.hasPrefix("detail") }, [])
+        XCTAssertEqual(stage.model.store.state.page["detail:count"], 5)
+        XCTAssertNil(stage.model.subPageView("detail"))
+    }
+
+    #if canImport(UIKit)
+    /// A ReorderableListView gives its rows a new identity on every drop, so
+    /// the SubPage in a row gets a new view: its pages, their state and an
+    /// earlier updateSubPage are kept, and nothing is fetched.
+    func test_B13_5_aSubPageInAReorderableRowKeepsItsPagesItsStateAndAnUpdateAcrossADrop() throws {
+        func box(_ id: String, _ height: JSONValue) -> JSONValue {
+            ["id": .string(id), "type": "SizedBox", "kind": "layout", "childMode": "single",
+             "props": ["width": 20, "height": height], "children": [], "watches": []]
+        }
+        let page: JSONValue = [
+            "pageId": "host", "title": "Host", "state": [Self.count(0, key: "moves")],
+            "components": [
+                ["id": "list", "type": "ReorderableListView", "kind": "layout", "childMode": "multi", "props": [:],
+                 "children": ["detail", "x", "y"], "watches": [],
+                 "actions": ["onReorder": ["type": "setState", "key": "moves", "scope": "page", "value": 1]]],
+                ["id": "detail", "type": "SubPage", "kind": "layout", "childMode": "single",
+                 "props": ["pageId": "b"], "children": [], "watches": []],
+                box("x", 100), box("y", 110),
+            ],
+        ]
+        let stub = SubPagePages()
+        let stage = try Stage(stub, page: page, root: "list")
+        defer { stage.close() }
+        stage.wait("page b") { stage.model.renderer.nodes["detail:1"] != nil }
+        try stage.run(Self.update("detail", "c"))
+        stage.wait("page c") { stage.model.store.state.page["detail:count"] == 3 }
+        stage.model.store.dispatch(["detail:count": 9])
+        stage.pump(0.3)
+        let mounted = stage.model.subPages
+
+        let list = try XCTUnwrap(stage.collectionView)
+        XCTAssertTrue(list.beginInteractiveMovementForItem(at: IndexPath(item: 0, section: 0)))
+        stage.pump(0.1)
+        list.updateInteractiveMovementTargetPosition(CGPoint(x: 100, y: list.contentSize.height - 10))
+        stage.pump(0.3)
+        list.endInteractiveMovement()
+        stage.wait("the drop") { stage.model.store.state.page["moves"] == 1 }
+        stage.pump(0.8)
+
+        XCTAssertEqual(stub.pagePaths, ["b", "c"], "the row built again fetched")
+        XCTAssertEqual(stage.model.subPages, mounted)
+        XCTAssertEqual(stage.model.store.state.page, ["moves": 1, "detail:count": 9])
+        XCTAssertEqual(stage.model.resolve("detail:1")?["data"], 9)
+        XCTAssertEqual(stage.drawing, .pages(["detail:0"]))
+    }
+    #endif
+
+    // MARK: fetches that are overtaken
+
+    func test_B13_4_anAnswerForASubPageWhoseNodeLeftIsDropped() throws {
+        let stub = SubPagePages()
+        stub.hold()
+        let stage = try Stage(stub, subPage: ["pageId": "a"])
+        defer { stage.close() }
+        stage.wait("the fetch") { stub.pagePaths == ["a"] }
+
+        try stage.tap("remove")
+        stage.wait("the delete") { stage.model.renderer.nodes["detail"] == nil }
+        stub.release()
+        stage.pump(0.5)
+        XCTAssertEqual(stage.model.subPages.prefixes, [], "the answer was mounted after its SubPage left")
+        XCTAssertEqual(stage.model.renderer.nodes.keys.filter { $0.hasPrefix("detail") }, [])
+        XCTAssertEqual(stage.model.store.state.page, ["count": 1])
+        XCTAssertNil(stage.model.subPageView("detail"))
+    }
+
+    func test_B13_4_aNewerOwnFetchOvertakesAnOlderOne() throws {
+        let stub = SubPagePages()
+        stub.hold("a")
+        let stage = try Stage(
+            stub, subPage: ["pageId": Self.page("which")], watches: ["which"], state: ["which": "a"])
+        defer { stage.close() }
+        stage.wait("the first fetch") { stub.pagePaths == ["a"] }
+
+        stage.model.store.dispatch(["which": "b"])
+        stage.wait("page b") { stage.model.renderer.nodes["detail:1"]?.props["data"] == "B" }
+        stub.release()
+        stage.pump(0.5)
+        XCTAssertEqual(stage.model.renderer.nodes["detail:1"]?.props["data"], "B", "the older answer was mounted")
+        XCTAssertNil(stage.model.renderer.nodes["detail:7"])
+        XCTAssertEqual(stage.model.store.state.page, ["count": 1, "which": "b", "detail:name": "b"])
+        XCTAssertEqual(stub.pagePaths, ["a", "b"])
+        XCTAssertEqual(stage.drawing, .pages(["detail:0"]))
+    }
+
+    func test_B13_5_theOldContentStaysWhileAnUpdateFetches() throws {
+        let stub = SubPagePages()
+        let stage = try Stage(stub, subPage: ["pageId": "a"])
+        defer { stage.close() }
+        stage.wait("page a") { stage.drawn.contains("detail:7") }
+
+        stub.hold("b")
+        try stage.tap("replace")
+        stage.wait("the update's fetch") { stub.pagePaths == ["a", "b?from=host"] }
+        stage.pump(0.2)
+        XCTAssertEqual(stage.drawing, .pages(["detail:0"]))
+        XCTAssertEqual(stage.model.renderer.nodes["detail:7"]?.props["data"], "A")
+        XCTAssertEqual(stage.model.store.state.page, ["count": 1, "detail:count": 5])
+
+        stub.release()
+        stage.wait("page b") { stage.model.renderer.nodes["detail:1"]?.props["data"] == "B" }
+        XCTAssertNil(stage.model.renderer.nodes["detail:7"])
+    }
+
     // MARK: Pages
 
     /// A page-state reference.
@@ -565,26 +720,51 @@ private final class Stage {
     let model: OrcaPageModel
     let recorder = NodeRecorder()
     let key: String
+    private let root: String
     private(set) var errors = 0
     private var window: HostWindow?
 
-    init(_ stub: SubPagePages, subPage props: JSONValue, key: String = "detail", watches: [JSONValue] = [],
-         state: [String: JSONValue] = [:], app: [String: JSONValue] = [:], loadingChild: Bool = false,
-         widgets: WidgetBuilders = WidgetBuilders()) throws {
-        let page = try SubPageTests.host(
-            key: key, subPage: props, watches: watches, state: state, loadingChild: loadingChild)
-            .decode(PageResponse.self)
+    convenience init(_ stub: SubPagePages, subPage props: JSONValue, key: String = "detail", watches: [JSONValue] = [],
+                     state: [String: JSONValue] = [:], app: [String: JSONValue] = [:], loadingChild: Bool = false,
+                     widgets: WidgetBuilders = WidgetBuilders()) throws {
+        try self.init(
+            stub,
+            page: SubPageTests.host(
+                key: key, subPage: props, watches: watches, state: state, loadingChild: loadingChild),
+            key: key, app: app, widgets: widgets)
+    }
+
+    /// `page` drawn from its node `root`; `key` is its SubPage.
+    init(_ stub: SubPagePages, page: JSONValue, root: String = "root", key: String = "detail",
+         app: [String: JSONValue] = [:], widgets: WidgetBuilders = WidgetBuilders()) throws {
         self.key = key
+        self.root = root
         model = OrcaPageModel(
-            page: page, store: ElmStore(app: app),
+            page: try page.decode(PageResponse.self), store: ElmStore(app: app),
             registry: WidgetRegistry(types: Set(GeneratedCapabilities.widgets).union(widgets.types)),
             client: OrcaClient(
                 baseURL: URL(string: "http://stub.invalid")!, appId: "fixture-app",
                 device: DeviceInfo(osVersion: "test"), transport: stub),
             widgets: widgets)
         model.onError = { [weak self] _ in self?.errors += 1 }
-        window = HostWindow(NodeView(id: "root", model: model).environment(\.orcaNodeRecorder, recorder))
+        show()
     }
+
+    /// Put the page on screen, with views of its own.
+    func show() {
+        window = HostWindow(NodeView(id: root, model: model).environment(\.orcaNodeRecorder, recorder))
+    }
+
+    /// Take the page's views down, as when another page covers it for good;
+    /// the page itself stays.
+    func hide() {
+        close()
+    }
+
+    #if canImport(UIKit)
+    /// The UICollectionView SwiftUI draws a List with.
+    var collectionView: UICollectionView? { window?.collectionView }
+    #endif
 
     /// What the SubPage draws now; nil when it is not on screen.
     var drawing: SubPageDrawing? {
@@ -686,6 +866,15 @@ private final class HostWindow {
         #endif
     }
 
+    #if canImport(UIKit)
+    var collectionView: UICollectionView? {
+        func find(in view: UIView) -> UICollectionView? {
+            (view as? UICollectionView) ?? view.subviews.lazy.compactMap { find(in: $0) }.first
+        }
+        return find(in: window)
+    }
+    #endif
+
     var width: CGFloat {
         #if canImport(UIKit)
         window.bounds.width
@@ -712,6 +901,7 @@ private final class SubPagePages: HTTPTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var _requests: [HTTPRequest] = []
     private var held = false
+    private var broken = false
     private var heldPages: Set<String> = []
     private var _answered: [String] = []
     private let actions: [JSONValue]
@@ -750,6 +940,9 @@ private final class SubPagePages: HTTPTransport, @unchecked Sendable {
         }
     }
 
+    /// Every page fetch fails from now on, with a 500.
+    func breakPages() { locked { broken = true } }
+
     func release() {
         locked {
             held = false
@@ -769,6 +962,7 @@ private final class SubPagePages: HTTPTransport, @unchecked Sendable {
         let name = request.url.path.components(separatedBy: "/page/").last ?? ""
         while locked({ held || heldPages.contains(name) }) { try await Task.sleep(nanoseconds: 10_000_000) }
         locked { _answered.append(name) }
+        if locked({ broken }) { return HTTPResponse(status: 500, body: Data("{}".utf8)) }
         guard let page = SubPageTests.pages[name] else { return HTTPResponse(status: 404, body: Data("{}".utf8)) }
         return HTTPResponse(status: 200, body: try page.encoded())
     }

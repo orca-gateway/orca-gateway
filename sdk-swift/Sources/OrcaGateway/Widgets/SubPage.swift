@@ -48,20 +48,21 @@ struct SubPageNodeView: View {
     }
 }
 
-/// The SubPage of a live page. The controller lives as long as this view
-/// does, through redraws and while another page covers it: the fetch starts
-/// when the view first appears and again only when the request changes, and
-/// the pages are unmounted when the view is gone for good.
+/// The SubPage of a live page. Its controller is the page model's, one per
+/// SubPage node for as long as that node is in the page (`subPage`), so it
+/// outlives this view: a view built again for the same node (a list row
+/// given a new identity, a page shown again) draws what is mounted and
+/// fetches only when the request is not the one last asked for.
 @MainActor
 private struct LiveSubPage: View {
     let node: ResolvedNode
     let model: OrcaPageModel
-    @StateObject private var controller: SubPageController
+    @ObservedObject private var controller: SubPageController
 
     init(node: ResolvedNode, model: OrcaPageModel) {
         self.node = node
         self.model = model
-        _controller = StateObject(wrappedValue: SubPageController(key: node.id, model: model))
+        controller = model.subPage(node.id)
     }
 
     var body: some View {
@@ -122,15 +123,15 @@ private struct JoinedPage: ViewModifier {
     }
 }
 
-/// The state of one SubPage view: whether its first fetch is still out, why
-/// its own fetch failed, and which fetch is the latest. The pages themselves
-/// are in the page model's registry.
+/// What one SubPage node holds while it is in its page, besides its mounted
+/// pages (those are in the page model's registry): whether its first fetch
+/// is still out, why its own fetch failed, what it last asked for and which
+/// fetch is the latest. The page model keeps it by node id and drops it when
+/// the node leaves (Kotlin's `SubPageSlot`).
 @MainActor
 final class SubPageController: ObservableObject {
     /// Id of the SubPage node.
     let key: String
-    /// Names this controller to the page model once it is gone.
-    nonisolated let token = UUID()
     private weak var model: OrcaPageModel?
     /// True until a first page is mounted or the first fetch fails.
     @Published private var loading = true
@@ -149,7 +150,7 @@ final class SubPageController: ObservableObject {
     /// is no longer the latest, or that an updateSubPage overtook, is dropped.
     private var load = 0
     /// The fetch for the node's own request, cancelled by a newer one and
-    /// when the view is gone.
+    /// when the node leaves the page.
     private var fetch: Task<Void, Never>?
 
     init(key: String, model: OrcaPageModel) {
@@ -157,10 +158,9 @@ final class SubPageController: ObservableObject {
         self.model = model
     }
 
-    deinit {
+    /// The node left the page: its fetch is of no use.
+    func cancel() {
         fetch?.cancel()
-        // S8: the nodes leave the store, the state keys stay.
-        Task { @MainActor [weak model, key, token] in model?.subPageLeft(key, token: token) }
     }
 
     func drawing(childId: String?) -> SubPageDrawing {
@@ -183,20 +183,19 @@ final class SubPageController: ObservableObject {
         return error.localizedDescription
     }
 
-    /// Whether this is still the view of a SubPage of the page: its node is
-    /// in the store and no newer view of the same SubPage has taken its
-    /// place (the page it was in was replaced by one with the same ids).
+    /// Whether this is still the controller of a SubPage of the page: its
+    /// node is in the store and the page it was in has not been replaced by
+    /// one with the same ids (whose SubPage has a controller of its own).
     private func isCurrent(in model: OrcaPageModel) -> Bool {
-        model.renderer.nodes[key] != nil && model.subPageView(key) === self
+        model.subPageView(key) === self
     }
 
-    /// The view is on screen asking for `next` (contract S4): fetch it, as a
-    /// replace, unless it is what was last asked for. What is mounted stays
-    /// on screen while the fetch runs.
+    /// A view of the node is on screen asking for `next` (contract S4):
+    /// fetch it, as a replace, unless it is what was last asked for, by this
+    /// view or one before it. What is mounted stays on screen while the
+    /// fetch runs.
     func want(_ next: SubPageRequest) {
-        guard let model, !model.isInert else { return }
-        model.subPageAppeared(self)
-        guard next != request else { return }
+        guard let model, !model.isInert, isCurrent(in: model), next != request else { return }
         request = next
         load += 1
         let mine = load
@@ -219,7 +218,7 @@ final class SubPageController: ObservableObject {
     func update(_ next: SubPageRequest, mode: String) async throws {
         guard let model else { return }
         let page = try await model.fetchSubPage(next)
-        // Gone, or replaced by another view of the same SubPage, meanwhile.
+        // The node left the page meanwhile.
         guard isCurrent(in: model) else { return }
         // The update wins over a fetch of the node's own that is still out.
         load += 1
