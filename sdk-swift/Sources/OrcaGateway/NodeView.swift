@@ -101,6 +101,8 @@ struct WidgetView: View {
         case "BottomNavigationBar": BottomNavigationBarView(node: node, model: model)
         case "BottomNavItem": BottomNavItemView(node: node)
         case "Drawer": DrawerView(node: node, model: model)
+        case "BackdropFilter": BackdropFilterView(node: node, model: model)
+        case "BlurView": BlurView(node: node, model: model)
         default:
             // A plugin or host widget; any other type draws nothing.
             if let build = model.widgets.builder(for: node.type) { build(node, model) } else { EmptyView() }
