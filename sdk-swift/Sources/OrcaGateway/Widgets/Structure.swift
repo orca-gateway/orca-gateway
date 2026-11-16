@@ -16,14 +16,17 @@ import AppKit
 /// a drag from the screen edge opens one (the leading edge only on the first
 /// page of a stack, where no back swipe takes it), the `openDrawer` action
 /// the leading one, and an AppBar with no leading widget (no actions) gets a
-/// menu button for it, as Flutter's AppBar does. Bottom sheets are not drawn
-/// yet.
+/// menu button for it, as Flutter's AppBar does. The bars take their insets
+/// from the body (Flutter removes them from its MediaQuery padding,
+/// scaffold.dart :3027-3031): a SafeArea in it neither adds them nor lets its
+/// content under the bars. Bottom sheets are not drawn yet.
 @MainActor
 struct ScaffoldView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
     @Environment(\.orcaDrawerHost) private var drawerHost
     @Environment(\.orcaPage) private var page
+    @Environment(\.orcaSafeAreaTaken) private var taken
 
     var body: some View {
         let appBar = node.slots["appBar"].flatMap(model.resolve)
@@ -38,6 +41,7 @@ struct ScaffoldView: View {
                     NodeView(id: body, model: model)
                 }
             }
+            .environment(\.orcaSafeAreaTaken, taken.union(barEdges(appBar: appBar != nil)))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             if let fab = node.slots["floatingActionButton"] {
                 NodeView(id: fab, model: model).padding(16)
@@ -75,10 +79,22 @@ struct ScaffoldView: View {
         .environment(\.orcaTight, [])
     }
 
+    /// The top edge under an appBar, the bottom one above bottom bars.
+    private func barEdges(appBar: Bool) -> Edge.Set {
+        var edges: Edge.Set = []
+        if appBar { edges.insert(.top) }
+        if hasBottomBars { edges.insert(.bottom) }
+        return edges
+    }
+
+    private var hasBottomBars: Bool {
+        !indexedSlots(node, "persistentFooterButton").isEmpty || node.slots["bottomNavigationBar"] != nil
+    }
+
     @ViewBuilder
     private var bottomBars: some View {
         let footer = indexedSlots(node, "persistentFooterButton")
-        if !footer.isEmpty || node.slots["bottomNavigationBar"] != nil {
+        if hasBottomBars {
             VStack(spacing: 0) {
                 if !footer.isEmpty {
                     HStack(spacing: 8) {
