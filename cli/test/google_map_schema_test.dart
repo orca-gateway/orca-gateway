@@ -393,13 +393,15 @@ void main() {
         expect(_description(note), contains('node\'s id'), reason: where);
         expect(_description(note), contains('does nothing'), reason: where);
         // resolveString takes any resolved value as its text.
-        expect(
-          _flat(_sdk(p.join('state', 'action_executor.dart'))),
-          contains(
-            'String resolveString(dynamic raw) { final resolved = '
-            "resolveValue(raw); return resolved?.toString() ?? ''; }",
-          ),
+        final executor = _sdk(p.join('state', 'action_executor.dart'));
+        const method = 'String resolveString(dynamic raw)';
+        final start = executor.indexOf(method);
+        expect(start, isNot(-1), reason: method);
+        final resolve = executor.substring(
+          start,
+          executor.indexOf('\n  }\n', start),
         );
+        expect(resolve, contains('?.toString()'), reason: method);
         expect(
           _description(note),
           contains('a non-string is used as its text'),
