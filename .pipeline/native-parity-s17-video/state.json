@@ -4,7 +4,7 @@
   "idea": "Native parity step 17, plugin 2 of 4: the video player plugin as separate native packages (plugins/orca_video_player/ios SwiftPM, plugins/orca_video_player/android Gradle) on the voice recorder's template, matching the Flutter plugin",
   "kind": "feature",
   "created_at": "2026-11-16T13:02:43Z",
-  "updated_at": "2026-11-16T13:34:54Z",
+  "updated_at": "2026-11-16T14:10:51Z",
   "active_session": "7317184b-fcd8-4ef3-bc8c-3dc085f8486c",
   "current": "09",
   "stages": {
@@ -45,8 +45,8 @@
     },
     "09": {
       "status": "draft",
-      "rounds": 3,
-      "card": "cards/09-r2.md"
+      "rounds": 4,
+      "card": "cards/09-r3.md"
     },
     "10": {
       "status": "pending"

@@ -3,21 +3,22 @@
 ## Front page
 
 ### In one breath
-group 2 of 4 · tasks: 3 green, 0 blocked · cases: 7 of 16 green · engine bun test: 812 pass
-T4 Swift package: plugins/orca_video_player/ios builds the CLI's generated types, pinned to Flutter.
-T5 Kotlin types: the Gradle package compiles the generated types, pinned to Flutter.
-T6 demo: the /video page plays an MP4 with five buttons and keeps the position in page state.
-Rebased onto main 677d114 (your merge of PR #47); every suite green; no generator drift.
+group 3 of 4 · tasks: 5 green, 0 blocked · cases: 12 of 16 green · engine bun test: 813 pass
+T7 Swift player: AVPlayer, Flutter's five triggers and actions; 25 tests, 24 on the simulator.
+T8 Kotlin player: MediaPlayer on a TextureView, the same; 19 tests; INTERNET in its manifest.
+T9 release.sh rows 13-14; T10 the mirror line, LICENSE and rehearsal; T11 the CI matrices.
+Reviews fixed: Swift now fails a non-number param as Flutter and Kotlin do; dead fields removed.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 auto-decided: a voice demo test already in main now lists /home's new /video button (still exact)
+3 auto-decided: a covered page stops its video (Flutter plays on) · the play mark follows the
+player · a voice release test already in main now ends its list at row 15 (still exact)
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 3, the players on both platforms and the release, mirror and CI rows. (default: go)
+2. Next: group 4: both demo apps, the READMEs, your walkthrough; then hand checks. (default: go)
 
 ## Appendix
 
@@ -105,6 +106,72 @@ Decisions: the onComplete flag kept for the hand checks · two Rows of buttons f
 errors 25 → 36, all of kinds already there, left as the voice's (all auto-decided, minor)
 Review fit: blocks (the baseline voice pin edit not recorded), fixed by the decision record · Review quality: pass
 
+### Group 3
+#### T7 · Swift AVPlayer plugin, view, five actions (753ec43; 0eaf4d5 and 976cb40 rework)
+Files: VP/ios/Sources/OrcaVideoPlayer/{VideoPlayerPlugin,VideoPlayback,PlayerLayerView,VideoPlayerView}.swift ·
+VP/ios/Tests/OrcaVideoPlayerTests/VideoPlayerPluginTests.swift (all new)
+Cases: C17.2/S → green (swift test 25 = 5 + 20, 0 warnings; xcodebuild test 24 on the iOS 18.5 simulator; red
+first: "cannot find type 'VideoPlayerPlugin'"; each view modifier removed in turn turned a test red; no network)
+Changed: `VideoPlayerPlugin: OrcaPlugin` with Flutter's name, widget, five actions, five triggers, a playerId
+registry · VideoController ports video_player's (seek clamp, play at the end from 0, volume clamp, speed while
+playing, speed ≤ 0 throws Dart's text) · registers once ready, fires through model.fire, unregisters on a new url
+or the view leaving · AVPlayer behind VideoPlayback · AVPlayerLayer that lets taps through · W5's UI.
+Decisions: the play mark follows the player · the player goes when the view leaves (both auto-decided, minor)
+Review fit: a non-number param did nothing, now fails as Flutter and Kotlin (0eaf4d5) · Review quality: two unused
+fields in the port's value, removed (976cb40)
+
+#### T8 · Kotlin MediaPlayer plugin, TextureView, INTERNET (ef91b87, 02f7a48 rework)
+Files: VP/android/video-player/src/main/AndroidManifest.xml · KT/{VideoPlayerPlugin,VideoPlayback,VideoPlayerView}.kt ·
+KTT/VideoPlayerPluginTest.kt (all new)
+Cases: C17.2/K → green (Gradle build: VideoPlayerPluginTest 19/19, props 6/6, lint no issues; red first: "Unresolved
+reference 'VideoPlayback'"; no voice or SDK file touched)
+Changed: INTERNET in the manifest (tested) · `VideoPlayerPlugin()` with Flutter's name, widget, five actions, five
+triggers; ready players by playerId; playerId and the numbers resolved from the raw action · VideoController ports
+video_player 2.11.1 (100 ms ticks while playing, seek clamp, play at the end from 0, volume clamp, speed > 0 while
+playing, the end pauses at the duration); MediaPlayer behind VideoPlayback · TextureView in an AndroidView, W5's UI;
+onPlay/onPause only from the tap, onComplete once and re-armed · fakes, plus one ShadowMediaPlayer test (no network).
+Decisions: a non-number or speed ≤ 0 fails the action, as Dart · onError from the exception or what/extra (minor)
+Review fit: pass · Review quality: an unused error field in the port's value, removed (02f7a48)
+
+#### T9 · release.sh rows 13-14, scratch-repo test (16953fd)
+Files: scripts/release.sh · engine/test/launch-release.test.ts
+Cases: P-release → green (`bun test test/launch-release.test.ts` 5 pass, also under /bin/bash 3.2; red first: "index
+out of range: 13"; engine 813 = 812 + 1; `bash -n` clean; shellcheck's 3 SC2005 notes on untouched lines as before)
+Changed: two rows appended and nothing else: 13 `orca_video_player-ios` (mirror, `orca_video_player-ios-v`,
+ios/VERSION), 14 `orca_video_player-android` (maven, `orca_video_player-android-v`); the script derives the mirror
+orca-gateway/orca-video-player-swift, the override ORCA_VIDEO_PLAYER_SWIFT_MIRROR_URL, the artifact
+com.orcagateway:orca-video-player, swift build + swift test, and "the orca_video_player Swift mirror"; the scratch
+repo gains both VERSION files; a full stubbed release of 13 (next) and 14 (kept) against a local bare mirror checks
+the rows, mirror and JDK checks, publish messages, commit and both tags.
+Decisions: the voice test's list-end check moved from row 13 to row 15, still as strict (decision
+baseline-voice-release-list-end-edited) · a full stubbed run, not a list-only check (both auto-decided, minor)
+Review fit: pass · Review quality: pass
+
+#### T10 · Mirror PACKAGES line, LICENSE, rehearsal (89cdb9f, 38a006e rework)
+Files: scripts/swift-mirror.sh · .github/workflows/sdk-swift-mirror.yml (header only) · VP/ios/LICENSE (new)
+Cases: P-mirror → green (rehearsal SC/s17v/t10/rehearse.sh 12 of 12; red first: "tag must start with one of
+sdk-swift-v orca_voice_recorder-ios-v", then "the split has no LICENSE"; the YAML parses). Part B, against a local
+bare mirror, stops at the split's own build: "no versions of 'orca-gateway-swift' match … 0.1.0-alpha.2" (not
+released yet), nothing pushed; part C, on a stand-in sdk-swift 0.1.0-alpha.2, publishes and verifies to the end;
+sdk-swift's split, refs and messages unchanged; SwiftPM's real fingerprint store unchanged.
+Changed: the PACKAGES line orca_video_player-ios-v → orca-gateway/orca-video-player-swift,
+ORCA_VIDEO_PLAYER_SWIFT_DEPLOY_KEY, OrcaVideoPlayer · the workflow's secrets paragraph names the video's · LICENSE
+is the voice's BSL. Decisions: the stand-in under a scratch HOME and CFFIXED_USER_HOME · `info` and the workflow's
+tag regex checked in the rehearsal (both auto-decided, minor)
+Review fit: pass · Review quality: the tag row had listed every mirror, back to its one example, fixed (38a006e)
+
+#### T11 · CI matrices gain the video player (cc6bed4)
+Files: .github/workflows/native-plugins.yml
+Cases: P-ci → green (the YAML parses; a scratch check of both matrices 14 of 14, red first: both listed only the voice
+recorder; the video steps run locally: swift build + swift test --skip-build 5, 0 warnings; xcodebuild test 4 on the
+iOS 18.5 simulator, TEST SUCCEEDED; the Gradle build BUILD SUCCESSFUL; actionlint not installed)
+Changed: the ios matrix gains `plugin: orca_video_player, module: OrcaVideoPlayer`; the android matrix is
+[orca_voice_recorder, orca_video_player]; nothing else needs the video (the path filters, working directories,
+job and artifact names, scheme and report globs all come from the matrix).
+Decisions: the video entries after the voice's, in release-row order · the header comment kept, it already says a
+plugin adds one entry per matrix (both auto-decided, minor)
+Review fit: pass · Review quality: pass
+
 ### Test run
 Group 1, on feat/native-parity-s17-video after T1-T3 (SC/s17v/g1run): `cd cli && dart test` 43 pass (40 + T1's 3) ·
 `dart analyze` no issues · `cd engine && bun test` 806 pass, 0 fail · `cd sdk && flutter test` 517 pass · `flutter
@@ -125,6 +192,16 @@ BUILD SUCCESSFUL · `cd plugins/orca_video_player/ios && swift build --build-tes
 `xcodebuild test -scheme OrcaVideoPlayer` on the iOS 18.5 simulator 4 pass, TEST SUCCEEDED · `cd
 plugins/orca_video_player/android && ./gradlew build --continue` BUILD SUCCESSFUL, 6 tests · the generators leave no
 diff · the pub dry run as at baseline.
+
+Group 3, after T7-T11 (T10's rework included), on main 677d114 (SC/s17v/g3run): `cd cli && dart test` 45 pass ·
+`dart analyze` no issues · `cd engine && bun test` 813 pass, 0 fail · `cd sdk && flutter test` 517 pass · `flutter
+analyze` no issues · sdk-swift core 585, SwiftUI 489, 0 failures, 0 compiler warnings · sdk-kotlin BUILD SUCCESSFUL ·
+voice packages: swift test 24, Gradle BUILD SUCCESSFUL · the video Swift package's swift test 25, 0 warnings;
+xcodebuild test on the iOS 18.5 simulator 24, TEST SUCCEEDED · the video Gradle package BUILD SUCCESSFUL, 25 tests
+(19 + 6), lint clean · the generators leave no diff · `bash -n` of release.sh and swift-mirror.sh, shellcheck clean
+on swift-mirror.sh · every workflow parses · the pub dry run as at baseline.
+After T7's rework (0eaf4d5) and T8's (02f7a48), the two video packages again (SC/s17v/g3run2): swift test 25, 0
+warnings · xcodebuild test on the iOS 18.5 simulator 24, TEST SUCCEEDED · the Gradle package BUILD SUCCESSFUL, 19 + 6.
 
 ### Blocked
 none
