@@ -303,8 +303,7 @@ bottom right. Under it are the lines "Map tapped on lat", "Map tapped on lng", "
 "Long press at lng", "Camera moved to lat", "Camera moved to lng", "Camera moved to zoom", "Marker
 tapped:" and "Marker taps: 0", then the button "Move Camera to NYC".
 
-With a key, the walk below was seen on the API 34 Google Play image (Google Play services 23.18),
-every step as written.
+With a key, the steps below were seen on the same API 34 image:
 
 1. **The pins.** A red pin on San Francisco at the centre. Oakland's is off the map's right edge,
    across the bay: drag the map most of its width to the left and a little down to see it.
