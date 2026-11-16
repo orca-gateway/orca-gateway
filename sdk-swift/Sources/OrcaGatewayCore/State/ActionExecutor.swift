@@ -37,11 +37,14 @@ public final class ActionExecutor {
     /// The kinds this executor runs. Anything else does nothing, as an
     /// unregistered handler does in Dart. `replaceComponent` is a server
     /// response kind outside action.ts, so it is handled but never advertised.
+    /// `refetchPage` is run by the handler the page model registers; with
+    /// none it does nothing and emits no effect, as Flutter's executor awaits
+    /// a null `onRefetchPage` (sdk/lib/src/state/action_executor.dart).
     nonisolated public static let kinds: Set<String> = [
         "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
         "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
         "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
-        "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage",
+        "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage", "refetchPage",
     ]
 
     public let store: ElmStore

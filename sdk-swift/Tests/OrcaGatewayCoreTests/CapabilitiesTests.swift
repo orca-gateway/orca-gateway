@@ -93,13 +93,32 @@ final class CapabilitiesTests: XCTestCase {
         let listed = Set((implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue))
         XCTAssertEqual(Set(GeneratedCapabilities.actionKinds), listed)
         XCTAssertTrue(listed.isSubset(of: Set(Action.kinds)))
-        XCTAssertEqual(listed.count, 23)
+        // 23 until native parity step 5 advertised refetchPage (A5.6).
+        XCTAssertEqual(listed.count, 24)
         XCTAssertTrue(listed.isSuperset(of: ["switchTab", "openDrawer"]))
         XCTAssertTrue(listed.isSuperset(of: ["once", "always", "debugLog"]))
         XCTAssertTrue(listed.contains("updateSubPage"))
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).
         XCTAssertEqual(ActionExecutor.kinds, listed.union(["replaceComponent"]))
+    }
+
+    /// A5.6: refetchPage is advertised and the executor runs it as a known
+    /// kind (the page model's handler, else nothing, as Flutter awaits a null
+    /// onRefetchPage), so the engine keeps a PullToRefresh whose onRefresh is
+    /// RefetchPage (capability-filter.ts drops a node whose action kind is
+    /// not advertised).
+    func testA5_6_RefetchPageIsAdvertisedAndKnownToTheExecutor() throws {
+        let implemented = try Fixtures.json("sdk-swift/capabilities.json")
+        let listed = (implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue)
+        XCTAssertTrue(listed.contains("refetchPage"), "not in capabilities.json")
+        XCTAssertEqual(listed, listed.sorted(), "capabilities.json actionKinds unsorted")
+        XCTAssertEqual(GeneratedCapabilities.actionKinds.filter { $0 == "refetchPage" }.count, 1,
+                       "refetchPage is not advertised exactly once")
+        XCTAssertEqual(GeneratedCapabilities.actionKinds, GeneratedCapabilities.actionKinds.sorted())
+        XCTAssertTrue(ActionExecutor.kinds.contains("refetchPage"))
+        XCTAssertTrue(ActionExecutor.implements(.refetchPage))
+        XCTAssertTrue(ActionExecutor.implements(.always(.init(action: .once(.init(action: .refetchPage))))))
     }
 
     func testValueKindsTransformsAndOpsAreComplete() {

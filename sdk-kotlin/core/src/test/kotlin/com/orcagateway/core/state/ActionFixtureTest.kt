@@ -176,8 +176,8 @@ class ActionFixtureTest {
     fun implementsLooksInsideOnceAndAlways() {
         assertTrue(ActionExecutor.implements(Action.Once(Action.GoBack)))
         assertTrue(ActionExecutor.implements(Action.Always(Action.DebugLog())))
-        assertFalse(ActionExecutor.implements(Action.Once(Action.RefetchPage)))
-        assertFalse(ActionExecutor.implements(Action.Always(Action.ActionGroup(actions = listOf(Action.RefetchPage)))))
+        assertFalse(ActionExecutor.implements(Action.Once(Action.CloseDialog)))
+        assertFalse(ActionExecutor.implements(Action.Always(Action.ActionGroup(actions = listOf(Action.CloseDialog)))))
     }
 
     @Test
@@ -195,7 +195,7 @@ class ActionFixtureTest {
         executor.execute(Action.CloseDialog)
         assertEquals(state, store.state)
         assertEquals(emptyList(), seen)
-        assertFalse(ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.RefetchPage))))
+        assertFalse(ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.CloseDialog))))
         assertTrue(
             ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.SetState("a", value = j(1))))),
         )

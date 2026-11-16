@@ -111,6 +111,7 @@ public enum GeneratedCapabilities {
         "once",
         "openDrawer",
         "openUrl",
+        "refetchPage",
         "serverAction",
         "setState",
         "share",
@@ -172,5 +173,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "cae35f8dd9e0234d4fb04745b6dfe79322ed74f26e33c3089d515af07841bf86"
+    public static let capsHash = "e4a5f4798d408f65c4102aa3e335fefaf2b29580d2642e2f9032726fabab867f"
 }

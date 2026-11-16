@@ -115,7 +115,9 @@ final class ActionFixtureTests: XCTestCase {
         XCTAssertTrue(ActionExecutor.implements(.once(.init(action: .goBack))))
         XCTAssertTrue(ActionExecutor.implements(.always(.init(action: .debugLog(.init())))))
         XCTAssertFalse(ActionExecutor.implements(.once(.init(action: .closeDialog))))
-        XCTAssertFalse(ActionExecutor.implements(.always(.init(action: .once(.init(action: .refetchPage))))))
+        // Was refetchPage until native parity step 5 made it a known kind;
+        // closeDialog, as Kotlin's twin (ActionFixtureTest.kt).
+        XCTAssertFalse(ActionExecutor.implements(.always(.init(action: .once(.init(action: .closeDialog))))))
     }
 
     // MARK: baseline rules
