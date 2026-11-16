@@ -106,6 +106,7 @@ public enum GeneratedCapabilities {
         "always",
         "animateForward",
         "animateReverse",
+        "clearState",
         "conditionalAction",
         "copyToClipboard",
         "debugLog",
@@ -116,6 +117,7 @@ public enum GeneratedCapabilities {
         "once",
         "openDrawer",
         "openUrl",
+        "persistState",
         "refetchPage",
         "serverAction",
         "setState",
@@ -178,5 +180,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "d2da2c213f33a30bc3aaaf2b1d78a1f09bf367a4b8624ceac380e5c72ca2f35c"
+    public static let capsHash = "d09c9ce9219403406d59212c559377a4085a2ea127ff30dcd468dad61eca8933"
 }

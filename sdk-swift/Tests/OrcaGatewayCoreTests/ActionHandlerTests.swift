@@ -127,6 +127,7 @@ final class ActionHandlerTests: XCTestCase {
             "updateSubPage",
             // Native parity step 5 (A5.6): run by the page model's handler.
             "refetchPage",
+            "persistState", "clearState",
         ])
     }
 }
