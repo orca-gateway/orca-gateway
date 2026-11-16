@@ -283,9 +283,8 @@ Google's legacy map renderer) it then draws no pins and its camera does not move
 buttons and "Move Camera to NYC" leave it on San Francisco, and the "Camera moved to" lines stay 0. Taps
 and long presses still report their coordinates.
 
-With a key, the map on that image crashed on opening with `NoClassDefFoundError` for
-`org.apache.http.ProtocolVersion` until the library declared `org.apache.http.legacy`, which it now
-does, so a host app needs nothing for it.
+With a key, the map on that image needs Apache's HTTP client: `org.apache.http.legacy` comes from the
+library's manifest through the manifest merger, so a host app needs nothing for it.
 
 The page sets `myLocationEnabled`, so the map shows the device's position once the app holds a location
 permission. Grant it and give the emulator a position before you open the page (`geo fix` takes the
