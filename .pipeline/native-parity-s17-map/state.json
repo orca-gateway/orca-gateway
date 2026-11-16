@@ -4,7 +4,7 @@
   "idea": "Native parity step 17, plugin 3 of 4: the map plugin as separate native packages (plugins/orca_google_map/ios SwiftPM on MapKit, plugins/orca_google_map/android Gradle on Maps Compose) on the voice recorder's template, matching the Flutter plugin",
   "kind": "feature",
   "created_at": "2026-11-16T15:16:54Z",
-  "updated_at": "2026-11-16T15:24:47Z",
+  "updated_at": "2026-11-16T15:25:23Z",
   "active_session": "7317184b-fcd8-4ef3-bc8c-3dc085f8486c",
   "current": "09",
   "stages": {
@@ -44,7 +44,8 @@
       "approved_with": "standing rule (minor and patch auto-approved): all five questions minor, defaults: commands as found; commits per task stacked on PR #49; gate per group; maps-compose added in the map's own Gradle build as plan step 17 names it (the user's approved plan); after the merge the mirror repo, key, secret and an Android Maps key are the user's"
     },
     "09": {
-      "status": "pending"
+      "status": "draft",
+      "rounds": 1
     },
     "10": {
       "status": "pending"
