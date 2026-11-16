@@ -10,9 +10,8 @@ name: SDK Swift Mirror
 #   sdk-swift-v<X>           sdk-swift/ to orca-gateway-swift; built in a Linux
 #                            container, verified on Linux, macOS and the iOS
 #                            simulator.
-#   orca_<name>-ios-v<X>     plugins/<name>/ios/ to its own mirror
-#                            (orca-voice-recorder-swift,
-#                            orca-video-player-swift); built on macOS (it
+#   orca_<name>-ios-v<X>     plugins/<name>/ios/ to its own mirror (e.g.
+#                            orca-voice-recorder-swift); built on macOS (it
 #                            needs AVFoundation), verified on macOS and the
 #                            iOS simulator.
 #
