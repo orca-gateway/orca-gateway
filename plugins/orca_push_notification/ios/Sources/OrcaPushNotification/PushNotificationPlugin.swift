@@ -124,8 +124,9 @@ final class PushNotifications {
     }
 
     /// The plugin's own notifications are presented; a remote one with a
-    /// notification is shown as a local one instead, its data as the JSON
-    /// payload (Flutter's onMessage listener); nothing else is presented.
+    /// notification (aps has an alert or a sound) is shown as a local one
+    /// instead, its data as the JSON payload (Flutter's onMessage listener);
+    /// nothing else is presented.
     func willPresent(_ notification: DeliveredNotification) async -> Bool {
         let repeated = notification.identifier == lastPresented
         lastPresented = notification.identifier
@@ -133,9 +134,11 @@ final class PushNotifications {
         guard notification.isRemote, !repeated else { return false }
 
         // firebase_messaging's message: a notification when aps has an alert
-        // (a string alert is its title), the data the keys left.
-        let alert = notification.userInfo["aps"]?["alert"] ?? .null
-        guard !alert.isNull else { return false }
+        // or a sound (a string alert is its title; no alert, no title and no
+        // body), the data the keys left.
+        let aps = notification.userInfo["aps"] ?? .null
+        let alert = aps["alert"]
+        guard !alert.isNull || !aps["sound"].isNull else { return false }
         let data = notification.userInfo.filter { !Self.isMessageKey($0.key) }
         let payload = (try? JSONValue.object(data).encoded()).map { String(decoding: $0, as: UTF8.self) }
         do {

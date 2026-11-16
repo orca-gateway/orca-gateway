@@ -411,6 +411,16 @@ final class PushNotificationPluginTests: XCTestCase {
         let silent = try await h.willPresent(remote(["aps": ["content-available": 1], "link": "a"]))
         XCTAssertFalse(silent, "a remote message with no notification")
         XCTAssertEqual(h.notifications.added.count, 1, "nothing shown for either")
+
+        // A sound with no alert is a notification to firebase_messaging (its
+        // sound branch), so Flutter shows it, with no title and no body.
+        let sound = try await h.willPresent(remote(["aps": ["sound": "default"], "link": "a"]))
+        XCTAssertFalse(sound, "not presented itself")
+        XCTAssertEqual(h.notifications.added.count, 2, "shown as a local one")
+        let shown = try XCTUnwrap(h.notifications.added.last)
+        XCTAssertEqual(shown.title, "")
+        XCTAssertEqual(shown.body, "")
+        XCTAssertEqual(shown.userInfo["payload"], #"{"link":"a"}"#)
     }
 
     func testC17_4_S_AForegroundRemoteNotificationIsShownAsALocalOneWithItsDataAsJSON() async throws {
