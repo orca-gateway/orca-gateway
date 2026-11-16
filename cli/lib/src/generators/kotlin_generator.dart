@@ -37,30 +37,32 @@ class KotlinGenerator {
     }
     buf.writeln();
 
-    final imports = <String>{if (!typesOnly) 'com.orcagateway.sdk.OrcaPlugin'};
+    // The types' imports, then the stub's; sorted before they are written.
+    final imports = <String>{};
     if (widgets.isNotEmpty) {
       imports.add('com.orcagateway.core.render.ResolvedNode');
-      if (!typesOnly) {
+    }
+    if (widgets.values.any((w) => w.props.values.any(_isJson)) ||
+        actions.values.any((a) => a.params.isNotEmpty)) {
+      imports.add('com.orcagateway.core.json.JsonValue');
+    }
+    if (actions.isNotEmpty) {
+      imports.add('kotlinx.serialization.json.JsonObject');
+    }
+    if (!typesOnly) {
+      imports.add('com.orcagateway.sdk.OrcaPlugin');
+      if (widgets.isNotEmpty) {
         imports.addAll([
           'androidx.compose.foundation.text.BasicText',
           'com.orcagateway.sdk.WidgetBuilder',
         ]);
       }
-    }
-    if (widgets.values.any((w) => w.props.values.any(_isJson))) {
-      imports.add('com.orcagateway.core.json.JsonValue');
-    }
-    if (actions.isNotEmpty) {
-      imports.add('kotlinx.serialization.json.JsonObject');
-      if (!typesOnly) {
+      if (actions.isNotEmpty) {
         imports.add('com.orcagateway.core.plugins.OrcaActionHandler');
       }
-    }
-    if (actions.values.any((a) => a.params.isNotEmpty)) {
-      imports.add('com.orcagateway.core.json.JsonValue');
-    }
-    if (hasTriggers && !typesOnly) {
-      imports.add('com.orcagateway.core.plugins.TriggerDefinition');
+      if (hasTriggers) {
+        imports.add('com.orcagateway.core.plugins.TriggerDefinition');
+      }
     }
     for (final import in imports.toList()..sort()) {
       buf.writeln('import $import');
