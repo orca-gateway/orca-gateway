@@ -18,7 +18,11 @@ public enum GeneratedCapabilities {
     public static let sdkSemver = "0.1.0-alpha.1"
 
     public static let widgets: [String] = [
+        "AnimatedAlign",
         "AnimatedBuilder",
+        "AnimatedContainer",
+        "AnimatedOpacity",
+        "AnimatedSwitcher",
         "AppBar",
         "BottomNavItem",
         "BottomNavigationBar",
@@ -33,6 +37,7 @@ public enum GeneratedCapabilities {
         "Expanded",
         "FallbackPrompt",
         "GestureDetector",
+        "Hero",
         "Icon",
         "Image",
         "OutlinedButton",
@@ -139,5 +144,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "127704a41d307211cf0dc5921f1672de9203a00989330ecf454a092a73d44125"
+    public static let capsHash = "944d9c6392b1db075d4b902584fbbc16db3039bfd72c7a9cf598fd1bff2932a5"
 }

@@ -1,7 +1,11 @@
 {
   "$comment": "What this Swift build implements. gen-native-capabilities.ts advertises these widgets (each must carry the ios target in schema/widget-registry.json) and these action kinds; value kinds, transforms and BoolExpr ops are scraped from the engine like the Dart SDK's. Add a name here only in the PR that lands its implementation.",
   "widgets": [
+    "AnimatedAlign",
     "AnimatedBuilder",
+    "AnimatedContainer",
+    "AnimatedOpacity",
+    "AnimatedSwitcher",
     "AppBar",
     "BottomNavItem",
     "BottomNavigationBar",
@@ -16,6 +20,7 @@
     "Expanded",
     "FallbackPrompt",
     "GestureDetector",
+    "Hero",
     "Icon",
     "Image",
     "OutlinedButton",
