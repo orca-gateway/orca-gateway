@@ -2,9 +2,6 @@ package com.orcagateway.core.client
 
 import java.io.File
 import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 
 /**
  * A [KeyValueStore] on disk, one file per key under [directory], for what
@@ -17,9 +14,12 @@ import java.nio.file.StandardCopyOption
  * `[A-Za-z0-9_-]` written `%XX` (the dot too, so no name is `.` or `..`) and
  * the empty key named `%`, so two keys never share a file and no key
  * reaches outside [directory]. A write goes to a temporary file in
- * [directory] first, then is moved over the key's file in one atomic step,
- * so a reader sees the old text or the new one, never a part. Temporary
- * names start with `~`, which no key's name does.
+ * [directory] first, then is renamed over the key's file in one atomic step
+ * (rename(2) on Android and Linux), so a reader sees the old text or the new
+ * one, never a part. Temporary names start with `~`, which no key's name does.
+ *
+ * All file work is `java.io`, no `java.nio.file`: core ships in the Android
+ * SDK at minSdk 24, and `java.nio.file` exists on Android only from API 26.
  *
  * Thread-safe. Like the SharedPreferences store's `apply()`, it never
  * throws: a write that fails keeps what was saved before, and a file that
@@ -27,32 +27,33 @@ import java.nio.file.StandardCopyOption
  */
 public class FileKeyValueStore(public val directory: File) : KeyValueStore {
     private val lock = Any()
-    private val root: Path = directory.toPath()
 
     /** The text saved under [key], or null when there is none or it cannot be read. */
     override fun getString(key: String): String? = synchronized(lock) {
         try {
-            Files.readString(fileOf(key))
+            fileOf(key).readText(Charsets.UTF_8)
         } catch (_: IOException) {
             null
         }
     }
 
-    /** Saves [value] under [key] with an atomic move; null deletes the key's file. */
+    /** Saves [value] under [key] with an atomic rename; null deletes the key's file. */
     override fun putString(key: String, value: String?) {
         synchronized(lock) {
             try {
                 if (value == null) {
-                    Files.deleteIfExists(fileOf(key))
+                    fileOf(key).delete()
                     return
                 }
-                Files.createDirectories(root)
-                val temp = Files.createTempFile(root, "~", ".tmp")
+                directory.mkdirs()
+                // java.io wants a prefix of three characters or more.
+                val temp = File.createTempFile("~orca", ".tmp", directory)
+                var renamed = false
                 try {
-                    Files.writeString(temp, value)
-                    Files.move(temp, fileOf(key), StandardCopyOption.ATOMIC_MOVE)
+                    temp.writeText(value, Charsets.UTF_8)
+                    renamed = temp.renameTo(fileOf(key))
                 } finally {
-                    Files.deleteIfExists(temp)
+                    if (!renamed) temp.delete()
                 }
             } catch (_: IOException) {
                 // Kept as before, as SharedPreferences.apply() reports nothing.
@@ -60,7 +61,7 @@ public class FileKeyValueStore(public val directory: File) : KeyValueStore {
         }
     }
 
-    private fun fileOf(key: String): Path = root.resolve(fileName(key))
+    private fun fileOf(key: String): File = File(directory, fileName(key))
 
     private companion object {
         const val HEX = "0123456789ABCDEF"
