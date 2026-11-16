@@ -41,6 +41,9 @@ import kotlin.test.assertTrue
 private class FakeRecorder : Recorder {
     val calls = ArrayList<String>()
     var maxAmplitude = 0
+
+    /** How many times the plugin read the amplitude. */
+    var reads = 0
     private var path: String? = null
 
     override fun start(path: String) {
@@ -62,7 +65,10 @@ private class FakeRecorder : Recorder {
         calls += "resume"
     }
 
-    override fun maxAmplitude(): Int = maxAmplitude
+    override fun maxAmplitude(): Int {
+        reads++
+        return maxAmplitude
+    }
 }
 
 /** A player that plays nothing: the test moves its position and ends the file. */
@@ -297,15 +303,45 @@ class VoiceRecorderPluginTest {
         assertEquals("idle", state("memo"))
     }
 
+    /** The record package's pause() cancels its amplitude timer and resume() starts it again (record.dart:106-118). */
     @Test
     fun c17_3_pauseAndResumeRecordingMoveTheState() {
         val executor = executor()
         run(executor, "startRecording", "recorderId" to "memo")
+        val recorder = audio.recorders.single()
+        val instance = assertNotNull(plugin.recorders["memo"])
+        recorder.maxAmplitude = 32_767
+        advance(200)
+        assertEquals(0.0, instance.amplitude)
+
         run(executor, "pauseRecording", "recorderId" to "memo")
         assertEquals("paused", state("memo"))
+        recorder.maxAmplitude = 16_384
+        advance(1_000)
+        assertEquals(0.0, instance.amplitude, "no tick while paused")
+        assertEquals(1, recorder.reads)
+
         run(executor, "resumeRecording", "recorderId" to "memo")
         assertEquals("recording", state("memo"))
-        assertEquals(listOf("pause", "resume"), audio.recorders.single().calls.drop(1))
+        advance(200)
+        assertEquals(-6.0203, instance.amplitude, 1e-4, "the ticks start again on resume")
+        assertEquals(2, recorder.reads)
+
+        // A resume of a recorder that is not paused starts no second loop.
+        run(executor, "resumeRecording", "recorderId" to "memo")
+        advance(200)
+        assertEquals(3, recorder.reads, "one reading per 200 ms")
+
+        // Stop ends the ticks, and a resume after it starts none.
+        run(executor, "stopRecording", "recorderId" to "memo")
+        run(executor, "resumeRecording", "recorderId" to "memo")
+        advance(1_000)
+        assertEquals(3, recorder.reads, "no reading after stop")
+
+        assertEquals(
+            listOf("start /cache/orca_recording_memo_1000.m4a", "pause", "resume", "resume", "stop", "resume"),
+            recorder.calls,
+        )
         assertEquals(StoreState(), executor.store.state)
     }
 

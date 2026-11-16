@@ -138,7 +138,11 @@ public class VoiceRecorderPlugin internal constructor(
         instance.recorder.start(path)
         instance.startTime = audio.now()
         instance.state = "recording"
+        startAmplitudeTicks(instance)
+    }
 
+    /** The record package's `_startAmplitudeTimer`: one loop per recorder, a running one replaced. */
+    private fun startAmplitudeTicks(instance: RecorderInstance) {
         instance.amplitudeTicks?.cancel()
         instance.amplitudeTicks = scope.launch {
             while (true) {
@@ -170,6 +174,9 @@ public class VoiceRecorderPlugin internal constructor(
         val recorderId = executor.resolveString(action["recorderId"])
         if (recorderId.isEmpty()) return
         val instance = recorders[recorderId] ?: return
+        // The record package's pause() cancels its amplitude timer: no readings while paused.
+        instance.amplitudeTicks?.cancel()
+        instance.amplitudeTicks = null
         instance.recorder.pause()
         instance.state = "paused"
     }
@@ -179,6 +186,8 @@ public class VoiceRecorderPlugin internal constructor(
         if (recorderId.isEmpty()) return
         val instance = recorders[recorderId] ?: return
         instance.recorder.resume()
+        // The record package's resume() starts the timer again; only a paused recorder has ticks to bring back.
+        if (instance.state == "paused") startAmplitudeTicks(instance)
         instance.state = "recording"
     }
 
