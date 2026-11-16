@@ -223,11 +223,10 @@ final class NodeObserver: ObservableObject {
         }
     }
 
-    /// A watched key changed: redraw, and tell DevTools.
+    /// A watched key changed: redraw. The redraw resolves the node again,
+    /// and that resolution tells DevTools, with the traces (PageRenderer).
     private func watchedChanged() {
         revision += 1
-        guard OrcaDebug.isEnabled, let node = model?.renderer.node(id) else { return }
-        OrcaDebug.report(.widgetRebuild(widgetId: id, widgetType: node.type, watches: watches))
     }
 
     private func structureChanged() {

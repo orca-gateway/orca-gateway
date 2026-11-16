@@ -229,14 +229,23 @@ final class DevToolsHookTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testAWatchingNodeReportsItsRebuild() async throws {
+    /// C19.1: the pin moved to Flutter's truth. The observer only redraws
+    /// (it used to report an empty `propTraces` before the node resolved
+    /// again); the redraw resolves the node, as NodeView's body does on the
+    /// new revision, and that resolution reports the traced props.
+    func testC19_1_aWatchingNodeReportsItsTracedRebuild() async throws {
         let model = OrcaPageModel(page: try recordedPage("counter-home"))
         let count = NodeObserver(model: model, id: "5")
         OrcaDebug.reporter = recorder
         await model.fire("onTap", on: try XCTUnwrap(model.resolve("11")))?.value
         XCTAssertEqual(count.revision, 1)
+        XCTAssertEqual(recorder.of("widget_rebuild"), [], "the observer only redraws")
+        XCTAssertEqual(model.resolve("5")?["data"], "1")
         XCTAssertEqual(recorder.of("widget_rebuild"), [
-            .widgetRebuild(widgetId: "5", widgetType: "Text", watches: ["count"]),
+            .widgetRebuild(widgetId: "5", widgetType: "Text", watches: ["count"], propTraces: ["data": [
+                TraceStep(op: "state", in: "count", out: "1"), TraceStep(op: "input", out: "1"),
+                TraceStep(op: "toString", in: "1", out: "1"),
+            ]]),
         ])
         XCTAssertEqual(recorder.of("state_change"), [
             .stateChange(scope: .page, pageId: "home", key: "count", oldValue: 0, newValue: 1),
