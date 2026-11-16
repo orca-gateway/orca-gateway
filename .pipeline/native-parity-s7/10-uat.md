@@ -11,13 +11,12 @@ Hand checks pass on the `rich` page on both devices; the branch sits on main 2ca
 nothing new
 
 ### Trade-offs
-2 still with you (defaults applied): A7.4 corrected to Flutter's one-cell Table (no wire change);
-SelectableText on iOS is a read-only UITextView (word and range selection), not .textSelection.
+2 decided by you (2026-11-16, "go with your recommendation"): A7.4 corrected to Flutter's one-cell
+Table (no wire change); SelectableText on iOS is a read-only UITextView (word and range selection).
 
 ### Questions for you
 1. Merge PR #52 once its checks are green. (default: wait for your merge)
-2. Keep the Table and SelectableText defaults above. (default: yes; say so to change)
-3. After the merge: close the slice, 11 and 13-16 skipped as in s6. (default: yes)
+2. After the merge: close the slice, 11 and 13-16 skipped as in s6. (default: yes)
 
 ## Appendix
 
