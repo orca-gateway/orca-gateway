@@ -6,20 +6,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.orcagateway.core.state.SnackbarQueue
 import com.orcagateway.sdk.widgets.BackdropRecording
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
  * Where a page's snackbars go: the page's host, handed to the Scaffold that
@@ -29,11 +27,16 @@ import kotlinx.coroutines.launch
 internal val LocalOrcaSnackbars = compositionLocalOf<SnackbarHostState?> { null }
 
 /**
- * One page with its snackbar and toast. Draws the page root at the top of
- * the space it is given; a Scaffold root fills it. A snackbar shows in the
- * root Scaffold's Material 3 `SnackbarHost` (or at the bottom of the page
- * when the root is not a Scaffold) for its duration; a toast is an Android
- * `Toast` (Swift draws both as a floating message).
+ * One page, with the head of its snackbar queue. Draws the page root at the
+ * top of the space it is given; a Scaffold root fills it.
+ *
+ * The queue is the app's under a router (Flutter's root ScaffoldMessenger),
+ * else the page's own, and it runs on this view's frames. A snackbar shows
+ * in the root Scaffold's Material 3 `SnackbarHost` from when it comes in to
+ * when it starts to go; with no Scaffold on screen it is queued and timed
+ * but drawn nowhere, as Flutter in release (scaffold.dart:229-262, :360-365).
+ * A toast is an Android `Toast`, shown when it reaches the head (Swift draws
+ * it as a floating message).
  *
  * Text without a style of its own is Material 3 `bodyMedium`, as Flutter's
  * default text style; the host's `MaterialTheme`, if any, applies.
@@ -45,26 +48,26 @@ internal val LocalOrcaSnackbars = compositionLocalOf<SnackbarHostState?> { null 
 public fun OrcaPageView(model: OrcaPageModel, modifier: Modifier = Modifier) {
     val snackbars = remember { SnackbarHostState() }
     val context = LocalContext.current
-    val toast = model.toast
+    val queue = model.snackbars
+    val head = queue.head
 
     LaunchedEffect(model) { model.appeared() }
-    LaunchedEffect(toast) {
-        val shown = toast ?: return@LaunchedEffect
-        when (shown.style) {
-            OrcaToast.Style.Snackbar -> coroutineScope {
-                // Cancelling the call dismisses the snackbar: that is how a
-                // duration in milliseconds is honoured.
-                val showing = launch { snackbars.showSnackbar(shown.message, duration = SnackbarDuration.Indefinite) }
-                delay(shown.durationMillis)
-                showing.cancel()
-            }
-            OrcaToast.Style.Toast -> {
-                val length = if (shown.durationMillis > TOAST_SHORT_MILLIS) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
-                Toast.makeText(context, shown.message, length).show()
-                delay(shown.durationMillis)
-            }
+    // Time passes for the queue on frames, and only while it holds something.
+    LaunchedEffect(queue) {
+        while (true) {
+            queue.awaitWork()
+            withFrameMillis(queue::tick)
         }
-        if (model.toast === shown) model.toast = null
+    }
+    LaunchedEffect(head) {
+        if (head == null || head.style != OrcaToast.Style.Toast || !queue.take(head)) return@LaunchedEffect
+        val length = if (head.durationMillis > TOAST_SHORT_MILLIS) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+        Toast.makeText(context, head.message, length).show()
+    }
+    val bar = head?.takeIf { it.style == OrcaToast.Style.Snackbar && queue.phase != SnackbarQueue.Phase.Leaving }
+    LaunchedEffect(bar) {
+        // Shown until this effect is cancelled: when the bar starts to go.
+        if (bar != null) snackbars.showSnackbar(bar.message, duration = SnackbarDuration.Indefinite)
     }
 
     // The root can change with the tree (a server action replacing it).
@@ -76,7 +79,6 @@ public fun OrcaPageView(model: OrcaPageModel, modifier: Modifier = Modifier) {
         CompositionLocalProvider(LocalOrcaSnackbars provides if (rootIsScaffold) snackbars else null) {
             Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 if (root != null) BackdropRecording { rootModifier -> NodeView(root, model, rootModifier) }
-                if (!rootIsScaffold) SnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter))
             }
         }
     }

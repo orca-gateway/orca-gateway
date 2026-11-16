@@ -46,8 +46,9 @@ class CounterPageTest {
         compose.onNodeWithText("0").assertIsDisplayed()
         compose.onNodeWithText("Counter reset to 0").assertIsDisplayed()
 
-        // The Dart default duration, 4000 ms, then the snackbar leaves.
-        compose.mainClock.advanceTimeBy(4000)
+        // In 250 ms, the Dart default duration of 4000 counted once fully in, out 250 (Flutter's
+        // ScaffoldMessenger, snack_bar.dart:30), from the first frame after the tap: then the queue is empty.
+        compose.mainClock.advanceTimeBy(4500)
         compose.waitForIdle()
         compose.onNodeWithText("Counter reset to 0").assertDoesNotExist()
         assertNull(model.toast)
@@ -68,8 +69,15 @@ class CounterPageTest {
         assertEquals("Saved", ShadowToast.getTextOfLatestToast())
     }
 
+    /**
+     * A8.4, flipped from "a snackbar shows on a page without a Scaffold" (step 8):
+     * Flutter's ScaffoldMessenger draws a bar only in the Scaffolds registered
+     * with it (scaffold.dart:229-262); with none on screen a release build
+     * draws nothing (a debug build asserts, :360-365), but the bar is still
+     * queued and timed. So the page bottom no longer draws it.
+     */
     @Test
-    fun aSnackbarShowsOnAPageWithoutAScaffold() {
+    fun a8_4_aSnackbarOnAPageWithoutAScaffoldIsQueuedNotDrawn() {
         val model = OrcaPageModel(
             page(
                 column("0", "1"),
@@ -81,7 +89,12 @@ class CounterPageTest {
         compose.mainClock.autoAdvance = false
         compose.onNodeWithText("Greet").performClick()
         compose.mainClock.advanceTimeBy(500)
-        compose.onNodeWithText("Hello").assertIsDisplayed()
+        compose.onNodeWithText("Hello").assertDoesNotExist()
+        assertEquals("Hello", model.toast?.message, "queued")
+
+        // Timed all the same: 250 in, 4000, 250 out.
+        compose.mainClock.advanceTimeBy(4500)
+        assertNull(model.toast)
     }
 
     @Test
