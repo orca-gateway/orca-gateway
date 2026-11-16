@@ -449,6 +449,11 @@ private const val NANOS_PER_MILLI = 1_000_000.0
  * `navigate`, a `setState` of app scope) reach it, and it takes every write
  * of app state, so that node redraws on a tab change. [close] it when the
  * tree leaves the screen.
+ *
+ * Its executor saves into the router's [OrcaRouter.savedState], as Flutter's
+ * shell executor runs on the app's StateManager (orca_shell.dart): a
+ * `persistState` of an app key saves the app entry. The shell is no page, so
+ * no page entry is restored for it.
  */
 internal class ShellTree(private val router: OrcaRouter, nodes: List<ComponentNode>) : AutoCloseable {
     val model: OrcaPageModel = OrcaPageModel(
@@ -456,7 +461,10 @@ internal class ShellTree(private val router: OrcaRouter, nodes: List<ComponentNo
         store = ElmStore(StoreState(app = router.appState)),
         registry = router.plugins?.registry ?: WidgetRegistry.shared,
         client = router.client,
-    ).also { router.plugins?.install(it) }
+    ).also {
+        router.plugins?.install(it)
+        it.executor.savedState = router.savedState
+    }
 
     private var following: AutoCloseable? = null
 

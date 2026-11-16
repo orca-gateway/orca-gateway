@@ -76,7 +76,7 @@ class ModelRoundTripTest {
     @Test
     fun allActionFixturesRoundTrip() {
         val files = Fixtures.files("actions")
-        assertEquals(29, files.size, "action fixtures 01-19, 30-35 and 45-48")
+        assertEquals(32, files.size, "action fixtures 01-19, 30-35 and 45-51")
         val kinds = HashSet<String>()
         for ((name, fixture) in files) {
             // Plugin action names a fixture registers handlers for (45-47).

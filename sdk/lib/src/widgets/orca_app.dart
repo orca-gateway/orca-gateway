@@ -386,6 +386,9 @@ class _OrcaAppState extends State<OrcaApp> with WidgetsBindingObserver {
         );
       }
 
+      // The saved state is read before the first page, in every boot mode.
+      await _stateManager.loadSaved();
+
       // If config was pre-loaded (e.g. from developer's own splash), use it directly
       if (widget.preloadedConfig != null) {
         _initRouter(widget.preloadedConfig!);
@@ -442,6 +445,8 @@ class _OrcaAppState extends State<OrcaApp> with WidgetsBindingObserver {
     for (final entry in config.initialAppState.entries) {
       _stateManager.setAppState(entry.key, entry.value);
     }
+    // Saved app keys (persistState) win over the config's values.
+    _stateManager.restoreApp();
 
     final merged = mergePlugins(
       registry: widget.registry,

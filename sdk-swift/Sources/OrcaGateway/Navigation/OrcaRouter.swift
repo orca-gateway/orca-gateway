@@ -231,6 +231,19 @@ public final class OrcaRouter: ObservableObject {
     public let table: RouteTable?
     /// OrcaApp's plugins: every page this router loads is built by it.
     var plugins: OrcaPluginHost?
+    /// The flows of the config the router was made with (Flutter
+    /// `OrcaPage.flows`); empty without a config.
+    let flows: [NavFlow]
+    /// The offline cache every page loader asks first (Flutter
+    /// `OrcaPage.staticFlowManager`). OrcaApp's config boot sets it; nil for
+    /// any other router, whose pages always go to the network.
+    var staticFlowManager: StaticFlowManager?
+    /// Where this router's pages save persistState and clearState, and what
+    /// they get back when they are set up (Flutter `StateManager`'s saved
+    /// state); its saved app entry was laid over the app state when the
+    /// router was made. OrcaApp gives its own; nil saves and restores
+    /// nothing.
+    public let savedState: SavedState?
 
     /// "Now" for route entrances, in milliseconds, on the scale of
     /// `OrcaPageModel.milliseconds(_:)`: the time a push is stamped with.
@@ -275,11 +288,17 @@ public final class OrcaRouter: ObservableObject {
     /// the link's location instead of `path`, which is never requested, and
     /// `onDeeplink` is told with `isColdStart` set. No route event: without
     /// a config there is none for the boot.
+    ///
+    /// With a `savedState` the app state starts as its saved app entry, so
+    /// the first page's request carries it.
     public init(client: OrcaClient, path: String = "home", system: SystemActions? = nil,
-                onDeeplink: ((DeeplinkEvent) -> Void)? = nil, link: URL? = nil) {
+                onDeeplink: ((DeeplinkEvent) -> Void)? = nil, link: URL? = nil, savedState: SavedState? = nil) {
         self.client = client
+        self.savedState = savedState
+        self.appState = Self.restored([:], savedState)
         self.system = system ?? .live
         self.table = nil
+        self.flows = []
         self.tabs = []
         self.hasDrawer = false
         let root = OrcaRoute(path)
@@ -293,8 +312,10 @@ public final class OrcaRouter: ObservableObject {
     }
 
     /// Boot from the server's config (`OrcaClient.fetchConfig`), as Flutter's
-    /// `OrcaApp._initRouter`: seed `initialAppState`, then show
-    /// `initialRoute` resolved against it, the page chain as root + stack.
+    /// `OrcaApp._initRouter`: seed `initialAppState`, lay the saved app
+    /// entry of `savedState` over it (its keys win, the ones it lacks are
+    /// added), then show `initialRoute` resolved against that, the page
+    /// chain as root + stack: a redirect sees the saved values.
     ///
     /// With a `link` (the deep link that opened the app) the router boots at
     /// the link's location instead of `initialRoute`: the same seeding, the
@@ -302,21 +323,27 @@ public final class OrcaRouter: ObservableObject {
     /// `isColdStart` set, after the boot's route event.
     public init(client: OrcaClient, config: NavConfig, system: SystemActions? = nil,
                 onRouteChanged: ((RouteChangeEvent) -> Void)? = nil,
-                onDeeplink: ((DeeplinkEvent) -> Void)? = nil, link: URL? = nil) {
+                onDeeplink: ((DeeplinkEvent) -> Void)? = nil, link: URL? = nil,
+                savedState: SavedState? = nil) {
         self.client = client
+        self.savedState = savedState
         self.system = system ?? .live
         let table = RouteTable(config)
         self.table = table
+        self.flows = config.flows
         self.tabs = config.tabs
         self.hasDrawer = !config.tabs.isEmpty
             && !(config.drawerItems.isEmpty && config.drawerComponents.isEmpty)
-        self.appState = config.initialAppState
+        // Flutter restores right after the initialAppState loop, before the
+        // router: redirects and guards see the saved values.
+        let initial = Self.restored(config.initialAppState, savedState)
+        self.appState = initial
         self.onRouteChanged = onRouteChanged
         self.onDeeplink = onDeeplink
         var shell = TabShell(table: table)
         // On a fresh shell a link is the boot: a `go` to its location.
-        let opened = link.map { shell.open(link: DeepLink.location(of: $0), appState: config.initialAppState) }
-        let change = opened?.change ?? shell.go(config.initialRoute, appState: config.initialAppState)
+        let opened = link.map { shell.open(link: DeepLink.location(of: $0), appState: initial) }
+        let change = opened?.change ?? shell.go(config.initialRoute, appState: initial)
         // `go` always leaves a page on screen, if only "not found".
         let first = Self.route(shell.visible[0], id: nil)
         self.root = first
@@ -334,12 +361,28 @@ public final class OrcaRouter: ObservableObject {
         }
     }
 
+    /// `scope` with the saved app entry of `savedState` laid over it, the
+    /// keys it lacks added (Flutter `StateManager.restoreApp`).
+    private static func restored(_ scope: [String: JSONValue], _ savedState: SavedState?) -> [String: JSONValue] {
+        guard let savedState else { return scope }
+        let store = ElmStore(app: scope)
+        savedState.restore(into: store)
+        return store.state.app
+    }
+
     /// The loader of a route, made the first time it is asked for.
     public func loader(for route: OrcaRoute) -> OrcaPageLoader {
         if let existing = loaders[route.id] { return existing }
         let loader = OrcaPageLoader(client: client, path: route.path, router: self)
         loaders[route.id] = loader
         return loader
+    }
+
+    /// The page the offline cache holds for a route path (no leading slash,
+    /// the cache's key): nil without a cache, for a dynamic route and for a
+    /// page no static flow saved. Throws when the saved pages do not decode.
+    func cachedPage(_ path: String) throws -> PageResponse? {
+        try staticFlowManager?.getCachedPage(path, flows: flows)
     }
 
     /// The route on top: the one a user is looking at.

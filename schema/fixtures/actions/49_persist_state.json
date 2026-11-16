@@ -1,0 +1,83 @@
+{
+  "name": "persist-state",
+  "description": "persistState saves a snapshot of a page or app key in local or session storage, moves a key saved in the other storage, saves nothing for a key the scope does not hold, and keeps the saved copy when setState changes the live value later. Native parity step 14 (C14.6).",
+  "pageId": "home",
+  "state": {
+    "page": {
+      "count": 3,
+      "name": "x"
+    },
+    "app": {
+      "theme": "dark"
+    }
+  },
+  "saved": {
+    "local": {
+      "orca_saved_page_home": {
+        "name": "old"
+      }
+    }
+  },
+  "actions": [
+    {
+      "type": "persistState",
+      "key": "count",
+      "scope": "page",
+      "storage": "local"
+    },
+    {
+      "type": "persistState",
+      "key": "theme",
+      "scope": "app",
+      "storage": "session"
+    },
+    {
+      "type": "persistState",
+      "key": "missing",
+      "scope": "page",
+      "storage": "local"
+    },
+    {
+      "type": "persistState",
+      "key": "name",
+      "scope": "page",
+      "storage": "session"
+    },
+    {
+      "type": "setState",
+      "key": "count",
+      "scope": "page",
+      "value": {
+        "type": "static",
+        "value": 4
+      }
+    }
+  ],
+  "expected": {
+    "state": {
+      "page": {
+        "count": 4,
+        "name": "x"
+      },
+      "app": {
+        "theme": "dark"
+      }
+    },
+    "effects": [],
+    "saved": {
+      "local": {
+        "orca_saved_page_home": {
+          "count": 3
+        }
+      },
+      "session": {
+        "orca_saved_app": {
+          "theme": "dark"
+        },
+        "orca_saved_page_home": {
+          "name": "x"
+        }
+      }
+    }
+  }
+}

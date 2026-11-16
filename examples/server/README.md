@@ -50,6 +50,7 @@ The server runs on `http://localhost:8080` by default.
 | `tabs.ts`             | Two apps, `tabs` and `tabs-server`, over the same pages. `tabs`: the SDK's own tab bar and drawer; each tab keeps its page (a counter, a scroll position, typed text), `SwitchTab`, `OpenDrawer`, the `_tabIndex` app state, routes over the tabs, a page with its own drawer, end drawer and bottom bar. `tabs-server`: the same with the tab bar and the drawer sent by the server |
 | `reorder.ts`          | App `reorder`: one `ReorderableListView` of five rows. The order is a list in page state; a drop sends `oldIndex` and `newIndex` to a server action, which answers with the moved list |
 | `subpage.ts`          | App `subpage`: a host page with a `SubPage` showing `detail/a`. Both have a page state `count` that do not clash, the sub-page shows a param it was sent, a server action inside it answers with a setState, and the host replaces it with `detail/b` or joins `detail/c` below it (`updateSubPage`) |
+| `saved-state.ts`      | App `saved-state`: `PersistState` and `ClearState`. A page-state count saved on the device (kept after a relaunch) or for the session (kept until the app process ends), or forgotten; an app-state visits count saved on the device; a second page to leave to and come back from |
 | `orca_google_map.ts`  | Google Maps integration via the map plugin                    |
 | `index.ts`            | Entry point — registers all examples into a single engine     |
 

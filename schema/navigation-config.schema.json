@@ -27,7 +27,7 @@
     "forceUpdate": {
       "type": "boolean",
       "default": false,
-      "description": "When true, the SDK forces all clients to re-fetch config on next launch."
+      "description": "When true, GET /version answers forceUpdate: true, and an SDK that checks versions at boot (offline mode) blocks the app with its force-update screen instead of booting it. Nothing is re-fetched."
     },
     "tabBar": {
       "description": "Custom server-driven tab bar widget tree. If omitted, the SDK renders a default BottomNavigationBar from the tabs array.",

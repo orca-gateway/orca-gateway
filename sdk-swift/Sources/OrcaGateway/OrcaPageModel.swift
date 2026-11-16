@@ -195,6 +195,18 @@ public final class OrcaPageModel: ObservableObject {
 
     public var page: PageResponse { renderer.page }
 
+    /// Save persistState and clearState to `savedState` from now on, and
+    /// lay the page's saved entry over its seed (Flutter
+    /// `StateManager.initPage`, which restores at every seed). The loader
+    /// runs it on each model it makes, from the network or the cache, on a
+    /// first load and a reload, before the page is shown. A SubPage's state
+    /// has no entry of its own. Nil, or a frozen copy, changes nothing.
+    func useSavedState(_ savedState: SavedState?) {
+        guard let savedState, !isInert else { return }
+        executor.savedState = savedState
+        savedState.restorePage(into: store, pageId: page.pageId)
+    }
+
     /// The renderer's node ids in Flutter's node map order, which the
     /// renderer's dictionary does not keep: a Dart map keeps insertion order,
     /// and setting a key it holds keeps its place. `apply` keeps it in step.
@@ -452,8 +464,9 @@ public final class OrcaPageModel: ObservableObject {
     /// model (Flutter `OrcaPage.onRefetchPage`: `initPage`, then
     /// `componentStore.init`), so the view, the executor and the action
     /// awaiting the refetch stay. Page state goes back to the new page's
-    /// initial values; app state is kept, only its unset keys are seeded.
-    /// `once` keys survive, as the executor does (Flutter forgets them because
+    /// initial values, with its saved entry laid over them as `useSavedState`
+    /// does (`initPage` restores at every seed); app state is kept, only its
+    /// unset keys are seeded. `once` keys survive, as the executor does (Flutter forgets them because
     /// it builds a new executor on every OrcaPage build, not because of the refetch).
     /// The page, and so its title, becomes the new one (Flutter keeps the first response's title).
     /// The pages mounted in SubPages stay, their nodes and their state keys,
@@ -467,6 +480,7 @@ public final class OrcaPageModel: ObservableObject {
         renderer = renderer.replacing(with: page, keep: mounted)
         store.pageId = page.pageId
         store.seed(page.state)
+        if !isInert { executor.savedState?.restorePage(into: store, pageId: page.pageId) }
         if !carried.isEmpty { store.dispatch(carried) }
         var seen: Set<String> = []
         let kept = nodeOrder.filter { mounted($0) && renderer.nodes[$0] != nil && seen.insert($0).inserted }

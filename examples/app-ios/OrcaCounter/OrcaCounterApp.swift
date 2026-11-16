@@ -8,14 +8,21 @@ import UIKit
 /// Any example app on that server runs here too: set ORCA_APP_ID and
 /// ORCA_PATH (for example `basic-actions` and `home`, or `server-actions`
 /// and `shop`) in the scheme, or as SIMCTL_CHILD_ORCA_APP_ID and
-/// SIMCTL_CHILD_ORCA_PATH for `simctl launch`. ORCA_OFFLINE=1 runs the
-/// version check at boot (the force-update screen when the server answers
-/// forceUpdate), and ORCA_SESSIONS=1 reports session starts and ends.
+/// SIMCTL_CHILD_ORCA_PATH for `simctl launch`. ORCA_OFFLINE=1 turns on
+/// `enableOffline`: with a path the version check at boot (the force-update
+/// screen when the server answers forceUpdate), with ORCA_BOOT=config the
+/// offline boot as well (the saved config and static pages; see "Offline" in
+/// the README). ORCA_SESSIONS=1 reports session starts and ends.
 ///
 /// ORCA_BOOT=config starts from the server's navigation config instead of a
 /// path (the host passes `path: nil`): its `initialRoute` is the first page and its `initialAppState` is
 /// seeded. Use it with ORCA_APP_ID=navigation (`examples/server/navigation.ts`);
 /// ORCA_PATH is not read then. The two switches above work in both modes.
+///
+/// ORCA_PRELOAD=1, with ORCA_BOOT=config only, runs that offline boot in the
+/// host instead (`HostPreload` below): its own splash awaits `preload`, then
+/// OrcaApp gets the config and the cache. It implies the offline cache, with
+/// or without ORCA_OFFLINE. Try both with ORCA_APP_ID=static-flows.
 ///
 /// Debug builds start Orca DevTools (ORCA_DEVTOOLS, ORCA_DEVTOOLS_HOST in
 /// `init`). ORCA_OVERLAY=1 draws the load-time chip at the bottom right of
@@ -57,15 +64,29 @@ struct OrcaCounterApp: App {
         WindowGroup {
             let path: String? = Self.setting("ORCA_BOOT", "path") == "config"
                 ? nil : Self.setting("ORCA_PATH", "home")
-            OrcaApp(
-                client: Self.client, path: path,
-                enableOffline: Self.isOn("ORCA_OFFLINE"),
-                enableSessionTracking: Self.isOn("ORCA_SESSIONS"),
-                onDeeplink: Self.logDeeplink,
-                plugins: [BadgePlugin(), DeviceActionsPlugin()],
-                splashView: Self.isOn("ORCA_SPLASH") ? { AnyView(HostSplash()) } : nil,
-                colorScheme: Self.colorScheme, locale: Self.locale)
+            if path == nil && Self.isOn("ORCA_PRELOAD") {
+                HostPreload(client: Self.client) { config, cache in
+                    Self.app(path: nil, preloadedConfig: config, staticFlowManager: cache)
+                }
+            } else {
+                Self.app(path: path)
+            }
         }
+    }
+
+    /// OrcaApp with the switches above. ORCA_PRELOAD's host gives it the
+    /// config and the cache its own preload used.
+    static func app(path: String?, preloadedConfig: NavConfig? = nil,
+                    staticFlowManager: StaticFlowManager? = nil) -> OrcaApp {
+        OrcaApp(
+            client: client, path: path,
+            enableOffline: isOn("ORCA_OFFLINE"),
+            preloadedConfig: preloadedConfig, staticFlowManager: staticFlowManager,
+            enableSessionTracking: isOn("ORCA_SESSIONS"),
+            onDeeplink: logDeeplink,
+            plugins: [BadgePlugin(), DeviceActionsPlugin()],
+            splashView: isOn("ORCA_SPLASH") ? { AnyView(HostSplash()) } : nil,
+            colorScheme: colorScheme, locale: locale)
     }
 
     /// ORCA_APP_ID's app with ORCA_API_KEY. ORCA_TIMEOUT sets the timeout
@@ -143,6 +164,46 @@ private struct HostSplash: View {
             .foregroundColor(.white)
         }
         .accessibilityIdentifier("hostSplash")
+    }
+}
+
+// MARK: - ORCA_PRELOAD
+
+/// The host's own splash for ORCA_PRELOAD=1: it awaits `preload` (Dart
+/// `OrcaApp.preload`) over `FileKeyValueStore.applicationSupport()`, the store
+/// OrcaApp's `enableOffline` uses, then shows `app` with the config and the
+/// same cache, so OrcaApp asks for nothing and its first frame is the first
+/// page. A force update and a failed preload are the host's to show, each as
+/// one plain line; offline with nothing saved the line is the error's
+/// "No network and no cached config available". Relaunch to try again.
+struct HostPreload<Content: View>: View {
+    let client: OrcaClient
+    @ViewBuilder let app: (NavConfig, StaticFlowManager) -> Content
+    @State private var cache = StaticFlowManager(store: FileKeyValueStore.applicationSupport())
+    /// nil while the splash shows.
+    @State private var result: Result<PreloadResult, Error>?
+
+    var body: some View {
+        switch result {
+        case nil:
+            VStack(spacing: 16) {
+                ProgressView()
+                Text("Checking version...")
+            }
+            .task {
+                do {
+                    result = .success(try await preload(client: client, cache: cache))
+                } catch {
+                    result = .failure(error)
+                }
+            }
+        case .success(.success(let config)):
+            app(config, cache)
+        case .success(.forceUpdate):
+            Text("Update required")
+        case .failure(let error):
+            Text(error.localizedDescription).multilineTextAlignment(.center).padding()
+        }
     }
 }
 

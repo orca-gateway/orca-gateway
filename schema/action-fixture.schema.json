@@ -72,6 +72,25 @@
         "minLength": 1
       }
     },
+    "saved": {
+      "$ref": "#/definitions/SavedStorages"
+    },
+    "load": {
+      "type": "object",
+      "description": "Set state up like a boot and then a page load, in place of seeding it as is: app state from `state.app`, the saved app entry restored over it, then the page `pageId` set up from `state` with its saved entry restored (a saved key replaces the declared initial or is added). App-scoped definitions keep each SDK's rule: set only while the app key is null. With `load`, `state.page` is {}. Absent: nothing is restored. Native parity step 14.",
+      "required": [
+        "state"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "type": "array",
+          "items": {
+            "$ref": "page-response.schema.json#/definitions/StateDefinition"
+          }
+        }
+      }
+    },
     "actions": {
       "type": "array",
       "minItems": 1,
@@ -111,6 +130,9 @@
               }
             ]
           }
+        },
+        "saved": {
+          "$ref": "#/definitions/SavedStorages"
         }
       }
     }
@@ -212,6 +234,29 @@
       },
       "additionalProperties": false,
       "description": "Record a handler registered from `handlers` appends when it runs: the name it was registered under and the raw action it received (type as sent, unresolved)."
+    },
+    "SavedStorages": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "local": {
+          "$ref": "#/definitions/SavedEntries"
+        },
+        "session": {
+          "$ref": "#/definitions/SavedEntries"
+        }
+      },
+      "description": "The saved storages of persistState / clearState (native parity step 14): `local` (the platform's persistent store) and `session` (a process-wide map, reset between fixtures). Top-level `saved` is what they hold before the actions (absent: both empty). `expected.saved` is what they hold after, compared exactly: an entry not listed must not exist and an absent storage is empty (absent: not compared). Neither action emits an effect."
+    },
+    "SavedEntries": {
+      "type": "object",
+      "patternProperties": {
+        "^orca_saved_(app|page_.+)$": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Entries by name, each a JSON object {key: value}: `orca_saved_app` holds app state, `orca_saved_page_<pageId>` a page's state."
     }
   }
 }

@@ -167,21 +167,29 @@ class CapabilitiesTest {
         assertEquals(emptySet(), A5 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
+    /**
+     * C14.6: native parity step 14 implements persistState and clearState
+     * (SavedState), so the pin moves from 24 to 26; Swift advertises the
+     * same two in the same step.
+     */
     @Test
-    fun actionKindsMatchTheImplementedList() {
+    fun c14_6_actionKindsMatchTheImplementedList() {
         val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["actionKinds"])
         assertEquals(listed, GeneratedCapabilities.actionKinds.toSet())
         assertTrue(Action.kinds.toSet().containsAll(listed), "not wire kinds: ${listed - Action.kinds.toSet()}")
         // S12 added animateForward and animateReverse: 20 to 22. B13.5-K: S13 added updateSubPage, 23.
-        // Step 5 added refetchPage (A5.6): 24.
-        assertEquals(24, listed.size)
+        // Step 5 added refetchPage (A5.6): 24. Step 14 added persistState and clearState: 26.
+        assertEquals(26, listed.size)
         assertTrue(listed.containsAll(setOf("animateForward", "animateReverse")))
         assertTrue("updateSubPage" in listed, "missing: updateSubPage")
         assertTrue("refetchPage" in listed, "missing: refetchPage")
         assertTrue(listed.containsAll(setOf("switchTab", "openDrawer")))
         // Step 2 added the fire-mode wrappers and the debugLog effect.
         assertTrue(listed.containsAll(setOf("once", "always", "debugLog")), "missing: ${setOf("once", "always", "debugLog") - listed}")
-        // Swift's twin: the iOS SDK advertises the same 24 kinds.
+        // Step 14 added the saved-state actions.
+        assertTrue(listed.containsAll(setOf("persistState", "clearState")), "missing: ${setOf("persistState", "clearState") - listed}")
+        assertEquals(GeneratedCapabilities.actionKinds.sorted(), GeneratedCapabilities.actionKinds, "the generator sorts the kinds")
+        // Swift's twin: the iOS SDK advertises the same 26 kinds.
         assertEquals(strings(json("sdk-swift/capabilities.json").jsonObject["actionKinds"]), listed)
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).

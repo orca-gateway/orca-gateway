@@ -113,11 +113,14 @@ final class CapabilitiesTests: XCTestCase {
         let listed = Set((implemented["actionKinds"].arrayValue ?? []).compactMap(\.stringValue))
         XCTAssertEqual(Set(GeneratedCapabilities.actionKinds), listed)
         XCTAssertTrue(listed.isSubset(of: Set(Action.kinds)))
-        // 23 until native parity step 5 advertised refetchPage (A5.6).
-        XCTAssertEqual(listed.count, 24)
+        // 23 before step 5's refetchPage (A5.6), 24 before step 14's persistState and clearState.
+        XCTAssertEqual(listed.count, 26)
         XCTAssertTrue(listed.isSuperset(of: ["switchTab", "openDrawer"]))
         XCTAssertTrue(listed.isSuperset(of: ["once", "always", "debugLog"]))
         XCTAssertTrue(listed.contains("updateSubPage"))
+        // C14.6 (S8): native parity step 14 advertises the saved-state pair.
+        XCTAssertTrue(listed.isSuperset(of: ["persistState", "clearState"]))
+        XCTAssertEqual(GeneratedCapabilities.actionKinds, GeneratedCapabilities.actionKinds.sorted())
         // The executor runs exactly what is advertised, plus the server-only
         // replaceComponent (not in action.ts, so never advertised).
         XCTAssertEqual(ActionExecutor.kinds, listed.union(["replaceComponent"]))

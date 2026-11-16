@@ -10,6 +10,7 @@ import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ActionList
 import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.models.StateScope
 import com.orcagateway.core.plugins.OrcaActionHandler
 import com.orcagateway.core.render.ComponentMutation
 import com.orcagateway.core.resolver.ValueResolver
@@ -89,6 +90,14 @@ public class ActionExecutor(
      * while DevTools is off; null lists none.
      */
     public var pageNodes: (() -> Collection<ComponentNode>)? = null
+
+    /**
+     * Where `persistState` saves and `clearState` removes saved copies (page
+     * scope: [store]'s `pageId`). Null saves nothing: `persistState` does
+     * nothing and `clearState` only nulls the live key. Neither emits an
+     * effect.
+     */
+    public var savedState: SavedState? = null
 
     private val reducer = ActionReducer()
     private var eventData: Map<String, JsonValue>? = null
@@ -216,6 +225,16 @@ public class ActionExecutor(
                     transformTrace = trace
                     affectedWidgets = watchers(action.key)
                 }
+            }
+
+            is Action.PersistState -> savedState?.persist(
+                action.key, action.scope ?: StateScope.Page, store.pageId, SavedState.Storage.of(action.storage), from = store,
+            )
+
+            is Action.ClearState -> {
+                val scope = action.scope ?: StateScope.Page
+                store.commit(store.state.setting(action.key, JsonValue.Null, scope))
+                savedState?.clear(action.key, scope, store.pageId)
             }
 
             is Action.ShowSnackbar, is Action.ShowToast -> {
@@ -512,6 +531,7 @@ public class ActionExecutor(
             "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
             "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
             "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage", "refetchPage",
+            "persistState", "clearState",
         )
 
         /** True when the action and everything nested in it is implemented. */

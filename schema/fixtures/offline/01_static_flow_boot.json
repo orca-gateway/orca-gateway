@@ -1,0 +1,2193 @@
+{
+  "name": "static-flow-boot",
+  "description": "The boot of an app with offline support: the version check against the saved flow versions, then the config from the store or from /config, what is saved, and which paths the page cache serves afterwards. One static flow \"main\" (home and about pre-rendered, profile dynamic), as examples/server/static-flows.ts serves it with small pages.",
+  "cases": [
+    {
+      "name": "first online boot",
+      "description": "C14.1, C14.2. Nothing saved. /version is stale against the empty saved versions, so the whole /config is fetched and saved: its body text, the versions of the flows that have one, and the pre-rendered pages of the static flow. Right after the boot the static pages are served from the cache; the dynamic route and an unknown path are not.",
+      "saved": {},
+      "version": {
+        "status": 200,
+        "body": {
+          "flows": {
+            "main": 4
+          }
+        }
+      },
+      "config": {
+        "status": 200,
+        "body": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "requests": [
+          "version",
+          "config"
+        ],
+        "result": {
+          "config": {
+            "main": 4
+          }
+        },
+        "saved": {
+          "orca_nav_config": "config",
+          "orca_flow_versions": {
+            "main": 4
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": "about",
+          "profile": null,
+          "settings": null
+        }
+      }
+    },
+    {
+      "name": "fresh: saved versions equal the remote ones",
+      "description": "C14.3. Every remote flow version equals the saved one: the saved config is the result and /config is not requested. Nothing is written. The pages are served from the store.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 4
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          },
+          "about": {
+            "pageId": "about",
+            "title": "About",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "About"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": {
+        "status": 200,
+        "body": {
+          "flows": {
+            "main": 4
+          }
+        }
+      },
+      "expected": {
+        "requests": [
+          "version"
+        ],
+        "result": {
+          "config": {
+            "main": 4
+          }
+        },
+        "saved": {
+          "orca_nav_config": "saved",
+          "orca_flow_versions": {
+            "main": 4
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": "about",
+          "profile": null,
+          "settings": null
+        }
+      }
+    },
+    {
+      "name": "fresh with no saved config",
+      "description": "C14.3. The versions match but no config text is saved: /config is fetched and everything is saved, as on a first boot.",
+      "saved": {
+        "orca_flow_versions": {
+          "main": 4
+        }
+      },
+      "version": {
+        "status": 200,
+        "body": {
+          "flows": {
+            "main": 4
+          }
+        }
+      },
+      "config": {
+        "status": 200,
+        "body": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "requests": [
+          "version",
+          "config"
+        ],
+        "result": {
+          "config": {
+            "main": 4
+          }
+        },
+        "saved": {
+          "orca_nav_config": "config",
+          "orca_flow_versions": {
+            "main": 4
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": "about",
+          "profile": null,
+          "settings": null
+        }
+      }
+    },
+    {
+      "name": "stale: a flow version moved",
+      "description": "C14.3. Saved main 3 (its pages: home only), remote main 4: the whole /config is fetched and saved again; the pages of main are replaced by the new ones, so about is now served.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 3,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 3
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": {
+        "status": 200,
+        "body": {
+          "flows": {
+            "main": 4
+          }
+        }
+      },
+      "config": {
+        "status": 200,
+        "body": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "requests": [
+          "version",
+          "config"
+        ],
+        "result": {
+          "config": {
+            "main": 4
+          }
+        },
+        "saved": {
+          "orca_nav_config": "config",
+          "orca_flow_versions": {
+            "main": 4
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": "about",
+          "profile": null,
+          "settings": null
+        }
+      }
+    },
+    {
+      "name": "offline with a saved config",
+      "description": "C14.1, C14.2. A cold start after one online boot, the network off (/version fails to connect): the saved config is the result, nothing is requested after /version and nothing is written. Static pages, visited or not, are served from the store; profile is not.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 4
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          },
+          "about": {
+            "pageId": "about",
+            "title": "About",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "About"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": "fail",
+      "expected": {
+        "requests": [
+          "version"
+        ],
+        "result": {
+          "config": {
+            "main": 4
+          }
+        },
+        "saved": {
+          "orca_nav_config": "saved",
+          "orca_flow_versions": {
+            "main": 4
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": "about",
+          "profile": null,
+          "settings": null
+        }
+      }
+    },
+    {
+      "name": "offline is any /version failure, an error status too",
+      "description": "C14.2. There is no connectivity check: any /version failure, here a 500, is the offline boot. The saved config is the result.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 4
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          },
+          "about": {
+            "pageId": "about",
+            "title": "About",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "About"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": {
+        "status": 500,
+        "body": {
+          "error": "Internal Server Error"
+        }
+      },
+      "expected": {
+        "requests": [
+          "version"
+        ],
+        "result": {
+          "config": {
+            "main": 4
+          }
+        },
+        "saved": {
+          "orca_nav_config": "saved",
+          "orca_flow_versions": {
+            "main": 4
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": "about",
+          "profile": null,
+          "settings": null
+        }
+      }
+    },
+    {
+      "name": "offline with nothing saved",
+      "description": "C14.2, C14.5. /version fails and no config is saved: the boot fails with this exact message (orca_app.dart preload) and nothing is written.",
+      "saved": {},
+      "version": "fail",
+      "expected": {
+        "requests": [
+          "version"
+        ],
+        "result": {
+          "error": "No network and no cached config available"
+        },
+        "saved": {},
+        "serves": {}
+      }
+    },
+    {
+      "name": "force update wins over a stale version",
+      "description": "C14.5. /version says forceUpdate: the result is forceUpdate, whatever the versions say (main moved from 3 to 4 here). /config is not requested and nothing is written.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 3,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 3
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          },
+          "about": {
+            "pageId": "about",
+            "title": "About",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "About"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": {
+        "status": 200,
+        "body": {
+          "flows": {
+            "main": 4
+          },
+          "forceUpdate": true
+        }
+      },
+      "expected": {
+        "requests": [
+          "version"
+        ],
+        "result": "forceUpdate",
+        "saved": {
+          "orca_nav_config": "saved",
+          "orca_flow_versions": {
+            "main": 3
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ]
+        },
+        "serves": {}
+      }
+    },
+    {
+      "name": "cleanup: a versioned flow gone from the refetched config",
+      "description": "C14.4. Saved versions {main: 4, old: 2} with the pages of both; remote {main: 5} and a /config without old: the pages of old are deleted and the versions are {main: 5}.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "old",
+              "routes": [
+                {
+                  "path": "legacy",
+                  "requiredAppState": []
+                }
+              ],
+              "version": 2,
+              "isStatic": true,
+              "pages": {
+                "legacy": {
+                  "pageId": "legacy",
+                  "title": "Legacy",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Legacy"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 4,
+          "old": 2
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          },
+          "about": {
+            "pageId": "about",
+            "title": "About",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "About"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        },
+        "orca_pages_old": {
+          "legacy": {
+            "pageId": "legacy",
+            "title": "Legacy",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Legacy"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": {
+        "status": 200,
+        "body": {
+          "flows": {
+            "main": 5
+          }
+        }
+      },
+      "config": {
+        "status": 200,
+        "body": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 5,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "requests": [
+          "version",
+          "config"
+        ],
+        "result": {
+          "config": {
+            "main": 5
+          }
+        },
+        "saved": {
+          "orca_nav_config": "config",
+          "orca_flow_versions": {
+            "main": 5
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": "about",
+          "profile": null,
+          "settings": null,
+          "legacy": null
+        }
+      }
+    },
+    {
+      "name": "an unversioned flow gone from the config keeps its pages",
+      "description": "C14.4. Cleanup walks the saved versions, which hold only flows that had a version. The static flow legacy never had one, so when it is gone from the refetched config its pages stay in the store. They are not served: the cache only looks in the flows of the config.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "legacy",
+              "routes": [
+                {
+                  "path": "legacy",
+                  "requiredAppState": []
+                }
+              ],
+              "isStatic": true,
+              "pages": {
+                "legacy": {
+                  "pageId": "legacy",
+                  "title": "Legacy",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Legacy"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 4
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          },
+          "about": {
+            "pageId": "about",
+            "title": "About",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "About"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        },
+        "orca_pages_legacy": {
+          "legacy": {
+            "pageId": "legacy",
+            "title": "Legacy",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Legacy"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": {
+        "status": 200,
+        "body": {
+          "flows": {
+            "main": 5
+          }
+        }
+      },
+      "config": {
+        "status": 200,
+        "body": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 5,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "requests": [
+          "version",
+          "config"
+        ],
+        "result": {
+          "config": {
+            "main": 5
+          }
+        },
+        "saved": {
+          "orca_nav_config": "config",
+          "orca_flow_versions": {
+            "main": 5
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ],
+          "orca_pages_legacy": [
+            "legacy"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": "about",
+          "profile": null,
+          "settings": null,
+          "legacy": null
+        }
+      }
+    },
+    {
+      "name": "a dynamic route is never served, even with a saved page",
+      "description": "C14.4. The server leaves dynamic routes out of pages; the client also keeps the set of dynamic paths of the static flows and never serves them. Here the store holds a page for profile (as if saved before the route turned dynamic) and the config marks profile dynamic: it is not served.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 4
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          },
+          "about": {
+            "pageId": "about",
+            "title": "About",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "About"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          },
+          "profile": {
+            "pageId": "profile",
+            "title": "Profile",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Profile"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": {
+        "status": 200,
+        "body": {
+          "flows": {
+            "main": 4
+          }
+        }
+      },
+      "expected": {
+        "requests": [
+          "version"
+        ],
+        "result": {
+          "config": {
+            "main": 4
+          }
+        },
+        "saved": {
+          "orca_nav_config": "saved",
+          "orca_flow_versions": {
+            "main": 4
+          },
+          "orca_pages_main": [
+            "about",
+            "home",
+            "profile"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": "about",
+          "profile": null,
+          "settings": null
+        }
+      }
+    },
+    {
+      "name": "the cache reads the saved pages, not the pages inside the config",
+      "description": "C14.1. Offline, the saved config carries home and about in its pages but the store's pages of main hold home only: about is not served. The page cache reads orca_pages_<flow>, never the pages of the config.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 4
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": "fail",
+      "expected": {
+        "requests": [
+          "version"
+        ],
+        "result": {
+          "config": {
+            "main": 4
+          }
+        },
+        "saved": {
+          "orca_nav_config": "saved",
+          "orca_flow_versions": {
+            "main": 4
+          },
+          "orca_pages_main": [
+            "home"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": null,
+          "profile": null,
+          "settings": null
+        }
+      }
+    },
+    {
+      "name": "quirk: an unversioned flow keeps the boot stale",
+      "description": "C14.3, Flutter's quirk, pinned as Flutter does it. /version lists every flow, an unversioned one as 0, but only flows with a version are saved, and a missing saved version differs from 0. So an app with an unversioned flow (extra here) is stale on every launch: /config is fetched each time and the saved versions stay {main: 4}.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "extra",
+              "routes": [
+                {
+                  "path": "settings",
+                  "requiredAppState": []
+                }
+              ]
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 4
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          },
+          "about": {
+            "pageId": "about",
+            "title": "About",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "About"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": {
+        "status": 200,
+        "body": {
+          "flows": {
+            "main": 4,
+            "extra": 0
+          }
+        }
+      },
+      "config": {
+        "status": 200,
+        "body": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 4,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "extra",
+              "routes": [
+                {
+                  "path": "settings",
+                  "requiredAppState": []
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "requests": [
+          "version",
+          "config"
+        ],
+        "result": {
+          "config": {
+            "main": 4,
+            "extra": null
+          }
+        },
+        "saved": {
+          "orca_nav_config": "config",
+          "orca_flow_versions": {
+            "main": 4
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ]
+        },
+        "serves": {
+          "home": "home",
+          "about": "about",
+          "profile": null,
+          "settings": null
+        }
+      }
+    },
+    {
+      "name": "a stale boot whose /config fails does not fall back",
+      "description": "C14.3, C14.5. Stale (saved main 3, remote 4) and /config answers 500: the boot fails with the client's error for that status. The saved config is not used and nothing is written.",
+      "saved": {
+        "orca_nav_config": {
+          "appId": "static-flows",
+          "appName": "Static Flows Demo",
+          "initialRoute": "/home",
+          "flows": [
+            {
+              "name": "main",
+              "routes": [
+                {
+                  "path": "home",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "about",
+                  "requiredAppState": []
+                },
+                {
+                  "path": "profile",
+                  "requiredAppState": [],
+                  "isDynamic": true
+                }
+              ],
+              "version": 3,
+              "isStatic": true,
+              "pages": {
+                "home": {
+                  "pageId": "home",
+                  "title": "Home",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "Home"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                },
+                "about": {
+                  "pageId": "about",
+                  "title": "About",
+                  "state": [],
+                  "components": [
+                    {
+                      "id": "0",
+                      "type": "Text",
+                      "kind": "primitive",
+                      "childMode": "none",
+                      "props": {
+                        "data": "About"
+                      },
+                      "children": [],
+                      "watches": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "orca_flow_versions": {
+          "main": 3
+        },
+        "orca_pages_main": {
+          "home": {
+            "pageId": "home",
+            "title": "Home",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "Home"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          },
+          "about": {
+            "pageId": "about",
+            "title": "About",
+            "state": [],
+            "components": [
+              {
+                "id": "0",
+                "type": "Text",
+                "kind": "primitive",
+                "childMode": "none",
+                "props": {
+                  "data": "About"
+                },
+                "children": [],
+                "watches": []
+              }
+            ]
+          }
+        }
+      },
+      "version": {
+        "status": 200,
+        "body": {
+          "flows": {
+            "main": 4
+          }
+        }
+      },
+      "config": {
+        "status": 500,
+        "body": {
+          "error": "Internal Server Error"
+        }
+      },
+      "expected": {
+        "requests": [
+          "version",
+          "config"
+        ],
+        "result": {
+          "error": {
+            "status": 500
+          }
+        },
+        "saved": {
+          "orca_nav_config": "saved",
+          "orca_flow_versions": {
+            "main": 3
+          },
+          "orca_pages_main": [
+            "about",
+            "home"
+          ]
+        },
+        "serves": {}
+      }
+    }
+  ]
+}

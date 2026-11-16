@@ -13,6 +13,11 @@ import XCTest
 /// run, a recording handler is registered under each name; it appends
 /// `{"kind": "handler", "name": <the name it was registered under>, "action":
 /// <the raw action it received>}` to the effects, in order with the others.
+///
+/// Optional `saved`, `load` and `expected.saved` (native parity step 14,
+/// C14.6): `saved` seeds the executor's SavedState, local in its store and
+/// session in the process-wide map; `load` sets state up as a boot and a page
+/// load do, so saved entries are restored; `expected.saved` is compared exactly.
 final class ActionFixtureTests: XCTestCase {
     /// The effects of one run as JSON, SDK effects and handler records alike.
     @MainActor final class Effects {
@@ -20,9 +25,9 @@ final class ActionFixtureTests: XCTestCase {
         func append(_ effect: JSONValue) { list.append(effect) }
     }
 
-    @MainActor func testAllTwentyNineActionFixturesPass() async throws {
+    @MainActor func testAllThirtyTwoActionFixturesPass() async throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 29)
+        XCTAssertEqual(files.count, 32)
         for (name, fx) in files { try await run(name, fx) }
     }
 
@@ -61,6 +66,18 @@ final class ActionFixtureTests: XCTestCase {
     /// emits no effect, as Flutter's executor awaits a null onRefetchPage.
     @MainActor func testA5_6_RefetchPageEmitsNothing_fixture48() async throws {
         try await run(fixture: "48_refetchPage.json")
+    }
+
+    @MainActor func testC14_6_PersistStateSavesASnapshotAndMovesAKeyBetweenStorages_fixture49() async throws {
+        try await run(fixture: "49_persist_state.json")
+    }
+
+    @MainActor func testC14_6_ClearStateNullsTheKeyAndRemovesItFromBothStorages_fixture50() async throws {
+        try await run(fixture: "50_clear_state.json")
+    }
+
+    @MainActor func testC14_6_SavedEntriesAreRestoredWhenStateIsSetUp_fixture51() async throws {
+        try await run(fixture: "51_restore_saved_state.json")
     }
 
     // MARK: the source (D1) and once (D2) beyond the fixtures
@@ -260,12 +277,32 @@ final class ActionFixtureTests: XCTestCase {
         let handlers = (fx["handlers"].arrayValue ?? []).compactMap(\.stringValue)
         XCTAssertTrue(actions.allSatisfy { runs($0, Set(handlers)) }, "\(name): every kind implemented")
 
-        let store = ElmStore(try fx["state"].decode(StoreState.self))
+        // `saved` (native parity step 14) seeds both storages: local in the
+        // store the SavedState reads, session through the process-wide map,
+        // which every fixture starts from and leaves empty.
+        let local = MemoryKeyValueStore(try Self.entries(fx["saved"], "local").mapValues { try wireText(.object($0)) })
+        SavedState.resetSession(try Self.entries(fx["saved"], "session"))
+        defer { SavedState.resetSession() }
+        let saved = SavedState(local: local)
+
+        // Without `load` the state is seeded as is and nothing is restored.
+        // With it the runner boots (app state, the saved app entry over it)
+        // and sets the page up from `load.state`, its saved entry restored.
+        let state = try fx["state"].decode(StoreState.self)
+        let store = ElmStore(fx["load"].isNull ? state : StoreState(app: state.app))
+        store.pageId = fx["pageId"].stringValue
+        if !fx["load"].isNull {
+            XCTAssertEqual(state.page, [:], "\(name): with load, state.page is {}")
+            saved.restore(into: store)
+            store.seed(try fx["load"]["state"].decode([StateDefinition].self))
+            saved.restorePage(into: store, pageId: try XCTUnwrap(store.pageId, "\(name): pageId"))
+        }
         var client: OrcaClient?
         if case .object(let responses) = fx["serverResponses"] {
             client = ActionStub.client(ActionStub(responses))
         }
         let executor = ActionExecutor(store: store, client: client)
+        executor.savedState = saved
         let effects = Effects()
         executor.onEffect = { effects.append($0.json) }
         for handler in handlers {
@@ -283,5 +320,25 @@ final class ActionFixtureTests: XCTestCase {
         }
         assertJSONEqual(try jsonOf(store.state), fx["expected"]["state"], "\(name): state")
         assertJSONEqual(.array(effects.list), fx["expected"]["effects"], "\(name): effects")
+
+        // `expected.saved`, exactly: an entry it does not list must not exist
+        // and an absent storage is empty. Local as the store holds it,
+        // session as the process-wide map holds it.
+        let want = fx["expected"]["saved"]
+        if !want.isNull {
+            assertJSONEqual(
+                .object(try local.values.mapValues { try JSONValue.decode(Data($0.utf8)) }),
+                .object(try Self.entries(want, "local").mapValues { .object($0) }), "\(name): saved local")
+            assertJSONEqual(
+                .object(SavedState.sessionEntries.mapValues { .object($0) }),
+                .object(try Self.entries(want, "session").mapValues { .object($0) }), "\(name): saved session")
+        }
+    }
+
+    /// One storage (`local` or `session`) of a fixture's `saved` or
+    /// `expected.saved`: its entries by name, none when absent.
+    private static func entries(_ saved: JSONValue, _ storage: String) throws -> [String: [String: JSONValue]] {
+        let json = saved[storage]
+        return json.isNull ? [:] : try json.decode([String: [String: JSONValue]].self)
     }
 }
