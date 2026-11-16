@@ -62,6 +62,7 @@ public struct PushNotificationPlugin: OrcaPlugin {
     public func didRegisterForRemoteNotifications(withDeviceToken deviceToken: Data) {
         push.registration.deviceToken = deviceToken
         push.registration.error = nil
+        push.messaging.deviceTokenDidChange()
     }
 
     /// The app delegate's `application(_:didFailToRegisterForRemoteNotificationsWithError:)`.

@@ -19,13 +19,18 @@
 //
 // FirebaseMessaging (firebase-ios-sdk, Apache 2.0) gives the FCM token and
 // topics, as firebase_messaging does for the Flutter plugin, in both places,
-// from the 12.17 releases only: 12.18 deprecates Messaging's FCM token (for
-// its installation ID registration) and 13 needs Xcode 26.2 (CI builds with
-// 16.4). It builds FirebaseCore, FirebaseInstallations, GoogleUtilities,
-// GoogleDataTransport, nanopb and Promises with it; SwiftPM fetches the rest
-// of firebase-ios-sdk's dependencies too. The app configures Firebase
-// (FirebaseApp.configure(), with its GoogleService-Info.plist); the plugin
-// never does.
+// from 12.17.0 to the newest 12.x (12.19.3 today); 13 needs Xcode 26.2 (CI
+// builds with 16.4). 12.18 and later deprecate Messaging's fcmToken and
+// token(completion:) for the installation ID registration
+// (register(completion:)), which is the app's to turn on
+// (FirebaseMessagingInstallationIdEnabled in its Info.plist, NO by default):
+// the adapter's token(completion:) keeps working, and its deprecation warning
+// in the build is accepted, as a 12.17.x pin would keep apps on 12.18 and
+// later from the plugin. It builds FirebaseCore, FirebaseInstallations,
+// GoogleUtilities, GoogleDataTransport, nanopb and Promises with it; SwiftPM
+// fetches the rest of firebase-ios-sdk's dependencies too. The app configures
+// Firebase (FirebaseApp.configure(), with its GoogleService-Info.plist); the
+// plugin never does.
 import Foundation
 import PackageDescription
 
@@ -38,7 +43,7 @@ let sdk: (dependency: Package.Dependency, identity: String) = inMonorepo
        "orca-gateway-swift")
 
 let firebase = Package.Dependency.package(
-    url: "https://github.com/firebase/firebase-ios-sdk", .upToNextMinor(from: "12.17.0"))
+    url: "https://github.com/firebase/firebase-ios-sdk", from: "12.17.0")
 
 let package = Package(
     name: "OrcaPushNotification",

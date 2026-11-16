@@ -11,8 +11,9 @@ import OrcaGateway
 /// on one APNs registration, with Flutter's name; without a configured
 /// Firebase app the token and topic calls, and so the three actions, fail with
 /// a message naming FirebaseApp.configure(), and nothing crashes; the APNs
-/// token the host hands over reaches Messaging before each call, whichever
-/// comes first, as firebase_messaging's ensureAPNSTokenSetting, and a call
+/// token the host hands over reaches Messaging at once, as firebase_messaging
+/// sets it in didRegister, and, when it came before Firebase was configured,
+/// before each call, as firebase_messaging's ensureAPNSTokenSetting; a call
 /// before any APNs token fails as its apns-token-not-set check does;
 /// Messaging's token, a nil token and its errors reach the actions. Messaging
 /// itself is a fake here: a real FCM token, real topics and the real APNs
@@ -138,7 +139,8 @@ final class PushMessagingTests: XCTestCase {
 
     func testC17_4_S_token_WithoutAConfiguredFirebaseAppTheCallsThrowTheClearErrorAndNothingCrashes() async {
         // This test process never calls FirebaseApp.configure(): no default
-        // app, where Messaging.messaging() would raise.
+        // app, where Messaging.messaging() would be nil and a call would never
+        // complete.
         let registration = RemoteNotificationRegistration()
         registration.deviceToken = Self.apnsA
         let failures = await Self.failures(FirebaseMessagingAdapter(registration: registration))
@@ -161,6 +163,17 @@ final class PushMessagingTests: XCTestCase {
     }
 
     // MARK: The APNs token, in either order
+
+    func testC17_4_S_token_AnAPNsTokenHandedOverOnceFirebaseIsConfiguredReachesMessagingAtOnceWithNoAction() {
+        // firebase_messaging sets it in didRegister, so Firebase maps a first
+        // FCM token to it and re-maps a stored one to a new APNs token.
+        let h = Harness()
+        h.plugin.didRegisterForRemoteNotifications(withDeviceToken: Self.apnsA)
+        XCTAssertEqual(h.firebase.calls, ["apnsToken 0a0b"], "no action run")
+        h.plugin.didRegisterForRemoteNotifications(withDeviceToken: Self.apnsA)
+        h.plugin.didRegisterForRemoteNotifications(withDeviceToken: Self.apnsB)
+        XCTAssertEqual(h.firebase.calls, ["apnsToken 0a0b", "apnsToken beef"], "the same one not handed again")
+    }
 
     func testC17_4_S_token_AnAPNsTokenHandedOverBeforeFirebaseIsConfiguredReachesMessagingAtTheFirstCall() async throws {
         let h = Harness()
@@ -243,13 +256,12 @@ final class PushMessagingTests: XCTestCase {
     let packageDir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
-    /// firebase-ios-sdk as the manifest takes it in both branches: by URL, the
-    /// 12.17 releases (12.18 deprecates Messaging's FCM token; 13 needs Xcode
-    /// 26.2, CI builds with 16.4).
+    /// firebase-ios-sdk as the manifest takes it in both branches: by URL, from
+    /// 12.17.0 up to the next major (13 needs Xcode 26.2, CI builds with 16.4).
     static let firebase: JSONValue = [
         "identity": "firebase-ios-sdk",
         "location": "https://github.com/firebase/firebase-ios-sdk",
-        "requirement": ["range": [["lowerBound": "12.17.0", "upperBound": "12.18.0"]]],
+        "requirement": ["range": [["lowerBound": "12.17.0", "upperBound": "13.0.0"]]],
     ]
 
     func testC17_4_S_token_TheManifestsWholeDependencyListIsTheSDKThenFirebaseInBothBranches() throws {

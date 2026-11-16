@@ -10,18 +10,22 @@ import Foundation
 ///
 /// Firebase is the app's to configure (`FirebaseApp.configure()`, as Flutter's
 /// `Firebase.initializeApp()` is the app's): without a default app each call
-/// throws `FirebaseMessagingError.notConfigured`, where Messaging would raise
-/// an Objective-C exception.
+/// throws `FirebaseMessagingError.notConfigured`. Unguarded, it would not
+/// raise: `Messaging.messaging()` returns nil there (FirebaseCore only logs
+/// that the default app is not configured), so a call would do nothing and
+/// the token and topic calls would never complete.
 ///
 /// The APNs token: Firebase does no swizzling (the app sets
 /// FirebaseAppDelegateProxyEnabled to NO), so the host hands it to the plugin,
-/// which keeps it in `registration`. As firebase_messaging's
-/// ensureAPNSTokenSetting, it is handed to Messaging before each call, when it
-/// is not Messaging's already: the token may come before or after
-/// FirebaseApp.configure() and before or after the first call. While Messaging
-/// has none, a call throws `FirebaseMessagingError.noAPNsToken`, as
-/// firebase_messaging's apns-token-not-set check does before getToken,
-/// subscribeToTopic and unsubscribeFromTopic.
+/// which keeps it in `registration`. It is handed to Messaging as it comes,
+/// once Firebase is configured, as firebase_messaging does in didRegister:
+/// Firebase then maps a first FCM token to it and re-maps one to a new APNs
+/// token. A token that came before FirebaseApp.configure() is handed over
+/// before the next call, as firebase_messaging's ensureAPNSTokenSetting does;
+/// neither hands over a token Messaging has already. While Messaging has none,
+/// a call throws `FirebaseMessagingError.noAPNsToken`, as firebase_messaging's
+/// apns-token-not-set check does before getToken, subscribeToTopic and
+/// unsubscribeFromTopic.
 @MainActor
 final class FirebaseMessagingAdapter: PushMessaging {
     /// Where the host's APNs token is kept (the plugin's).
@@ -54,14 +58,26 @@ final class FirebaseMessagingAdapter: PushMessaging {
         try await ready().unsubscribe(topic: topic)
     }
 
+    /// The host's new APNs token goes to Messaging at once; before Firebase
+    /// is configured, at the next call.
+    func deviceTokenDidChange() {
+        guard let messaging = messaging() else { return }
+        handOver(to: messaging)
+    }
+
     /// Messaging, with the host's APNs token handed over.
     private func ready() throws -> FirebaseMessagingInstance {
         guard let messaging = messaging() else { throw FirebaseMessagingError.notConfigured }
+        handOver(to: messaging)
+        guard messaging.apnsToken != nil else { throw FirebaseMessagingError.noAPNsToken(registration.error) }
+        return messaging
+    }
+
+    /// The host's APNs token to Messaging, when it is not Messaging's already.
+    private func handOver(to messaging: FirebaseMessagingInstance) {
         if let deviceToken = registration.deviceToken, messaging.apnsToken != deviceToken {
             messaging.apnsToken = deviceToken
         }
-        guard messaging.apnsToken != nil else { throw FirebaseMessagingError.noAPNsToken(registration.error) }
-        return messaging
     }
 }
 
@@ -102,6 +118,8 @@ protocol FirebaseMessagingInstance: AnyObject {
 extension Messaging: FirebaseMessagingInstance {
     func fetchToken() async throws -> String? {
         try await withCheckedThrowingContinuation { continuation in
+            // Deprecated from Firebase 12.18 for register(completion:), which is opt-in, so this still
+            // works: warning accepted. Follow-up: move to register(completion:) when it is not opt-in.
             token { value, error in
                 if let error { continuation.resume(throwing: error) } else { continuation.resume(returning: value) }
             }

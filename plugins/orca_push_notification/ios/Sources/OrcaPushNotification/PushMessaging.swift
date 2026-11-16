@@ -12,4 +12,12 @@ protocol PushMessaging: Sendable {
     func token() async throws -> String?
     func subscribe(toTopic topic: String) async throws
     func unsubscribe(fromTopic topic: String) async throws
+    /// The host has handed over an APNs token (now in the plugin's
+    /// registration), for a service that takes it as it comes.
+    func deviceTokenDidChange()
+}
+
+extension PushMessaging {
+    /// Nothing, for a service that reads the token when it needs it.
+    func deviceTokenDidChange() {}
 }
