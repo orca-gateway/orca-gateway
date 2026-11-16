@@ -208,8 +208,11 @@ final class UnsupportedWidgetPlaceholderTests: XCTestCase {
         assertNear(pixels.pixel(w / 2, h - 1), Self.border, "the bottom border")
         // The 17-point inset holds only the fill: a line 8 points in on
         // each side (from 2 points in along it: the border's edge is smoothed).
-        let padding = (4..<w - 4).flatMap { [($0, 2 * 8), ($0, h - 2 * 8)] }
-            + (2 * 8..<h - 2 * 8).flatMap { [(2 * 8, $0), (w - 2 * 8, $0)] }
+        let rows: [(Int, Int)] = (4..<w - 4).flatMap { (x: Int) -> [(Int, Int)] in [(x, 2 * 8), (x, h - 2 * 8)] }
+        let columns: [(Int, Int)] = (2 * 8..<h - 2 * 8).flatMap { (y: Int) -> [(Int, Int)] in
+            [(2 * 8, y), (w - 2 * 8, y)]
+        }
+        let padding: [(Int, Int)] = rows + columns
         XCTAssertNil(firstOff(pixels, padding, Self.fill), "the padding")
 
         // The first row: the grey icon in its 20-point box at 17 (the
