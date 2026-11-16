@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -179,16 +180,18 @@ class MainActivity : ComponentActivity() {
  * This app's own splash (ORCA_SPLASH), drawn in OrcaApp's place while it
  * boots: the version check (ORCA_OFFLINE) and the `/config` fetch (ORCA_BOOT
  * `config`). The app's name on a blue screen, so it cannot pass for the SDK's
- * spinner.
+ * spinner. The caption ends with the locale OrcaApp gives the views under it,
+ * read from [LocalConfiguration] as OrcaApp provides it, so ORCA_LOCALE shows.
  */
 @Composable
 private fun HostSplash() {
+    val locale = LocalConfiguration.current.locales[0].toLanguageTag()
     Column(
         Modifier.fillMaxSize().background(Color(0xFF1565C0)),
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Orca Counter", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
-        Text("host splash", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+        Text("host splash · $locale", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
     }
 }

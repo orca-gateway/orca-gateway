@@ -365,7 +365,8 @@ setContent {
 ```
 
 - `splash`, else `loading`, shows while the app boots: the version check (`enableOffline`) and the
-  `/config` fetch (no `path`). A page opened at a path skips both. Pages keep the SDK's spinner.
+  `/config` fetch (no `path`). A page opened at a path skips the `/config` fetch; with
+  `enableOffline` the splash still shows during the version check. Pages keep the SDK's spinner.
 - `error` gets what failed the boot: the `/config` fetch's error or a plugin conflict. A page that
   fails to load always shows the SDK's error screen, with "Try again".
 - `forceUpdate` replaces "Update required. Please update the app.".

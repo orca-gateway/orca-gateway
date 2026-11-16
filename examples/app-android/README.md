@@ -266,14 +266,33 @@ scheme. A server page does not: without the URL extra the counter page stays lig
 a page's Scaffold in its default light theme.
 
 **Locale.** `--es ORCA_LOCALE ar` (or `fr-FR`) gives `OrcaApp` that locale: its screens and pages
-read it from `LocalConfiguration`. The example pages have nothing that changes with it, so they
-look the same; the layout stays left to right, as Flutter's default localizations are, and the
-server still gets the device's locale in `x-orca-locale`.
+read it from `LocalConfiguration`, and so does the app's splash (`ORCA_SPLASH`, below), whose
+caption ends with it. Against the example server the splash is a blink, so give the app a server
+that takes the request and never answers. In a second terminal:
+
+```bash
+nc -l 8099
+```
+
+Then:
+
+```bash
+adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --ez ORCA_SPLASH true \
+  --es ORCA_LOCALE fr-FR --es ORCA_BOOT config --es ORCA_TIMEOUT 5 \
+  --es ORCA_SERVER_URL http://10.0.2.2:8099
+```
+
+`nc` prints the config request. The blue splash reads "host splash · fr-FR" under "Orca Counter":
+the locale `OrcaApp` hands the views under it; without the extra it is the device's. Five seconds
+later the request times out, "Connection Failed" shows and `nc` stops; start it again before the
+next launch. The example pages have nothing that changes with the locale, so they look the same;
+the layout stays left to right, as Flutter's default localizations are, and the server still gets
+the device's locale in `x-orca-locale`.
 
 **Splash.** With `ORCA_SPLASH` the app draws its own splash, "Orca Counter" in white on blue with
-"host splash" under it, where the SDK shows its spinner while it boots: during the version check
-(`ORCA_OFFLINE`) and while `/config` is fetched (`ORCA_BOOT config`). A page opened at a path skips
-both, so start the navigation app from its config with the check on:
+"host splash" and the locale under it, where the SDK shows its spinner while it boots: during the
+version check (`ORCA_OFFLINE`) and while `/config` is fetched (`ORCA_BOOT config`). A page opened
+at a path skips the `/config` fetch, so start the navigation app from its config with the check on:
 
 ```bash
 adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --ez ORCA_SPLASH true \
