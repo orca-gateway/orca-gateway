@@ -37,15 +37,16 @@ final class CapabilitiesTests: XCTestCase {
 
     /// A3.1: native parity step 3's 13 layout wrappers are drawn by SwiftUI,
     /// so the generated vector advertises them, each once and sorted like
-    /// capabilities.json. The pin is 62: with step 12's 5 animated widgets
-    /// (49), then native parity step 4's 11 effect and touch wrappers (A4.x),
-    /// then step 13's ReorderableListView and SubPage.
-    func testA3_1TheThirteenLayoutWrappersAreAdvertisedSixtyTwoInAll() throws {
+    /// capabilities.json. The pin is 63: with step 12's 5 animated widgets
+    /// (49), then native parity step 4's 11 effect and touch wrappers (A4.x,
+    /// 60), then step 13's ReorderableListView and SubPage, then S18's
+    /// UnsupportedWidgetPlaceholder.
+    func testA3_1TheThirteenLayoutWrappersAreAdvertisedSixtyThreeInAll() throws {
         let advertised = Set(GeneratedCapabilities.widgets)
         XCTAssertEqual(Self.a3_1.subtracting(advertised), [], "not advertised")
         XCTAssertTrue(Self.a3_1.isSubset(of: try manifestIOSWidgets()), "a wrapper lacks the ios target")
-        XCTAssertEqual(GeneratedCapabilities.widgets.count, 62)
-        XCTAssertEqual(advertised.count, 62)
+        XCTAssertEqual(GeneratedCapabilities.widgets.count, 63)
+        XCTAssertEqual(advertised.count, 63)
         XCTAssertEqual(GeneratedCapabilities.widgets, GeneratedCapabilities.widgets.sorted())
     }
 
@@ -76,6 +77,16 @@ final class CapabilitiesTests: XCTestCase {
         "AbsorbPointer", "BackdropFilter", "BlurView", "ClipOval", "ClipRect", "ColorFiltered",
         "DecoratedBox", "IgnorePointer", "InteractiveViewer", "Opacity", "RotatedBox",
     ]
+
+    /// C18.4: S18 adds UnsupportedWidgetPlaceholder. It has the ios target,
+    /// is advertised, and the registry the SDK draws with knows it, so a
+    /// page's placeholder is not degraded to FallbackPrompt.
+    func testC18_4_UnsupportedWidgetPlaceholderIsAdvertisedAndTheStandardRegistryKnowsIt() throws {
+        let ios = try manifestIOSWidgets()
+        XCTAssertTrue(ios.contains("UnsupportedWidgetPlaceholder"), "UnsupportedWidgetPlaceholder lacks the ios target")
+        XCTAssertTrue(GeneratedCapabilities.widgets.contains("UnsupportedWidgetPlaceholder"), "not advertised")
+        XCTAssertTrue(WidgetRegistry.shared.supports("UnsupportedWidgetPlaceholder"), "the standard registry degrades it")
+    }
 
     func testActionKindsMatchTheImplementedList() throws {
         let implemented = try Fixtures.json("sdk-swift/capabilities.json")

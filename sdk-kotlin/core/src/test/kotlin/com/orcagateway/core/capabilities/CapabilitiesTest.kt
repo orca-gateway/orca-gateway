@@ -70,12 +70,14 @@ class CapabilitiesTest {
      * B13.3-K: S13 adds ReorderableListView, 60 to 61.
      *
      * B13.4-K: S13 adds SubPage, 61 to 62.
+     *
+     * C18.4: S18 adds UnsupportedWidgetPlaceholder: the pin moves to 63.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame62WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame63WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(62, kotlin.size)
+        assertEquals(63, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -96,6 +98,7 @@ class CapabilitiesTest {
         assertTrue("ReorderableListView" in GeneratedCapabilities.widgets, "not advertised: ReorderableListView")
         assertTrue("SubPage" in kotlin, "missing: SubPage")
         assertTrue("SubPage" in GeneratedCapabilities.widgets, "not advertised: SubPage")
+        assertTrue("UnsupportedWidgetPlaceholder" in GeneratedCapabilities.widgets, "S18's UnsupportedWidgetPlaceholder is not advertised")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
@@ -104,15 +107,16 @@ class CapabilitiesTest {
      * A3.1: Compose draws the 13 layout wrappers, so the generated vector
      * advertises them and the core registry lets them through instead of
      * degrading them; WidgetBuildersTest pins standard() to the same set.
-     * The pin is 62: with S12's 5 animated ones (49), then native parity
-     * step 4's 11 effect and touch wrappers (A4.x), then S13's
-     * ReorderableListView and SubPage.
+     * The pin is 63: with S12's 5 animated ones (49), then native parity
+     * step 4's 11 effect and touch wrappers (A4.x, 60), then S13's
+     * ReorderableListView and SubPage, then S18's
+     * UnsupportedWidgetPlaceholder.
      */
     @Test
     fun a3_1_theThirteenLayoutWrappersAreAdvertisedAndLetThrough() {
         val advertised = GeneratedCapabilities.widgets.toSet()
         assertEquals(emptySet(), A3_1 - advertised, "not advertised")
-        assertEquals(62, GeneratedCapabilities.widgets.size)
+        assertEquals(63, GeneratedCapabilities.widgets.size)
         assertEquals(emptySet(), A3_1 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 

@@ -3,6 +3,7 @@ package com.orcagateway.sdk
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.res.Configuration
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -24,14 +25,27 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,10 +67,15 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.util.Consumer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -69,6 +88,7 @@ import com.orcagateway.core.animation.Curves
 import com.orcagateway.core.client.DeviceInfo
 import com.orcagateway.core.client.OrcaClient
 import com.orcagateway.core.client.OrcaClientException
+import com.orcagateway.core.client.OrcaErrorInfo
 import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.navigation.DeeplinkEvent
 import com.orcagateway.core.navigation.RouteChangeEvent
@@ -94,6 +114,7 @@ import com.orcagateway.sdk.widgets.PageDrawerHost
 import com.orcagateway.sdk.widgets.orcaReduceMotion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
  * Loads one page through [OrcaClient] and keeps the result (Swift
@@ -106,7 +127,8 @@ import kotlinx.coroutines.launch
  *
  * A load cancelled mid-fetch (its page left the screen) leaves [phase] at
  * `Loading` and runs again on the next [loadIfNeeded]. After [close] it
- * builds no page: a fetch that lands then is dropped.
+ * builds no page: a fetch that lands then is dropped. A failed load keeps
+ * what was thrown in [Phase.Failed.error]; [OrcaErrorView] draws it.
  */
 public class OrcaPageLoader(
     public val client: OrcaClient,
@@ -122,7 +144,8 @@ public class OrcaPageLoader(
             internal var renderCompleteMs: Double? = null
         }
 
-        public data class Failed(public val message: String) : Phase
+        /** The load threw [error]: [message] says it as text ("HTTP 404: <body>" for a status). */
+        public data class Failed(public val message: String, public val error: Throwable? = null) : Phase
     }
 
     public var phase: Phase by mutableStateOf(Phase.Loading)
@@ -166,9 +189,9 @@ public class OrcaPageLoader(
             started = false
             throw e
         } catch (e: OrcaClientException.Http) {
-            Phase.Failed("HTTP ${e.status}: ${e.body.take(200)}")
+            Phase.Failed("HTTP ${e.status}: ${e.body.take(200)}", e)
         } catch (e: Exception) {
-            Phase.Failed(e.message ?: e.toString())
+            Phase.Failed(e.message ?: e.toString(), e)
         }
     }
 
@@ -189,7 +212,8 @@ public class OrcaPageLoader(
  *
  * A boot cancelled mid-fetch leaves [phase] at `Loading` and runs again on
  * the next [loadIfNeeded]. After [close] it builds no router: a config that
- * lands then is dropped.
+ * lands then is dropped. A failed fetch keeps what was thrown in
+ * [Phase.Failed.error]; [OrcaErrorView] draws it.
  *
  * [system] and [onRouteChanged] go to the router a load makes. OrcaApp keeps
  * a boot through a rotation and sets them to the shown activity's own.
@@ -208,7 +232,8 @@ public class OrcaAppBoot(
 
         public class Ready(public val router: OrcaRouter) : Phase
 
-        public data class Failed(public val message: String) : Phase
+        /** The fetch threw [error]: [message] says it as text ("HTTP 500: <body>" for a status). */
+        public data class Failed(public val message: String, public val error: Throwable? = null) : Phase
     }
 
     public var phase: Phase by mutableStateOf(Phase.Loading)
@@ -257,9 +282,9 @@ public class OrcaAppBoot(
             started = false
             throw e
         } catch (e: OrcaClientException.Http) {
-            Phase.Failed("HTTP ${e.status}: ${e.body.take(200)}")
+            Phase.Failed("HTTP ${e.status}: ${e.body.take(200)}", e)
         } catch (e: Exception) {
-            Phase.Failed(e.message ?: e.toString())
+            Phase.Failed(e.message ?: e.toString(), e)
         }
     }
 
@@ -283,7 +308,8 @@ public class OrcaAppBoot(
  * server's navigation (routes, redirects, initial app state): a spinner
  * while `/config` is fetched (once), then the config's `initialRoute` with
  * its `initialAppState`, every location going through the config's routes;
- * a failed fetch shows an error with a retry. A config with tabs is drawn as
+ * a failed fetch shows Flutter's error screen for it ([OrcaErrorView]) with a
+ * retry, as a page that failed to load does. A config with tabs is drawn as
  * a tab shell ([TabShellScreen]): a bottom bar, and one stack per tab.
  *
  * A [path] the host gives opens that one page instead: no config is fetched
@@ -343,6 +369,25 @@ public class OrcaAppBoot(
  * by default the SDK's own, else a [WidgetBuilders.standard] with what the
  * host registered on it. Not advertised; the plugins' builders are added
  * to a copy, so this one is not changed.
+ * @param loading drawn while `/config` is fetched (Dart
+ * `OrcaApp.loadingWidget`) and, without a [splash], while the version check
+ * runs. Boot only, as the views below: pages keep the SDK's spinner.
+ * @param splash drawn while the version check runs and while `/config` is
+ * fetched (Dart `OrcaApp.splashWidget`, which falls back to `loadingWidget`).
+ * @param error drawn, alone, with what failed the boot: the `/config` fetch's
+ * error or the plugin conflict (Dart `OrcaApp.errorBuilder`). Without it the
+ * SDK's [OrcaErrorView] shows; a page that fails to load always shows that.
+ * @param forceUpdate drawn when the version check demands an update (Dart
+ * `OrcaApp.forceUpdateBuilder`), in place of the SDK's one line.
+ * @param colorScheme the Material 3 colours of everything OrcaApp draws, its
+ * boot screens and its pages (Flutter's MaterialApp `theme`, `darkTheme` and
+ * `themeMode`, through `OrcaApp.materialApp`), with the host's typography and
+ * shapes; null keeps the host's [MaterialTheme]. A Scaffold page stays light,
+ * as Flutter's builders wrap it in a light `ThemeData()`.
+ * @param locale the locale OrcaApp's screens and pages see in
+ * [LocalConfiguration] (Flutter's MaterialApp `locale`), the layout direction
+ * kept: Flutter's default localizations are left to right. Nothing is sent:
+ * `x-orca-locale` stays the device's, as in Flutter.
  */
 @Composable
 public fun OrcaApp(
@@ -357,6 +402,12 @@ public fun OrcaApp(
     customActions: Map<String, OrcaActionHandler> = emptyMap(),
     widgets: WidgetBuilders = WidgetBuilders.shared,
     onDeeplink: ((DeeplinkEvent) -> Unit)? = null,
+    loading: (@Composable () -> Unit)? = null,
+    splash: (@Composable () -> Unit)? = null,
+    error: (@Composable (Throwable) -> Unit)? = null,
+    forceUpdate: (@Composable () -> Unit)? = null,
+    colorScheme: ColorScheme? = null,
+    locale: Locale? = null,
 ) {
     val context = LocalContext.current
     val identified = remember { client.identified(SharedPreferencesKeyValueStore(context)) }
@@ -372,7 +423,10 @@ public fun OrcaApp(
         val router = retained.value
         AttachHost(router, system, onRouteChanged, onDeeplink)
         NewIntentLinks { router.handleDeeplink(it) }
-        RouterApp(router, modifier, enableOffline, enableSessionTracking, plugins, customActions, widgets)
+        RouterApp(
+            router, modifier, enableOffline, enableSessionTracking, plugins, customActions, widgets,
+            loading, splash, error, forceUpdate, colorScheme, locale,
+        )
         return
     }
     // A boot made now holds the link through the version check and the config fetch. Once per kept
@@ -387,27 +441,35 @@ public fun OrcaApp(
     val prepare = {
         if (boot.plugins == null) boot.plugins = OrcaPluginHost.merge(boot.client, plugins, customActions, widgets)
     }
-    // The version check comes first: the config is asked only once the app may run.
-    OrcaBootView(identified, enableOffline, enableSessionTracking, modifier, prepare) {
-        val scope = rememberCoroutineScope()
-        // Before the load starts, so the router it makes gets them.
-        DisposableEffect(boot, system, onRouteChanged) {
-            boot.system = system
-            boot.onRouteChanged = onRouteChanged
-            onDispose {
-                if (boot.system === system) boot.system = null
-                if (boot.onRouteChanged === onRouteChanged) boot.onRouteChanged = null
+    val bootSplash = splash ?: loading
+    WithSchemeAndLocale(colorScheme, locale) {
+        // The version check comes first: the config is asked only once the app may run.
+        OrcaBootView(identified, enableOffline, enableSessionTracking, modifier, prepare, bootSplash, error, forceUpdate) {
+            val scope = rememberCoroutineScope()
+            // Before the load starts, so the router it makes gets them.
+            DisposableEffect(boot, system, onRouteChanged) {
+                boot.system = system
+                boot.onRouteChanged = onRouteChanged
+                onDispose {
+                    if (boot.system === system) boot.system = null
+                    if (boot.onRouteChanged === onRouteChanged) boot.onRouteChanged = null
+                }
             }
-        }
-        LaunchedEffect(boot) { boot.loadIfNeeded(context) }
-        when (val phase = boot.phase) {
-            OrcaAppBoot.Phase.Loading -> LoadingView(modifier)
-            is OrcaAppBoot.Phase.Ready -> {
-                AttachHost(phase.router, system, onRouteChanged, onDeeplink)
-                OrcaNavHost(phase.router, modifier)
-            }
-            is OrcaAppBoot.Phase.Failed -> ErrorView("Could not load this app", phase.message, modifier) {
-                scope.launch { boot.reload(context) }
+            LaunchedEffect(boot) { boot.loadIfNeeded(context) }
+            when (val phase = boot.phase) {
+                OrcaAppBoot.Phase.Loading -> if (bootSplash != null) HostView(modifier, bootSplash) else LoadingView(modifier)
+                is OrcaAppBoot.Phase.Ready -> {
+                    AttachHost(phase.router, system, onRouteChanged, onDeeplink)
+                    OrcaNavHost(phase.router, modifier)
+                }
+                is OrcaAppBoot.Phase.Failed -> {
+                    val thrown = phase.error ?: RuntimeException(phase.message)
+                    if (error != null) {
+                        HostView(modifier) { error(thrown) }
+                    } else {
+                        OrcaErrorView(thrown, modifier) { scope.launch { boot.reload(context) } }
+                    }
+                }
             }
         }
     }
@@ -519,6 +581,13 @@ internal class Retained<T : AutoCloseable>(val value: T) : ViewModel(value)
  * on is not requested), and every new Intent's link. The router remembers
  * that it took the launch link, so hiding and showing this in the same
  * activity does not handle it again.
+ *
+ * [loading], [splash], [error], [forceUpdate], [colorScheme] and [locale]
+ * are those of OrcaApp(client) (Dart `OrcaApp.loadingWidget`,
+ * `splashWidget`, `errorBuilder`, `forceUpdateBuilder`, and
+ * `OrcaApp.materialApp`'s theme and locale): here no config is fetched, so
+ * [splash] (else [loading]) shows while the version check runs, and
+ * [error] gets the plugin conflict.
  */
 @Composable
 public fun OrcaApp(
@@ -529,6 +598,12 @@ public fun OrcaApp(
     plugins: List<OrcaPlugin> = emptyList(),
     customActions: Map<String, OrcaActionHandler> = emptyMap(),
     widgets: WidgetBuilders = WidgetBuilders.shared,
+    loading: (@Composable () -> Unit)? = null,
+    splash: (@Composable () -> Unit)? = null,
+    error: (@Composable (Throwable) -> Unit)? = null,
+    forceUpdate: (@Composable () -> Unit)? = null,
+    colorScheme: ColorScheme? = null,
+    locale: Locale? = null,
 ) {
     // launchLink() gives the link again when this is composed again in the same activity; the router knows it took it.
     val first = launchLink().takeUnless { router.launchLinkTaken }
@@ -545,7 +620,10 @@ public fun OrcaApp(
         }
         return
     }
-    RouterApp(router, modifier, enableOffline, enableSessionTracking, plugins, customActions, widgets)
+    RouterApp(
+        router, modifier, enableOffline, enableSessionTracking, plugins, customActions, widgets,
+        loading, splash, error, forceUpdate, colorScheme, locale,
+    )
 }
 
 /** A router's pages behind the boot gate, with the plugins merged: what both OrcaApps draw. */
@@ -558,12 +636,62 @@ private fun RouterApp(
     plugins: List<OrcaPlugin>,
     customActions: Map<String, OrcaActionHandler>,
     widgets: WidgetBuilders,
+    loading: (@Composable () -> Unit)?,
+    splash: (@Composable () -> Unit)?,
+    error: (@Composable (Throwable) -> Unit)?,
+    forceUpdate: (@Composable () -> Unit)?,
+    colorScheme: ColorScheme?,
+    locale: Locale?,
 ) {
     // Once per router: one kept through a rotation keeps what it was given.
     val prepare = {
         if (router.plugins == null) router.plugins = OrcaPluginHost.merge(router.client, plugins, customActions, widgets)
     }
-    OrcaBootView(router.client, enableOffline, enableSessionTracking, modifier, prepare) { OrcaNavHost(router, modifier) }
+    WithSchemeAndLocale(colorScheme, locale) {
+        OrcaBootView(router.client, enableOffline, enableSessionTracking, modifier, prepare, splash ?: loading, error, forceUpdate) {
+            OrcaNavHost(router, modifier)
+        }
+    }
+}
+
+/**
+ * [content] under the host's [colorScheme] and [locale], each when given
+ * (Flutter's boot and ready MaterialApps take `OrcaApp.materialApp`'s theme
+ * and locale). The tree is the same either way, so a scheme or a locale
+ * changed while the app runs keeps the boot and the pages: with no scheme,
+ * the host's own is set again.
+ */
+@Composable
+private fun WithSchemeAndLocale(colorScheme: ColorScheme?, locale: Locale?, content: @Composable () -> Unit) {
+    val configuration = LocalConfiguration.current
+    val localized = remember(configuration, locale) { locale?.let { configuration.withLocale(it) } }
+    CompositionLocalProvider(*listOfNotNull(localized?.let { LocalConfiguration provides it }).toTypedArray()) {
+        WithColorScheme(colorScheme ?: MaterialTheme.colorScheme, content)
+    }
+}
+
+/**
+ * A copy of this configuration in [locale], with this one's layout direction:
+ * Flutter's MaterialApp turns right to left only with the host's own
+ * localizations (its default ones are left to right).
+ */
+private fun Configuration.withLocale(locale: Locale): Configuration = Configuration(this).also {
+    it.setLocale(locale)
+    val direction = Configuration.SCREENLAYOUT_LAYOUTDIR_MASK
+    it.screenLayout = (it.screenLayout and direction.inv()) or (screenLayout and direction)
+}
+
+/**
+ * [content] under a [MaterialTheme] of [colorScheme] with the current
+ * typography, shapes and text style (MaterialTheme alone would set its
+ * bodyLarge as the text style).
+ */
+@Composable
+internal fun WithColorScheme(colorScheme: ColorScheme, content: @Composable () -> Unit) {
+    val textStyle = LocalTextStyle.current
+    MaterialTheme(colorScheme = colorScheme, shapes = MaterialTheme.shapes, typography = MaterialTheme.typography) {
+        CompositionLocalProvider(LocalTextStyle provides textStyle, content = content)
+    }
 }
 
 /** The router's pages on a [NavHost], once the boot let the app run. */
@@ -778,7 +906,7 @@ private fun RouteBody(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoad
             OrcaPageView(phase.model)
             PageDebugOverlay(phase.model, phase.renderCompleteMs, Modifier.align(AbsoluteAlignment.BottomRight))
         }
-        is OrcaPageLoader.Phase.Failed -> ErrorView("Could not load this page", phase.message) {
+        is OrcaPageLoader.Phase.Failed -> OrcaErrorView(phase.error ?: RuntimeException(phase.message)) {
             scope.launch { loader.reload(context) }
         }
     }
@@ -791,23 +919,75 @@ private fun LoadingView(modifier: Modifier = Modifier) {
     }
 }
 
-/** The SDK's error view: what went wrong, and a "Try again" when there is an [onRetry]. */
+/**
+ * The SDK's error screen, the native twin of Flutter's `buildOrcaError`
+ * (sdk/lib/src/widgets/orca_error.dart): for [error], the icon, title and
+ * message [OrcaErrorInfo.from] gives ("Not Found" and "The requested page
+ * could not be found." for a 404, "Connection Failed" for a server never
+ * reached, ...), laid out as Flutter's: centred, padding 32, the icon 48,
+ * then 16 down the title (18, semibold), then 8 down the message (14). The
+ * icons are Flutter's Material ones (`lock_outline`, `block`, `search_off`,
+ * `speed`, `cloud_off`, `error_outline`, `settings`, `wifi_off`).
+ *
+ * The colours are the theme's, so dark mode reads: [MaterialTheme]'s
+ * onSurface for the title, onSurfaceVariant for the icon and message, where
+ * Flutter's are fixed black at 87% and 60%.
+ *
+ * With [onRetry], a "Try again" button under the message, a native extra
+ * Flutter's screen does not have. OrcaApp shows this view, with a retry, for
+ * a page that failed to load and a failed config boot; a host can show it for
+ * its own errors. Test tag `orca.error`.
+ */
 @Composable
-internal fun ErrorView(title: String, message: String, modifier: Modifier = Modifier, onRetry: (() -> Unit)? = null) {
-    Column(
-        modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Text(
-            message,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        if (onRetry != null) TextButton(onClick = onRetry) { Text("Try again") }
+public fun OrcaErrorView(error: Throwable, modifier: Modifier = Modifier, onRetry: (() -> Unit)? = null) {
+    OrcaErrorView(OrcaErrorInfo.from(error), modifier, onRetry)
+}
+
+/** [OrcaErrorView] for an [info] already made: the boot's plugin conflict keeps its own message. */
+@Composable
+internal fun OrcaErrorView(info: OrcaErrorInfo, modifier: Modifier = Modifier, onRetry: (() -> Unit)? = null) {
+    val colors = MaterialTheme.colorScheme
+    val base = LocalTextStyle.current
+    Box(modifier.fillMaxSize().testTag("orca.error"), contentAlignment = Alignment.Center) {
+        Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                errorIcon(info.kind),
+                contentDescription = null,
+                modifier = Modifier.size(48.dp).testTag("orca.error.icon"),
+                tint = colors.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                info.title,
+                color = colors.onSurface,
+                textAlign = TextAlign.Center,
+                style = base.merge(TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold)),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                info.message,
+                color = colors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                style = base.merge(TextStyle(fontSize = 14.sp)),
+            )
+            if (onRetry != null) {
+                Spacer(Modifier.height(16.dp))
+                TextButton(onClick = onRetry) { Text("Try again") }
+            }
+        }
     }
+}
+
+/** The Material icon Flutter's `buildOrcaError` draws for [kind]. */
+internal fun errorIcon(kind: OrcaErrorInfo.Kind): ImageVector = when (kind) {
+    OrcaErrorInfo.Kind.Unauthorized -> Icons.Outlined.Lock
+    OrcaErrorInfo.Kind.Forbidden -> Icons.Filled.Block
+    OrcaErrorInfo.Kind.NotFound -> Icons.Filled.SearchOff
+    OrcaErrorInfo.Kind.TooManyRequests -> Icons.Filled.Speed
+    OrcaErrorInfo.Kind.Server -> Icons.Filled.CloudOff
+    OrcaErrorInfo.Kind.Configuration -> Icons.Filled.Settings
+    OrcaErrorInfo.Kind.Connection -> Icons.Filled.WifiOff
+    OrcaErrorInfo.Kind.Status, OrcaErrorInfo.Kind.Unknown -> Icons.Filled.ErrorOutline
 }
 
 /** The page of a location no route matches, with a way out: [onHome]. */

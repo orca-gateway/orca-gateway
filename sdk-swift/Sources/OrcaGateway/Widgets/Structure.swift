@@ -20,6 +20,11 @@ import AppKit
 /// from the body (Flutter removes them from its MediaQuery padding,
 /// scaffold.dart :3027-3031): a SafeArea in it neither adds them nor lets its
 /// content under the bars. Bottom sheets are not drawn yet.
+///
+/// Always light: Flutter's `_buildScaffold`
+/// (sdk/lib/src/builders/structure_builders.dart), like its AppBar, Card,
+/// button and input builders, wraps the widget in `Theme(data: ThemeData())`,
+/// so an app's dark theme does not reach a Scaffold page.
 @MainActor
 struct ScaffoldView: View {
     let node: ResolvedNode
@@ -34,9 +39,9 @@ struct ScaffoldView: View {
         let drawers = ScaffoldDrawers(node: node, model: model, host: drawerHost,
                                       router: page?.router, route: page?.route.id)
         ZStack(alignment: .bottomTrailing) {
-            if let background = Props.color(node["backgroundColor"]) {
-                background.ignoresSafeArea()
-            }
+            // Painted also without a backgroundColor: the light background,
+            // so a dark window never shows behind the light page.
+            (Props.color(node["backgroundColor"]) ?? systemBackground).ignoresSafeArea()
             Group {
                 if let body = node.slots["body"] {
                     NodeView(id: body, model: model)
@@ -78,6 +83,7 @@ struct ScaffoldView: View {
         // constraints, so an axis forced on the Scaffold (the warn banner's
         // stretched Column) reaches neither the AppBar title nor the body.
         .environment(\.orcaTight, [])
+        .environment(\.colorScheme, .light)
     }
 
     /// The top edge under an appBar, the bottom one above bottom bars.
@@ -147,11 +153,16 @@ struct ScaffoldDrawers {
     }
 
     /// Show that drawer: the slot's node, normally a `Drawer`, which gives
-    /// the panel its width and colour.
+    /// the panel its width and colour. Light, as the Scaffold it belongs to
+    /// (`ScaffoldView`): the host draws it at the app root, out of the
+    /// Scaffold's light pin, but Flutter's `_buildScaffold` wraps the whole
+    /// Scaffold, drawer slots too, in `Theme(data: ThemeData())`.
     func open(_ edge: DrawerEdge) {
         guard let host, let id = slot(edge) else { return }
         let model = self.model
-        host.present(id: panelId(edge), edge: edge) { AnyView(NodeView(id: id, model: model)) }
+        host.present(id: panelId(edge), edge: edge) {
+            AnyView(NodeView(id: id, model: model).environment(\.colorScheme, .light))
+        }
     }
 
     func close(_ edge: DrawerEdge) {
@@ -270,6 +281,9 @@ private struct AppBarChrome: ViewModifier {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(background ?? Color.clear, for: .navigationBar)
                 .toolbarBackground(background == nil ? .automatic : .visible, for: .navigationBar)
+                // Light as the page under it (ScaffoldView): its material and the status bar.
+                .toolbarColorScheme(.light, for: .navigationBar)
+                .background(LightNavigationBar())
                 #endif
         } else if let appBar {
             content.safeAreaInset(edge: .top, spacing: 0) {
@@ -307,6 +321,57 @@ private struct AppBarChrome: ViewModifier {
         return Props.text(title["data"])
     }
 }
+
+#if os(iOS)
+/// Keeps the navigation bar light while a page with an AppBar is in the
+/// window, before iOS 26. There `toolbarColorScheme` reaches the bar only
+/// while its background is `.visible`, and the AppBar's is `.automatic`
+/// (clear at the scroll edge): under a dark scheme the bar stayed dark, its
+/// scrolled-under material dark and the status bar's content light over the
+/// light page. The bar is the stack's: once no such page over it is in a
+/// window it is unpinned, unless something else restyled it meanwhile.
+private struct LightNavigationBar: UIViewRepresentable {
+    func makeUIView(context: Context) -> Pin { Pin() }
+    func updateUIView(_ view: Pin, context: Context) {}
+
+    final class Pin: UIView {
+        /// The pins in a window.
+        private static let shown = NSHashTable<Pin>.weakObjects()
+        private weak var bar: UINavigationBar?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if #available(iOS 26, *) { return }
+            if window != nil {
+                guard bar == nil, let bar = navigationBar() else { return }
+                self.bar = bar
+                Self.shown.add(self)
+                bar.overrideUserInterfaceStyle = .light
+            } else if let bar {
+                self.bar = nil
+                Self.shown.remove(self)
+                if bar.overrideUserInterfaceStyle == .light, !Self.shown.allObjects.contains(where: { $0.bar === bar }) {
+                    bar.overrideUserInterfaceStyle = .unspecified
+                }
+            }
+        }
+
+        /// The navigation bar of the controller this view is drawn in.
+        private func navigationBar() -> UINavigationBar? {
+            var responder: UIResponder? = self
+            while let next = responder, !(next is UIViewController) { responder = next.next }
+            return (responder as? UIViewController)?.navigationController?.navigationBar
+        }
+    }
+}
+#endif
 
 /// An AppBar outside a Scaffold's appBar slot, laid out as Flutter's
 /// NavigationToolbar: `toolbarHeight` high (default 56); the leading slot a

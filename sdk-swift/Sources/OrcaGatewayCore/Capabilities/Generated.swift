@@ -78,6 +78,7 @@ public enum GeneratedCapabilities {
         "TextButton",
         "TextField",
         "Transform",
+        "UnsupportedWidgetPlaceholder",
         "Video",
         "Wrap",
     ]
@@ -171,5 +172,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "e7b6e54243f0259effafb2ab9cdf8760bce5faacd263ae48070a8f08cf2d83fa"
+    public static let capsHash = "cae35f8dd9e0234d4fb04745b6dfe79322ed74f26e33c3089d515af07841bf86"
 }

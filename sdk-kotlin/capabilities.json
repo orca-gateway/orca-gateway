@@ -61,6 +61,7 @@
     "TextButton",
     "TextField",
     "Transform",
+    "UnsupportedWidgetPlaceholder",
     "Video",
     "Wrap"
   ],

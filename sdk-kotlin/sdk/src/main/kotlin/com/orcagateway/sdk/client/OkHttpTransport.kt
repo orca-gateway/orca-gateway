@@ -13,6 +13,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -21,6 +22,11 @@ import kotlin.coroutines.resumeWithException
  * asks for gzip and decodes it itself, as the engine compresses when asked.
  * Every status is a response; only a failure to get one (no network, DNS,
  * timeout) throws, as an [IOException].
+ *
+ * A request's [HttpRequest.timeoutMillis] is the call timeout of that call
+ * alone, send to answer and body read: past it OkHttp cancels the call and
+ * it throws an `InterruptedIOException("timeout")`. A request without one
+ * keeps the [OkHttpClient]'s own timeouts.
  *
  * Share one [OkHttpClient] across the app (its connection pool and threads);
  * pass yours to reuse an existing one.
@@ -37,6 +43,7 @@ public class OkHttpTransport(private val http: OkHttpClient = OkHttpClient()) : 
                 .method(request.method, body)
                 .build(),
         )
+        request.timeoutMillis?.let { call.timeout().timeout(it, TimeUnit.MILLISECONDS) }
         return suspendCancellableCoroutine { continuation ->
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(

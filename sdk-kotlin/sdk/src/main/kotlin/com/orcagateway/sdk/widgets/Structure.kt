@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.contentColorFor
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -74,6 +75,7 @@ import com.orcagateway.sdk.ChildView
 import com.orcagateway.sdk.LocalOrcaSnackbars
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
+import com.orcagateway.sdk.WithColorScheme
 import com.orcagateway.sdk.indexedSlots
 import com.orcagateway.sdk.navigation.LocalOrcaNavigation
 import com.orcagateway.sdk.navigation.OrcaRouter
@@ -122,6 +124,12 @@ private val LocalDrawerChildDirection = compositionLocalOf<LayoutDirection?> { n
  *
  * Flutter's Scaffold lays out its slots with fresh, loose constraints, so a
  * size forced on the Scaffold reaches neither the AppBar title nor the body.
+ *
+ * The Scaffold and all it holds are light whatever the app's colour scheme:
+ * Flutter's `_buildScaffold` (sdk/lib/src/builders/structure_builders.dart)
+ * wraps it in `Theme(data: ThemeData())`, the default light theme, so a dark
+ * MaterialApp theme does not reach a Scaffold page. The typography and
+ * shapes stay the app's; the server's `backgroundColor` still wins.
  */
 @Composable
 internal fun ScaffoldWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -149,10 +157,12 @@ internal fun ScaffoldWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
         }
     }
 
-    CompositionLocalProvider(LocalOrcaSnackbars provides null) {
-        PageDrawer(start, startState, end = false, gestures = true, model, modifier.boundedBy(window)) { inner ->
-            PageDrawer(end, endState, end = true, gestures = start == null || endState.isOpen, model, inner) { innermost ->
-                ScaffoldFrame(node, model, innermost, snackbars, drawers)
+    WithColorScheme(flutterLight) {
+        CompositionLocalProvider(LocalOrcaSnackbars provides null) {
+            PageDrawer(start, startState, end = false, gestures = true, model, modifier.boundedBy(window)) { inner ->
+                PageDrawer(end, endState, end = true, gestures = start == null || endState.isOpen, model, inner) { innermost ->
+                    ScaffoldFrame(node, model, innermost, snackbars, drawers)
+                }
             }
         }
     }
@@ -254,6 +264,9 @@ private fun ScaffoldFrame(
         }
     }
 }
+
+/** Flutter's `ThemeData()` colours, as Material 3's default light scheme. */
+private val flutterLight = lightColorScheme()
 
 /**
  * A Material 3 Scaffold needs a finite size. Where its parent leaves an axis

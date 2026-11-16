@@ -61,6 +61,7 @@ import com.orcagateway.sdk.widgets.SubPageWidget
 import com.orcagateway.sdk.widgets.TextFieldWidget
 import com.orcagateway.sdk.widgets.TextWidget
 import com.orcagateway.sdk.widgets.TransformWidget
+import com.orcagateway.sdk.widgets.UnsupportedWidgetPlaceholderWidget
 import com.orcagateway.sdk.widgets.VideoWidget
 import com.orcagateway.sdk.widgets.WrapWidget
 import java.util.concurrent.ConcurrentHashMap
@@ -118,7 +119,7 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 62 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 63 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
@@ -126,9 +127,9 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
          * AnimatedContainer, AnimatedOpacity, AnimatedAlign, AnimatedSwitcher
          * and Hero, the 13 layout wrappers of native parity step 3 (A3.1),
          * the 11 effect and touch wrappers of native parity step 4
-         * (A4.x), and S13's ReorderableListView and SubPage. Keep the two
-         * lists in step: the caps vector advertises what this draws
-         * (WidgetBuildersTest checks it).
+         * (A4.x), S13's ReorderableListView and SubPage, and S18's
+         * UnsupportedWidgetPlaceholder. Keep the two lists in step: the caps
+         * vector advertises what this draws (WidgetBuildersTest checks it).
          */
         public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
             register("Scaffold") { node, model, modifier -> ScaffoldWidget(node, model, modifier) }
@@ -146,6 +147,7 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
             register("OutlinedButton") { node, model, modifier -> ButtonWidget(node, model, modifier) }
             register("TextButton") { node, model, modifier -> ButtonWidget(node, model, modifier) }
             register("FallbackPrompt") { node, model, modifier -> FallbackPromptWidget(node, model, modifier) }
+            register("UnsupportedWidgetPlaceholder") { node, model, modifier -> UnsupportedWidgetPlaceholderWidget(node, model, modifier) }
             register("Expanded") { node, model, modifier -> ExpandedWidget(node, model, modifier) }
             register("Spacer") { node, model, modifier -> SpacerWidget(node, model, modifier) }
             register("TextField") { node, model, modifier -> TextFieldWidget(node, model, modifier) }

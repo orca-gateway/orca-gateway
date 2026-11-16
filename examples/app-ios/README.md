@@ -191,6 +191,106 @@ reach the server is queued and sent on the next foreground; the server then prin
 Not there yet: the offline page cache and `preload()` arrive with plan step 14. Until then the
 version check runs with no saved flow versions, and only a force update changes what the app does.
 
+## Error screens, dark mode, locale and splash
+
+Five more settings try what `OrcaApp` draws around the pages. Set them as the two above, in the
+scheme or as `SIMCTL_CHILD_*`. Unset, the app runs as before:
+
+| Setting | Default | Does |
+|---|---|---|
+| `ORCA_API_KEY` | `demo-key` | the client's API key; the example server answers any other with 401 |
+| `ORCA_SCHEME` | unset: the system's | `dark` or `light`, passed as `OrcaApp(colorScheme:)` |
+| `ORCA_LOCALE` | unset: the device's | a BCP-47 tag such as `ar` or `fr-FR`, passed as `OrcaApp(locale:)` |
+| `ORCA_SPLASH` | off | `1` or `true`: the app's own splash, passed as `OrcaApp(splashView:)` |
+| `ORCA_TIMEOUT` | unset: the SDK's 30 | the seconds a request may take, set as the client's `timeout` |
+
+The app reads its settings at launch, and `simctl launch` leaves a running app as it is, so the
+commands below add `--terminate-running-process`. Start the server first (step 1 above). Each error
+screen is the SDK's `OrcaErrorView`: Flutter's error screen, with a "Try again" button added.
+
+**Page not found.** A path the counter app does not have:
+
+```bash
+SIMCTL_CHILD_ORCA_PATH=missing \
+  xcrun simctl launch --terminate-running-process booted com.orcagateway.examples.counter
+```
+
+A magnifying glass, "Not Found" and "The requested page could not be found."
+
+**Unauthorized.** A key the server does not know:
+
+```bash
+SIMCTL_CHILD_ORCA_API_KEY=wrong \
+  xcrun simctl launch --terminate-running-process booted com.orcagateway.examples.counter
+```
+
+A lock, "Unauthorized" and "Invalid or missing API key. Please check your configuration."
+
+**Offline.** Stop the server and launch, or leave it running and point the app at a port nothing
+listens on:
+
+```bash
+SIMCTL_CHILD_ORCA_SERVER_URL=http://localhost:9 \
+  xcrun simctl launch --terminate-running-process booted com.orcagateway.examples.counter
+```
+
+A crossed-out Wi-Fi sign, "Connection Failed" and "Unable to reach the server. Please check your
+network and server status." With the server stopped, start it again and tap "Try again": the
+counter loads.
+
+**Dark mode.** `ORCA_SCHEME=dark` turns the SDK's own screens dark, the error screen and the
+spinner. A server page's Scaffold stays light, as Flutter's default theme draws it, so try it on an
+error screen:
+
+```bash
+SIMCTL_CHILD_ORCA_SCHEME=dark SIMCTL_CHILD_ORCA_PATH=missing \
+  xcrun simctl launch --terminate-running-process booted com.orcagateway.examples.counter
+```
+
+"Not Found" in white on black. `ORCA_SCHEME=light` keeps it light on a simulator in dark mode
+(`xcrun simctl ui booted appearance dark`).
+
+**Host splash and timeout.** A splash shows while the app waits for its first answer: the version
+check (`ORCA_OFFLINE=1`) or the navigation config (`ORCA_BOOT=config`). Against the example server
+that is a blink, so give the app a server that takes the request and never answers. In a second
+terminal:
+
+```bash
+nc -l 8099
+```
+
+Then:
+
+```bash
+SIMCTL_CHILD_ORCA_SPLASH=1 SIMCTL_CHILD_ORCA_BOOT=config SIMCTL_CHILD_ORCA_TIMEOUT=5 \
+  SIMCTL_CHILD_ORCA_SERVER_URL=http://localhost:8099 \
+  xcrun simctl launch --terminate-running-process booted com.orcagateway.examples.counter
+```
+
+`nc` prints the config request. The app shows its own splash: "Orca Counter" in large white letters
+on indigo, and under it "host splash" with the locale its views get. Five seconds later the request
+times out, "Connection Failed" shows and `nc` stops; start it again before the next launch. Without
+`ORCA_SPLASH` the same wait shows the SDK's spinner, and without `ORCA_TIMEOUT` it lasts the SDK's
+30 seconds.
+
+**Locale.** Add `SIMCTL_CHILD_ORCA_LOCALE=fr-FR` (or `ar`) to the launch above: the splash caption
+reads `host splash · fr-FR`, the locale `OrcaApp` gives every view under it. The example's pages
+format no dates or numbers, so they look the same. The server still gets the device's locale in
+`x-orca-locale`, as from Flutter.
+
+**Placeholder card.** The `placeholder` page of the `capability-demo` app shows two
+`UnsupportedWidgetPlaceholder` cards, the grey card a server sends for a widget that cannot run in
+this app:
+
+```bash
+SIMCTL_CHILD_ORCA_APP_ID=capability-demo SIMCTL_CHILD_ORCA_PATH=placeholder \
+  xcrun simctl launch --terminate-running-process booted com.orcagateway.examples.counter
+```
+
+The first card has every prop set: a map icon, "Google Maps", the reason and a "Learn more" link.
+The second has only the widget type, so it shows the SDK's defaults: "OrcaGoogleMap" and "This
+widget runs in the compiled mobile app and cannot preview here."
+
 ## DevTools
 
 Debug builds connect to Orca DevTools on `ws://localhost:6363` (start it with `task devtools:dev`)
