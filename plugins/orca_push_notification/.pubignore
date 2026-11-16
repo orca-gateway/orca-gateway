@@ -1,0 +1,10 @@
+# pub reads this file instead of .gitignore, so it repeats .gitignore's entries.
+# The native packages ship on their own (SwiftPM mirror, Maven Central), not in the pub archive.
+/ios/
+/android/
+.build/
+.swiftpm/
+Package.resolved
+.gradle/
+.kotlin/
+local.properties
