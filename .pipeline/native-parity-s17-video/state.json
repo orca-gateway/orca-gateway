@@ -4,9 +4,9 @@
   "idea": "Native parity step 17, plugin 2 of 4: the video player plugin as separate native packages (plugins/orca_video_player/ios SwiftPM, plugins/orca_video_player/android Gradle) on the voice recorder's template, matching the Flutter plugin",
   "kind": "feature",
   "created_at": "2026-11-16T13:02:43Z",
-  "updated_at": "2026-11-16T15:13:47Z",
+  "updated_at": "2026-11-16T17:25:09Z",
   "active_session": "7317184b-fcd8-4ef3-bc8c-3dc085f8486c",
-  "current": "10",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -51,27 +51,38 @@
       "approved_with": "standing rule (minor and patch auto-approved): gate 09 group 4 of 4, both questions minor, defaults: no blocked tasks; approve the stage, then stage 10 opens the video PR"
     },
     "10": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 1,
-      "card": "cards/10-r1.md"
+      "card": "cards/10-r1.md",
+      "approved_at": "2026-11-16T17:24:54Z",
+      "approved_with": "standing rule (minor and patch auto-approved): question 1 answered by your merge of PR #49 (38806077, 2026-11-16 16:32Z, all 9 checks passed); questions 2-4 minor, defaults"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by the default accepted at gate 10 (standing rule, minor)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-16T17:25:09Z",
+      "approved_with": "standing rule (minor and patch auto-approved): gate 12's two questions (close the video slice with 13-16 skipped; the map goes on on main 3880607) minor, defaults"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "the video player has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "the video player has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "the video player has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "the video player has no deployed service; skipped by the default accepted at gate 12 (standing rule, minor)"
     }
   },
   "gates": {
