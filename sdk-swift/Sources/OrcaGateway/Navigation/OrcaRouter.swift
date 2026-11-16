@@ -181,10 +181,6 @@ public final class OrcaRouter: ObservableObject {
     /// Reduced motion (`@OrcaReduceMotion`, set by the view that draws the
     /// router): every push is the system's.
     var reduceMotion = false
-    /// Whether the last change of the stacks was left to the system's
-    /// animation (true), or made with it off for a page that animates
-    /// itself in (false); nil before the first change.
-    private(set) var lastPathWriteAnimated: Bool?
     /// The entrance of every route on the stacks that was pushed with the
     /// system animation off, by route id; it stays while the route does.
     private var entrances: [UUID: RouteEntrance] = [:]
@@ -308,11 +304,9 @@ public final class OrcaRouter: ObservableObject {
     private func writeStacks(pushed: OrcaRoute?, _ body: () -> Void) {
         let spec = pushed.map { TransitionSpec.spec(for: $0.transition) }
         guard let pushed, let spec, !reduceMotion, spec.honoured(on: .iOS) else {
-            lastPathWriteAnimated = true
             return body()
         }
         entrances[pushed.id] = RouteEntrance(spec: spec, startMs: frameClock())
-        lastPathWriteAnimated = false
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction, body)
@@ -337,7 +331,7 @@ public final class OrcaRouter: ObservableObject {
         } else {
             pendingType = .push
             // Without a config no route has a transition: the system push.
-            writeStacks(pushed: routes[0]) { stack.append(routes[0]) }
+            stack.append(routes[0])
         }
     }
 
@@ -628,7 +622,6 @@ public final class OrcaRouter: ObservableObject {
         loaders = loaders.filter { live.contains($0.key) }
         if let asked = pageDrawerRequest, !live.contains(asked) { pageDrawerRequest = nil }
         entrances = entrances.filter { live.contains($0.key) }
-        if pendingType != .push { lastPathWriteAnimated = true }
         handTopTheAppState()
         // A change that `navigate` and `goBack` did not start came through
         // the `NavigationStack` path: a back swipe when the stack shrank.

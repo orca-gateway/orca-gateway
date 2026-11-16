@@ -77,14 +77,23 @@ final class TransitionTests: XCTestCase {
         XCTAssertEqual(look.scale, 1, accuracy: 1e-9, "scale", file: file, line: line)
     }
 
+    /// Wait for `condition`, looked at every 10 ms, for 5 s at most; what
+    /// follows asserts it, so a timeout fails there.
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition(), Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+    }
+
     // MARK: - B12.6-S: fade and slide-up
 
     func test_B12_6_pushingAFadeRouteTurnsTheSystemPushOffAndThePageFadesIn() throws {
         let router = try router(plain)
-        XCTAssertNil(router.lastPathWriteAnimated, "the boot is no push")
+        XCTAssertNil(router.entrance(of: router.top.id), "the boot is no push")
         router.navigate(to: "/fade")
         XCTAssertEqual(router.top.path, "fade")
-        XCTAssertEqual(router.lastPathWriteAnimated, false)
+        XCTAssertNotNil(router.entrance(of: router.top.id))
         XCTAssertEqual(router.entrance(of: router.top.id)?.spec.kind, .fade)
 
         assertLook(router.entering(router.top, at: 1000), 0, 0)
@@ -100,7 +109,7 @@ final class TransitionTests: XCTestCase {
         let router = try router(plain)
         now = 5000
         router.navigate(to: "/rise")
-        XCTAssertEqual(router.lastPathWriteAnimated, false)
+        XCTAssertNotNil(router.entrance(of: router.top.id))
         XCTAssertEqual(router.entrance(of: router.top.id)?.spec.kind, .slideUp)
 
         assertLook(router.entering(router.top, at: 5000), 1, 1)
@@ -113,7 +122,7 @@ final class TransitionTests: XCTestCase {
     func test_B12_6_theDefaultsAre300MillisecondsEasedInAndOut() throws {
         let router = try router(plain)
         router.navigate(to: "/eased")
-        XCTAssertEqual(router.lastPathWriteAnimated, false)
+        XCTAssertNotNil(router.entrance(of: router.top.id))
         assertLook(router.entering(router.top, at: 1075), 0.12868531048297882, 0)
         assertLook(router.entering(router.top, at: 1150), 0.5, 0)
         assertLook(router.entering(router.top, at: 1300), 1, 0)
@@ -132,7 +141,6 @@ final class TransitionTests: XCTestCase {
             let router = try router(plain)
             router.navigate(to: "/" + path)
             XCTAssertEqual(router.top.path, path)
-            XCTAssertEqual(router.lastPathWriteAnimated, true, path)
             XCTAssertNil(router.entrance(of: router.top.id), path)
             assertLook(router.entering(router.top, at: 1000), 1, 0)
         }
@@ -143,7 +151,6 @@ final class TransitionTests: XCTestCase {
             let router = try router(plain)
             router.reduceMotion = true
             router.navigate(to: "/" + path)
-            XCTAssertEqual(router.lastPathWriteAnimated, true, path)
             XCTAssertNil(router.entrance(of: router.top.id), path)
             assertLook(router.entering(router.top, at: 1000), 1, 0)
         }
@@ -153,27 +160,29 @@ final class TransitionTests: XCTestCase {
         let router = try router(plain)
         router.navigate(to: "/fade")
         let pushed = router.top.id
-        XCTAssertEqual(router.lastPathWriteAnimated, false)
+        XCTAssertNotNil(router.entrance(of: router.top.id))
 
         now = 1050
         router.goBack()
         XCTAssertEqual(router.top.path, "start")
-        XCTAssertEqual(router.lastPathWriteAnimated, true, "the pop is the system's")
+        XCTAssertNil(router.entrance(of: router.top.id), "the pop is the system's")
         XCTAssertNil(router.entrance(of: pushed), "the route that left takes its entrance along")
         assertLook(router.entering(router.top, at: 1050), 1, 0)
 
         // A back swipe writes the path itself: nothing of ours runs.
         router.navigate(to: "/rise")
-        XCTAssertEqual(router.lastPathWriteAnimated, false)
+        let swiped = router.top.id
+        XCTAssertNotNil(router.entrance(of: swiped))
         now = 3000
         router.stack = []
         XCTAssertEqual(router.top.path, "start")
-        XCTAssertEqual(router.lastPathWriteAnimated, true)
+        XCTAssertNil(router.entrance(of: router.top.id))
+        XCTAssertNil(router.entrance(of: swiped), "swiped away, its entrance with it")
 
         // The same route again enters again, from the new time.
         now = 4000
         router.navigate(to: "/fade")
-        XCTAssertEqual(router.lastPathWriteAnimated, false)
+        XCTAssertNotNil(router.entrance(of: router.top.id))
         assertLook(router.entering(router.top, at: 4000), 0, 0)
         assertLook(router.entering(router.top, at: 4200), 1, 0)
     }
@@ -184,13 +193,16 @@ final class TransitionTests: XCTestCase {
         let fade = router.top
         now = 2000
         router.navigate(to: "/bare")
-        XCTAssertEqual(router.lastPathWriteAnimated, true)
+        let bare = router.top.id
+        XCTAssertNil(router.entrance(of: bare))
         // Still on the stack: the same entrance, long over.
         XCTAssertEqual(router.entrance(of: fade.id)?.startMs, 1000)
         assertLook(router.entering(fade, at: 2000), 1, 0)
         router.goBack()
         XCTAssertEqual(router.top, fade)
-        XCTAssertEqual(router.lastPathWriteAnimated, true)
+        // The pop is the system's: no entrance begins, the old one stands.
+        XCTAssertNil(router.entrance(of: bare))
+        XCTAssertEqual(router.entrance(of: fade.id)?.startMs, 1000)
         assertLook(router.entering(fade, at: 2000), 1, 0)
     }
 
@@ -199,7 +211,7 @@ final class TransitionTests: XCTestCase {
         router.navigate(to: "/home/detail", replace: true)
         XCTAssertEqual(router.root.path, "home")
         XCTAssertEqual(router.top.path, "home/detail")
-        XCTAssertEqual(router.lastPathWriteAnimated, false)
+        XCTAssertNotNil(router.entrance(of: router.top.id))
         assertLook(router.entering(router.top, at: 1000), 0, 0)
         assertLook(router.entering(router.root, at: 1000), 1, 0)
 
@@ -209,17 +221,17 @@ final class TransitionTests: XCTestCase {
         other.navigate(to: "/fade", replace: true)
         XCTAssertEqual(other.root.path, "fade")
         XCTAssertTrue(other.stack.isEmpty)
-        XCTAssertEqual(other.lastPathWriteAnimated, true)
         XCTAssertNil(other.entrance(of: other.root.id))
     }
 
     func test_B12_7_withoutAConfigNoRouteHasATransition() {
         let router = OrcaRouter(client: PageStub.client(stub), path: "home", system: SystemRecorder().actions())
         router.navigate(to: "about")
-        XCTAssertEqual(router.lastPathWriteAnimated, true)
+        XCTAssertEqual(router.top.path, "about")
         XCTAssertNil(router.entrance(of: router.top.id))
         router.goBack()
-        XCTAssertEqual(router.lastPathWriteAnimated, true)
+        XCTAssertEqual(router.top.path, "home")
+        XCTAssertNil(router.entrance(of: router.top.id))
     }
 
     // MARK: - Inside a tab
@@ -229,7 +241,7 @@ final class TransitionTests: XCTestCase {
         XCTAssertTrue(router.hasShell)
         router.navigate(to: "/feed/item/7")
         XCTAssertEqual(router.tabStacks[0].map(\.path), ["feed", "feed/item/7"])
-        XCTAssertEqual(router.lastPathWriteAnimated, false)
+        XCTAssertNotNil(router.entrance(of: router.top.id))
         let item = router.top
         assertLook(router.entering(item, at: 1000), 0, 0)
         assertLook(router.entering(item, at: 1100), 0.5, 0)
@@ -238,18 +250,19 @@ final class TransitionTests: XCTestCase {
         // Another tab and back: no push, and the page is as it was left.
         now = 6000
         router.selectTab(1)
-        XCTAssertEqual(router.lastPathWriteAnimated, true)
         XCTAssertNil(router.entrance(of: router.top.id))
         router.navigate(to: "/feed/item/7", replace: true)
         XCTAssertEqual(router.currentTab, 0)
+        let left = router.entrance(of: router.top.id)?.startMs
+        now = 7000
         router.selectTab(1)
         router.selectTab(0)
-        XCTAssertEqual(router.lastPathWriteAnimated, true)
+        // Coming back to a tab is no push: no entrance begins.
+        XCTAssertEqual(router.entrance(of: router.top.id)?.startMs, left)
 
         // The tab's other child keeps the system push.
         router.navigate(to: "/feed/about")
         XCTAssertEqual(router.top.path, "feed/about")
-        XCTAssertEqual(router.lastPathWriteAnimated, true)
         XCTAssertNil(router.entrance(of: router.top.id))
     }
 
@@ -257,7 +270,7 @@ final class TransitionTests: XCTestCase {
         let router = try router(tabbed)
         router.navigate(to: "/settings")
         XCTAssertEqual(router.overRoutes.map(\.path), ["settings"])
-        XCTAssertEqual(router.lastPathWriteAnimated, false)
+        XCTAssertNotNil(router.entrance(of: router.top.id))
         assertLook(router.entering(router.top, at: 1000), 1, 1)
         assertLook(router.entering(router.top, at: 1200), 1, 0.5)
         assertLook(router.entering(router.top, at: 1400), 1, 0)
@@ -265,14 +278,13 @@ final class TransitionTests: XCTestCase {
         now = 1500
         router.goBack()
         XCTAssertEqual(router.top.path, "feed")
-        XCTAssertEqual(router.lastPathWriteAnimated, true)
+        XCTAssertNil(router.entrance(of: router.top.id))
     }
 
     func test_B12_7_reducedMotionInsideATabKeepsTheSystemPush() throws {
         let router = try router(tabbed)
         router.reduceMotion = true
         router.navigate(to: "/feed/item/7")
-        XCTAssertEqual(router.lastPathWriteAnimated, true)
         XCTAssertNil(router.entrance(of: router.top.id))
     }
 
@@ -290,13 +302,15 @@ final class TransitionTests: XCTestCase {
         window.makeKeyAndOrderFront(nil)
         defer { window.orderOut(nil) }
         #endif
-        try await Task.sleep(nanoseconds: 400_000_000)
+        let pages = { self.stub.requests.map { $0.url.path.components(separatedBy: "/page/").last ?? "" } }
+        try await waitUntil { pages() == ["feed"] }
         router.navigate(to: "/feed/item/7")
-        XCTAssertEqual(router.lastPathWriteAnimated, false)
-        try await Task.sleep(nanoseconds: 600_000_000)
+        XCTAssertNotNil(router.entrance(of: router.top.id))
         // The pushed page was drawn (so fetched), and its entrance is over.
-        let pages = stub.requests.map { $0.url.path.components(separatedBy: "/page/").last ?? "" }
-        XCTAssertEqual(pages, ["feed", "feed/item/7"])
+        try await waitUntil {
+            pages().count == 2 && router.entering(router.top, at: router.frameClock()).opacity == 1
+        }
+        XCTAssertEqual(pages(), ["feed", "feed/item/7"])
         let look = router.entering(router.top, at: router.frameClock())
         XCTAssertEqual(look.opacity, 1)
     }
