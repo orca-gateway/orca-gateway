@@ -73,6 +73,8 @@ struct PagerView: View {
             .onEnded { feed.ended(at: $0.time) })
         // A drag cancelled (no onEnded) settles from where it is, as Flutter's.
         .onChange(of: touching) { active in if !active { feed.released() } }
+        // A new tree with fewer pages brings the pager back within them.
+        .onChange(of: ids.count) { count in feed.keepWithinPages(count: count) }
         // Laid out and dragged left to right; right-to-left is `backwards`,
         // each page back in the ambient direction.
         .environment(\.layoutDirection, .leftToRight)
@@ -161,19 +163,22 @@ private struct FreePager: View {
 ///   scroll view inside (Flutter's gesture arena). It follows the finger
 ///   from there (DragStartBehavior.start), kept within the pages, and
 ///   begins the scroll.
-/// - Let go, the release velocity and the finger's travel over the last
-///   100 ms of the drag (VelocityTracker's window; no speed when the finger
-///   was still for 40 ms) pick PageSnap's page, a fling only past both its
-///   gates (speed and travel), and the pager settles there by Flutter's
-///   ScrollSpringSimulation (PagerSpring), one sample a frame, ending
-///   exactly on it.
+/// - Every position of the touch from touch-down goes to the core's
+///   IOSFlingTracker, Flutter's iOS tracker (its recognizer feeds the
+///   tracker from the pointer down; Android's windowed VelocityTracker is
+///   Kotlin's). Let go, its velocity and travel pick PageSnap's page, a
+///   fling only past both gates (speed and travel), and the pager settles
+///   there by Flutter's ScrollSpringSimulation (PagerSpring), one sample a
+///   frame, ending exactly on it; a new extent, or none, ends a settle on
+///   its page at once.
+/// - Fewer pages (a new tree) bring a pager past the last back to it
+///   (`keepWithinPages`, outside the view's body), stopping a settle aimed
+///   past it.
 /// - Each move goes through a ScrollObserver: begin, scrolling, end.
 @MainActor
 final class PagerFeed: ObservableObject {
     /// Flutter's kTouchSlop, in points.
     static let slop: Double = 18
-    /// Flutter's kMaxFlingVelocity, points per second.
-    static let maxFlingVelocity: Double = 8000
 
     @Published private(set) var page: Double
 
@@ -186,15 +191,18 @@ final class PagerFeed: ObservableObject {
     private let observer = ScrollObserver()
     private var touch: Touch?
     private var settle: Task<Void, Never>?
+    /// The page a settle under way ends on.
+    private var settleTarget: Int?
 
     /// One touch: whether it is the pager's (nil until it passes the slop),
     /// the page and the finger along the axis where the drag started, its
-    /// samples, and whether it stopped a settle.
+    /// positions along the axis from touch-down, and whether it stopped a
+    /// settle.
     private struct Touch {
         var ours: Bool?
         var startPage: Double = 0
         var startFinger: Double = 0
-        var samples: [(time: Date, finger: Double)] = []
+        var tracker = PageSnap.IOSFlingTracker()
         var held = false
     }
 
@@ -227,6 +235,7 @@ final class PagerFeed: ObservableObject {
         var touch = self.touch ?? Touch(held: stopSettle())
         let along = Double(vertical ? translation.height : translation.width)
         let across = Double(vertical ? translation.width : translation.height)
+        touch.tracker.add(time: time.timeIntervalSinceReferenceDate, position: along)
         if touch.ours == nil, max(abs(along), abs(across)) > Self.slop {
             touch.ours = abs(along) >= abs(across)
             touch.startPage = page
@@ -234,7 +243,6 @@ final class PagerFeed: ObservableObject {
             if touch.ours == true { fire(observer.observe(metrics, inProgress: true)) }
         }
         if touch.ours == true {
-            touch.samples = touch.samples.filter { time.timeIntervalSince($0.time) <= 0.1 } + [(time, along)]
             let moved = (along - touch.startFinger) * (backwards ? 1 : -1)
             let offset = min(max(touch.startPage * extent + moved, 0), maxExtent)
             if offset != page * extent {
@@ -245,12 +253,30 @@ final class PagerFeed: ObservableObject {
         self.touch = touch
     }
 
+    /// The page count is now `count` (a new tree, this pager kept): past
+    /// the last page, the pager comes back to it without a scroll (Flutter
+    /// keeps the offset within the new extent); a settle aimed past it
+    /// stops there and ends the scroll.
+    func keepWithinPages(count: Int) {
+        self.count = count
+        let last = Double(max(count - 1, 0))
+        if let target = settleTarget, Double(target) > last {
+            settle?.cancel()
+            settle = nil
+            settleTarget = nil
+            page = min(page, last)
+            fire(observer.observe(metrics, inProgress: false))
+        } else if page > last {
+            page = last
+        }
+    }
+
     /// The finger has lifted.
     func ended(at time: Date) {
         guard let touch else { return }
         self.touch = nil
         if touch.ours == true {
-            let release = Self.release(touch.samples, at: time)
+            let release = touch.tracker.estimate(now: time.timeIntervalSinceReferenceDate)
             let sign: Double = backwards ? 1 : -1
             settle(velocity: release.velocity * sign, travel: release.travel * sign)
         } else if touch.held {
@@ -262,7 +288,7 @@ final class PagerFeed: ObservableObject {
     /// where it is (Flutter's `cancel` goes ballistic at 0).
     func released() {
         guard touch != nil else { return }
-        touch?.samples = []
+        touch?.tracker = PageSnap.IOSFlingTracker()
         ended(at: Date())
     }
 
@@ -272,55 +298,42 @@ final class PagerFeed: ObservableObject {
         ScrollMetrics(offset: page * extent, maxExtent: maxExtent, viewportDimension: extent)
     }
 
-    /// The finger's speed along the axis in points per second over the
-    /// velocity window, at most Flutter's kMaxFlingVelocity, and how far it
-    /// travelled over it (newest minus oldest, Flutter's estimate offset).
-    /// The window is VelocityTracker's: the samples of the last 100 ms back
-    /// to a gap of more than 40 ms; none when the finger was still for
-    /// 40 ms before `time`.
-    private static func release(_ samples: [(time: Date, finger: Double)],
-                                at time: Date) -> (velocity: Double, travel: Double) {
-        guard let last = samples.last, time.timeIntervalSince(last.time) <= 0.04 else { return (0, 0) }
-        var first = last
-        for sample in samples.dropLast().reversed() {
-            guard first.time.timeIntervalSince(sample.time) <= 0.04 else { break }
-            first = sample
-        }
-        guard last.time > first.time else { return (0, 0) }
-        let travel = last.finger - first.finger
-        let speed = travel / last.time.timeIntervalSince(first.time)
-        return (min(max(speed, -maxFlingVelocity), maxFlingVelocity), travel)
-    }
-
     /// Stops a settle under way where it is, ending the scroll; whether one was.
     private func stopSettle() -> Bool {
         guard let settle else { return false }
         settle.cancel()
         self.settle = nil
+        settleTarget = nil
         fire(observer.observe(metrics, inProgress: false))
         return true
     }
 
     /// Settles on PageSnap's page for the release `velocity` and `travel`
-    /// (toward later pages), one spring sample a frame; the scroll ends there.
+    /// (toward later pages), one spring sample a frame; the scroll ends
+    /// there, at once when the extent changes (or goes) on the way.
     private func settle(velocity: Double, travel: Double) {
         let start = page * extent
-        let target = PageSnap.target(offset: start, viewportExtent: extent, velocity: velocity,
-                                     travel: travel, pageCount: count)
-        let end = Double(target ?? 0) * extent
-        guard start != end else { return fire(observer.observe(metrics, inProgress: false)) }
+        guard let target = PageSnap.target(offset: start, viewportExtent: extent, velocity: velocity,
+                                           travel: travel, pageCount: count),
+              start != Double(target) * extent
+        else { return fire(observer.observe(metrics, inProgress: false)) }
         fire(observer.observe(metrics, inProgress: true))
-        let spring = PagerSpring(start: start, end: end,
+        let spring = PagerSpring(start: start, end: Double(target) * extent,
                                  velocity: PageSnap.flingVelocity(velocity, travel: travel))
-        let began = Date()
+        let began = Date(), laidOut = extent
+        settleTarget = target
         settle = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 16_666_667)
-                guard let self, !Task.isCancelled, extent > 0 else { return }
+                guard let self, !Task.isCancelled else { return }
                 let time = Date().timeIntervalSince(began)
-                let done = spring.done(time)
-                page = spring.x(time) / extent
-                if done { settle = nil }
+                let resized = extent != laidOut
+                let done = resized || spring.done(time)
+                page = resized ? Double(target) : spring.x(time) / extent
+                if done {
+                    settle = nil
+                    settleTarget = nil
+                }
                 fire(observer.observe(metrics, inProgress: !done))
                 if done { return }
             }

@@ -37,7 +37,8 @@ final class PagerTests: XCTestCase {
         for (props, direction) in cases {
             let model = try model([node("box", "SizedBox", ["width": 200, "height": 100], ["pv"])] + pages(3, props))
             let pixels = try draw(NodeView(id: "box", model: model).environment(\.layoutDirection, direction))
-            assertFrame(pixels.bounds(of: Self.red), CGRect(x: 0, y: 0, width: 200, height: 100), "\(props) \(direction)")
+            assertFrame(pixels.bounds(of: Self.red), CGRect(x: 0, y: 0, width: 200, height: 100),
+                        "\(props) \(direction)")
             XCTAssertNil(pixels.bounds(of: Self.green), "\(props) \(direction)")
             assertFrame(pixels.bounds { !Self.grey($0) }, CGRect(x: 0, y: 0, width: 200, height: 100),
                         "\(props) \(direction)")
@@ -151,9 +152,9 @@ final class PagerTests: XCTestCase {
     }
 
     /// A5.4: a release is a fling only while the finger was still moving
-    /// (Flutter's VelocityTracker takes a finger still for 40 ms as
-    /// stopped): let go at once a quarter of the way on, the pager settles
-    /// on page 1; held still first, it settles back on page 0.
+    /// (Flutter's iOS tracker takes no sample for 40 ms as a still finger):
+    /// let go at once a fifth of the way on, the pager settles on page 1;
+    /// held still first, it settles back on page 0.
     func testA5_4AReleaseIsAFlingOnlyWhileTheFingerStillMoves() {
         let (moving, _) = feed()
         Self.swipe(moving, to: -70, hold: 0)
@@ -164,28 +165,38 @@ final class PagerTests: XCTestCase {
         wait(until: { held.page == 0 }, "a held release did not settle back on page 0: \(held.page)")
     }
 
-    /// A5.4: a quick flick is a fling only if the finger also travelled
-    /// more than 18 points in the last 100 ms (Flutter's minFlingDistance):
-    /// dragged slowly to 0.25, a flick of 10 points at 500 points a second
-    /// settles back on page 0; one of 30 points turns it to page 1.
-    func testA5_4AShortFlickIsNoFling() {
-        for (flick, page) in [(-80.0, 0.0), (-100, 1)] {
-            let (feed, _) = feed()
+    /// A5.4: a quick 35-point swipe in 40 ms pages: the iOS tracker counts
+    /// the finger from touch-down (Flutter's recognizer feeds it from the
+    /// pointer down), so its travel is 35, past the 18 of the gate, though
+    /// the pager took the drag only past the slop.
+    func testA5_4AQuick35PointSwipePages() {
+        let (feed, _) = feed()
+        Self.swipe(feed, to: -35, over: 0.04, hold: 0.005)
+        wait(until: { feed.page == 1 }, "a quick 35-point swipe did not page: \(feed.page)")
+    }
+
+    /// A5.4: the travel counts from touch-down, so a drag back near where
+    /// the finger touched down is no fling, however fast: from page 1, left
+    /// to -60 and quickly back right (about 1800 points a second) to 10
+    /// points short of the touch, it settles on page 1 from 0.9; back to 20
+    /// points past it, it flings back to page 0 from 0.75.
+    func testA5_4ADragBackNearWhereItTouchedDownIsNoFling() {
+        for (back, page) in [(-10.0, 1.0), (20, 0)] {
+            let (feed, _) = feed(page: 1)
             let t = Date()
-            feed.changed(.zero, at: t)
-            feed.changed(CGSize(width: -20, height: 0), at: t + 0.01)
-            feed.changed(CGSize(width: -70, height: 0), at: t + 0.2)
-            feed.changed(CGSize(width: flick, height: 0), at: t + 0.22)
-            feed.ended(at: t + 0.23)
-            wait(until: { feed.page == page }, "a flick to \(flick) did not settle on page \(page): \(feed.page)")
+            for (step, x) in [0, -30, -60, -40, -25, back].enumerated() {
+                feed.changed(CGSize(width: x, height: 0), at: t + Double(step) * 0.01)
+            }
+            feed.ended(at: t + 0.055)
+            wait(until: { feed.page == page }, "back to \(back) did not settle on page \(page): \(feed.page)")
         }
     }
 
-    /// A5.4: the velocity window reaches back only to a pause of more than
-    /// 40 ms (Flutter's VelocityTracker): a fast 40 points, a 60 ms pause,
-    /// then 5 more points is a release of 5 points' travel, no fling, so the
-    /// pager settles back on page 0 from 0.275.
-    func testA5_4TheVelocityWindowStopsAtAPause() {
+    /// A5.4: the iOS tracker has no window and no cut at a pause: a fast 40
+    /// points, a 60 ms pause, then 5 more weighs to about -2483 points a
+    /// second over 75 of travel, a fling, so the pager settles on page 1
+    /// from 0.275.
+    func testA5_4AReleaseAfterAPauseStillCountsTheWholeDrag() {
         let (feed, _) = feed()
         let t = Date()
         feed.changed(.zero, at: t)
@@ -195,7 +206,51 @@ final class PagerTests: XCTestCase {
         feed.changed(CGSize(width: -75, height: 0), at: t + 0.09)
         XCTAssertEqual(feed.page, 0.275, accuracy: 1e-9)
         feed.ended(at: t + 0.1)
-        wait(until: { feed.page == 0 }, "a release after a pause flung: \(feed.page)")
+        wait(until: { feed.page == 1 }, "a release after a pause did not fling: \(feed.page)")
+    }
+
+    /// A5.4: fewer pages (a new tree, the pager kept) bring a pager past the
+    /// last one back to it, silently, as Flutter keeps the offset within the
+    /// new extent; a settle aimed past the end stops on the last page and
+    /// ends the scroll there.
+    func testA5_4FewerPagesBringThePagerBackWithinThem() {
+        let (feed, events) = feed(page: 4)
+        feed.keepWithinPages(count: 2)
+        XCTAssertEqual(feed.page, 1)
+        XCTAssertEqual(events.list, [], "the correction scrolled")
+
+        let (settling, settled) = self.feed(page: 3)
+        Self.swipe(settling, to: -70)
+        pump(0.05)
+        XCTAssertGreaterThan(settling.page, 3.2, "no settle under way")
+        settling.keepWithinPages(count: 2)
+        XCTAssertEqual(settling.page, 1)
+        XCTAssertEqual(settled.list.last?.trigger, "onScrollEnd")
+        XCTAssertEqual(settled.list.last?.eventData["offset"], 200)
+        let count = settled.list.count
+        pump(0.5)
+        XCTAssertEqual(settled.list.count, count, "the stopped settle went on")
+        XCTAssertEqual(settling.page, 1)
+    }
+
+    /// A5.4: a new extent, or none, during a settle ends it on its page at
+    /// once, onScrollEnd at page × the new extent, and leaves no settle
+    /// behind (a touch then ends nothing).
+    func testA5_4ANewExtentEndsASettleOnItsPage() {
+        for extent in [300.0, 0] {
+            let (feed, events) = feed()
+            Self.swipe(feed, to: -70)
+            pump(0.05)
+            XCTAssertTrue(feed.page > 0.2 && feed.page < 1, "no settle under way: \(feed.page)")
+            feed.update(extent: extent, count: 5, vertical: false, backwards: false) { events.list += $0 }
+            wait(until: { events.list.last?.trigger == "onScrollEnd" }, "no onScrollEnd at extent \(extent)")
+            XCTAssertEqual(feed.page, 1)
+            XCTAssertEqual(events.list.last?.eventData["offset"], .double(extent))
+            XCTAssertEqual(events.list.last?.eventData["viewportDimension"], .double(extent))
+            let count = events.list.count
+            feed.changed(.zero, at: Date())
+            XCTAssertEqual(events.list.count, count, "a settle was left behind at extent \(extent)")
+        }
     }
 
     #if canImport(UIKit)
@@ -223,15 +278,15 @@ final class PagerTests: XCTestCase {
     }
 
     /// A5.4: each settle moves at most one page from where the finger let
-    /// go, however fast: from page 0 to 1, from 1 (let go at 1.85) to 2, and
-    /// a drag of more than a page from 2 (let go at 3.4) to 4, each ending at
-    /// page × 200.
+    /// go, however fast: from page 0 (let go at 0.375) to 1, from 1 (let go
+    /// at 1.475) to 2, and a drag of more than a page from 2 (let go at 3.2)
+    /// to 4, each ending at page × 200.
     func testA5_4EachSettleMovesAtMostOnePageFromWhereTheFingerLetGo() throws {
         let hosted = try HostedPager(pages(5, actions: triggers))
         defer { hosted.close() }
 
-        for (finger, page, ends) in [(-150.0, 1.0, 1), (-190, 2, 2), (-300, 4, 3)] {
-            hosted.swipe(to: finger, over: 0.02)
+        for (finger, over, page, ends) in [(-150.0, 0.02, 1.0, 1), (-190, 0.02, 2, 2), (-300, 0.05, 4, 3)] {
+            hosted.swipe(to: finger, over: over)
             hosted.wait(until: { hosted.value("ends") == .int(ends) }, "no onScrollEnd \(ends)")
             XCTAssertEqual(hosted.feed.page, page)
             XCTAssertEqual(hosted.value("endOffset").doubleValue, page * 200)
@@ -273,6 +328,20 @@ final class PagerTests: XCTestCase {
         XCTAssertEqual(hosted.inits, [2, 1, 1, 0, 0])
         hosted.feed.ended(at: u + 0.5)
         hosted.wait(until: { hosted.feed.page == 1 }, "did not settle back on page 1")
+    }
+
+    /// A5.4: a pager on page 4 whose node comes back with two pages (a new
+    /// tree, the pager kept) shows page 1, the last, not an empty box.
+    func testA5_4APagerOnAPageThatIsGoneShowsTheLastPage() throws {
+        let hosted = try HostedPager(pages(5) + [node("pv2", "PageView", [:], ["page0", "page1"])], page: 4)
+        defer { hosted.close() }
+        assertFrame(try hosted.pixels().bounds(of: Self.magenta), CGRect(x: 0, y: 0, width: 200, height: 100))
+
+        try hosted.show("pv2")
+        XCTAssertEqual(hosted.feed.page, 1)
+        let pixels = try hosted.pixels()
+        assertFrame(pixels.bounds(of: Self.green), CGRect(x: 0, y: 0, width: 200, height: 100))
+        XCTAssertNil(pixels.bounds(of: Self.magenta))
     }
 
     /// A5.4: with pageSnapping false the pages scroll freely: a scroll view
@@ -429,30 +498,33 @@ final class PagerTests: XCTestCase {
             .frame(width: 200, height: 100)
     }
 
-    /// A feed laid out as a pager of five pages `extent` long, and the
-    /// events it fires.
-    func feed(extent: Double = 200, vertical: Bool = false,
+    /// A feed at `page` laid out as a pager of five pages `extent` long,
+    /// and the events it fires.
+    func feed(page: Double = 0, extent: Double = 200, vertical: Bool = false,
               backwards: Bool = false) -> (PagerFeed, Events) {
-        let feed = PagerFeed()
+        let feed = PagerFeed(page: page)
         let events = Events()
         feed.update(extent: extent, count: 5, vertical: vertical, backwards: backwards) { events.list += $0 }
         return (feed, events)
     }
 
-    /// A horizontal swipe: the finger passes the slop (20 the way it goes),
-    /// moves on evenly to `finger` over `over` seconds, a sample every 10 ms
-    /// (as a finger's moves come), and lifts after `hold`.
+    /// A horizontal swipe from touch-down: the finger moves evenly to
+    /// `finger` over `over` seconds, a sample every 10 ms (as a finger's
+    /// moves come), and lifts after `hold`; the pager takes it where it
+    /// passes the slop.
     static func swipe(_ feed: PagerFeed, to finger: Double, over: Double = 0.05, hold: Double = 0.01) {
         let t = Date()
-        let slop: Double = finger < 0 ? -20 : 20
         feed.changed(.zero, at: t)
-        feed.changed(CGSize(width: slop, height: 0), at: t + 0.01)
         let steps = max(Int((over / 0.01).rounded()), 1)
         for step in 1...steps {
             let part = Double(step) / Double(steps)
-            feed.changed(CGSize(width: slop + (finger - slop) * part, height: 0), at: t + 0.01 + over * part)
+            feed.changed(CGSize(width: finger * part, height: 0), at: t + over * part)
         }
-        feed.ended(at: t + 0.01 + over + hold)
+        feed.ended(at: t + over + hold)
+    }
+
+    func pump(_ seconds: Double) {
+        RunLoop.main.run(until: Date().addingTimeInterval(seconds))
     }
 
     func wait(until done: () -> Bool, _ message: @autoclosure () -> String, timeout: Double = 3) {
@@ -472,6 +544,7 @@ final class PagerTests: XCTestCase {
     static let red = colour(255, 0, 0)
     static let green = colour(0, 255, 0)
     static let blue = colour(0, 0, 255)
+    static let magenta = colour(255, 0, 255)
     static let grey = colour(128, 128, 128)
     static let background = Color(.sRGB, red: 128 / 255, green: 128 / 255, blue: 128 / 255)
 
@@ -507,14 +580,16 @@ final class Events {
 @MainActor
 private final class HostedPager {
     let model: OrcaPageModel
-    let feed = PagerFeed()
+    let feed: PagerFeed
+    private let holder: NodeHolder
     private let window: UIWindow
 
-    init(_ nodes: [JSONValue], width: CGFloat = 200, height: CGFloat = 100) throws {
+    init(_ nodes: [JSONValue], width: CGFloat = 200, height: CGFloat = 100, page: Double = 0) throws {
         model = try PagerTests().model(nodes)
+        feed = PagerFeed(page: page)
+        holder = NodeHolder(try XCTUnwrap(model.resolve("pv"), "no pager"))
         let frame = CGRect(x: 0, y: 0, width: width, height: height)
-        let host = UIHostingController(rootView: PagerView(node: try XCTUnwrap(model.resolve("pv"), "no pager"),
-                                                           model: model, feed: feed)
+        let host = UIHostingController(rootView: HeldPager(holder: holder, model: model, feed: feed)
             .frame(width: width, height: height, alignment: .topLeading)
             .ignoresSafeArea())
         window = UIWindow(frame: frame)
@@ -527,6 +602,13 @@ private final class HostedPager {
     }
 
     func value(_ key: String) -> JSONValue { model.store.value(key) }
+
+    /// The same pager drawn from the node `id` from now on, as a new tree's
+    /// node in its place.
+    func show(_ id: String) throws {
+        holder.node = try XCTUnwrap(model.resolve(id), "no node \(id)")
+        pump(0.3)
+    }
 
     /// How many times each page's onInit ran.
     var inits: [Double] { (0..<5).map { value("init\($0)").doubleValue ?? -1 } }
@@ -567,6 +649,26 @@ private final class HostedPager {
 
     func close() {
         window.isHidden = true
+    }
+}
+
+/// The node a hosted pager is drawn from.
+private final class NodeHolder: ObservableObject {
+    @Published var node: ResolvedNode
+
+    init(_ node: ResolvedNode) {
+        self.node = node
+    }
+}
+
+/// A pager drawn from the held node, keeping its view (and feed) as the node changes.
+private struct HeldPager: View {
+    @ObservedObject var holder: NodeHolder
+    let model: OrcaPageModel
+    let feed: PagerFeed
+
+    var body: some View {
+        PagerView(node: holder.node, model: model, feed: feed)
     }
 }
 #endif

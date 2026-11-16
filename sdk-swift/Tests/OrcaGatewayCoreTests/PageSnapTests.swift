@@ -12,14 +12,16 @@ import XCTest
 /// kMinFlingVelocity × 2 = 100 points per second (widgets/scroll_physics
 /// .dart:905), and the finger travelled more than the minimum fling
 /// distance, kTouchSlop = 18 points (scroll_physics.dart `minFlingDistance`),
-/// within the velocity window (the estimate's offset, newest minus oldest
-/// sample of the last 100 ms, gestures/velocity_tracker.dart); below either
-/// the velocity is 0. A fling adds half a page in its direction, then the
-/// page is rounded half away from zero (Dart's `roundToDouble`), and kept
-/// within the pages. Offsets and velocities count toward later pages,
-/// whichever way the axis is drawn. A 200-point viewport over five pages
-/// and 100 points of travel unless said. The same cases as
-/// Kotlin's PageSnapTest.
+/// by the estimate's offset; below either the velocity is 0. On iOS the
+/// estimate is IOSScrollViewFlingVelocityTracker's (IOSFlingTracker below:
+/// the last 20 samples from touch-down, gestures/velocity_tracker.dart
+/// :295-397); Kotlin's Android one is the windowed VelocityTracker. A fling
+/// adds half a page in its direction, then the page is rounded half away
+/// from zero (Dart's `roundToDouble`), and kept within the pages. Offsets
+/// and velocities count toward later pages, whichever way the axis is
+/// drawn. A 200-point viewport over five pages and 100 points of travel
+/// unless said. The same cases as Kotlin's PageSnapTest, plus the iOS
+/// tracker's.
 final class PageSnapTests: XCTestCase {
     private func target(_ offset: Double, _ velocity: Double = 0, travel: Double = 100, extent: Double = 200,
                         count: Int = 5, snapping: Bool = true, minFling: Double = PageSnap.minFlingVelocity,
@@ -79,7 +81,7 @@ final class PageSnapTests: XCTestCase {
     }
 
     /// A5.4: a fling must also travel past the minimum distance (kTouchSlop,
-    /// 18 points) in its last 100 ms, not reach it: 150 points a second
+    /// 18 points) by its estimate, not reach it: 150 points a second
     /// (past iOS's 100) with 10 points of travel settles on the nearest
     /// page, 300 with 30 turns it; 18 is no fling, 18.5 is; a backward
     /// travel counts by its length; a smaller minimum lets 10 points fling.
@@ -97,13 +99,69 @@ final class PageSnapTests: XCTestCase {
     /// A5.4: the velocity the physics gets, which the settle starts with,
     /// is the release's past both gates and 0 below either (the drag
     /// recognizer's DragEndDetails): 300 over 30 is 300, -300 over -30 is
-    /// -300; 300 over 10 and 100 over 30 are 0.
+    /// -300; 300 over 10 and 100 over 30 are 0; past kMaxFlingVelocity
+    /// (8000) it is held there (the recognizer's `considerFling`).
     func testA5_4TheFlingVelocityIsTheReleasesPastBothGatesElseZero() {
         XCTAssertEqual(PageSnap.flingVelocity(300, travel: 30), 300)
         XCTAssertEqual(PageSnap.flingVelocity(-300, travel: -30), -300)
         XCTAssertEqual(PageSnap.flingVelocity(300, travel: 10), 0)
         XCTAssertEqual(PageSnap.flingVelocity(100, travel: 30), 0)
         XCTAssertEqual(PageSnap.flingVelocity(60, travel: 30, minFlingVelocity: 50), 60)
+        XCTAssertEqual(PageSnap.maxFlingVelocity, 8000)
+        XCTAssertEqual(PageSnap.flingVelocity(9000, travel: 30), 8000)
+        XCTAssertEqual(PageSnap.flingVelocity(-9000, travel: -30), -8000)
+    }
+
+    // MARK: IOSFlingTracker (IOSScrollViewFlingVelocityTracker)
+
+    private func tracker(_ samples: [(Double, Double)]) -> PageSnap.IOSFlingTracker {
+        var tracker = PageSnap.IOSFlingTracker()
+        for (time, position) in samples { tracker.add(time: time, position: position) }
+        return tracker
+    }
+
+    /// A5.4: the iOS estimate weighs the last three pairs of samples 0.6,
+    /// 0.35 and 0.05, the oldest most, with no window and no cut at a
+    /// pause, and its travel is newest minus oldest: 0, -20, -60 ten ms
+    /// apart, a 60 ms pause, -70, -75 is about -2483 points a second
+    /// (0.6 × -4000 + 0.35 × -166.7 + 0.05 × -500) over -75 points.
+    func testA5_4TheIOSTrackerWeighsItsLastThreePairsAcrossAPause() {
+        let estimate = tracker([(0, 0), (0.01, -20), (0.02, -60), (0.08, -70), (0.09, -75)]).estimate(now: 0.1)
+        XCTAssertEqual(estimate.velocity, -2483.333, accuracy: 0.01)
+        XCTAssertEqual(estimate.travel, -75, accuracy: 1e-9)
+    }
+
+    /// A5.4: no sample for more than 40 ms before the release is a still
+    /// finger: no speed and no travel (`_assumePointerMoveStoppedMilliseconds`);
+    /// 40 ms after 0, -20, -40 it still moves at 0.35 × -2000 + 0.05 × -2000
+    /// (the third pair back is missing).
+    func testA5_4TheIOSTrackerIsStillAfter40Ms() {
+        let moving = tracker([(0, 0), (0.01, -20), (0.02, -40)])
+        XCTAssertEqual(PageSnap.IOSFlingTracker.stoppedAfter, 0.04)
+        XCTAssertEqual(moving.estimate(now: 0.06).velocity, -800, accuracy: 1e-6)
+        XCTAssertEqual(moving.estimate(now: 0.06).travel, -40, accuracy: 1e-9)
+        XCTAssertEqual(moving.estimate(now: 0.061).velocity, 0)
+        XCTAssertEqual(moving.estimate(now: 0.061).travel, 0)
+    }
+
+    /// A5.4: the iOS tracker keeps the last 20 samples: 25 positions 0 ... 24
+    /// ten ms apart travel 24 - 5 = 19 at 100 points a second.
+    func testA5_4TheIOSTrackerKeepsTheLast20Samples() {
+        XCTAssertEqual(PageSnap.IOSFlingTracker.sampleSize, 20)
+        let estimate = tracker((0..<25).map { (Double($0) * 0.01, Double($0)) }).estimate(now: 0.25)
+        XCTAssertEqual(estimate.velocity, 100, accuracy: 1e-6)
+        XCTAssertEqual(estimate.travel, 19, accuracy: 1e-9)
+    }
+
+    /// A5.4: a missing pair, or one with no time between its samples, counts
+    /// 0: one sample is no speed and no travel; two 10 ms apart 10 points
+    /// are 0.05 × 1000; nothing added is no estimate.
+    func testA5_4TheIOSTrackerCountsAMissingPairAsZero() {
+        XCTAssertEqual(tracker([(0, 5)]).estimate(now: 0).velocity, 0)
+        XCTAssertEqual(tracker([(0, 5)]).estimate(now: 0).travel, 0)
+        XCTAssertEqual(tracker([(0, 0), (0.01, 10)]).estimate(now: 0.01).velocity, 50, accuracy: 1e-6)
+        XCTAssertEqual(tracker([(0, 0), (0, 10)]).estimate(now: 0).velocity, 0)
+        XCTAssertEqual(tracker([]).estimate(now: 0).velocity, 0)
     }
 
     /// A5.4: the target stays within the pages: a fling back from the first
