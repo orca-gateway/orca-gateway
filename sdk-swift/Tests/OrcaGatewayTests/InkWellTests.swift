@@ -53,17 +53,23 @@ final class InkWellTests: XCTestCase {
         XCTAssertEqual(fired(model), counts(doubleTap: 1))
     }
 
-    /// A6.6: a long press fires onLongPress and no tap, after Flutter's
-    /// kLongPressTimeout, 500 ms (gestures/constants.dart:29), the wait of
-    /// the InkWell's long press (`PressGestures.longPressDuration`). That a
-    /// hold is never also a tap is a hand check.
+    /// A6.6: a long press fires onLongPress and no tap. The InkWell's long
+    /// press (`InkWellNodeView.pressGesture`, read by the gesture it attaches)
+    /// waits Flutter's kLongPressTimeout, 500 ms (gestures/constants.dart:29),
+    /// and allows Flutter's kTouchSlop, 18 (:65), not SwiftUI's default 10.
+    /// That SwiftUI then delivers a hold as the long press alone, and gives
+    /// it up past 18 pt, needs a touch, which a package test cannot inject:
+    /// a hand check.
     func testA6_6ALongPressFiresOnLongPressAfterFlutters500ms() async throws {
         let model = try page([inkWell("w", "c"), sizedBox("c", 100, 50)])
 
         await (try view(model, "w")).longPress?()?.value
 
         XCTAssertEqual(fired(model), counts(longPress: 1))
-        XCTAssertEqual(PressGestures.longPressDuration, 0.5)
+        let press = InkWellNodeView.pressGesture
+        XCTAssertEqual(press.minimumDuration, 0.5, "Flutter's kLongPressTimeout")
+        XCTAssertEqual(press.maximumDistance, 18, "Flutter's kTouchSlop")
+        XCTAssertEqual(LongPressGesture().maximumDistance, 10, "SwiftUI's default slop")
     }
 
     /// A6.6: while pressed the highlight fills the InkWell in
