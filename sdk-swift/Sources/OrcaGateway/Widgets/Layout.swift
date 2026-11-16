@@ -7,9 +7,9 @@ import SwiftUI
 /// `spaceAround` and `spaceEvenly` space like a child; `spaceAround` puts
 /// half a space at each end. A Column's cross-axis `baseline` is `start`.
 ///
-/// A Row or Column with an Expanded or Spacer child is drawn by FlexLayout,
-/// which shares the space by `flex`; every other one keeps the stack below,
-/// so pages that drew before draw exactly as before.
+/// A Row or Column with an Expanded, Flexible or Spacer child is drawn by
+/// FlexLayout, which shares the space by `flex`; every other one keeps the
+/// stack below, so pages that drew before draw exactly as before.
 ///
 /// `textDirection` and `verticalDirection` (Flutter LB:119-158) order the
 /// flex's own layout only: rtl starts a Row at the right and swaps a
@@ -23,6 +23,7 @@ struct FlexView: View {
     let model: OrcaPageModel
     let axis: Axis
     @Environment(\.layoutDirection) private var ambient
+    @Environment(\.orcaUnbounded) private var unbounded
 
     var body: some View {
         let laid = content
@@ -53,21 +54,31 @@ struct FlexView: View {
         if flexes.contains(where: { $0 > 0 }) {
             FlexLayout(axis: axis, cross: Props.crossAxis(node["crossAxisAlignment"]),
                        fill: Props.fillsMainAxis(node["mainAxisSize"]),
-                       gap: Props.number(node["gap"]) ?? 0, up: up) {
+                       gap: Props.number(node["gap"]) ?? 0, up: up,
+                       main: Props.mainAxis(node["mainAxisAlignment"]), gapItems: Props.number(node["gap"]) != nil) {
                 ForEach(Array(zip(node.childIds, flexes)), id: \.0) { id, flex in
                     child(id).layoutValue(key: FlexFactor.self, value: flex)
+                        .layoutValue(key: LooseFlex.self, value: loose(id))
                 }
             }
             .environment(\.orcaFlexAxis, axis)
+            .environment(\.orcaUnbounded, unbounded.subtracting(TightAxes(axis)))
         } else {
             stacked
         }
     }
 
-    /// Flutter `propOr<int>('flex', 1)` for Expanded and Spacer; 0 otherwise.
+    /// Flutter `propOr<int>('flex', 1)` for Expanded, Flexible and Spacer;
+    /// 0 otherwise.
     private func flex(of id: String) -> Int {
-        guard let type = model.renderer.node(id)?.type, type == "Expanded" || type == "Spacer" else { return 0 }
+        guard let type = model.renderer.node(id)?.type, ["Expanded", "Flexible", "Spacer"].contains(type)
+        else { return 0 }
         return max(model.resolve(id)?["flex"]?.intValue ?? 1, 0)
+    }
+
+    /// A Flexible whose `fit` is not `tight` (LB:234-240).
+    private func loose(_ id: String) -> Bool {
+        model.renderer.node(id)?.type == "Flexible" && model.resolve(id)?["fit"]?.stringValue != "tight"
     }
 
     /// A Column going up is the stack of its children in reverse, its
@@ -108,6 +119,7 @@ struct FlexView: View {
             if trail { Spacer(minLength: 0) }
         }
         .environment(\.orcaFlexAxis, axis)
+        .environment(\.orcaUnbounded, unbounded.union(TightAxes(axis)))
     }
 
     @ViewBuilder
@@ -179,30 +191,36 @@ struct CenterView: View {
     }
 }
 
-/// Flutter `RenderPositionedBox` with a factor: on an axis with a factor
+/// Flutter `RenderPositionedBox` (Center, Align): on an axis with a factor
 /// the box is the child's size times it, on one without it fills what is
-/// offered (the child's size when unbounded), never more than offered.
-/// The child, offered what the box is offered, sits in the middle.
+/// offered (the child's size when unbounded), never more than offered; on
+/// an axis the parent forces (`tight`, Align only) it is the forced size.
+/// The child, offered what the box is offered, sits at `alignment` (the
+/// middle for Center).
 struct CenterFactorLayout: Layout {
     var widthFactor: CGFloat?
     var heightFactor: CGFloat?
+    var alignment: UnitPoint = .center
+    var tight: TightAxes = []
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let child = subviews.first?.sizeThatFits(proposal) ?? .zero
-        return CGSize(width: side(child.width, widthFactor, proposal.width),
-                      height: side(child.height, heightFactor, proposal.height))
+        return CGSize(width: side(child.width, widthFactor, proposal.width, tight.contains(.horizontal)),
+                      height: side(child.height, heightFactor, proposal.height, tight.contains(.vertical)))
     }
 
-    private func side(_ child: CGFloat, _ factor: CGFloat?, _ offered: CGFloat?) -> CGFloat {
+    private func side(_ child: CGFloat, _ factor: CGFloat?, _ offered: CGFloat?, _ forced: Bool) -> CGFloat {
         let bound = offered.flatMap { $0.isFinite ? $0 : nil }
+        if forced, let bound { return bound }
         guard let factor else { return bound ?? child }
         return min(child * factor, bound ?? .infinity)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let child = subviews.first else { return }
-        child.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center,
-                    proposal: ProposedViewSize(child.sizeThatFits(proposal)))
+        child.place(at: CGPoint(x: bounds.minX + bounds.width * alignment.x,
+                                y: bounds.minY + bounds.height * alignment.y),
+                    anchor: alignment, proposal: ProposedViewSize(child.sizeThatFits(proposal)))
     }
 }
 
@@ -217,22 +235,27 @@ struct PaddingView: View {
     }
 }
 
-/// A fixed size on the axes it names; with no child, an empty box of that
-/// size (0 on an axis it leaves out).
+/// Flutter `SizedBox` (widgets/basic.dart), a RenderConstrainedBox with
+/// `tightFor(width, height)`: a fixed size on the axes it names, kept
+/// within the parent's limits as `enforce` keeps it (TightForLayout); with
+/// no child, an empty box of that size (0, or the parent's min, on an axis
+/// it leaves out).
 @MainActor
 struct SizedBoxView: View {
     let node: ResolvedNode
     let model: OrcaPageModel
+    @Environment(\.orcaMinimum) private var minimum
 
     var body: some View {
         let width = Props.number(node["width"])
         let height = Props.number(node["height"])
         if node.childIds.isEmpty {
-            Color.clear.frame(width: width ?? 0, height: height ?? 0)
+            Color.clear
+                .modifier(TightFor(width: width ?? 0, height: height ?? 0, minimum: minimum.size(for: node.id)))
         } else {
             ChildView(node: node, model: model)
                 .modifier(AddTight(axes: [width != nil ? .horizontal : [], height != nil ? .vertical : []]))
-                .frame(width: width, height: height)
+                .modifier(TightFor(width: width, height: height, minimum: minimum.size(for: node.id)))
         }
     }
 }
@@ -528,13 +551,25 @@ struct HugLayout: Layout {
         subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
-/// Adds axes to the tight set the children see.
+/// Adds axes to the tight set the children see (and so takes them out of
+/// the unbounded set: a forced axis is bounded).
 struct AddTight: ViewModifier {
     let axes: TightAxes
     @Environment(\.orcaTight) private var tight
 
     func body(content: Content) -> some View {
-        content.environment(\.orcaTight, tight.union(axes))
+        content.environment(\.orcaTight, tight.union(axes)).modifier(Bound(axes: axes))
+    }
+}
+
+/// Takes axes out of the unbounded set the children see (`orcaUnbounded`):
+/// a set size or a max there bounds them.
+struct Bound: ViewModifier {
+    let axes: TightAxes
+    @Environment(\.orcaUnbounded) private var unbounded
+
+    func body(content: Content) -> some View {
+        content.environment(\.orcaUnbounded, unbounded.subtracting(axes))
     }
 }
 #endif

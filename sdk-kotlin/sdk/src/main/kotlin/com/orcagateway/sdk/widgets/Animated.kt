@@ -21,10 +21,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.IntSize
 import com.orcagateway.core.animation.AnimationDuration
 import com.orcagateway.core.animation.AnimationMix
 import com.orcagateway.core.animation.ImplicitAnimation
@@ -38,7 +36,6 @@ import com.orcagateway.sdk.OrcaNodeSnapshot
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.WidgetBuilder
 import com.orcagateway.sdk.style.Props
-import kotlin.math.roundToInt
 
 // Flutter's implicitly animated widgets (layout_builders.dart
 // `_buildAnimatedContainer` ... `_buildHero`). Each of the first three is its
@@ -159,33 +156,6 @@ internal fun AnimatedAlignWidget(
 ) {
     draw(sampled(node, model, node.propsWith("alignment", JsonValue.String("center"))), model, modifier)
 }
-
-/**
- * Flutter `Align` (`RenderPositionedBox`, as [CenterWidget] for the
- * centre): the child loose at `alignment`. On an axis with a factor
- * (`widthFactor`, `heightFactor`) or no limit it is the child's size times
- * the factor (1 when absent); on the others as big as it may be.
- */
-@Composable
-internal fun AlignWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
-    val alignment = Props.alignment(node["alignment"])
-    val widthFactor = Props.number(node["widthFactor"])
-    val heightFactor = Props.number(node["heightFactor"])
-    Layout(content = { ChildView(node, model) }, modifier = modifier) { measurables, constraints ->
-        val child = measurables.firstOrNull()?.measure(constraints.copy(minWidth = 0, minHeight = 0))
-        val width = alignedSide(child?.width ?: 0, widthFactor, constraints.hasBoundedWidth, constraints.maxWidth)
-            .coerceIn(constraints.minWidth, constraints.maxWidth)
-        val height = alignedSide(child?.height ?: 0, heightFactor, constraints.hasBoundedHeight, constraints.maxHeight)
-            .coerceIn(constraints.minHeight, constraints.maxHeight)
-        layout(width, height) {
-            child?.place(alignment.align(IntSize(child.width, child.height), IntSize(width, height), layoutDirection))
-        }
-    }
-}
-
-/** Flutter's shrink-wrapped side (the child's times the factor) with a factor or no limit, else the limit. */
-private fun alignedSide(child: Int, factor: Double?, bounded: Boolean, max: Int): Int =
-    if (factor != null || !bounded) (child * (factor ?: 1.0)).coerceAtLeast(0.0).roundToInt() else max
 
 /**
  * Which children an AnimatedSwitcher shows and how opaque each is: the

@@ -440,11 +440,27 @@ extension OrcaRoute {
 ///
 /// A route pushed from inside a Hero zooms out of it on iOS 18 and up
 /// (`OrcaRouter.zoomSource(of:)`, `HeroZoom`); such a route has no entrance.
+///
+/// Where the route shows a navigation bar on iOS (pushed: the back button;
+/// or a title bar) that bar takes the top inset from the page, as Flutter's
+/// Scaffold takes it under an appBar (scaffold.dart :3027-3031): a SafeArea
+/// in the page neither adds it nor lets its content under the bar.
 @MainActor
 struct RoutePage: View {
     let router: OrcaRouter
     let route: OrcaRoute
     var isStackRoot = false
+    @Environment(\.orcaSafeAreaTaken) private var taken
+
+    /// The top edge where the route shows a navigation bar on iOS; macOS
+    /// draws its toolbar outside the content.
+    private var barEdges: Edge.Set {
+        #if os(iOS)
+        return !isStackRoot || route.scaffoldTitle != nil ? .top : []
+        #else
+        return []
+        #endif
+    }
 
     static let homeButtonTitle = "Go to home page"
 
@@ -476,6 +492,7 @@ struct RoutePage: View {
         } else {
             LoadedRoutePage(route: route, loader: router.loader(for: route))
                 .environment(\.orcaPage, OrcaPageContext(router: router, route: route, isStackRoot: isStackRoot))
+                .environment(\.orcaSafeAreaTaken, taken.union(barEdges))
         }
     }
 }

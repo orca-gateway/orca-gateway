@@ -7,6 +7,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.IntrinsicMeasurable
+import androidx.compose.ui.layout.IntrinsicMeasureScope
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasurePolicy
@@ -25,6 +27,7 @@ import com.orcagateway.sdk.ChildView
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.style.Props
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -35,9 +38,10 @@ import kotlin.math.roundToInt
  * by the space left, and have no `spaceAround` with a gap).
  *
  * `gap` is the Flutter SDK's: a box `gap` long between two children, which
- * `mainAxisAlignment` spaces like any child. An Expanded or Spacer child
- * ([ExpandedWidget], [SpacerWidget]) takes a share of the space the others
- * leave; every other child takes its own size.
+ * `mainAxisAlignment` spaces like any child. An Expanded, Flexible or
+ * Spacer child ([ExpandedWidget], [FlexibleWidget], [SpacerWidget]) takes
+ * a share of the space the others leave; every other child takes its own
+ * size.
  *
  * `textDirection` (`ltr` or `rtl`; the page's direction when absent) and
  * `verticalDirection` (`up` or `down`) order the Flex's own layout only:
@@ -81,6 +85,23 @@ internal fun ExpandedWidget(node: ResolvedNode, model: OrcaPageModel, modifier: 
 }
 
 /**
+ * Flutter `Flexible` (`flex`, 1 by default; `fit`, loose unless `tight`):
+ * inside a Row or Column it takes a share of the main axis as Expanded
+ * does, but a loose child is held only to at most its share
+ * (`RenderFlex._constraintsForFlexChild`, `FlexFit.loose`): it keeps its
+ * own size and what it leaves of the share is placed by
+ * `mainAxisAlignment`. Outside a Row or Column the flex is not read and it
+ * just draws its child, as Flutter does in release builds.
+ */
+@Composable
+internal fun FlexibleWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
+    val fill = node["fit"]?.stringValue == "tight"
+    Box(modifier.flex(flexOf(node), fill), propagateMinConstraints = true) {
+        ChildView(node, model)
+    }
+}
+
+/**
  * Flutter `Spacer` (`flex`, 1 by default): an Expanded with an empty child,
  * as long as its share. It has no size of its own, so it never widens a
  * Row's cross axis.
@@ -96,29 +117,33 @@ private fun flexOf(node: ResolvedNode): Int =
 
 /**
  * Marks a Flex child with Flutter's `flex` for [FlexMeasurePolicy]; 0 (or
- * no mark) is an ordinary child, and a negative flex counts as 0.
+ * no mark) is an ordinary child, and a negative flex counts as 0. [fill]
+ * is Flutter's `FlexFit`: tight (Expanded, Spacer) forces the child to its
+ * share, loose (Flexible) lets it be smaller.
  */
-internal fun Modifier.flex(flex: Int): Modifier = this then FlexFactorElement(max(flex, 0))
+internal fun Modifier.flex(flex: Int, fill: Boolean = true): Modifier = this then FlexFactorElement(max(flex, 0), fill)
 
-private class FlexFactorElement(val flex: Int) : ModifierNodeElement<FlexFactorNode>() {
-    override fun create(): FlexFactorNode = FlexFactorNode(flex)
+private class FlexFactorElement(val flex: Int, val fill: Boolean) : ModifierNodeElement<FlexFactorNode>() {
+    override fun create(): FlexFactorNode = FlexFactorNode(flex, fill)
 
     override fun update(node: FlexFactorNode) {
         node.flex = flex
+        node.fill = fill
     }
 
     override fun InspectorInfo.inspectableProperties() {
         name = "flex"
         value = flex
+        properties["fill"] = fill
     }
 
-    override fun equals(other: Any?): Boolean = other is FlexFactorElement && other.flex == flex
+    override fun equals(other: Any?): Boolean = other is FlexFactorElement && other.flex == flex && other.fill == fill
 
-    override fun hashCode(): Int = flex
+    override fun hashCode(): Int = 31 * flex + fill.hashCode()
 }
 
-/** The parent data [FlexMeasurePolicy] reads: the child's `flex`. */
-private class FlexFactorNode(var flex: Int) : Modifier.Node(), ParentDataModifierNode {
+/** The parent data [FlexMeasurePolicy] reads: the child's `flex` and fit. */
+private class FlexFactorNode(var flex: Int, var fill: Boolean) : Modifier.Node(), ParentDataModifierNode {
     override fun Density.modifyParentData(parentData: Any?): Any = this@FlexFactorNode
 }
 
@@ -129,13 +154,15 @@ private class FlexFactorNode(var flex: Int) : Modifier.Node(), ParentDataModifie
  *    the Flex's limit on the cross axis: tight under `stretch` (when that
  *    limit is finite), loose otherwise.
  * 2. The main-axis space left after them and the gaps is shared by the
- *    children with flex (see [Modifier.flex]) in proportion to it, each held
- *    to exactly its share (Expanded's tight fit), on the same cross axis.
+ *    children with flex (see [Modifier.flex]) in proportion to it, on the
+ *    same cross axis: a tight child (Expanded) is held to exactly its share,
+ *    a loose one (Flexible) to at most it, what it leaves going to
+ *    `mainAxisAlignment`, not to the others (`_constraintsForFlexChild`).
  *    Shares are rounded to whole pixels so they add up to the space left,
- *    which leaves nothing for `mainAxisAlignment` to place. When the main
- *    axis has no limit (a Column in a scroll view), where Flutter throws, a
- *    flex child is measured like the others and takes its own size, as the
- *    Swift SDK's `FlexLayout` does.
+ *    which leaves nothing to place when every flex child is tight. When the
+ *    main axis has no limit (a Column in a scroll view), where Flutter
+ *    throws, a flex child is measured like the others and takes its own
+ *    size, as the Swift SDK's `FlexLayout` does.
  * 3. The Flex is as long as it may be when `mainAxisSize` is `max` and the
  *    main axis is bounded, else as long as its children (and gaps); as wide
  *    as its widest child (or its baseline extent in a Row).
@@ -183,19 +210,17 @@ internal class FlexMeasurePolicy(
 
         val gapPx = gap?.toPx() ?: 0f
         val gaps = if (gap != null) max(measurables.size - 1, 0) else 0
-        val totalFlex = flexes.sumOf { it.toLong() }
         val free = max(0f, maxMain - fixed.sumOf { if (it != null) mainOf(it) else 0 } - gapPx * gaps)
-        var flexBefore = 0L
+        val shares = shares(free, flexes)
         val placeables = measurables.mapIndexed { i, m ->
             fixed[i] ?: run {
-                val start = (free * flexBefore / totalFlex).roundToInt()
-                flexBefore += flexes[i]
-                val share = (free * flexBefore / totalFlex).roundToInt() - start
+                val share = shares[i]
+                val least = if ((m.parentData as? FlexFactorNode)?.fill == false) 0 else share
                 m.measure(
                     if (vertical) {
-                        childConstraints.copy(minHeight = share, maxHeight = share)
+                        childConstraints.copy(minHeight = least, maxHeight = share)
                     } else {
-                        childConstraints.copy(minWidth = share, maxWidth = share)
+                        childConstraints.copy(minWidth = least, maxWidth = share)
                     },
                 )
             }
@@ -248,6 +273,99 @@ internal class FlexMeasurePolicy(
                 val at = position.roundToInt().let { if (flipMain) mainSize - it - mainOf(p) else it }
                 if (vertical) p.place(offset, at) else p.place(at, offset)
                 position += mainOf(p) + between
+            }
+        }
+    }
+
+    override fun IntrinsicMeasureScope.minIntrinsicWidth(measurables: List<IntrinsicMeasurable>, height: Int): Int =
+        intrinsic(measurables, height, horizontal = true, min = true)
+
+    override fun IntrinsicMeasureScope.maxIntrinsicWidth(measurables: List<IntrinsicMeasurable>, height: Int): Int =
+        intrinsic(measurables, height, horizontal = true, min = false)
+
+    override fun IntrinsicMeasureScope.minIntrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int =
+        intrinsic(measurables, width, horizontal = false, min = true)
+
+    override fun IntrinsicMeasureScope.maxIntrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int =
+        intrinsic(measurables, width, horizontal = false, min = false)
+
+    /**
+     * Flutter's `RenderFlex._getIntrinsicSize`, the [min] or max intrinsic
+     * width ([horizontal]) or height for [extent] on the other axis. Compose would
+     * derive it from [measure], which gives a flex child no share.
+     *
+     * Along the main axis: the children without flex and the gaps, plus the
+     * largest intrinsic length per flex among the flex children times the
+     * total flex (rounded up). Across: the largest child, each child without
+     * flex taken at its max intrinsic main length, each flex child at its
+     * share of what they leave of [extent] (none when it is unbounded). A
+     * Row aligned on `baseline` answers its tallest child's height, not
+     * Flutter's ascent plus descent: intrinsics carry no baselines.
+     */
+    private fun IntrinsicMeasureScope.intrinsic(
+        measurables: List<IntrinsicMeasurable>,
+        extent: Int,
+        horizontal: Boolean,
+        min: Boolean,
+    ): Int {
+        val size = { m: IntrinsicMeasurable, other: Int ->
+            when {
+                horizontal && min -> m.minIntrinsicWidth(other)
+                horizontal -> m.maxIntrinsicWidth(other)
+                min -> m.minIntrinsicHeight(other)
+                else -> m.maxIntrinsicHeight(other)
+            }
+        }
+        val gaps = (gap?.toPx() ?: 0f) * if (gap != null) max(measurables.size - 1, 0) else 0
+        if (horizontal != vertical) {
+            var totalFlex = 0L
+            var inflexible = gaps
+            var perFlex = 0f
+            for (m in measurables) {
+                val flex = (m.parentData as? FlexFactorNode)?.flex ?: 0
+                totalFlex += flex
+                if (flex > 0) {
+                    perFlex = max(perFlex, size(m, extent).toFloat() / flex)
+                } else {
+                    inflexible += size(m, extent)
+                }
+            }
+            return ceil(perFlex * totalFlex + inflexible).toInt()
+        }
+        val bounded = extent != Constraints.Infinity
+        val flexes = measurables.map { if (bounded) (it.parentData as? FlexFactorNode)?.flex ?: 0 else 0 }
+        var used = gaps
+        var crossSize = 0
+        measurables.forEachIndexed { i, m ->
+            if (flexes[i] == 0) {
+                val main = if (vertical) {
+                    m.maxIntrinsicHeight(Constraints.Infinity)
+                } else {
+                    m.maxIntrinsicWidth(Constraints.Infinity)
+                }
+                used += main
+                crossSize = max(crossSize, size(m, main))
+            }
+        }
+        val shares = shares(max(0f, extent - used), flexes)
+        measurables.forEachIndexed { i, m -> if (flexes[i] > 0) crossSize = max(crossSize, size(m, shares[i])) }
+        return crossSize
+    }
+
+    /**
+     * Each flex child's share of [free] in proportion to its flex (0 for a
+     * child without), rounded to whole pixels so the shares add up to it.
+     */
+    private fun shares(free: Float, flexes: List<Int>): List<Int> {
+        val totalFlex = flexes.sumOf { it.toLong() }
+        var flexBefore = 0L
+        return flexes.map { flex ->
+            if (flex == 0) {
+                0
+            } else {
+                val start = (free * flexBefore / totalFlex).roundToInt()
+                flexBefore += flex
+                (free * flexBefore / totalFlex).roundToInt() - start
             }
         }
     }

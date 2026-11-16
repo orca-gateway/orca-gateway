@@ -3,6 +3,7 @@ package com.orcagateway.core.capabilities
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.BoolExpr
 import com.orcagateway.core.models.Value
+import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.core.state.ActionExecutor
 import com.orcagateway.core.support.Fixtures
 import kotlinx.serialization.json.Json
@@ -59,12 +60,15 @@ class CapabilitiesTest {
      * B12.2-K to B12.5-K: S12 adds AnimatedContainer, AnimatedOpacity,
      * AnimatedAlign, AnimatedSwitcher and Hero, so the pin moves from 31 to
      * 36 (again to the new truth).
+     *
+     * A3.1: native parity step 3 adds the 13 layout wrappers ([A3_1]), so the
+     * pin moves on to 49; Swift lands the same 13 in the same step.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame36WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame49WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(36, kotlin.size)
+        assertEquals(49, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -79,8 +83,23 @@ class CapabilitiesTest {
         val s12 = setOf("AnimatedAlign", "AnimatedContainer", "AnimatedOpacity", "AnimatedSwitcher", "Hero")
         assertTrue(kotlin.containsAll(s12), "missing: ${s12 - kotlin.toSet()}")
         assertTrue(GeneratedCapabilities.widgets.containsAll(s12), "not advertised: ${s12 - GeneratedCapabilities.widgets.toSet()}")
+        assertTrue(kotlin.containsAll(A3_1), "missing: ${A3_1 - kotlin.toSet()}")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
+    }
+
+    /**
+     * A3.1: Compose draws the 13 layout wrappers, so the generated vector
+     * advertises them (49 in all, with S12's 5 animated ones) and the core registry lets them through
+     * instead of degrading them; WidgetBuildersTest pins standard() to the
+     * same set.
+     */
+    @Test
+    fun a3_1_theThirteenLayoutWrappersAreAdvertisedAndLetThrough() {
+        val advertised = GeneratedCapabilities.widgets.toSet()
+        assertEquals(emptySet(), A3_1 - advertised, "not advertised")
+        assertEquals(49, GeneratedCapabilities.widgets.size)
+        assertEquals(emptySet(), A3_1 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
     @Test
@@ -152,5 +171,14 @@ class CapabilitiesTest {
         val v = CapabilityVector("", "", listOf("é", "a", "Z"), emptyList(), emptyList(), emptyList(), emptyList())
         assertTrue(v.canonicalJson().contains("\"widgets\":[\"Z\",\"a\",\"é\"]"))
         assertFalse(v.canonicalJson().contains(" "))
+    }
+
+    private companion object {
+        /** Native parity step 3's layout wrappers (A3.1), sorted. */
+        val A3_1 = setOf(
+            "Align", "AspectRatio", "Baseline", "ConstrainedBox", "FittedBox", "Flexible",
+            "FractionallySizedBox", "IntrinsicHeight", "IntrinsicWidth", "LimitedBox", "Offstage",
+            "SafeArea", "Wrap",
+        )
     }
 }
