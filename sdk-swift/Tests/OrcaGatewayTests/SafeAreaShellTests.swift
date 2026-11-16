@@ -32,7 +32,8 @@ struct SafeAreaShellPages: HTTPTransport {
 /// bottomNavigationBar or persistent footer (scaffold.dart :3027-3031), and
 /// the tab shell is such a Scaffold: a SafeArea in the body sees no inset on
 /// those edges, so flagged false it still keeps its content between the
-/// bars. Each page is drawn by OrcaApp in a UIKit window with safe-area
+/// bars. A route's own navigation bar (pushed, or a title bar) takes the top
+/// edge the same way. Each page is drawn by OrcaApp in a UIKit window with safe-area
 /// insets (iOS only); its content is a Column as tall as it is let be, a
 /// green box at its top and a blue one at its bottom, found in the pixels,
 /// the bars found as UIKit views or by their colour.
@@ -106,6 +107,57 @@ final class SafeAreaShellTests: XCTestCase {
         XCTAssertEqual(top.minY, barBottom, accuracy: Self.accuracy, "the content starts at the bar's bottom")
     }
 
+    /// A3.6: a pushed page has the navigation bar with its back button, so
+    /// a SafeArea with top false in its Scaffold (no AppBar) keeps its
+    /// content below that bar, not under it.
+    func testA3_6ASafeAreaWithTopFalseOnAPushedPageStaysBelowTheBackBar() async throws {
+        let router = OrcaRouter(client: SafeAreaShellPages(components: ["pushed": [
+            node("s", "Scaffold", ["body": "safe"], ["safe"], kind: "structure"),
+        ] + safeArea(["top": false])]).client, path: "page", system: SystemRecorder().actions())
+        let window = try await show(router)
+        defer { window.isHidden = true }
+        try await push("pushed", on: router)
+
+        let bar = try XCTUnwrap(AppBarCardTests.navigationBar(in: window), "no navigation bar")
+        let barBottom = bar.convert(bar.bounds, to: window).maxY
+        XCTAssertGreaterThan(barBottom, Self.insets.top, "the bar sits below the top inset")
+        let top = try XCTUnwrap(try snapshot(window).bounds(of: FlowTests.isGreen), "the content's top is hidden")
+        XCTAssertEqual(top.minY, barBottom, accuracy: Self.accuracy, "the content starts at the bar's bottom")
+    }
+
+    /// A3.6: a stack's first page drawn with a title bar (a route outside
+    /// the tabs: `scaffoldTitle`) keeps a SafeArea's content with top false
+    /// below that bar.
+    func testA3_6ASafeAreaWithTopFalseUnderARoutesTitleBarStaysBelowTheBar() async throws {
+        let router = try titledRouter([
+            node("s", "Scaffold", ["body": "safe"], ["safe"], kind: "structure"),
+        ] + safeArea(["top": false]))
+        XCTAssertNotNil(router.root.scaffoldTitle, "the route has a title bar")
+        XCTAssertFalse(router.hasShell, "the route is outside the tabs")
+        let window = try await show(router)
+        defer { window.isHidden = true }
+
+        let bar = try XCTUnwrap(AppBarCardTests.navigationBar(in: window), "no navigation bar")
+        let barBottom = bar.convert(bar.bounds, to: window).maxY
+        XCTAssertGreaterThan(barBottom, Self.insets.top, "the bar sits below the top inset")
+        let top = try XCTUnwrap(try snapshot(window).bounds(of: FlowTests.isGreen), "the content's top is hidden")
+        XCTAssertEqual(top.minY, barBottom, accuracy: Self.accuracy, "the content starts at the bar's bottom")
+    }
+
+    /// A3.6: a stack's first page with no bar (no title, no AppBar): nothing
+    /// took the top edge, so a SafeArea with top false lets its content
+    /// reach the window's top.
+    func testA3_6ASafeAreaWithTopFalseOnAStackRootWithNoBarReachesTheTop() async throws {
+        let router = OrcaRouter(client: SafeAreaShellPages(components: ["page": [
+            node("s", "Scaffold", ["body": "safe"], ["safe"], kind: "structure"),
+        ] + safeArea(["top": false])]).client, path: "page", system: SystemRecorder().actions())
+        let window = try await show(router)
+        defer { window.isHidden = true }
+
+        let top = try XCTUnwrap(try snapshot(window).bounds(of: FlowTests.isGreen), "the content's top is hidden")
+        XCTAssertEqual(top.minY, 0, accuracy: Self.accuracy, "the content reaches the window's top")
+    }
+
     // MARK: helpers
 
     /// A wire node; a structure node names its slots in `props`.
@@ -148,6 +200,35 @@ final class SafeAreaShellTests: XCTestCase {
         ]
         return OrcaRouter(client: SafeAreaShellPages(components: ["home": components]).client,
                           config: try config.decode(NavConfig.self), system: SystemRecorder().actions())
+    }
+
+    /// A router whose first page is `/login`, a route outside the tab
+    /// `/home`: one stack, no shell, its root drawn with a title bar. The
+    /// page `login` is `components`.
+    func titledRouter(_ components: [JSONValue]) throws -> OrcaRouter {
+        let config: JSONValue = [
+            "initialRoute": "/login",
+            "tabs": [["id": "home", "label": "Home", "icon": "home", "initialRoute": "/home"]],
+            "flows": [["name": "main", "routes": [["path": "home"], ["path": "login"]]]],
+        ]
+        return OrcaRouter(client: SafeAreaShellPages(components: ["login": components]).client,
+                          config: try config.decode(NavConfig.self), system: SystemRecorder().actions())
+    }
+
+    /// Pushes `path` on `router`, then waits for its page to load and the
+    /// push to settle.
+    func push(_ path: String, on router: OrcaRouter) async throws {
+        router.navigate(to: path)
+        let loader = router.loader(for: router.top)
+        for _ in 0..<30 {
+            if case .loaded = loader.phase { break }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        guard case .loaded = loader.phase else {
+            throw NSError(domain: "SafeAreaShellTests", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "the pushed page did not load: \(loader.phase)"])
+        }
+        try await Task.sleep(nanoseconds: 1_000_000_000)
     }
 
     /// OrcaApp on `router` in a light 300 by 500 UIKit window whose safe
