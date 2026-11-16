@@ -3,19 +3,20 @@
 ## Front page
 
 ### In one breath
-group 2 of 6 · tasks: 2 green, 0 blocked · cases: C19.7, C19.3, C19.4 green · every suite green
-T6 Swift: OrcaDebugOptions (Flutter's names, defaults), the state and network gates, bodies.
-T7 Kotlin: the same; one rework: an empty appState shows no requestBody, as Flutter and Swift.
+group 3 of 6 · tasks: 2 green, 0 blocked · cases: C19.1, C19.3, C19.4, C19.7 green · suites green
+T8 Swift: traced resolution in the core; a watched node reports its prop traces once per build.
+One rework: a parent reading a watched child (AppBar title, flex, Positioned) reported too.
+T9 Kotlin: the same traced resolution and rebuild events; passed both reviews first time.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-1 auto-decided: options are read once per request, so one request never mixes settings
+5 auto-decided: build vs read entry (Swift), nested trace call is an error, objects only traced
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 3 (resolveWithTrace and traced widget_rebuild in both cores). (default: go)
+2. Next: group 4 (setState traces, affectedWidgets, the debugLog pin). (default: go)
 
 ## Appendix
 
@@ -85,7 +86,35 @@ Decisions: options read once per request · a non-JSON request body falls back t
 Review fit: an empty appState reported `requestBody: {}` where Flutter (orca_page.dart:163-167) and Swift show none,
 fixed (db49e6b, new test c19_3_aPageFetchWithAnEmptyAppStateShowsNoRequestBody) · Review quality: pass
 
+### Group 3
+#### T8 · Swift resolveWithTrace, traced widget_rebuild (2929f60, rework a2891fe)
+Files: sdk-swift/Sources/OrcaGatewayCore/Resolver/ValueResolver.swift · Render/PageRenderer.swift ·
+Sources/OrcaGateway/OrcaPageModel.swift · Widgets/Structure.swift (rework, one line) · Tests/OrcaGatewayCoreTests/
+PropTraceTests.swift (new) · Tests/OrcaGatewayTests/DevToolsClientTests.swift
+Cases: C19.1/S → green (core 390 = 386 + 4; SwiftUI 258 = 257 + 1; red first: compile, then the observer's empty event)
+Changed: resolveWithTrace → (value, trace) through a private recorder only the traced call holds (untraced: a nil
+check); state, event, input and per-op steps in Dart's text; every traces fixture runs; PageRenderer reports
+widgetRebuild with the non-empty traces of a watched node's object props on every build, the first included;
+NodeObserver only redraws; the UI rebuild test moved to the new truth (stricter: the observer reports nothing).
+Decisions: a nested traced call is an assert (Flutter) · objects-only props traced · a build entry that reports and a
+silent entry for a parent's reads; the Scaffold appBar slot builds through the reporting one
+Review fit: a parent's read of a watched child (AppBar title, flex/fit, Positioned) also reported, 2-3 per redraw where
+Flutter sends one per WatchBuilder build, fixed (a2891fe, testC19_1_aWatchedNodeReportsOncePerBuildNeverOnItsParentsRead)
+· Review quality: pass
+#### T9 · Kotlin resolveWithTrace, traced widget_rebuild (f2b5e83)
+Files: sdk-kotlin/core/.../resolver/ValueResolver.kt · core/.../render/PageRenderer.kt · sdk/.../OrcaPageModel.kt ·
+core/src/test/.../debug/PropTraceTest.kt (new) · sdk/src/test/.../debug/DevToolsUiReportingTest.kt
+Cases: C19.1/K → green (core 392 = 385 + 7; sdk 374, c6 renamed; red first: compile, then the redraw's report)
+Changed: resolveWithTrace → Pair(value, trace) through a recorder field set for the call (a nested call throws;
+cleared in finally); PageRenderer reports as T8 on every resolution (NodeView is its only caller: one per redraw);
+NodeObserver only redraws; one @TestFactory case per traces file; c6 checks full traces at count 0 and 1.
+Decisions: Pair return · JUnit5 @TestFactory (already on the classpath) · array props untraced (Flutter: Map only)
+Review fit: pass · Review quality: pass (notes: resolvers are per call, so the recorder is never shared across threads)
+
 ### Test run
+Group 3 (..a2891fe): `swift build --build-tests` 0 warnings · `swift test` core 390, SwiftUI 258, 0 failures ·
+`./gradlew build` core 392, sdk 374, 0 failures · sdk `flutter test` 357 · Files changed: the tasks' only, plus T8's
+one-line Structure.swift edit (the appBar slot's build entry; reviewed, fit pass).
 Group 2 (..db49e6b): `swift build --build-tests` 0 warnings · `swift test` core 386, SwiftUI 257, 0 failures ·
 `./gradlew build` core 385, sdk 374, 0 failures. Files changed: the tasks' only.
 Group 1 (d3c2f38..9b4dc06): engine `bun test` 770 pass (751 + T1's 19) · sdk `flutter test` 357 (349 + 5 + 3) · devtools
