@@ -20,9 +20,9 @@ final class ActionFixtureTests: XCTestCase {
         func append(_ effect: JSONValue) { list.append(effect) }
     }
 
-    @MainActor func testAllTwentyEightActionFixturesPass() async throws {
+    @MainActor func testAllTwentyNineActionFixturesPass() async throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 28)
+        XCTAssertEqual(files.count, 29)
         for (name, fx) in files { try await run(name, fx) }
     }
 
@@ -55,6 +55,12 @@ final class ActionFixtureTests: XCTestCase {
 
     @MainActor func testA2_4_ScrollTriggersReadTheirEventValues_fixture19() async throws {
         try await run(fixture: "19_scroll_event_values.json")
+    }
+
+    /// A5.6: with no reload wired, refetchPage leaves the state alone and
+    /// emits no effect, as Flutter's executor awaits a null onRefetchPage.
+    @MainActor func testA5_6_RefetchPageEmitsNothing_fixture48() async throws {
+        try await run(fixture: "48_refetchPage.json")
     }
 
     // MARK: the source (D1) and once (D2) beyond the fixtures

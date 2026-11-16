@@ -1,0 +1,703 @@
+{
+  "name": "lists-and-pages",
+  "description": "Column holding the five list, grid and page widgets with every prop each can carry on the wire: a horizontal ListView with padding, shrinkWrap, primary false, itemExtent 80, reverse bound to pageState `reversed` (true) and an onScrollEnd that stores the event offset (no `separator`: the engine sends a raw widget where Flutter reads a node id); a vertical GridView with crossAxisCount 2, mainAxisSpacing 8, crossAxisSpacing 4, childAspectRatio 1.5, padding, shrinkWrap and primary false, and a horizontal one with 3, 2, 2 and ratio 2; a vertical PageView with pageSnapping false and reverse true over three SizedBox pages; a Scrollbar with thumbVisibility true and thickness 6 around a plain ListView; and a PullToRefresh with colour #6200EE, background #FFFFFF, displacement 60 and an onRefresh of refetchPage around a plain ListView. Every static prop reaches the wire unchanged, both actions ride on their nodes, the reverse binding stays a state Value with `reversed` in its watches, and every client resolver resolves each prop to the listed value.",
+  "input": {
+    "type": "Column",
+    "key": "col",
+    "props": {},
+    "children": [
+      {
+        "type": "ListView",
+        "key": "list",
+        "props": {
+          "scrollDirection": "horizontal",
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
+          "shrinkWrap": true,
+          "reverse": {
+            "type": "state",
+            "key": "reversed",
+            "scope": "page"
+          },
+          "primary": false,
+          "itemExtent": 80
+        },
+        "actions": {
+          "onScrollEnd": {
+            "type": "setState",
+            "scope": "page",
+            "key": "listOffset",
+            "value": {
+              "type": "event",
+              "key": "offset"
+            }
+          }
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "listA",
+            "props": {
+              "data": "A"
+            }
+          },
+          {
+            "type": "Text",
+            "key": "listB",
+            "props": {
+              "data": "B"
+            }
+          },
+          {
+            "type": "Text",
+            "key": "listC",
+            "props": {
+              "data": "C"
+            }
+          }
+        ]
+      },
+      {
+        "type": "GridView",
+        "key": "grid",
+        "props": {
+          "crossAxisCount": 2,
+          "mainAxisSpacing": 8,
+          "crossAxisSpacing": 4,
+          "childAspectRatio": 1.5,
+          "scrollDirection": "vertical",
+          "padding": {
+            "top": 8,
+            "right": 8,
+            "bottom": 8,
+            "left": 8
+          },
+          "shrinkWrap": true,
+          "primary": false
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "grid1",
+            "props": {
+              "data": "1"
+            }
+          },
+          {
+            "type": "Text",
+            "key": "grid2",
+            "props": {
+              "data": "2"
+            }
+          },
+          {
+            "type": "Text",
+            "key": "grid3",
+            "props": {
+              "data": "3"
+            }
+          },
+          {
+            "type": "Text",
+            "key": "grid4",
+            "props": {
+              "data": "4"
+            }
+          }
+        ]
+      },
+      {
+        "type": "GridView",
+        "key": "gridH",
+        "props": {
+          "crossAxisCount": 3,
+          "mainAxisSpacing": 2,
+          "crossAxisSpacing": 2,
+          "childAspectRatio": 2,
+          "scrollDirection": "horizontal"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "key": "gridH1",
+            "props": {
+              "data": "1"
+            }
+          },
+          {
+            "type": "Text",
+            "key": "gridH2",
+            "props": {
+              "data": "2"
+            }
+          },
+          {
+            "type": "Text",
+            "key": "gridH3",
+            "props": {
+              "data": "3"
+            }
+          }
+        ]
+      },
+      {
+        "type": "PageView",
+        "key": "pager",
+        "props": {
+          "scrollDirection": "vertical",
+          "pageSnapping": false,
+          "reverse": true
+        },
+        "children": [
+          {
+            "type": "SizedBox",
+            "key": "page1",
+            "props": {
+              "width": 100,
+              "height": 100
+            }
+          },
+          {
+            "type": "SizedBox",
+            "key": "page2",
+            "props": {
+              "width": 100,
+              "height": 100
+            }
+          },
+          {
+            "type": "SizedBox",
+            "key": "page3",
+            "props": {
+              "width": 100,
+              "height": 100
+            }
+          }
+        ]
+      },
+      {
+        "type": "Scrollbar",
+        "key": "scrollbar",
+        "props": {
+          "thumbVisibility": true,
+          "thickness": 6
+        },
+        "children": [
+          {
+            "type": "ListView",
+            "key": "barList",
+            "props": {},
+            "children": [
+              {
+                "type": "Text",
+                "key": "barA",
+                "props": {
+                  "data": "A"
+                }
+              },
+              {
+                "type": "Text",
+                "key": "barB",
+                "props": {
+                  "data": "B"
+                }
+              },
+              {
+                "type": "Text",
+                "key": "barC",
+                "props": {
+                  "data": "C"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "PullToRefresh",
+        "key": "refresh",
+        "props": {
+          "color": "#6200EE",
+          "backgroundColor": "#FFFFFF",
+          "displacement": 60
+        },
+        "actions": {
+          "onRefresh": {
+            "type": "refetchPage"
+          }
+        },
+        "children": [
+          {
+            "type": "ListView",
+            "key": "refreshList",
+            "props": {},
+            "children": [
+              {
+                "type": "Text",
+                "key": "refreshA",
+                "props": {
+                  "data": "A"
+                }
+              },
+              {
+                "type": "Text",
+                "key": "refreshB",
+                "props": {
+                  "data": "B"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "pageState": {
+      "reversed": true
+    },
+    "appState": {},
+    "infoData": null,
+    "requestInfo": {},
+    "config": {}
+  },
+  "expected": [
+    {
+      "id": "col",
+      "type": "Column",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "list",
+        "grid",
+        "gridH",
+        "pager",
+        "scrollbar",
+        "refresh"
+      ],
+      "watches": []
+    },
+    {
+      "id": "refresh",
+      "type": "PullToRefresh",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "color": "#6200EE",
+        "backgroundColor": "#FFFFFF",
+        "displacement": 60
+      },
+      "children": [
+        "refreshList"
+      ],
+      "watches": [],
+      "actions": {
+        "onRefresh": {
+          "type": "refetchPage"
+        }
+      }
+    },
+    {
+      "id": "refreshList",
+      "type": "ListView",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "refreshA",
+        "refreshB"
+      ],
+      "watches": []
+    },
+    {
+      "id": "refreshB",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "B"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "refreshA",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "A"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "scrollbar",
+      "type": "Scrollbar",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "thumbVisibility": true,
+        "thickness": 6
+      },
+      "children": [
+        "barList"
+      ],
+      "watches": []
+    },
+    {
+      "id": "barList",
+      "type": "ListView",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {},
+      "children": [
+        "barA",
+        "barB",
+        "barC"
+      ],
+      "watches": []
+    },
+    {
+      "id": "barC",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "C"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "barB",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "B"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "barA",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "A"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "pager",
+      "type": "PageView",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "scrollDirection": "vertical",
+        "pageSnapping": false,
+        "reverse": true
+      },
+      "children": [
+        "page1",
+        "page2",
+        "page3"
+      ],
+      "watches": []
+    },
+    {
+      "id": "page3",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 100,
+        "height": 100
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "page2",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 100,
+        "height": 100
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "page1",
+      "type": "SizedBox",
+      "kind": "layout",
+      "childMode": "single",
+      "props": {
+        "width": 100,
+        "height": 100
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "gridH",
+      "type": "GridView",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisCount": 3,
+        "mainAxisSpacing": 2,
+        "crossAxisSpacing": 2,
+        "childAspectRatio": 2,
+        "scrollDirection": "horizontal"
+      },
+      "children": [
+        "gridH1",
+        "gridH2",
+        "gridH3"
+      ],
+      "watches": []
+    },
+    {
+      "id": "gridH3",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "3"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "gridH2",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "2"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "gridH1",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "1"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "grid",
+      "type": "GridView",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "crossAxisCount": 2,
+        "mainAxisSpacing": 8,
+        "crossAxisSpacing": 4,
+        "childAspectRatio": 1.5,
+        "scrollDirection": "vertical",
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "shrinkWrap": true,
+        "primary": false
+      },
+      "children": [
+        "grid1",
+        "grid2",
+        "grid3",
+        "grid4"
+      ],
+      "watches": []
+    },
+    {
+      "id": "grid4",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "4"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "grid3",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "3"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "grid2",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "2"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "grid1",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "1"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "list",
+      "type": "ListView",
+      "kind": "layout",
+      "childMode": "multi",
+      "props": {
+        "scrollDirection": "horizontal",
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
+        "shrinkWrap": true,
+        "reverse": {
+          "type": "state",
+          "key": "reversed",
+          "scope": "page"
+        },
+        "primary": false,
+        "itemExtent": 80
+      },
+      "children": [
+        "listA",
+        "listB",
+        "listC"
+      ],
+      "watches": [
+        "reversed"
+      ],
+      "actions": {
+        "onScrollEnd": {
+          "type": "setState",
+          "scope": "page",
+          "key": "listOffset",
+          "value": {
+            "type": "event",
+            "key": "offset"
+          }
+        }
+      }
+    },
+    {
+      "id": "listC",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "C"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "listB",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "B"
+      },
+      "children": [],
+      "watches": []
+    },
+    {
+      "id": "listA",
+      "type": "Text",
+      "kind": "primitive",
+      "childMode": "none",
+      "props": {
+        "data": "A"
+      },
+      "children": [],
+      "watches": []
+    }
+  ],
+  "resolved": {
+    "list": {
+      "scrollDirection": "horizontal",
+      "padding": {
+        "top": 4,
+        "right": 8,
+        "bottom": 4,
+        "left": 8
+      },
+      "shrinkWrap": true,
+      "reverse": true,
+      "primary": false,
+      "itemExtent": 80
+    },
+    "grid": {
+      "crossAxisCount": 2,
+      "mainAxisSpacing": 8,
+      "crossAxisSpacing": 4,
+      "childAspectRatio": 1.5,
+      "scrollDirection": "vertical",
+      "padding": {
+        "top": 8,
+        "right": 8,
+        "bottom": 8,
+        "left": 8
+      },
+      "shrinkWrap": true,
+      "primary": false
+    },
+    "gridH": {
+      "crossAxisCount": 3,
+      "mainAxisSpacing": 2,
+      "crossAxisSpacing": 2,
+      "childAspectRatio": 2,
+      "scrollDirection": "horizontal"
+    },
+    "pager": {
+      "scrollDirection": "vertical",
+      "pageSnapping": false,
+      "reverse": true
+    },
+    "scrollbar": {
+      "thumbVisibility": true,
+      "thickness": 6
+    },
+    "refresh": {
+      "color": "#6200EE",
+      "backgroundColor": "#FFFFFF",
+      "displacement": 60
+    }
+  }
+}
