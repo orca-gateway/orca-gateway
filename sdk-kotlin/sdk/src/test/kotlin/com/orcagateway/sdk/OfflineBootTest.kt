@@ -159,9 +159,10 @@ class OfflineBootTest {
         waitForText("About from the cache")
         assertEquals(listOf("version"), engine.paths)
 
-        // Not saved: the page's error view, as today.
+        // Not saved: the page's error view, as today: Flutter's for a server never reached.
         compose.onNodeWithText("Profile").performClick()
-        waitForText("Could not load this page")
+        waitForText("Connection Failed")
+        compose.onNodeWithText("Unable to reach the server. Please check your network and server status.").assertIsDisplayed()
         assertEquals(listOf("version", "page/profile"), engine.paths)
     }
 
@@ -205,13 +206,17 @@ class OfflineBootTest {
     }
 
     @Test
-    fun c14_2_withNothingSavedTheBootErrorSaysSoAndTryAgainRunsPreloadAgain() {
+    fun c14_2_withNothingSavedTheBootShowsFluttersErrorForItAndTryAgainRunsPreloadAgain() {
         val engine = StaticFlowsEngine(online = false)
         val cache = cache()
         compose.setContent { OrcaApp(engine.client, enableOffline = true, staticFlowManager = cache) }
 
-        waitForText("No network and no cached config available")
-        compose.onNodeWithText("Could not load this app").assertIsDisplayed()
+        // Flutter's buildOrcaError for Exception('No network and no cached config available'): its
+        // default branch, and no other text. Not "Connection Failed": the boot's own error, not /version's.
+        waitForText("Something Went Wrong")
+        compose.onNodeWithText("An unexpected error occurred. Please try again.").assertIsDisplayed()
+        assertEquals(0, compose.onAllNodes(hasText("No network and no cached config available")).fetchSemanticsNodes().size)
+        assertEquals(0, compose.onAllNodes(hasText("Connection Failed")).fetchSemanticsNodes().size)
         assertEquals(listOf("version"), engine.paths)
 
         engine.online = true

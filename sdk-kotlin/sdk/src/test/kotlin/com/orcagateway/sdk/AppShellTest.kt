@@ -171,9 +171,12 @@ class AppShellTest {
             )
         }
 
-        // The version check runs: the splash, not the loading view nor the SDK spinner.
+        // The version check runs: the splash, not the loading view nor the SDK spinner. The boot's
+        // preload asks /version off the main thread, so the splash is up before the request is.
         waitForTag(SPLASH)
+        waitForPath(engine, "/version")
         assertEquals(listOf("/api/v1/app/counter/version"), engine.paths)
+        compose.onNodeWithTag(SPLASH).assertIsDisplayed()
         assertEquals(0, tagged(LOADING))
         assertEquals(0, spinners())
 
@@ -204,7 +207,9 @@ class AppShellTest {
         }
 
         waitForTag(LOADING)
+        waitForPath(engine, "/version")
         assertEquals(listOf("/api/v1/app/counter/version"), engine.paths)
+        compose.onNodeWithTag(LOADING).assertIsDisplayed()
         assertEquals(0, spinners())
 
         version.complete(Unit)
