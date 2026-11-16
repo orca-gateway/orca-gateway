@@ -3,7 +3,7 @@
 ## Front page
 
 ### In one breath
-group 1 of 8 · tasks: 3 green, 0 blocked · fixture 45 green on engine and Flutter, cores on both SDKs
+group 1 of 8 · tasks: 3 green, 0 blocked · fixture 45 green on engine and Flutter, both cores green
 F1 Fixture 45 and target-check pins: 15 nodes, every declared prop; pins off Checkbox and FAB.
 S-core / K-core FormControls: checkbox cycle, radio selection, slider snapping; 14 twin cases each.
 Ahead (running): E-ios1 committed; S-check and K-check (Checkbox, Radio, the value binding).
