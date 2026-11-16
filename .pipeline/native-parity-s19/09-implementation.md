@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 3 of 6 · tasks: 2 green, 0 blocked · cases: C19.1, C19.3, C19.4, C19.7 green · suites green
-T8 Swift: traced resolution in the core; a watched node reports its prop traces once per build.
-One rework: a parent reading a watched child (AppBar title, flex, Positioned) reported too.
-T9 Kotlin: the same traced resolution and rebuild events; passed both reviews first time.
+group 4 of 6 · tasks: 2 green, 0 blocked · cases: C19.1-C19.4, C19.6, C19.7 green · suites green
+T10 Swift: a setState's event carries its trace and the widgets watching its key; debugLog pinned.
+One rework: widgets added by a server action were sorted by id; now Flutter's arrival order.
+T11 Kotlin: the same; passed both reviews first time.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-5 auto-decided: build vs read entry (Swift), nested trace call is an error, objects only traced
+3 auto-decided: a page-nodes hook on the executor, the wire type in affectedWidgets, one resolve
 
 ### Questions for you
 1. Blocked tasks: none. (default: none)
-2. Next: group 4 (setState traces, affectedWidgets, the debugLog pin). (default: go)
+2. Next: group 5 (the host's debug options, logTimings, the timing overlay). (default: go)
 
 ## Appendix
 
@@ -111,7 +111,35 @@ NodeObserver only redraws; one @TestFactory case per traces file; c6 checks full
 Decisions: Pair return · JUnit5 @TestFactory (already on the classpath) · array props untraced (Flutter: Map only)
 Review fit: pass · Review quality: pass (notes: resolvers are per call, so the recorder is never shared across threads)
 
+### Group 4
+#### T10 · Swift action trace, affectedWidgets, debugLog (6f4840f, rework 6977b2a)
+Files: sdk-swift/Sources/OrcaGatewayCore/State/ActionExecutor.swift · State/ActionReducer.swift ·
+Sources/OrcaGateway/OrcaPageModel.swift · Tests/OrcaGatewayCoreTests/ActionTraceTests.swift (new) ·
+Tests/OrcaGatewayTests/LifecycleTests.swift
+Cases: C19.2/S, C19.6/S → green (core 398 = 390 + 8; SwiftUI 261 = 258 + 3; red first: compile, then the page test;
+the C19.6 pins pass on today's code, as a pin should)
+Changed: a public `pageNodes` hook on the executor, set by OrcaPageModel; each run keeps its own trace and affected
+list, so only the setState's own event carries them; a transform value resolves once, through resolveWithTrace
+while DevTools is on; exact-key watchers {id,type,watches} after the commit, in Flutter's nodeMap order (the model
+keeps an ordered id list through add, replace, update, delete); debugLog: the action event only, plus os.Logger.
+Decisions: the reducer's traced entry internal (one new public member) · computed only when the event will be sent
+Review fit: server-action-added nodes sorted by id where Flutter keeps arrival order, fixed (6977b2a,
+testC19_2_nodesServerActionsChangedKeepFluttersNodeMapOrder) · Review quality: pass
+#### T11 · Kotlin action trace, affectedWidgets, debugLog (064393d)
+Files: sdk-kotlin/core/.../state/ActionExecutor.kt · state/ActionReducer.kt · sdk/.../OrcaPageModel.kt ·
+core/src/test/.../debug/ActionTraceTest.kt (new) · sdk/src/test/.../widgets/LifecycleTest.kt
+Cases: C19.2/K, C19.6/K → green (core 399 = 392 + 7; sdk 376 = 374 + 2; red first: the 5 behaviour tests and the page
+test; the off guard and C19.6 pins pass on today's code)
+Changed: a public `pageNodes` hook set to the renderer's node map (a LinkedHashMap: Flutter's order through every
+mutation); per-run trace and affected, cleared around each handler; internal reducer setState resolves a transform
+once, traced while DevTools is on; logcat line plus the action event only for debugLog.
+Decisions: the hook a plain var like onEffect/onMutation (set once at init, one thread) · affectedWidgets use the wire
+type, not the degraded one (Flutter's node.type)
+Review fit: pass · Review quality: pass
+
 ### Test run
+Group 4 (..6977b2a): `swift build --build-tests` 0 warnings · `swift test` core 398, SwiftUI 261, 0 failures ·
+`./gradlew build` core 399, sdk 376, 0 failures · sdk `flutter test` 357 · Files changed: the tasks' only.
 Group 3 (..a2891fe): `swift build --build-tests` 0 warnings · `swift test` core 390, SwiftUI 258, 0 failures ·
 `./gradlew build` core 392, sdk 374, 0 failures · sdk `flutter test` 357 · Files changed: the tasks' only, plus T8's
 one-line Structure.swift edit (the appBar slot's build entry; reviewed, fit pass).
