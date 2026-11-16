@@ -40,19 +40,20 @@ final class CapabilitiesTests: XCTestCase {
 
     /// A3.1: native parity step 3's 13 layout wrappers are drawn by SwiftUI,
     /// so the generated vector advertises them, each once and sorted like
-    /// capabilities.json. The pin is 82: with step 12's 5 animated widgets
+    /// capabilities.json. The pin is 89: with step 12's 5 animated widgets
     /// (49), then native parity step 4's 11 effect and touch wrappers (A4.x,
     /// 60), then step 13's ReorderableListView and SubPage, then S18's
     /// UnsupportedWidgetPlaceholder (63), then native parity step 5's five
     /// scroll widgets (A5.x, 68), then step 13's CustomScrollView and four
     /// sliver widgets (B13.1, B13.2, 73), then native parity step 6's nine
-    /// form controls (A6.x).
-    func testA3_1TheThirteenLayoutWrappersAreAdvertisedEightyTwoInAll() throws {
+    /// form controls (A6.x, 82), then native parity step 7's seven rich
+    /// widgets (A7.x).
+    func testA3_1TheThirteenLayoutWrappersAreAdvertisedEightyNineInAll() throws {
         let advertised = Set(GeneratedCapabilities.widgets)
         XCTAssertEqual(Self.a3_1.subtracting(advertised), [], "not advertised")
         XCTAssertTrue(Self.a3_1.isSubset(of: try manifestIOSWidgets()), "a wrapper lacks the ios target")
-        XCTAssertEqual(GeneratedCapabilities.widgets.count, 82)
-        XCTAssertEqual(advertised.count, 82)
+        XCTAssertEqual(GeneratedCapabilities.widgets.count, 89)
+        XCTAssertEqual(advertised.count, 89)
         XCTAssertEqual(GeneratedCapabilities.widgets, GeneratedCapabilities.widgets.sorted())
     }
 
@@ -133,6 +134,30 @@ final class CapabilitiesTests: XCTestCase {
     static let a6: Set<String> = [
         "Checkbox", "FloatingActionButton", "Form", "IconButton", "InkWell", "Radio", "Slider",
         "Switch", "TextFormField",
+    ]
+
+    /// A7.x: native parity step 7's seven rich widgets are drawn by SwiftUI
+    /// (A7.1-A7.4: RichText, SelectableText, DefaultTextStyle, ImageIcon,
+    /// the two progress indicators, Table), so capabilities.json lists each
+    /// of them, the generated vector advertises each, once, every one
+    /// carrying the manifest's ios target, and the standard registry lets
+    /// them through.
+    func testA7_xAdvertisesTheSevenRichWidgets() throws {
+        let implemented = try Fixtures.json("sdk-swift/capabilities.json")
+        let listed = Set((implemented["widgets"].arrayValue ?? []).compactMap(\.stringValue))
+        XCTAssertEqual(Self.a7.subtracting(listed), [], "not in capabilities.json")
+        for widget in Self.a7.sorted() {
+            XCTAssertEqual(GeneratedCapabilities.widgets.filter { $0 == widget }.count, 1,
+                           "\(widget) is not advertised exactly once")
+        }
+        XCTAssertEqual(Self.a7.subtracting(try manifestIOSWidgets()), [], "a widget lacks the ios target")
+        XCTAssertEqual(Self.a7.subtracting(WidgetRegistry.shared.types), [], "degraded by the standard registry")
+    }
+
+    /// Native parity step 7's rich widgets (A7.1-A7.4).
+    static let a7: Set<String> = [
+        "CircularProgressIndicator", "DefaultTextStyle", "ImageIcon", "LinearProgressIndicator",
+        "RichText", "SelectableText", "Table",
     ]
 
     func testActionKindsMatchTheImplementedList() throws {

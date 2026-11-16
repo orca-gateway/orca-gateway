@@ -22,9 +22,14 @@ struct DefaultTextStyleView: View {
 }
 
 /// The DefaultTextStyle above this point; nil, the default: none, so a
-/// Text draws on the ambient style as it always has. A Material host
-/// (Card, a button, InkWell, Scaffold's body, an AppBar title) sets it
-/// back to nil, as Flutter's Material resets it (MUI material.dart:470-474).
+/// Text draws on the ambient style as it always has. A Material host sets
+/// it back to nil, as Flutter's Material resets it (MUI material.dart:
+/// 470-474): the whole Scaffold (its drawers are drawn by the app's drawer
+/// host, above every page, so no DTS reaches them), the whole AppBar
+/// toolbar (leading, title, actions: `AppBarToolbar`, so SliverAppBar's
+/// row as well), Card, the three buttons (ElevatedButton, TextButton,
+/// OutlinedButton), the FloatingActionButton and InkWell's child.
+/// IconButton has no Material and passes it through.
 private struct OrcaDefaultTextStyleKey: EnvironmentKey {
     static let defaultValue: TextStyles.Layer? = nil
 }
