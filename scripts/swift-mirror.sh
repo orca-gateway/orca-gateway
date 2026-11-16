@@ -1,37 +1,74 @@
 #!/usr/bin/env bash
 #
-# Publishes the iOS SDK to its SwiftPM mirror and checks what was published
-# (Epic 23b, task 23b.25). SwiftPM resolves a package from a repository root
-# with bare X.Y.Z tags, so sdk-swift/ is split out of the monorepo with
-# `git subtree split` and pushed to orca-gateway/orca-gateway-swift.
+# Publishes a Swift package of this repository to its SwiftPM mirror and
+# checks what was published (Epic 23b, task 23b.25). SwiftPM resolves a
+# package from a repository root with bare X.Y.Z tags, so the package's
+# directory is split out of the monorepo with `git subtree split` and pushed
+# to its own repository: sdk-swift/ to orca-gateway/orca-gateway-swift, a
+# plugin's iOS package (plugins/<name>/ios/) to its own mirror. The tag says
+# which: PACKAGES below holds one line per package.
 #
-# .github/workflows/sdk-swift-mirror.yml runs it on every sdk-swift-v<X> tag
-# that scripts/release.sh pushes. It runs the same way against a local bare
-# repository, which is how a release is rehearsed:
+# .github/workflows/sdk-swift-mirror.yml runs it on every sdk-swift-v<X> and
+# orca_<name>-ios-v<X> tag that scripts/release.sh pushes. It runs the same
+# way against a local bare repository, which is how a release is rehearsed:
 #
 #   bash scripts/swift-mirror.sh publish sdk-swift-v0.1.0-alpha.1 /tmp/orca-gateway-swift.git
 #   bash scripts/swift-mirror.sh verify  file:///tmp/orca-gateway-swift.git 0.1.0-alpha.1 run
 #
-#   publish <tag> <remote>   split the tag's sdk-swift/, check it builds on its
-#                            own, push it to <remote> main (fast-forward only)
-#                            and tag it there with the bare version.
+#   publish <tag> <remote>   split the tag's package directory, check it
+#                            builds on its own, push it to <remote> main
+#                            (fast-forward only) and tag it there with the
+#                            bare version.
 #   verify <url> <version> <mode>
 #                            resolve the mirror at exactly <version> from a
 #                            scratch package, as an app would, and:
 #                              run  build and run it (Linux or macOS): it
 #                                   prints sdkSemver, which must equal <version>
 #                              ios  build it for the iOS simulator (macOS)
+#                            The package is the one whose mirror has the
+#                            url's name (orca-gateway-swift.git: sdk-swift),
+#                            so a rehearsal's bare repository keeps that name.
+#                            A plugin has no version to print: `run` builds a
+#                            scratch library that imports it (macOS).
+#   info <tag>               print the tag's version, mirror, deploy key
+#                            secret and whether it is a plugin, as the
+#                            name=value lines the workflow reads.
 #
 # Environment: SWIFT_DOCKER_IMAGE makes `publish` build the split tree in that
 # Linux swift image (CI) instead of with the local `swift`.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PREFIX="sdk-swift"
-TAG_PREFIX="sdk-swift-v"
+
+# One line per package; the next plugin adds its own:
+#   tag prefix|directory|mirror (owner/name on GitHub)|deploy key secret|library
+# The secret, in the repository's Actions secrets, holds the private half of a
+# deploy key with write access on the mirror (docs/User_Actions.md). The
+# library is the plugin's product a scratch app imports; sdk-swift's check is
+# its own (sdkSemver), so it has none.
+PACKAGES=(
+  "sdk-swift-v|sdk-swift|orca-gateway/orca-gateway-swift|SWIFT_MIRROR_DEPLOY_KEY|"
+  "orca_voice_recorder-ios-v|plugins/orca_voice_recorder/ios|orca-gateway/orca-voice-recorder-swift|ORCA_VOICE_RECORDER_SWIFT_DEPLOY_KEY|OrcaVoiceRecorder"
+)
+TAG_PREFIX="" PREFIX="" MIRROR="" SECRET="" LIBRARY=""
 
 die() { printf "error: %s\n" "$*" >&2; exit 1; }
 say() { printf "==> %s\n" "$*"; }
+
+# Sets TAG_PREFIX, PREFIX, MIRROR, SECRET and LIBRARY from the line whose tag
+# prefix starts $2 (by_tag) or whose mirror is named $2 (by_mirror).
+find_package() {
+  local by=$1 key=$2 line known=""
+  for line in "${PACKAGES[@]}"; do
+    IFS='|' read -r TAG_PREFIX PREFIX MIRROR SECRET LIBRARY <<<"$line"
+    case "$by" in
+      by_tag) [[ "$key" == "$TAG_PREFIX"* ]] && return 0; known+=" $TAG_PREFIX" ;;
+      by_mirror) [[ "$key" == "${MIRROR#*/}" ]] && return 0; known+=" ${MIRROR#*/}" ;;
+    esac
+  done
+  [[ "$by" == by_mirror ]] && die "no package has the mirror $key (one of:$known)"
+  die "tag must start with one of$known: $key"
+}
 
 # Cleanup never decides the outcome: under `set -e` a failing command in an
 # EXIT trap becomes the script's exit status, which once failed a release
@@ -48,7 +85,7 @@ trap cleanup EXIT
 
 publish() {
   local tag=$1 remote=$2
-  [[ "$tag" == "$TAG_PREFIX"* ]] || die "tag must start with $TAG_PREFIX: $tag"
+  find_package by_tag "$tag"
   local version="${tag#"$TAG_PREFIX"}"
   cd "$REPO_ROOT"
   git rev-parse -q --verify "refs/tags/$tag" >/dev/null || die "no tag $tag here"
@@ -117,6 +154,8 @@ verify() {
   case "$mode" in run|ios) ;; *) die "unknown mode: $mode (run or ios)" ;; esac
   local identity
   identity=$(basename "$url" .git)
+  find_package by_mirror "$identity"
+  if [[ -n "$LIBRARY" ]]; then verify_plugin "$url" "$version" "$mode" "$identity"; return; fi
   WORK=$(mktemp -d)
   mkdir -p "$WORK/Sources/MirrorCheck"
 
@@ -178,8 +217,57 @@ SWIFT
   fi
 }
 
+# A plugin's check: a scratch library that imports it, built for macOS (run)
+# or the iOS simulator (ios). The plugin has no version to print, and needs
+# AVFoundation, so it has no Linux run.
+verify_plugin() {
+  local url=$1 version=$2 mode=$3 identity=$4
+  WORK=$(mktemp -d)
+  mkdir -p "$WORK/Sources/MirrorCheck"
+  cat >"$WORK/Package.swift" <<SWIFT
+// swift-tools-version: 5.9
+import PackageDescription
+
+let package = Package(
+    name: "MirrorCheck",
+    platforms: [.iOS(.v16), .macOS(.v13)],
+    products: [.library(name: "MirrorCheckLib", targets: ["MirrorCheck"])],
+    dependencies: [
+        .package(url: "$url", exact: "$version"),
+    ],
+    targets: [
+        .target(name: "MirrorCheck", dependencies: [
+            .product(name: "$LIBRARY", package: "$identity"),
+        ]),
+    ]
+)
+SWIFT
+  printf 'import %s\n' "$LIBRARY" >"$WORK/Sources/MirrorCheck/MirrorCheck.swift"
+
+  cd "$WORK"
+  say "Resolving $url at exactly $version"
+  swift package resolve
+  if [[ "$mode" == "run" ]]; then
+    swift build
+    say "The mirror at $version builds a package that imports $LIBRARY"
+  else
+    xcodebuild -quiet -scheme MirrorCheck \
+      -destination "generic/platform=iOS Simulator" build
+    say "The mirror at $version builds for the iOS simulator"
+  fi
+}
+
+# What the workflow needs to know about a tag, as GITHUB_OUTPUT lines.
+info() {
+  local tag=$1
+  find_package by_tag "$tag"
+  printf 'version=%s\nmirror=%s\nsecret=%s\n' "${tag#"$TAG_PREFIX"}" "$MIRROR" "$SECRET"
+  if [[ -n "$LIBRARY" ]]; then echo "plugin=true"; else echo "plugin=false"; fi
+}
+
 case "${1:-}" in
   publish) [[ $# -eq 3 ]] || die "usage: $0 publish <tag> <remote>"; publish "$2" "$3" ;;
   verify)  [[ $# -eq 4 ]] || die "usage: $0 verify <url> <version> <run|ios>"; verify "$2" "$3" "$4" ;;
-  *) die "usage: $0 publish <tag> <remote> | verify <url> <version> <run|ios>" ;;
+  info)    [[ $# -eq 2 ]] || die "usage: $0 info <tag>"; info "$2" ;;
+  *) die "usage: $0 publish <tag> <remote> | verify <url> <version> <run|ios> | info <tag>" ;;
 esac
