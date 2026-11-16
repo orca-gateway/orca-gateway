@@ -271,7 +271,7 @@ adb shell am start -S -n com.orcagateway.examples.counter/.MainActivity --ez ORC
 In DevTools, open Network, pick a request and its Body tab: a page request shows the page JSON the
 server sent back. Its event also carries the app state the app sent (`requestBody`); the Body tab
 shows the request body only for a request that got no answer. Without the extra, the Body tab says
-bodies are not captured. The `x-api-key` header is sent as `<redacted>` either way.
+bodies are not captured. The `Authorization` header (the app's API key) shows as `<redacted>` either way.
 
 Add `--es ORCA_APP_ID server-actions --es ORCA_PATH shop` (or another app) as the run task does.
 On a device, pass the Mac's address the same way (`--es ORCA_DEVTOOLS_HOST 192.168.1.20`), or run
