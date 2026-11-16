@@ -32,6 +32,23 @@ one commit per task (reworks as their own commits), the stage records, and the w
 (`get_status`): 0 passing, 4 pending, 0 failing, mergeable. The body is in the session scratchpad
 (`s17p/pr-s17-push.md`).
 
+### After PR #53 merged: rebased onto main 96f6986 (2026-11-17)
+- CI on 9a8bcec: 12 green, 1 red, "orca_google_map Swift package (macOS, iOS simulator)" (run 43961936036, job
+  133631314894). The macOS `swift test` passed 28 of 28. On the iOS simulator one map test failed,
+  `testC17_1_S_TheTriggersRunTheNodesActionsAsTheyAreNow` (MapKitViewTests.swift:377): it got "marker1", the old
+  action, not "the new action". The test waits a fixed 0.3 s after replaceComponent for SwiftUI's updateUIView to hand
+  the coordinator the node's new `fire`, then taps. On that runner the test took 19.1 s (0.4 s here), so the update
+  came after the tap.
+- A flake, not this PR: #54 changes no map file. Its only shared change is the push entry in native-plugins.yml's two
+  matrices, a job on its own runner. The map PR's own run 43919111892 failed the same way in another map test (the
+  pin not shown within the 3 s pump). Here `xcodebuild test -only-testing:OrcaGoogleMapTests/MapKitViewTests
+  -test-iterations 5` on the iOS 18.5 simulator: 55 tests, 0 failures; the trigger test 0.40 s each time.
+- Rebased onto 96f6986 (43 commits, no conflict); the push re-runs every check. Again here: map, push Android green;
+  the Android demo assembleDebug and lintDebug; engine 843 pass, 0 fail; the generators leave no diff.
+- The Android walk's step 3 again, with the Maps key: the tap logged the deep-link line, the notification left the
+  shade, and Map Integration drew Google's map with its pin (no MapsDynamite crash: #53's entry is now on the branch).
+- Follow-up: harden the map's iOS simulator tests (wait on a signal, not a fixed pump), its own PR.
+
 ### What reviewers will find in the body
 - Why: push existed only for Flutter.
 - What changes: the two packages in the map's shape (firebase-ios-sdk from 12.17.0 on iOS, firebase-messaging 25.0.2
