@@ -127,7 +127,11 @@ final class BackdropTests: XCTestCase {
             }
             // Not laid out at all, or laid out at zero size.
             XCTAssertEqual(frames["w"]?.size ?? .zero, .zero, "\(type) with no child takes room")
-            XCTAssertNil(try draw(nodes, width: 60, height: 60).bounds { $0.a > 0 }, "\(type) with no child draws")
+            // Over a page colour: a render that draws nothing at all can
+            // come back holding the previous render's pixels.
+            let pixels = try draw(nodes, width: 60, height: 60, page: Color(.sRGB, red: 0, green: 0, blue: 1))
+            XCTAssertNil(pixels.bounds { $0.r != 0 || $0.g != 0 || $0.b != 255 || $0.a != 255 },
+                         "\(type) with no child draws")
         }
     }
 

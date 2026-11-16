@@ -82,7 +82,7 @@ struct BlurView: View {
                 .background { Props.color(node["overlayColor"]) ?? .clear }
                 .background { Rectangle().fill(BackdropStrength(node).material).allowsHitTesting(false) }
                 .clipShape(shape)
-                .background { Rectangle().fill(Color.black.opacity(0.001)) } // invisible, but takes hits (see above)
+                .background { Rectangle().hitFill() } // invisible, but takes hits (see above, Shape.hitFill)
         }
     }
 }

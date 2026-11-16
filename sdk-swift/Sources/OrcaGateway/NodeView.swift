@@ -103,6 +103,12 @@ struct WidgetView: View {
         case "Drawer": DrawerView(node: node, model: model)
         case "BackdropFilter": BackdropFilterView(node: node, model: model)
         case "BlurView": BlurView(node: node, model: model)
+        case "Opacity": OpacityView(node: node, model: model)
+        case "RotatedBox": RotatedBoxView(node: node, model: model)
+        case "ClipRect": ClipRectView(node: node, model: model)
+        case "ClipOval": ClipOvalView(node: node, model: model)
+        case "DecoratedBox": DecoratedBoxView(node: node, model: model)
+        case "ColorFiltered": ColorFilteredView(node: node, model: model)
         default:
             // A plugin or host widget; any other type draws nothing.
             if let build = model.widgets.builder(for: node.type) { build(node, model) } else { EmptyView() }
