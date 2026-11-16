@@ -189,6 +189,7 @@ struct UnsupportedWidgetPlaceholderView: View {
                         .rotationEffect(.degrees(IconNames.isRotated(iconName) ? 90 : 0))
                         .frame(width: 20, height: 20)
                         .foregroundColor(accent)
+                        .accessibilityHidden(true)
                 }
                 Text(displayName.isEmpty ? Props.text(node["widgetType"]) : displayName)
                     .font(.system(size: 15, weight: .semibold))
