@@ -3,21 +3,22 @@
 ## Front page
 
 ### In one breath
-group 3 of 8 · tasks: 4 green, 0 blocked · Switch, Slider, TextFormField and Form on both SDKs
-The degrade demo now degrades UnregisteredPluginWidget, a type no app registers, for good.
-A disabled field matches Flutter: read-only when bare, Material's disabled colours when decorated.
-Rebased on main 941e789 (PR #46). Ahead: K-tap and E-ios2 done; S-tap, the inks, K-theme next.
+groups 4-7 of 8 · tasks: 12 green, 0 blocked · buttons, InkWell, field text style, degrade pages
+IconButton, FAB and InkWell fire as Flutter's: a 500 ms long press within 18 pt, never also a tap.
+A field's text style is layered as Flutter's; Kotlin shares one Flutter light colour scheme.
+The degrade pages on both SDKs use UnregisteredPluginWidget; Kotlin advertises all 77 widgets.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-2 auto-decided (minor): the Swift Switch's on tint is activeColor at 0x80, Flutter's checked
-track (the thumb stays iOS white); a UISlider ignores a tap on its track (documented).
+3 auto-decided (minor): Kotlin long-presses at Flutter's 500 ms (Android's is 400); the iOS
+InkWell highlights while the finger is down (Flutter: 100 ms in, held through the 300 ms wait);
+both degrade tests pin the prompt's exact wording.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: groups 4 and 5 (buttons, InkWell, one Kotlin scheme, field text colour). (default: go)
+2. Next: group 8 (S-caps running), the rebase on main, the suites and the hand checks. (default: go)
 
 ## Appendix
 
@@ -25,7 +26,7 @@ Cases count: 7 rows split per SDK = 14 cells, plus the fixture half (F1) and the
 D-forms); a row is ticked in phase-a-tests.md only when every half passes on both SDKs and the hand checks agree.
 
 ### Group 1
-Commits: F1 7f1d5a6, S-core 5cbe406, K-core e7e6caf (staged by path). Nothing pushed. S-core and K-core reviewed together
+Commits: F1 4828c73, S-core 1aeb7c5, K-core 8a9b9d5 (staged by path). Nothing pushed. S-core and K-core reviewed together
 (fit and quality, against Flutter): S-core passed; K-core went back once. F1 self-reviewed (a fixture and a test
 refactor). Group 1 approved under the standing rule.
 
@@ -64,7 +65,7 @@ Decided: as S-core; checkboxNext(null, two-state) is false, so the UI draws a tw
 false before it cycles (IB ~:209/:224), noted in both Checkbox briefs.
 
 ### Group 2
-Commits: E-ios1 682e6b6, K-check 1484a87, S-check ca4d7ec (staged by path). Nothing pushed. K-check and S-check
+Commits: E-ios1 1e3d957, K-check a86be4b, S-check 90f5330 (staged by path). Nothing pushed. K-check and S-check
 reviewed (fit and quality in one pass, against Flutter): K-check passed; S-check went back once. E-ios1 self-reviewed
 (two engine classes, a regenerated registry, a test pin). Group 2 approved under the standing rule.
 
@@ -137,7 +138,149 @@ down, as Flutter's. Input.kt: the same two disabled-field paths as Swift.
 Left documented: a drag back onto the drawn stop sends nothing (Compose filters against its own snapped value); the
 thumb shadow is approximate; the indicator is not in an overlay.
 
+### Group 4
+Commits: E-ios2 f7ebc0b, K-tap 2f3ac6f, S-tap 35e7199 + 66b292d. Nothing pushed. K-tap reviewed and went back once (Flutter's
+500 ms long press, the FAB's ripple colours, which also opened K-theme); S-tap passed review, its nits go in as a rework. E-ios2 self-reviewed (two
+engine classes, a regenerated registry, a test pin).
+
+#### Task E-ios2 · FloatingActionButton and InkWell gain ios
+Files: `engine/src/components/button/floating-action-button.ts` · `engine/src/components/layout/ink-well.ts` ·
+`engine/src/core/widget-registry-gen.ts` · `schema/widget-registry.json` · `engine/test/widget-targets.test.ts`
+Cases: A6.5 / A6.6 eng and A6.x tgt → green, 3 red first (the orphan list and both new checks); engine `bun test`
+803/0; `swift test --filter CapabilitiesTests` 13/0; tsc clean.
+Changed: both classes take all four targets and lose the Epic 23b line; their doc lines say what iOS draws (the FAB in
+M3's 56 / 40 pt rounded square, InkWell a highlight while pressed, no ripple). IOS_ORPHANS = SnackBar, Tooltip.
+
+#### Task K-tap · Kotlin IconButton and FloatingActionButton
+Files: `sdk-kotlin/sdk/.../widgets/Buttons.kt` · `.../widgets/IconButtonFabTest.kt` (new)
+Cases: A6.5, A6.7 (IconButton, FAB) kt → green, 13 `a6_…` cases, red on stubs that drew nothing; `./gradlew cleanTest
+build --no-build-cache` core 584, sdk 692, lint clean.
+Changed: IconButtonWidget is Flutter's own (size + 16) box (padding and alignment, colour only when set, 0.38 disabled,
+gestures only when enabled and given that trigger, constraints, no ripple); FloatingActionButtonWidget is M3's regular
+or small FAB (primaryContainer, content #4F378B as Flutter's ThemeData(), elevation ?? 6), live without a handler; a
+private InertFab draws a disabled one unchanged and inert.
+Rework (review): an internal FlutterGestureTiming sets Flutter's 500 ms long press around both (decision
+kotlin-long-press-500; Android's is 400); fabOverlay gives the FAB Flutter's splash and highlight colours.
+Decided: tooltip is the accessibility label until step 8 draws Tooltip; an enabled FAB takes every long press, as
+Flutter's wrapper does.
+
+#### Task S-tap · Swift IconButton and FloatingActionButton
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Buttons.swift` · `.../NodeView.swift` · `sdk-swift/Tests/OrcaGatewayTests/
+IconButtonFabTests.swift` (new)
+Cases: A6.5, A6.7 (IconButton, FAB) sw → green, 13 tests (2 hosted, iOS only; the digest said 3), red first; `swift test` UI 514, core
+599; iOS scheme UI 644, core 599, no golden moved.
+Changed: PressGestures (tap and/or a 500 ms long press); IconButtonNodeView as Kotlin's box; FloatingActionButtonNodeView
+56 / 16 or mini 40 / 12 in a 48 pt target, a shadow at elevation ?? 6, live whenever enabled, drawn unchanged and still
+blocking hits when disabled (Flutter's Material absorbs); tooltip is the accessibility label.
+Rework (review, 66b292d): PressGestures composes both triggers as one LongPressGesture(0.5, maximumDistance 18,
+Flutter's kTouchSlop).exclusively(before: TapGesture()), so a hold is never also a tap without relying on modifier
+order; the tooltip docs say a hold on a tooltipped button shows Flutter's bubble; 14 tests; `swift test` UI 522, core
+599; iOS scheme UI 653, core 599.
+
+### Group 5
+Commits: K-fstyle 8af429b, K-ink 9c024b5, K-theme c34da82, S-fstyle c6e64df, S-ink e8d5d09 + addcf65. Nothing pushed. K-ink,
+K-fstyle, S-fstyle and S-ink reviewed (fit and quality in one pass, against Flutter); K-theme checked against Flutter's
+`_colorSchemeLightM3` role by role.
+
+#### Task K-ink · Kotlin InkWell with ripple
+Files: `sdk-kotlin/sdk/.../widgets/Gesture.kt` · `.../widgets/InkWellTest.kt` (new)
+Cases: A6.6, A6.7 (InkWell) kt → green, 7 `a6_…` cases red on a stub, two mutations caught (no FlutterGestureTiming;
+ink over the child); core 621, sdk 728, lint clean.
+Changed: InkWellWidget is combinedClickable with onClick, onLongClick and onDoubleClick always set (a tap waits out
+Flutter's 300 ms kDoubleTapTimeout, a double tap fires only onDoubleTap), inside FlutterGestureTiming (500 ms); an ink
+layer under the child: highlightColor ?? #66BCBCBC fading over 200 ms as InkHighlight, and a ripple in splashColor ??
+#66C8C8C8, both clipped to borderRadius; no `enabled`, live without actions.
+Left documented: Flutter on Android draws InkSparkle, Kotlin a RippleDrawable ripple from the touch down.
+
+#### Task K-theme · One shared Flutter light scheme (added at 09, K-tap review)
+Files: `sdk-kotlin/sdk/.../widgets/FlutterTheme.kt` (new) · `Selection.kt` · `Structure.kt` · `Buttons.kt` · `Controls.kt`
+Cases: A6.x look → green; a scratchpad check (red before the file existed) compares all 48 roles with Flutter's
+`_colorSchemeLightM3`; core 621, sdk 728, lint clean, no golden moved.
+Changed: `internal val FlutterLightScheme` sets the 4 roles where Compose's light scheme differs from Flutter's
+(the on…Container tones); four private copies are gone.
+
+#### Task S-ink · Swift InkWell with press highlight
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Stack.swift` · `.../NodeView.swift` · `sdk-swift/Tests/OrcaGatewayTests/
+InkWellTests.swift` (new)
+Cases: A6.6, A6.7 (InkWell) sw → green, 8 tests (1 hosted, iOS only), red on an API stub, a mutation (ink over the
+child) caught; `swift test` UI 521, core 599; iOS scheme UI 652, core 599, no golden moved.
+Changed: InkWellNodeView beside GestureNodeView: tap, double tap and a 500 ms long press always attached (the double
+tap chained first; one exclusive long press after them, so a hold is never also a tap and the highlight goes off when
+it fires, as Flutter cancels the tap); the whole box takes touches; highlightColor ?? #BCBCBC66 under the unclipped
+child, clipped to borderRadius, fading over 200 ms; no ripple on iOS (D6), no `enabled`.
+Rework (review, addcf65): the long press takes S-tap's 500 ms / 18 pt gesture (kTouchSlop, pinned red first at 10);
+the doc states Flutter's highlight timing (on at kPressTimeout, 100 ms in, held through the double-tap wait; iOS while
+the finger is down, D6); `swift test` UI 522, core 599; iOS scheme UI 653, core 599.
+Left for the hand check: SwiftUI's 300 ms double-tap wait, the live press and a hold never also tapping (no package
+test can inject a touch).
+
+#### Task S-fstyle / K-fstyle · A field's text style as Flutter's (added at 09, K-switch review)
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Input.swift` · `.../TextFieldTests.swift` · `sdk-kotlin/sdk/.../widgets/
+Input.kt` · `.../widgets/FormFieldTest.kt`
+Cases: A6.4, A6.7 sw and kt → green, 5 cases each (3 red first, 2 pin what already matched), on TextField and
+TextFormField, enabled and disabled; Kotlin core 621, sdk 721; Swift field tests 15/15 on the iOS scheme.
+Changed: the base style is layered as Flutter's: no style sent, 16 / black; a style on a decorated field, 16 in
+onSurface #1D1B20 (@0.38 disabled); a style on a bare field, the engine's 14 / white; the sent style merged on top.
+For the user: the bare field's white text is Flutter's own behaviour, likely a builder bug (followups).
+
+### Group 6
+Commits: K-deg-a 0e81cde, S-deg-a 89a7813. Nothing pushed. Both self-reviewed (recordings and test strings; the diffs
+and the PNGs read by the main session; the two SDKs' recordings are byte-identical).
+
+#### Task K-deg-a · Kotlin warn and graceful pages re-recorded
+Files: `sdk-kotlin/core/.../render/DegradeTest.kt` · `sdk-kotlin/sdk/src/test/resources/pages/degrade-graceful.json` ·
+`.../pages/degrade-warn.json` · `.../goldens/degrade-warn.png` · `sdk-kotlin/sdk/.../GoldenTest.kt`
+Cases: d1, d2, g1 kept green: d1 and d2 red on the old pages, g1 red against the old golden (4.3 % of pixels); core
+621, sdk 728, lint clean; no test added or removed.
+Changed: both checks name UnregisteredPluginWidget and "Above / Below the plugin widget."; every structural assertion
+kept; d2 also pins the banner's exact body (decision degrade-banner-body). Only the degraded node, the banner body and
+the texts moved in the recordings; require and 426 untouched. The warn golden re-recorded alone (filtered to g1): the
+orange banner naming widget.UnregisteredPluginWidget, the "Unsupported content" card between the two texts.
+
+#### Task S-deg-a · Swift warn and graceful pages re-recorded
+Files: `sdk-swift/Tests/OrcaGatewayCoreTests/DegradeTests.swift` · `sdk-swift/Tests/Pages/degrade-graceful.json` ·
+`.../Pages/degrade-warn.json` · `sdk-swift/Tests/Goldens/degrade-warn.sdk-27.2.ios-18.5.png` · `.../GoldenTests.swift`
+Cases: T4.1 / T4.2 graceful, warn and the warn golden kept green: 3 red on the old files, the golden 4.56 % off;
+`swift test` UI 522, core 599; iOS scheme UI 653, core 599, all 4 goldens compared, no other golden moved.
+Changed: as K-deg-a, the banner body pinned to the same string; the recordings are byte-identical to Kotlin's.
+
+### Group 7
+Commits: K-deg-b 1e45792, S-deg-b e77a2a1. Nothing pushed. Both self-reviewed (the diffs and the goldens read by the
+main session; the require recordings are byte-identical); K-deg-b went back once (decision degrade-require-body).
+
+#### Task K-deg-b · Kotlin require page, DevTools test
+Files: `sdk-kotlin/sdk/src/test/resources/pages/degrade-require.json` · `.../goldens/degrade-require.png` ·
+`sdk-kotlin/core/.../debug/DevToolsReportingTest.kt` · `sdk-kotlin/core/.../render/DegradeTest.kt` (added at 09, d3)
+Cases: g2, e8 and d3 kept green: g2 red on the new page against the old golden (0.6 % of pixels); e8 cannot go red
+(Checkbox still falls back before K-caps); d3's new pin fails on the old page; core 621, sdk 728, lint clean.
+Changed: the require recording names widget.UnregisteredPluginWidget, nothing else (degrade-426 re-records byte for
+byte); the golden re-recorded alone (two body lines reflow); e8's two nodes and its expected event use the made-up type
+(primitive, no children); d3 pins the prompt's exact body.
+
+#### Task S-deg-b · Swift require page, DevTools test
+Files: `sdk-swift/Tests/Pages/degrade-require.json` · `sdk-swift/Tests/Goldens/degrade-require.sdk-27.2.ios-18.5.png` ·
+`sdk-swift/Tests/OrcaGatewayCoreTests/DevToolsEventTests.swift` · `.../DegradeTests.swift` (added at 09, the body pin)
+Cases: the require golden red first (0.63 %), the body pin red on the old page, the fallback-once check green with no
+red run possible; `swift test` UI 522, core 599; iOS scheme UI 653, core 599; only the require golden moved.
+Changed: as K-deg-b; the devtools fixture's event-name table (~:118) left alone (it reads a fixture, not the registry).
+
+### Group 8
+Commits: K-caps 4d77280, S-caps (pending); D-forms b7e73e7 (landed early, before G4). Nothing pushed. K-caps
+self-reviewed (a registration list, a sorted manifest, a regenerated file, count pins; the diff read by the main
+session).
+
+#### Task K-caps · Kotlin registers and advertises the nine
+Files: `sdk-kotlin/capabilities.json` · `sdk-kotlin/core/.../capabilities/Generated.kt` · `.../CapabilitiesTest.kt` ·
+`sdk-kotlin/sdk/.../WidgetBuilders.kt` · `sdk-kotlin/README.md` (added at 09: it counts the widgets)
+Cases: A6.x caps unit kt → a6_x_kt_advertisesTheNineFormControls and a3_1 (77) red first, then green; c1 (now
+c1_kotlinAdvertisesTheSame77WidgetsAsSwift) red until S-caps by design, it compares with sdk-swift/capabilities.json;
+core 622 with c1 the 1 failure, sdk 728, lint clean; degrade tests and goldens unmoved.
+Changed: standard() registers the nine (TextFormField → TextFieldWidget, Form → FormWidget); capabilities.json lists
+them (77, sorted); one generator run (Generated.swift byte-identical); README and KDoc say 77.
+
 ### Test run
+G4-G7 (on 941e789, last runs on the final files): `swift test` UI 522, core 599 · iOS scheme UI 653, core 599 ·
+Kotlin core 621, sdk 728, lint clean (then K-caps: core 622 with c1 red until S-caps, sdk 728) · engine 803/0 at E-ios2.
 G1: engine `bun test` 799/0 · `flutter test test/conformance/` 260 · `swift test` UI 456, core 562 · Kotlin core 584,
 sdk 642, lint clean.
 G3 (rebased on 941e789): engine 806 pass, 1 fail (parity-a-forms "page whole", red until the caps group) ·
