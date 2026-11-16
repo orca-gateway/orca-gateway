@@ -43,8 +43,13 @@ class OrcaSubPageWidget extends StatefulWidget {
 }
 
 class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
+  /// What the SubPage node has mounted. It is the node's, held by the parent
+  /// page's store: this widget may be one of several built for the node over
+  /// time, and the pages outlive each of them (S7, S8).
+  late final SubPageSlot _slot;
+
   /// The pages mounted here, oldest first (page 0 `K:`, joined `K#j:`).
-  late final SubPageMounts _mounts = SubPageMounts(widget.subPageKey);
+  SubPageMounts get _mounts => _slot.mounts;
 
   /// The parent page's node store, kept for [dispose].
   ComponentStore? _store;
@@ -59,17 +64,24 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
   /// is no longer the latest, or that an updateSubPage overtook, is dropped.
   int _load = 0;
 
-  /// Counts the mounts that are not a join. It is part of the key of each
-  /// drawn page, so a page that replaces another gets fresh elements: nothing
-  /// of the old page (a nested SubPage, a stateful widget) carries over.
-  int _generation = 0;
-
   @override
   void initState() {
     super.initState();
     _store = widget.parentContext.actionExecutor?.componentStore;
     // Register this sub-page for updateSubPage action targeting.
     _store?.registerSubPage(widget.subPageKey, updateContent);
+    _slot =
+        _store?.subPageSlot(widget.subPageKey) ??
+        SubPageSlot(widget.subPageKey);
+    // The node has its pages already (an earlier widget of it mounted them)
+    // and still asks for the same page: they are drawn as they are, so the
+    // state of the pages and an earlier updateSubPage stay.
+    if (_mounts.pages.isNotEmpty &&
+        _slot.location ==
+            subPageRequest(widget.pageId, widget.params).location) {
+      _loading = false;
+      return;
+    }
     _loadOwn();
   }
 
@@ -85,13 +97,13 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
 
   @override
   void dispose() {
-    // S8: the nodes leave the store, the state keys stay.
-    // A SubPage with the same key may have taken this one's place already
-    // (its page was replaced): then the registration is no longer ours.
-    _store?.removeSubPagePages(_mounts.prefixes);
-    if (_store?.unregisterSubPage(widget.subPageKey, updateContent) ?? false) {
-      _store?.setSubPagePrefixes(widget.subPageKey, const []);
-    }
+    // S8 follows the node, not this widget: while the SubPage node is in the
+    // page its pages stay in the store for the next widget of the node. The
+    // store unmounts them when the node goes (it may have done so already).
+    // Another widget of the node may have registered since: then the
+    // registration is no longer ours.
+    _store?.unregisterSubPage(widget.subPageKey, updateContent);
+    _store?.releaseSubPage(widget.subPageKey, _slot);
     super.dispose();
   }
 
@@ -99,15 +111,20 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
   /// stays on screen while it runs.
   Future<void> _loadOwn() async {
     final load = ++_load;
+    final location = subPageRequest(widget.pageId, widget.params).location;
     try {
       final response = await _fetchSubPage(widget.pageId, widget.params);
       if (!mounted || load != _load) return;
-      setState(() => _mount('replace', response));
+      setState(() {
+        _mount('replace', response);
+        _slot.location = location;
+      });
     } catch (error) {
       if (!mounted || load != _load) return;
       setState(() {
         _loading = false;
         _error = error;
+        _slot.location = location;
       });
     }
   }
@@ -147,7 +164,7 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
     if (mode != 'join' || before.isEmpty) {
       // A replace: the nodes added since under the old pages go too.
       _store?.removeSubPagePages(before);
-      _generation++;
+      _slot.generation++;
     }
     pageStore?.removeKeys(change.removedStateKeys);
     _store?.putSubPageNodes(change.nodes.map(ComponentNode.fromJson));
@@ -217,7 +234,7 @@ class OrcaSubPageWidgetState extends State<OrcaSubPageWidget> {
       for (final page in _mounts.pages)
         if (_nodesOf(page) case final nodes when nodes.isNotEmpty)
           KeyedSubtree(
-            key: ValueKey('$_generation/${page.prefix}'),
+            key: ValueKey('${_slot.generation}/${page.prefix}'),
             child: renderer.render(nodes),
           ),
     ];

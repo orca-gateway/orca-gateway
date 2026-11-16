@@ -247,6 +247,50 @@ Map<String, dynamic> _leaf(List<List<Map<String, dynamic>>> buttons) => _page(
   state: {'n': 1},
 );
 
+/// The sub-page `detail/<tag>` with a `bump` button that sets its count to 8.
+Map<String, dynamic> _bumpable(String tag, int count) {
+  final page = _detail(tag, count);
+  (page['components'] as List)
+    ..addAll(_button('bump', _setPage('count', 8)))
+    ..[0]['children'] = ['label', 'count', 'bump'];
+  return page;
+}
+
+/// A host whose SubPage `detail` is the first child of a list of type [list],
+/// above a spacer taller than the screen: a ListView scrolled to the end
+/// disposes the SubPage's widget while its node stays in the page.
+Map<String, dynamic> _listHost({String list = 'ListView'}) => _page('host', [
+  _node('root', 'Column', children: ['grab', 'replace', 'fill']),
+  ..._grab,
+  ..._button('replace', {
+    'type': 'updateSubPage',
+    'subPageId': 'detail',
+    'pageId': 'detail/b',
+    'mode': 'replace',
+  }),
+  _node('fill', 'Expanded', childMode: 'single', children: ['list']),
+  _node('list', list, children: ['detail', 'spacer', 'tail']),
+  _subPageNode(),
+  _node('spacer', 'SizedBox', childMode: 'single', props: {'height': 3000}),
+  _text('tail', 'Tail'),
+]);
+
+/// Jumps the host's ListView to [offset].
+Future<void> _scrollTo(WidgetTester tester, double offset) async {
+  tester
+      .state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      )
+      .position
+      .jumpTo(offset);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('C-flutter: params reach the request as the query', (
     tester,
@@ -946,6 +990,196 @@ void main() {
       await h.tap(tester, 'go');
 
       expect(fresh.value, 1.0);
+    },
+  );
+
+  // ── Unmount follows the node, not the widget (S7, S8) ───────
+
+  testWidgets(
+    'C-flutter: a SubPage scrolled out of a lazy list and back keeps its '
+    'pages, its state and an earlier updateSubPage, with no fetch',
+    (tester) async {
+      final client = _StubClient({
+        'host': _listHost(),
+        'detail/a': _bumpable('a', 5),
+        'detail/b': _bumpable('b', 7),
+      });
+      final h = _Harness(client);
+      await h.pump(tester);
+      await h.tap(tester, 'grab');
+      await h.tap(tester, 'replace');
+      await h.tap(tester, 'bump');
+      expect(find.text('Page b'), findsOneWidget);
+      expect(h.pageState, {'detail:count': 8});
+
+      Iterable<String> mounted() =>
+          h.store.nodeMap.keys.where((id) => id.startsWith('detail:'));
+      final nodes = mounted().toList();
+      expect(nodes, hasLength(5));
+
+      await _scrollTo(tester, 2500);
+
+      // The widget is gone; the node, its pages and their state are not.
+      expect(find.text('Page b'), findsNothing);
+      expect(find.text('bump'), findsNothing);
+      expect(mounted(), unorderedEquals(nodes));
+      expect(h.store.subPagePrefixes, ['detail:']);
+      expect(h.pageState, {'detail:count': 8});
+
+      await _scrollTo(tester, 0);
+
+      expect(find.text('Page b'), findsOneWidget);
+      expect(find.text('Page a'), findsNothing);
+      expect(find.text('8'), findsOneWidget);
+      expect(h.pageState, {'detail:count': 8});
+      expect(mounted(), unorderedEquals(nodes));
+      expect(client.fetched, ['host', 'detail/a', 'detail/b']);
+
+      // The widget that came back is the one updateSubPage reaches.
+      await h.tap(tester, 'replace');
+
+      expect(client.fetched, ['host', 'detail/a', 'detail/b', 'detail/b']);
+      expect(find.text('7'), findsOneWidget);
+      expect(h.pageState, {'detail:count': 7});
+    },
+  );
+
+  testWidgets(
+    'C-flutter: a SubPage whose widget is re-keyed by its parent in one '
+    'frame keeps its pages, its state and an earlier updateSubPage',
+    (tester) async {
+      final host = _listHost(list: 'ReorderableListView');
+      final client = _StubClient({
+        'host': host,
+        'detail/a': _bumpable('a', 5),
+        'detail/b': _bumpable('b', 7),
+      });
+      final h = _Harness(client);
+      await h.pump(tester);
+      await h.tap(tester, 'grab');
+      await h.tap(tester, 'replace');
+      await h.tap(tester, 'bump');
+
+      // The list comes back with `detail` second: its index key changes, so
+      // its widget is built anew while the SubPage node stays in the page.
+      h.store.replaceComponent('list', [
+        ComponentNode.fromJson(
+          _node(
+            'list',
+            'ReorderableListView',
+            children: ['tail', 'detail', 'spacer'],
+          ),
+        ),
+        for (final node in host['components'] as List)
+          if (const ['tail', 'detail', 'spacer'].contains(node['id']))
+            ComponentNode.fromJson(node as Map<String, dynamic>),
+      ]);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(_top(tester, 'Tail'), lessThan(_top(tester, 'Page b')));
+      expect(find.text('Page a'), findsNothing);
+      expect(find.text('8'), findsOneWidget);
+      expect(h.pageState, {'detail:count': 8});
+      expect(client.fetched, ['host', 'detail/a', 'detail/b']);
+    },
+  );
+
+  testWidgets(
+    'C-flutter: a SubPage node deleted while no widget shows it is unmounted',
+    (tester) async {
+      final client = _StubClient({
+        'host': _listHost(),
+        'detail/a': _detail('a', 5),
+      });
+      final h = _Harness(client);
+      await h.pump(tester);
+      await h.tap(tester, 'grab');
+      await _scrollTo(tester, 2500);
+      expect(find.text('Page a'), findsNothing);
+      expect(
+        h.store.nodeMap.keys.where((id) => id.startsWith('detail:')),
+        hasLength(3),
+      );
+
+      h.store.deleteComponent('detail');
+      await tester.pumpAndSettle();
+
+      expect(
+        h.store.nodeMap.keys.where((id) => id.startsWith('detail')),
+        isEmpty,
+      );
+      expect(h.store.subPagePrefixes, isEmpty);
+      // S8: the state keys are left where they are.
+      expect(h.pageState, {'detail:count': 5});
+
+      await _scrollTo(tester, 0);
+
+      expect(find.text('Page a'), findsNothing);
+      expect(client.fetched, ['host', 'detail/a']);
+    },
+  );
+
+  testWidgets(
+    'C-flutter: a SubPage node deleted while shown in a list is unmounted',
+    (tester) async {
+      final client = _StubClient({
+        'host': _listHost(),
+        'detail/a': _detail('a', 5),
+      });
+      final h = _Harness(client);
+      await h.pump(tester);
+      await h.tap(tester, 'grab');
+      expect(find.text('Page a'), findsOneWidget);
+
+      h.store.deleteComponent('detail');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Page a'), findsNothing);
+      expect(
+        h.store.nodeMap.keys.where((id) => id.startsWith('detail')),
+        isEmpty,
+      );
+      expect(h.store.subPagePrefixes, isEmpty);
+      expect(h.pageState, {'detail:count': 5});
+      expect(client.fetched, ['host', 'detail/a']);
+    },
+  );
+
+  testWidgets(
+    'C-flutter: a nested SubPage is kept with its outer one, and unmounted '
+    'with it when the outer node is deleted off screen',
+    (tester) async {
+      final client = _StubClient({
+        'host': _listHost(),
+        'detail/a': _outer(),
+        'leaf/x': _leaf([_button('bump', _setPage('n', 2))]),
+      });
+      final h = _Harness(client);
+      await h.pump(tester);
+      await h.tap(tester, 'grab');
+      await h.tap(tester, 'bump');
+      expect(h.pageState, {'detail:count': 5, 'detail:inner:n': 2});
+
+      await _scrollTo(tester, 2500);
+      expect(find.text('Page a'), findsNothing);
+      await _scrollTo(tester, 0);
+
+      expect(find.text('Page a'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+      expect(h.pageState, {'detail:count': 5, 'detail:inner:n': 2});
+      expect(client.fetched, ['host', 'detail/a', 'leaf/x']);
+
+      await _scrollTo(tester, 2500);
+      h.store.deleteComponent('detail');
+      await tester.pumpAndSettle();
+
+      expect(
+        h.store.nodeMap.keys.where((id) => id.startsWith('detail')),
+        isEmpty,
+      );
+      expect(h.store.subPagePrefixes, isEmpty);
+      expect(h.pageState, {'detail:count': 5, 'detail:inner:n': 2});
     },
   );
 }
