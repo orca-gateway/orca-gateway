@@ -3,22 +3,20 @@
 ## Front page
 
 ### In one breath
-groups 4-7 of 8 · tasks: 12 green, 0 blocked · buttons, InkWell, field text style, degrade pages
-IconButton, FAB and InkWell fire as Flutter's: a 500 ms long press within 18 pt, never also a tap.
-A field's text style is layered as Flutter's; Kotlin shares one Flutter light colour scheme.
-The degrade pages on both SDKs use UnregisteredPluginWidget; Kotlin advertises all 77 widgets.
+group 8 of 8 · all green, 0 blocked · both SDKs advertise the nine (77 widgets, one caps hash)
+Hand checks pass on iPhone and Android for A6.1-A6.7; the iOS InkWell took three reworks.
+Next: rebase on main d82ed11 (PR #48, slivers), regenerate, rerun every suite, open the PR.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided (minor): Kotlin long-presses at Flutter's 500 ms (Android's is 400); the iOS
-InkWell highlights while the finger is down (Flutter: 100 ms in, held through the 300 ms wait);
-both degrade tests pin the prompt's exact wording.
+2 auto-decided (minor): the iOS InkWell highlight stays until the lift (as Kotlin's);
+Compose's 48 dp touch target on small Kotlin widgets is a follow-up, not fixed here.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 8 (S-caps running), the rebase on main, the suites and the hand checks. (default: go)
+2. Next: rebase, suites, tick A6.1-A6.7, open the step 6 PR. (default: go)
 
 ## Appendix
 
