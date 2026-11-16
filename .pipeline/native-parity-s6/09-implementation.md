@@ -3,22 +3,21 @@
 ## Front page
 
 ### In one breath
-group 2 of 8 · tasks: 3 green, 0 blocked · Checkbox and Radio drawn and bound on both SDKs
-E-ios1 Checkbox and Radio gain the ios target (Epic 23b's degrade reversed, your call).
-S-check / K-check: the stateKey write, then onChange; a tap decides from the value drawn.
-Ahead: D-deg2 committed (degrade page on a made-up widget); S-switch running; K-switch in review.
+group 3 of 8 · tasks: 4 green, 0 blocked · Switch, Slider, TextFormField and Form on both SDKs
+The degrade demo now degrades UnregisteredPluginWidget, a type no app registers, for good.
+A disabled field matches Flutter: read-only when bare, Material's disabled colours when decorated.
+Rebased on main 941e789 (PR #46). Ahead: K-tap and E-ios2 done; S-tap, the inks, K-theme next.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-3 auto-decided (minor): the degrade demo moves to UnregisteredPluginWidget, a type no app
-registers (Phase B is drawing the slivers); the Kotlin Slider takes Flutter's year2023 look;
-the Swift Radio is drawn in shapes at Flutter's sizes, not SF Symbols (D6 amended).
+2 auto-decided (minor): the Swift Switch's on tint is activeColor at 0x80, Flutter's checked
+track (the thumb stays iOS white); a UISlider ignores a tap on its track (documented).
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 3 (Switch, Slider, TextFormField, Form), already running. (default: go)
+2. Next: groups 4 and 5 (buttons, InkWell, one Kotlin scheme, field text colour). (default: go)
 
 ## Appendix
 
@@ -100,9 +99,49 @@ suites were rerun on the final files.
 Decided: Radio in shapes (D6 amended); no activeColor fills the iOS accent where Flutter's tile uses #6750A4
 (documented); an invisible hit fill so a disabled or unbound control still takes the touch, as Flutter's.
 
+### Group 3
+Commits (after the rebase on 941e789): D-deg 3b6230d, D-deg2 ac1a765, S-switch c2d129d, K-switch eb9de1c. Nothing
+pushed. S-switch reviewed and went back twice; K-switch went back four times (the year2023 Slider, the send on press,
+the disabled field, a test that pinned non-Flutter text colour). D-deg and D-deg2 self-reviewed (a demo page). Group 3
+approved under the standing rule.
+
+#### Task D-deg / D-deg2 · Degrade demo page
+Files: `examples/server/capability-demo.ts` · `examples/server/index.ts` · `examples/app-android/README.md`
+D-deg moved the page off Checkbox to a CustomScrollView; Phase B is drawing the slivers natively, so D-deg2 (added at
+09, decision degrade-widget, agreed with the parent session for Phase B) moved it to a local PrimitiveWidget of type
+UnregisteredPluginWidget between "Above / Below the plugin widget.". Engine `bun test` 801/0; recordings per policy
+identical for the Swift and Kotlin vectors (graceful drops it, warn adds the banner, require one prompt).
+
+#### Task S-switch · Swift Switch, Slider, TextFormField, Form
+Files: `sdk-swift/Sources/OrcaGateway/Widgets/Controls.swift` (new) · `.../NodeView.swift` · `.../Widgets/Input.swift`
+(added at 09) · `sdk-swift/Tests/OrcaGatewayTests/SwitchSliderTests.swift` (new) · `.../FormFieldTests.swift` (new) ·
+`.../TextFieldTests.swift` (added at 09)
+Cases: A6.3, A6.4, A6.7 sw → green, 15 tests, all red first; `swift test` UI 470, core 562; iOS scheme UI 593, core 562.
+Changed: a Toggle (UISwitch, 60 × 48 footprint, on tint activeColor at 0x80) and a Slider (UISlider, width × 48, clamped
+and snapped, each value sent once per drag, kept in @State across redraws); TextFormField drawn by the TextField view,
+Form by ChildView. Input.swift: a disabled bare field is read-only (takes focus, no edits); a decorated one keeps
+`.disabled` and draws M3's disabled label, hint, helper, counter, prefix, suffix, border and fill, the decoration's own
+colours winning.
+Rework (review): documentation of what a UISlider cannot do (a track tap sends nothing; the thumb stays white); the
+Switch track; @State; the disabled checks made to attempt the edit; TextFieldTests' readOnly check rewritten so it can
+fail (it never could); then the two disabled-field paths above.
+
+#### Task K-switch · Kotlin Switch, Slider, TextFormField, Form
+Files: `sdk-kotlin/sdk/.../widgets/Controls.kt` (new) · `.../widgets/Input.kt` (added at 09) · `.../SwitchSliderTest.kt`
+(new) · `.../FormFieldTest.kt` (new)
+Cases: A6.3, A6.4, A6.7 kt → green, 27 tests; `./gradlew cleanTest build --no-build-cache` core 584, sdk 692, lint clean.
+Changed: an M3 Switch (checked track activeColor at 0x80, a disabled unchecked one keeps inactiveColor) and the M3 Slider
+drawn in Flutter's year2023 look (decision kotlin-slider-look): a 48 + h slot, its own 4/6 dp track and ticks, a 20 dp
+round thumb with elevation, the r 24 overlay from the press, the drop value indicator held 500 ms; a press sends on the
+down, as Flutter's. Input.kt: the same two disabled-field paths as Swift.
+Left documented: a drag back onto the drawn stop sends nothing (Compose filters against its own snapped value); the
+thumb shadow is approximate; the indicator is not in an overlay.
+
 ### Test run
 G1: engine `bun test` 799/0 · `flutter test test/conformance/` 260 · `swift test` UI 456, core 562 · Kotlin core 584,
 sdk 642, lint clean.
+G3 (rebased on 941e789): engine 806 pass, 1 fail (parity-a-forms "page whole", red until the caps group) ·
+`swift test` UI 503, core 599 · iOS scheme UI 626, core 599 · Kotlin core 621, sdk 716, lint clean · no generator drift.
 G2: engine 801/0 · `swift test` UI 468, core 562 · iOS scheme UI 578, core 562 · Kotlin core 584, sdk 652, lint clean.
 
 ### Blocked
