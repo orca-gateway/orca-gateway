@@ -16,23 +16,23 @@ import UIKit
 /// to `borderRadius`, and no ripple on iOS. Each trigger counts its fires in
 /// a page state key. Swift cannot inject a tap (TouchTests): a gesture runs
 /// the view's own action for it, and what takes touches is found by hit
-/// tests over text fields behind, in a hosted window (iOS). How long SwiftUI
-/// holds a single tap for the double tap, and the press itself, are checked
-/// by hand. The look, pressed and at rest, is ImageRenderer pixels at scale 1
+/// tests over text fields behind, in a hosted window (iOS). The double-tap
+/// window is `DoubleTapResolver`'s and `InkTaps`', tested here; that SwiftUI
+/// delivers each lift, the hold and a swipe is checked by hand. The look,
+/// pressed and at rest, is ImageRenderer pixels at scale 1
 /// (macOS and iOS). The registry is widened by InkWell (advertised only in
 /// group 8).
 @MainActor
 final class InkWellTests: XCTestCase {
     // MARK: A6.6
 
-    /// A6.6: a tap fires onTap once. onDoubleTap is always set (Flutter's
-    /// builder sets all three), so a node with only onTap still has its
-    /// double tap and long press attached, firing nothing: the double tap
-    /// comes before the tap in the InkWell's gesture
-    /// (`testA6_6TheThreeTriggersAreOneGestureTheLongPressFirst`), so SwiftUI
-    /// holds a single tap until a second one can no longer come (Flutter
-    /// waits its 300 ms kDoubleTapTimeout); how long SwiftUI waits is a hand
-    /// check.
+    /// A6.6: onDoubleTap is always set (Flutter's builder sets all three), so
+    /// a node with only onTap still has its double tap and long press
+    /// attached, firing nothing, and a tap is held as Flutter's
+    /// DoubleTapGestureRecognizer holds it (`DoubleTapResolver`): it fires
+    /// onTap, once, only when kDoubleTapTimeout, 300 ms
+    /// (gestures/constants.dart:35), has passed since its lift with no
+    /// second tap; not at 250 ms.
     func testA6_6ATapFiresOnTapOnlyOnceTheDoubleTapTimeoutHasPassed() async throws {
         let model = try page([inkWell("w", "c", on: ["onTap"]), sizedBox("c", 100, 50)])
         let well = try view(model, "w")
@@ -44,15 +44,69 @@ final class InkWellTests: XCTestCase {
         XCTAssertNil(doubleTap(), "a double tap with no onDoubleTap fired something")
         XCTAssertNil(longPress(), "a long press with no onLongPress fired something")
         XCTAssertEqual(fired(model), counts(tap: 1))
+
+        var taps = DoubleTapResolver()
+        XCTAssertEqual(taps.tapEnded(at: 0), [], "a tap fired at its lift")
+        XCTAssertEqual(taps.advance(to: 0.25), [], "250 ms after the tap")
+        XCTAssertEqual(taps.advance(to: 0.299), [], "299 ms after the tap")
+        XCTAssertEqual(taps.advance(to: 0.3), [.tap], "300 ms after the tap")
+        XCTAssertEqual(taps.advance(to: 1), [], "the tap fired twice")
     }
 
-    /// A6.6: a double tap fires onDoubleTap once, and onTap not at all.
+    /// A6.6: a double tap fires onDoubleTap once, and onTap not at all: a
+    /// second tap lifting 250 ms after the first makes the two a double tap
+    /// at that lift, and no tap fires after it.
     func testA6_6ADoubleTapFiresOnDoubleTapOnly() async throws {
         let model = try page([inkWell("w", "c"), sizedBox("c", 100, 50)])
 
         await (try view(model, "w")).doubleTap?()?.value
 
         XCTAssertEqual(fired(model), counts(doubleTap: 1))
+        var taps = DoubleTapResolver()
+        XCTAssertEqual(taps.tapEnded(at: 0), [])
+        XCTAssertEqual(taps.tapEnded(at: 0.25), [.doubleTap], "a second tap 250 ms after the first")
+        XCTAssertNil(taps.deadline, "a tap still held after the double tap")
+        XCTAssertEqual(taps.advance(to: 1), [], "the double tap also fired a tap")
+    }
+
+    /// A6.6: a second tap 350 ms after the first is a tap of its own: the
+    /// first fires onTap at 300 ms, the second 300 ms after its own lift.
+    /// Should the wait run late, the second lift fires the first tap before
+    /// it holds itself.
+    func testA6_6ASecondTapAfterTheTimeoutIsATapOfItsOwn() {
+        var taps = DoubleTapResolver()
+        XCTAssertEqual(taps.tapEnded(at: 0), [])
+        XCTAssertEqual(taps.advance(to: 0.3), [.tap], "the first tap")
+        XCTAssertEqual(taps.tapEnded(at: 0.35), [], "the second tap fired at its lift")
+        XCTAssertEqual(taps.advance(to: 0.6), [], "the second tap fired before its 300 ms")
+        XCTAssertEqual(taps.advance(to: 0.65), [.tap], "the second tap")
+
+        var late = DoubleTapResolver()
+        XCTAssertEqual(late.tapEnded(at: 0), [])
+        XCTAssertEqual(late.tapEnded(at: 0.35), [.tap], "the first tap, its window over")
+        XCTAssertEqual(late.advance(to: 0.65), [.tap], "the second tap")
+    }
+
+    /// A6.6: the view's taps (`InkTaps`) wait out the window on the clock: a
+    /// tap fires nothing at its lift and onTap once 300 ms have passed; two
+    /// taps 250 ms apart fire the double tap at the second lift and leave no
+    /// wait behind.
+    func testA6_6TheTapsWaitOutTheWindowInRealTime() async throws {
+        let taps = InkTaps()
+        let seen = Seen()
+        let start = Date()
+
+        taps.tapEnded(at: 0) { seen.events.append($0) }
+        XCTAssertEqual(seen.events, [], "a tap fired at its lift")
+        let wait = try XCTUnwrap(taps.wait, "no wait for the double-tap window")
+        await wait.value
+        XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(start), 0.29, "the tap fired before 300 ms")
+        XCTAssertEqual(seen.events, [.tap])
+
+        taps.tapEnded(at: 10) { seen.events.append($0) }
+        taps.tapEnded(at: 10.25) { seen.events.append($0) }
+        XCTAssertEqual(seen.events, [.tap, .doubleTap])
+        XCTAssertNil(taps.wait, "a double tap left a tap waiting")
     }
 
     /// A6.6: a long press fires onLongPress and no tap. The InkWell's long
@@ -68,38 +122,52 @@ final class InkWellTests: XCTestCase {
         await (try view(model, "w")).longPress?()?.value
 
         XCTAssertEqual(fired(model), counts(longPress: 1))
-        let press = InkWellNodeView.gestures(pressing: GestureState(initialValue: false)).first.base
+        let press = InkWellNodeView.gestures.first
         XCTAssertEqual(press.minimumDuration, 0.5, "Flutter's kLongPressTimeout")
         XCTAssertEqual(press.maximumDistance, 18, "Flutter's kTouchSlop")
         XCTAssertEqual(LongPressGesture().maximumDistance, 10, "SwiftUI's default slop")
     }
 
-    /// A6.6: the three triggers are one gesture, as Flutter's gesture arena
-    /// decides between its recognizers: the long press first (500 ms, 18 pt),
-    /// so a tap can succeed only once it has failed, the press lifted
-    /// sooner, and once it succeeds no tap can (a hold is never a tap); then
-    /// the double tap, so a single tap succeeds only once a second one can no
-    /// longer come; then the single tap. The pressed highlight is the long
-    /// press's own pressing state. Read from the gesture the view attaches
-    /// (`InkWellNodeView.gestures`). What a package test cannot reach, as it
-    /// cannot inject a touch: that SwiftUI delivers a 0.7 s hold as the long
-    /// press alone, a quick tap once its double-tap wait is over, a double
-    /// tap as one, resets the highlight on the lift, and lets a swipe that
-    /// starts on the InkWell scroll a ScrollView around it (hand checks).
-    func testA6_6TheThreeTriggersAreOneGestureTheLongPressFirst() {
-        let gestures = InkWellNodeView.gestures(pressing: GestureState(initialValue: false))
+    /// A6.6: the long press and the tap are one gesture, exactly the FAB's
+    /// (`PressGestures.exclusive`, the shape the iPhone hand check proves),
+    /// as Flutter's gesture arena decides between its recognizers: the long
+    /// press first (500 ms, 18 pt), so the tap can succeed only once it has
+    /// failed, the press lifted sooner, and once it succeeds the tap cannot
+    /// (a hold is never a tap); then one tap, whose lifts `InkTaps` sorts
+    /// into taps and double taps. Nothing else is in it: a count-2 tap in it
+    /// lost the single taps on the iPhone (hand check 2), and the
+    /// highlight's `.updating` on its long press lost every tap (hand check
+    /// 3). Read from the gesture the
+    /// view attaches (`InkWellNodeView.gestures`).
+    func testA6_6TheLongPressAndTheTapAreOneGestureTheLongPressFirst() {
+        let gestures: ExclusiveGesture<LongPressGesture, TapGesture> = InkWellNodeView.gestures
 
-        XCTAssertEqual(gestures.first.base.minimumDuration, 0.5, "first, the long press: Flutter's kLongPressTimeout")
-        XCTAssertEqual(gestures.first.base.maximumDistance, 18, "first, the long press: Flutter's kTouchSlop")
-        XCTAssertEqual(gestures.second.first.count, 2, "then the double tap")
-        XCTAssertEqual(gestures.second.second.count, 1, "then the single tap")
+        XCTAssertEqual(gestures.first.minimumDuration, 0.5, "first, the long press: Flutter's kLongPressTimeout")
+        XCTAssertEqual(gestures.first.maximumDistance, 18, "first, the long press: Flutter's kTouchSlop")
+        XCTAssertEqual(gestures.second.count, 1, "then one tap")
+    }
 
+    /// A6.6: the pressed highlight is read by a gesture of its own, beside the
+    /// InkWell's (simultaneous, so it cannot take a touch from it): a long
+    /// press that never succeeds, pressing from the touch, given up past
+    /// Flutter's 18 pt kTouchSlop (Flutter cancels the tap there), and, as a
+    /// @GestureState, reset on the lift and when a ScrollView takes the
+    /// touch. What a package test cannot reach, as it cannot inject a touch:
+    /// that SwiftUI delivers a 0.7 s hold as the long press alone and a quick
+    /// press as the tap, shows and clears the highlight so, and lets a swipe
+    /// that starts on the InkWell scroll a ScrollView around it (hand
+    /// checks).
+    func testA6_6TheHighlightIsReadByAGestureOfItsOwn() {
+        let highlight = InkWellNodeView.highlightGesture(pressing: GestureState(initialValue: false))
+
+        XCTAssertEqual(highlight.base.minimumDuration, .infinity, "the highlight's long press can succeed")
+        XCTAssertEqual(highlight.base.maximumDistance, 18, "Flutter's kTouchSlop")
         var pressed = false
         var transaction = Transaction()
-        gestures.first.body(true, &pressed, &transaction)
-        XCTAssertTrue(pressed, "the long press's pressing state does not drive the highlight")
-        gestures.first.body(false, &pressed, &transaction)
-        XCTAssertFalse(pressed, "the highlight outlives the long press's pressing state")
+        highlight.body(true, &pressed, &transaction)
+        XCTAssertTrue(pressed, "the press does not drive the highlight")
+        highlight.body(false, &pressed, &transaction)
+        XCTAssertFalse(pressed, "the highlight outlives the press")
     }
 
     /// A6.6: while pressed the highlight fills the InkWell in
@@ -197,6 +265,12 @@ final class InkWellTests: XCTestCase {
     #endif
 
     // MARK: pages
+
+    /// What a tap sequence fired, in order.
+    @MainActor
+    final class Seen {
+        var events: [DoubleTapResolver.Event] = []
+    }
 
     nonisolated static let triggers = ["onTap", "onDoubleTap", "onLongPress"]
 
