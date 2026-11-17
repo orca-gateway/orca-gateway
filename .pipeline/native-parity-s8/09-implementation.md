@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 6 of 7 · tasks: 2 green, 0 blocked · Tooltip draws Flutter's bubble on both SDKs
-A 500 ms hold shows it 24 below the child's centre (above it near the bottom); gone 1.5 s later.
-It stays in its page's area: above the tab bar and the keyboard; it never takes a touch.
+group 7 of 7 · tasks: 2 green, 0 blocked · both SDKs advertise the four (93 widgets, 28 kinds)
+Hand checks pass A8.1-A8.5 on simulator and emulator; one Android Back finding fixed, rechecked.
+All seven groups done: step 8 is ready for its PR once the iOS suite and plugins pass.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-Flutter puts the bubble in the nearest Overlay, so under tabs it stays above the tab bar; we do the
-same (the brief said one root layer). A child with its own long press runs both: a known difference.
+VoiceOver and TalkBack were not checked by hand (no VoiceOver in the Simulator); the PR lists those
+checks for a device. Rows A8.1 and A8.5 are corrected to what Flutter's SDK does.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 7, the four widgets join both capability vectors and READMEs. (default: go)
+2. Next: stage 10, open the step 8 PR, then tick A8.1-A8.5 with its link. (default: go)
 
 ## Appendix
 
@@ -61,6 +61,36 @@ already ran ahead of the kinds check).
 Changed: both kinds join `kinds`; with no handler they fall to the existing default (no state, no effect, reported to
 DevTools as Flutter's built-in handlers are, AE:180-204); a page handler runs and is awaited (OP:323-374, D5).
 Decided: no explicit switch branch (the default covers it). Not done: README's kind count (S-caps, G7).
+
+### Group 7
+Commits: S-caps d28807f2, K-caps 05908112, D-overlays' test 3a9477f8, the hand-check fix 1793d880 (staged by path).
+Nothing pushed. Twin review: pass on both lenses, first time; one nit taken (K-caps' doc range A8.1-A8.5). The main
+session reran the native capabilities and widget registry generators after both: no drift.
+
+#### Task S-caps / K-caps · the four advertised
+Files: both `capabilities.json`, `Generated.swift` / `Generated.kt` (one generator, caps hash 3d9011c0… on both),
+`CapabilitiesTests.swift` / `CapabilitiesTest.kt`, Swift `StructureWidgetTests.swift`, Kotlin `WidgetBuilders.kt`, both
+READMEs. Commits d28807f2, 05908112.
+Cases: A8.x caps on both (`testA8_xAdvertisesTheFourOverlays` / `a8_x_kt_advertisesTheFourOverlays`: sorted, once
+each, the platform target, the standard registry takes each); widget pins 89 → 93; Swift's D2 orphan check now asserts
+Tooltip and SnackBar are advertised; the switch-draws-every-widget check names the four (Dialog a zero-size view);
+Kotlin standard() registers the four and WidgetBuildersTest c2 (standard() == the vector) went red on exactly the four,
+then green. READMEs: 93 widgets, 28 kinds. Red first on both (89 vs 93, not advertised).
+Then `engine/test/parity-a-overlays.test.ts` (D-overlays, written in G6) went green: each native vector gets the page
+whole, openDialog and closeDialog kept, no FallbackPrompt or caps banner. Commit 3a9477f8.
+
+#### Hand checks · page `overlays`, iPhone 16 Pro simulator (iOS 18.5) and Android API 34 emulator
+A8.1-A8.5 pass on both (the list is in the PR). One finding, fixed here (K-dialog, 1793d880): with a field in the sheet
+focused, Android took three Backs (keyboard, focus, sheet); the panel was the field's focusable parent and Compose spent
+the Back on a focus exit (FocusInteropUtils.android.kt:77-78, FocusTraversal.kt:135-138). The sheet's focus target is
+now an empty box beside the content; new `a8_1_backWithAFieldInTheSheetFocusedClosesTheSheet` red first; rechecked on
+the emulator: Back 1 hides the keyboard, Back 2 closes the sheet. Reviewed: pass both lenses.
+Seen on the emulator: the example host keeps Android's default soft input mode, so the window pans to keep the sheet's
+field in view; the panel's own lift on WindowInsets.ime is for an edge-to-edge host.
+Not checked here: VoiceOver (not in the Simulator) and TalkBack on a device, a real finger's hold and haptic: listed in
+the PR for the user.
+Runs: engine 849, Flutter 554, analyze clean, Swift UI 633 / core 667, Kotlin core 684 / sdk 892 (with the fix), build
+and lint clean, the four Android plugin packages build and test.
 
 ### Group 6
 Commits: K-tip df2f6bd4, S-tip a8f2f751 (staged by path). Nothing pushed. Twin review: both passed quality first time;
