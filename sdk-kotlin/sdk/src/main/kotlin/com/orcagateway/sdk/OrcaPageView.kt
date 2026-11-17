@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.orcagateway.sdk.widgets.BackdropRecording
+import com.orcagateway.sdk.widgets.DialogLayer
 
 /**
  * The queue whose head a Scaffold with no Scaffold above it draws, as
@@ -34,6 +35,13 @@ internal val LocalOrcaSnackbars = compositionLocalOf<OrcaSnackbarQueue?> { null 
 internal val LocalOrcaShellSnackbars = compositionLocalOf { false }
 
 /**
+ * True for a page that a titled route's frame holds: the frame draws the
+ * page's sheets over its title bar ([DialogLayer]), as Flutter's sheet route
+ * is above the route's title-bar Scaffold, so the page draws none itself.
+ */
+internal val LocalOrcaFrameDialogs = compositionLocalOf { false }
+
+/**
  * One page, with the head of its snackbar queue. Draws the page root at the
  * top of the space it is given; a Scaffold root fills it.
  *
@@ -45,6 +53,10 @@ internal val LocalOrcaShellSnackbars = compositionLocalOf { false }
  * Flutter in release (scaffold.dart:229-262, :360-365). A toast is an
  * Android `Toast`, shown when it reaches the head (Swift draws it as a
  * floating message).
+ *
+ * The sheets the page's openDialog opens are drawn over it, its Scaffold's
+ * bars included, and under a tab bar around it ([DialogLayer]); under a
+ * titled route's frame, over that frame instead.
  *
  * Text without a style of its own is Material 3 `bodyMedium`, as Flutter's
  * default text style; the host's `MaterialTheme`, if any, applies.
@@ -80,7 +92,9 @@ public fun OrcaPageView(model: OrcaPageModel, modifier: Modifier = Modifier) {
     ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
         CompositionLocalProvider(LocalOrcaSnackbars provides if (drawsBar) queue else null) {
             Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                if (root != null) BackdropRecording { rootModifier -> NodeView(root, model, rootModifier) }
+                DialogLayer(if (LocalOrcaFrameDialogs.current) null else model) {
+                    if (root != null) BackdropRecording { rootModifier -> NodeView(root, model, rootModifier) }
+                }
             }
         }
     }

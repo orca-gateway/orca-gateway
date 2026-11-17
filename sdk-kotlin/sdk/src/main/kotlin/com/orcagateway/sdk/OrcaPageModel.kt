@@ -31,6 +31,7 @@ import com.orcagateway.core.state.SnackbarQueue
 import com.orcagateway.core.subpage.SubPage
 import com.orcagateway.core.subpage.SubPageHost
 import com.orcagateway.core.subpage.SubPageMounts
+import com.orcagateway.sdk.widgets.OrcaDialogs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,14 +40,17 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * A snackbar or toast in the app's queue ([OrcaPageModel.toast] is the one
- * at its head). [OrcaPageView] draws a snackbar in the root Scaffold's
- * Material 3 `SnackbarHost` (nowhere when the page has none) and a toast as
- * an Android `Toast`, each on its turn. Two toasts are never equal, even
- * with the same text (identity, as Swift's UUID).
+ * at its head), each shown on its turn: a snackbar as Material 3's fixed
+ * bar, drawn by the root Scaffold on screen (the page's, the tab shell's,
+ * a titled route's; nowhere when there is none), a toast as an Android
+ * `Toast`. Two toasts are never equal, even with the same text (identity,
+ * as Swift's UUID).
  */
 public class OrcaToast(
     public val message: String,
@@ -104,6 +108,38 @@ public class OrcaPageModel(
      * queue and time empties it. Compose state.
      */
     public val toast: OrcaToast? get() = snackbars.head
+
+    /**
+     * The sheets openDialog opened on this page, drawn by the layer of its
+     * [OrcaPageView] (or of its titled route's frame). Compose state.
+     */
+    internal val dialogs: OrcaDialogs = OrcaDialogs()
+
+    /**
+     * closeDialog closes the top sheet, none open nothing, never a page
+     * (sdk/lib/src/state/action_executor.dart:894-919). Flutter's is a
+     * built-in, so a host's or a plugin's closeDialog registered after it
+     * replaces it: the loader registers it before the plugins.
+     */
+    internal fun registerCloseDialog() {
+        executor.registerHandler("closeDialog") { _, _ -> dialogs.close() }
+    }
+
+    /**
+     * openDialog opens a sheet of the Dialog `dialogId` and returns once it
+     * closes, so a sequential group's next action waits for that; an id the
+     * page lacks, or a Dialog with no child on it, opens nothing
+     * (sdk/lib/src/widgets/orca_page.dart:323-374). Flutter's page registers
+     * it after the host's custom actions (:318-323), so it beats a custom
+     * one: the loader registers it after the plugins.
+     */
+    internal fun registerOpenDialog() {
+        executor.registerHandler("openDialog") { action, _ ->
+            val dialogId = (action["dialogId"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@registerHandler
+            val heightFactor = (action["heightFactor"] as? JsonPrimitive)?.takeUnless { it.isString }?.doubleOrNull
+            dialogs.open(dialogId, heightFactor, renderer.nodes)?.closed?.await()
+        }
+    }
 
     /**
      * Bumped after every change to the node tree (a server action adding,
@@ -273,9 +309,13 @@ public class OrcaPageModel(
         }
     }
 
-    /** Cancel every action still running. The model draws on, but runs nothing more. */
+    /**
+     * Cancel every action still running. The model draws on, but runs
+     * nothing more. Its sheets go, and an openDialog waiting on one returns.
+     */
     override fun close() {
         scope.cancel()
+        dialogs.closeAll()
     }
 
     /**

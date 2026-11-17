@@ -113,6 +113,7 @@ import com.orcagateway.sdk.navigation.OrcaRouter
 import com.orcagateway.sdk.navigation.TabShellScreen
 import com.orcagateway.sdk.navigation.deeplink
 import com.orcagateway.sdk.system.SystemActions
+import com.orcagateway.sdk.widgets.DialogLayer
 import com.orcagateway.sdk.widgets.LocalOrcaHeroStage
 import com.orcagateway.sdk.widgets.LocalOrcaPageDrawerHost
 import com.orcagateway.sdk.widgets.OrcaHeroStage
@@ -134,6 +135,7 @@ import java.util.Locale
  * OrcaApp was given. Use it from the main thread; [phase] is Compose state.
  * With DevTools on, a loaded page sends its `timing` once, on its first frame.
  * A page's `refetchPage` action fetches it again into the same model, in place.
+ * Its `openDialog` and `closeDialog` open and close its sheets ([OrcaPageModel]).
  *
  * Under a router with an offline cache (OrcaApp's `staticFlowManager`, or
  * `enableOffline`) the page is asked of the cache first, off the main
@@ -198,9 +200,12 @@ public class OrcaPageLoader(
             val model = OrcaPageModel(
                 page, store = ElmStore(StoreState(app = app)), registry = registry, client = client, savedState = router?.savedState,
             )
-            // Before the plugins: a custom `refetchPage` overrides it, as in Flutter.
+            // Before the plugins: a custom `refetchPage` or `closeDialog` overrides it, as in Flutter.
             model.executor.registerHandler("refetchPage") { _, _ -> refetch(model, client) }
+            model.registerCloseDialog()
             plugins?.install(model)
+            // After them: Flutter's page openDialog beats a custom one (orca_page.dart:318-323).
+            model.registerOpenDialog()
             router?.attach(model)
             // A cache hit has no timing: no DevTools `timing` event and no load time on the
             // overlay, as Flutter's OrcaPage (its collector is null for a cached page).
@@ -1039,7 +1044,9 @@ internal fun RoutePage(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoa
  * (navigation_handler.dart:111-147, :372; orca_page.dart:218-247), on the
  * single stack and over the tab shell alike: the app's snackbar shows at
  * its bottom edge, over the page, even when the page has no Scaffold, and
- * the page's Scaffolds are nested in it and draw none.
+ * the page's Scaffolds are nested in it and draw none. The page's sheets
+ * are drawn over the whole frame, title bar and snackbar bar included, as
+ * Flutter's sheet route is above the route ([DialogLayer]).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1049,24 +1056,29 @@ private fun RouteFrame(router: OrcaRouter, route: OrcaRoute, loader: OrcaPageLoa
         RouteBody(router, route, loader)
         return
     }
-    val title = (loader?.phase as? OrcaPageLoader.Phase.Loaded)?.model?.page?.title ?: fallback
+    val model = (loader?.phase as? OrcaPageLoader.Phase.Loaded)?.model
+    val title = model?.page?.title ?: fallback
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            TopAppBar(
-                title = { Text(title, Modifier.testTag(ORCA_ROUTE_TITLE_TAG)) },
-                navigationIcon = {
-                    if (router.stack.isNotEmpty()) {
-                        IconButton(onClick = { router.goBack() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        DialogLayer(model) {
+            Column(Modifier.fillMaxSize()) {
+                TopAppBar(
+                    title = { Text(title, Modifier.testTag(ORCA_ROUTE_TITLE_TAG)) },
+                    navigationIcon = {
+                        if (router.stack.isNotEmpty()) {
+                            IconButton(onClick = { router.goBack() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
                         }
+                    },
+                )
+                Box(Modifier.weight(1f)) {
+                    CompositionLocalProvider(LocalOrcaShellSnackbars provides true, LocalOrcaFrameDialogs provides true) {
+                        RouteBody(router, route, loader)
                     }
-                },
-            )
-            Box(Modifier.weight(1f)) {
-                CompositionLocalProvider(LocalOrcaShellSnackbars provides true) { RouteBody(router, route, loader) }
+                }
             }
+            SnackbarLayer(router.snackbars, NO_BARS, onBars = false)
         }
-        SnackbarLayer(router.snackbars, NO_BARS, onBars = false)
     }
 }
 
