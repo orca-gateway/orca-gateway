@@ -10,6 +10,10 @@
 - If your app passes `GlobalMaterialLocalizations` or `GlobalCupertinoLocalizations` from `flutter_localizations` in `localizationsDelegates`, take them from `material_ui` and `cupertino_ui` instead. `GlobalMaterialLocalizations.delegates` covers the Flutter, Material and Cupertino strings.
 - Widgets that still import the old library, in a plugin or a package, no longer get the app's theme or its Material localizations: they see the default theme. Until they migrate, wrap them in `MaterialUiCompatibilityBridge` from `material_ui`. For the whole app, set `OrcaMaterialAppConfig.builder` to `(context, child) => MaterialUiCompatibilityBridge(child: child!)`, and OrcaApp applies it to every screen. The SDK does not add the bridge itself: `material_ui` marks it deprecated, as a temporary migration aid, and it carries over only the color scheme, text theme, platform and visual density.
 
+### Fixed
+
+- `OrcaClient` now applies its `timeout` (30 seconds by default), which it declared but never used. Every request the client sends, from the send to the last byte of the answer, is held to it. A slower request fails with a `SocketException`, so the error screen shows Connection Failed, as the Swift and Kotlin SDKs do. Before, a slow server kept a request waiting as long as the HTTP client did. An app whose server legitimately takes longer than 30 seconds should pass a longer `timeout`.
+
 ## 0.3.3 - 2026-11-06
 
 ### Added

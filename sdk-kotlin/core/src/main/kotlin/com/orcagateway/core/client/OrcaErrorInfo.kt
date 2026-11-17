@@ -65,8 +65,8 @@ public data class OrcaErrorInfo(
          *   [SocketException] (refused, no route, unreachable network),
          *   [UnknownHostException], and [InterruptedIOException], which
          *   covers [java.net.SocketTimeoutException] and OkHttp's call
-         *   timeout. A timeout is a connection failure on the natives, where
-         *   Flutter's `TimeoutException` falls to the default. A plain
+         *   timeout. A timeout is a connection failure, as Flutter's client
+         *   reports its timeout as a `SocketException`. A plain
          *   [java.io.IOException] (a connection dropped mid-answer, a TLS
          *   failure) is unknown, as Flutter's `HttpException` and
          *   `HandshakeException` are.

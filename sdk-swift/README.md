@@ -493,14 +493,12 @@ shows it for a page or a config that failed; you can show it too. `OrcaErrorInfo
 | No network, no host, no connection, a timeout | `.connection` | Connection Failed |
 | Anything else | `.unknown` | Something Went Wrong |
 
-Two native differences: "Failed to fetch page" also stands for the config and the version check,
-which Flutter names, and a timeout is Connection Failed, where Flutter's falls to Something Went
-Wrong.
+One native difference: "Failed to fetch page" also stands for the config and the version check,
+which Flutter names.
 
 **Timeout.** `OrcaClient(timeout:)`, 30 seconds by default, bounds each request from send to answer;
-a slower one fails with `URLError(.timedOut)`, shown as Connection Failed. Flutter's `OrcaClient`
-declares the same 30-second `timeout` but never applies it, so a Flutter app waits as long as its
-HTTP stack does. A custom `transport` must honour task cancellation, or the timeout waits for its
+a slower one fails with `URLError(.timedOut)`, shown as Connection Failed, as Flutter's `OrcaClient`
+`timeout` does. A custom `transport` must honour task cancellation, or the timeout waits for its
 answer.
 
 The [iOS example](https://github.com/orca-gateway/orca-gateway/tree/main/examples/app-ios) has a

@@ -1,5 +1,6 @@
+import 'dart:async' show TimeoutException;
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, SocketException;
 import 'dart:ui' show PlatformDispatcher;
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/widgets.dart' show WidgetsBinding;
@@ -17,6 +18,13 @@ class OrcaClient {
   final String? apiKey;
   final String? environment;
   final http.Client _client;
+
+  /// How long one request may take, from the send to the last byte of its
+  /// answer, 30 s by default. Every request the client sends is held to it.
+  /// A slower one fails with a [SocketException], which the error screen
+  /// shows as Connection Failed, as the Swift and Kotlin SDKs show theirs.
+  /// The late answer is dropped, not aborted: the connection stays open until
+  /// the server answers or the HTTP client gives up.
   final Duration timeout;
 
   OrcaClient({
@@ -25,7 +33,7 @@ class OrcaClient {
     this.environment,
     this.timeout = const Duration(seconds: 30),
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  }) : _client = _TimeoutClient(client ?? http.Client(), timeout);
 
   ClientTimingCollector? _lastTimingCollector;
   String? _lastTimingHeader;
@@ -677,6 +685,44 @@ class OrcaClient {
   void dispose() {
     _client.close();
   }
+}
+
+/// Holds every request to [OrcaClient.timeout]: the send and the whole
+/// answer, its body read here (OrcaClient reads every body in full anyway).
+class _TimeoutClient extends http.BaseClient {
+  _TimeoutClient(this._inner, this._timeout);
+
+  final http.Client _inner;
+  final Duration _timeout;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    Future<http.StreamedResponse> whole() async {
+      final response = await _inner.send(request);
+      final body = await response.stream.toBytes();
+      return http.StreamedResponse(
+        http.ByteStream.fromBytes(body),
+        response.statusCode,
+        contentLength: body.length,
+        request: response.request,
+        headers: response.headers,
+        isRedirect: response.isRedirect,
+        persistentConnection: response.persistentConnection,
+        reasonPhrase: response.reasonPhrase,
+      );
+    }
+
+    try {
+      return await whole().timeout(_timeout);
+    } on TimeoutException {
+      // dart:io's HttpClient reports its own connection timeout as a
+      // SocketException too.
+      throw SocketException('Request timed out after $_timeout: ${request.method} ${request.url}');
+    }
+  }
+
+  @override
+  void close() => _inner.close();
 }
 
 class OrcaClientException implements Exception {
