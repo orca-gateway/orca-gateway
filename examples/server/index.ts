@@ -117,4 +117,5 @@ console.log("  - parity-a:       /api/v1/app/parity-a/page/effects");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/lists");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/forms");
 console.log("  - parity-a:       /api/v1/app/parity-a/page/rich");
+console.log("  - parity-a:       /api/v1/app/parity-a/page/overlays");
 console.log("  - saved-state:    /api/v1/app/saved-state/page/home");
