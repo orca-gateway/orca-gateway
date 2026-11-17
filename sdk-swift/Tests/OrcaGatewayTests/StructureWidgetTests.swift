@@ -260,12 +260,13 @@ final class StructureWidgetTests: XCTestCase {
     /// S18 added UnsupportedWidgetPlaceholder, to 68 when native parity
     /// step 5 advertised its five scroll widgets (A5.x), to 73 with step
     /// 13's CustomScrollView and four sliver widgets (B13.1, B13.2), to 82
-    /// when step 6 advertised its nine form controls (A6.x), and to 89 when
-    /// step 7 advertised its seven rich widgets (A7.x).
-    func test_B10_C_S_eightyNineWidgetsAreAdvertisedWithTheThreeNewOnes() {
+    /// when step 6 advertised its nine form controls (A6.x), to 89 when
+    /// step 7 advertised its seven rich widgets (A7.x), and to 93 when step 8
+    /// advertised its four overlays (A8.x).
+    func test_B10_C_S_ninetyThreeWidgetsAreAdvertisedWithTheThreeNewOnes() {
         let widgets = GeneratedCapabilities.widgets
-        XCTAssertEqual(widgets.count, 89)
-        XCTAssertEqual(Set(widgets).count, 89)
+        XCTAssertEqual(widgets.count, 93)
+        XCTAssertEqual(Set(widgets).count, 93)
         XCTAssertTrue(Set(widgets).isSuperset(of: ["BottomNavigationBar", "BottomNavItem", "Drawer"]))
         XCTAssertEqual(WidgetRegistry.shared.types, Set(widgets))
     }
@@ -274,11 +275,20 @@ final class StructureWidgetTests: XCTestCase {
         let model = try navModel()
         // Any resolved node, retyped: only the switch is under test.
         var node = try XCTUnwrap(model.resolve("body"))
+        var views: [String: String] = [:]
         for type in GeneratedCapabilities.widgets {
             node.type = type
             let drawn = Self.branch(WidgetView(node: node, model: model).body)
             XCTAssertFalse(drawn is EmptyView, "\(type) is advertised and falls to the switch's default")
+            views[type] = String(describing: Swift.type(of: drawn))
         }
+        // A8.x: step 8's four overlays are among them, each drawn by a view
+        // of its own; Dialog's draws nothing in place (a zero-size view, not
+        // the default's EmptyView) and openDialog shows its children.
+        XCTAssertEqual(views["BottomSheet"], "BottomSheetNodeView")
+        XCTAssertEqual(views["Dialog"], "DialogNodeView")
+        XCTAssertEqual(views["SnackBar"], "SnackBarNodeView")
+        XCTAssertEqual(views["Tooltip"], "TooltipNodeView")
         // What the check relies on: a type outside the switch is EmptyView.
         node.type = "NoSuchWidget"
         XCTAssertTrue(Self.branch(WidgetView(node: node, model: model).body) is EmptyView)

@@ -28,11 +28,11 @@ final class CapabilitiesTests: XCTestCase {
 
         // SnackBar and Tooltip, Epic 23b's last iOS orphans, take the ios
         // target in native parity step 8 (A8.3, A8.5; design D2), as
-        // Checkbox, Radio, FloatingActionButton and InkWell did in step 6.
-        // They are not advertised until step 8's caps task lists them.
+        // Checkbox, Radio, FloatingActionButton and InkWell did in step 6,
+        // and step 8's caps task advertises both (A8.x).
         for widget in ["SnackBar", "Tooltip"] {
             XCTAssertTrue(ios.contains(widget), "\(widget) lacks the ios target")
-            XCTAssertFalse(advertised.contains(widget))
+            XCTAssertTrue(advertised.contains(widget), "\(widget) is not advertised")
         }
         // Drawer now has the ios target.
         XCTAssertTrue(ios.contains("Drawer"), "Drawer lacks the ios target")
@@ -40,20 +40,20 @@ final class CapabilitiesTests: XCTestCase {
 
     /// A3.1: native parity step 3's 13 layout wrappers are drawn by SwiftUI,
     /// so the generated vector advertises them, each once and sorted like
-    /// capabilities.json. The pin is 89: with step 12's 5 animated widgets
+    /// capabilities.json. The pin is 93: with step 12's 5 animated widgets
     /// (49), then native parity step 4's 11 effect and touch wrappers (A4.x,
     /// 60), then step 13's ReorderableListView and SubPage, then S18's
     /// UnsupportedWidgetPlaceholder (63), then native parity step 5's five
     /// scroll widgets (A5.x, 68), then step 13's CustomScrollView and four
     /// sliver widgets (B13.1, B13.2, 73), then native parity step 6's nine
     /// form controls (A6.x, 82), then native parity step 7's seven rich
-    /// widgets (A7.x).
-    func testA3_1TheThirteenLayoutWrappersAreAdvertisedEightyNineInAll() throws {
+    /// widgets (A7.x, 89), then native parity step 8's four overlays (A8.x).
+    func testA3_1TheThirteenLayoutWrappersAreAdvertisedNinetyThreeInAll() throws {
         let advertised = Set(GeneratedCapabilities.widgets)
         XCTAssertEqual(Self.a3_1.subtracting(advertised), [], "not advertised")
         XCTAssertTrue(Self.a3_1.isSubset(of: try manifestIOSWidgets()), "a wrapper lacks the ios target")
-        XCTAssertEqual(GeneratedCapabilities.widgets.count, 89)
-        XCTAssertEqual(advertised.count, 89)
+        XCTAssertEqual(GeneratedCapabilities.widgets.count, 93)
+        XCTAssertEqual(advertised.count, 93)
         XCTAssertEqual(GeneratedCapabilities.widgets, GeneratedCapabilities.widgets.sorted())
     }
 
@@ -159,6 +159,29 @@ final class CapabilitiesTests: XCTestCase {
         "CircularProgressIndicator", "DefaultTextStyle", "ImageIcon", "LinearProgressIndicator",
         "RichText", "SelectableText", "Table",
     ]
+
+    /// A8.x: native parity step 8's four overlays are drawn by SwiftUI
+    /// (A8.1-A8.5: Dialog in place as nothing and as the sheet openDialog
+    /// opens, BottomSheet inline and in the Scaffold slot, Tooltip's bubble,
+    /// SnackBar inline and through showSnackbar), so capabilities.json lists
+    /// each of them, the generated vector advertises each, once, every one
+    /// carrying the manifest's ios target, and the standard registry lets
+    /// them through.
+    func testA8_xAdvertisesTheFourOverlays() throws {
+        let implemented = try Fixtures.json("sdk-swift/capabilities.json")
+        let listed = (implemented["widgets"].arrayValue ?? []).compactMap(\.stringValue)
+        XCTAssertEqual(Self.a8.subtracting(listed), [], "not in capabilities.json")
+        XCTAssertEqual(listed, listed.sorted(), "capabilities.json widgets unsorted")
+        for widget in Self.a8.sorted() {
+            XCTAssertEqual(GeneratedCapabilities.widgets.filter { $0 == widget }.count, 1,
+                           "\(widget) is not advertised exactly once")
+        }
+        XCTAssertEqual(Self.a8.subtracting(try manifestIOSWidgets()), [], "a widget lacks the ios target")
+        XCTAssertEqual(Self.a8.subtracting(WidgetRegistry.shared.types), [], "degraded by the standard registry")
+    }
+
+    /// Native parity step 8's overlays (A8.1-A8.5).
+    static let a8: Set<String> = ["BottomSheet", "Dialog", "SnackBar", "Tooltip"]
 
     func testActionKindsMatchTheImplementedList() throws {
         let implemented = try Fixtures.json("sdk-swift/capabilities.json")

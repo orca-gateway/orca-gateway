@@ -32,6 +32,7 @@ public enum GeneratedCapabilities {
         "BlurView",
         "BottomNavItem",
         "BottomNavigationBar",
+        "BottomSheet",
         "Card",
         "Center",
         "Checkbox",
@@ -46,6 +47,7 @@ public enum GeneratedCapabilities {
         "CustomScrollView",
         "DecoratedBox",
         "DefaultTextStyle",
+        "Dialog",
         "Divider",
         "Drawer",
         "ElevatedButton",
@@ -94,6 +96,7 @@ public enum GeneratedCapabilities {
         "SliverGrid",
         "SliverList",
         "SliverToBoxAdapter",
+        "SnackBar",
         "Spacer",
         "Stack",
         "SubPage",
@@ -103,6 +106,7 @@ public enum GeneratedCapabilities {
         "TextButton",
         "TextField",
         "TextFormField",
+        "Tooltip",
         "Transform",
         "UnsupportedWidgetPlaceholder",
         "Video",
@@ -203,5 +207,5 @@ public enum GeneratedCapabilities {
     ]
 
     /// sha256 of the engine's canonicalizeVector() of the vector above.
-    public static let capsHash = "1aaf60d669d5cc675a722c908eb54cc9c9b6282a972f3cc593ed5cb99c97238d"
+    public static let capsHash = "3d9011c0ef8f105ee4699bc6c0bc05522444879ec56b5558ef0d96ff9cd4189f"
 }
