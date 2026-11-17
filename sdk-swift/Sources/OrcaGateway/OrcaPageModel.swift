@@ -4,8 +4,9 @@ import os
 import SwiftUI
 
 /// A snackbar or toast of the page's queue (the router's under OrcaApp).
-/// Both are drawn as a floating message at the bottom; a snackbar spans the
-/// width.
+/// A toast is drawn as a pill at the page's bottom (`ToastView`); a snackbar
+/// as Flutter's M3 fixed bar in the root Scaffold on screen, or the tab
+/// shell's above its tab bar (`SnackbarSlot`).
 public struct OrcaToast: Identifiable, Equatable, Sendable {
     public enum Style: Sendable { case snackbar, toast }
     public let id = UUID()
@@ -109,6 +110,10 @@ public final class OrcaPageModel: ObservableObject {
     }
     /// What sends `objectWillChange` when `snackbars`' head item changes.
     private var headWatch: AnyCancellable?
+    /// The sheets openDialog opened on this page, which closeDialog closes
+    /// (Flutter's modal routes on the page's Navigator); the layer over the
+    /// page's NavigationStack draws them (`DialogLayer`).
+    let dialogs = OrcaDialogs()
     /// Bumped after every change to the node tree (a server action adding,
     /// updating, replacing or deleting components).
     @Published public private(set) var structureRevision = 0
@@ -184,7 +189,32 @@ public final class OrcaPageModel: ObservableObject {
         executor.registerHandler("refetchPage") { [weak self] _, _ in
             try await self?.onRefetchPage?()
         }
+        // closeDialog is Flutter's executor built-in (action_executor.dart
+        // :894-919), which a host's own replaces: registered before the
+        // plugin host, as refetchPage. The top sheet only, never a page.
+        executor.registerHandler("closeDialog") { [weak self] _, _ in
+            await self?.dialogs.close()
+        }
+        registerOpenDialog()
         watchHead()
+    }
+
+    /// The page's openDialog (Flutter `OrcaPage`'s, orca_page.dart:323-374):
+    /// the sheet of the keyed Dialog, and the action ends when it closes.
+    /// Flutter registers it after the host's custom actions (:318-323), so
+    /// it beats a host's own: the loader registers it again once a plugin
+    /// host has added its handlers.
+    func registerOpenDialog() {
+        executor.registerHandler("openDialog") { [weak self] action, _ in
+            await self?.openDialog(action)
+        }
+    }
+
+    /// openDialog: `dialogId` as sent (no Value), `heightFactor` ?? 0.5.
+    private func openDialog(_ action: JSONValue) async {
+        guard !isInert, let dialogId = action["dialogId"].stringValue else { return }
+        await dialogs.open(dialogId: dialogId, heightFactor: action["heightFactor"].doubleValue,
+                           nodes: renderer.nodes)
     }
 
     /// From now on, tell this model's views each time the head item of

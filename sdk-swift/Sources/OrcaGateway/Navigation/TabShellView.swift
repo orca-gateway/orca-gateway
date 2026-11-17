@@ -12,7 +12,9 @@ import SwiftUI
 /// clearState go to the router's saved state; the app's plugin widgets and
 /// custom action handlers are a page's too; its snackbars and toasts join
 /// the app's queue, as Flutter's shell executor shows them on the root
-/// messenger. A widget this SDK cannot draw degrades as on a page.
+/// messenger. Its openDialog opens nothing and does not wait (that executor
+/// has no onOpenDialog); a host's own still runs. A widget this SDK cannot
+/// draw degrades as on a page.
 @MainActor
 final class ShellTree {
     static let pageId = "__shell__"
@@ -29,6 +31,7 @@ final class ShellTree {
             ?? OrcaPageModel(page: response, store: store, client: router.client)
         self.page = page
         page.snackbars = router.snackbars
+        page.dialogs.isDrawn = false
         // persistState and clearState save through the app's saved state, as
         // Flutter's shell executor does with the app's StateManager; Flutter
         // restores no page entry for the shell, so neither does this.
@@ -93,6 +96,8 @@ final class TabShellModel: ObservableObject {
     let drawerRows: [DrawerRow]
     /// The default drawer's header (Flutter `OrcaShell._buildDefaultDrawer`).
     let drawerHeader = "Menu"
+    /// The server tab bar's height, as last drawn under a tab's page.
+    let serverBar = ServerBarHeight()
     private var drawerOpen: AnyCancellable?
 
     /// `drawers`: where the shell drawer is shown while the router has it
@@ -272,6 +277,9 @@ private struct PlainTabs: View {
 /// animates that page's content in (the shell's bars around the page are
 /// not part of it and appear at once). Any other push, a tab switch and
 /// going back are the system's.
+///
+/// Over the stack lie the sheets of its page on top and, over them, the
+/// app's snackbar (`TabStackLayers`).
 @MainActor
 private struct TabStack: View {
     @ObservedObject var router: OrcaRouter
@@ -290,8 +298,59 @@ private struct TabStack: View {
                             .modifier(ShellBar(model: model, route: route))
                     }
             }
+            .environment(\.orcaDialogsDrawn, true)
+            .overlay {
+                TabStackLayers(router: router, model: model, route: model.path(of: index).last ?? root,
+                               serverBar: model.serverBar)
+            }
         } else {
             Color.clear
+        }
+    }
+}
+
+/// The server tab bar's height (`ShellBar` measures it under each tab page).
+@MainActor
+final class ServerBarHeight: ObservableObject {
+    @Published var height: CGFloat = 0
+}
+
+/// What lies over a tab's stack, `route` its top. The sheets of that page,
+/// as showModalBottomSheet puts them on the branch Navigator (its nearest):
+/// over the page and its navigation bar, from the top edge down to the tab
+/// bar, which stays uncovered; over the shell, where no tab bar shows, down
+/// to the bottom edge (the root Navigator's route). Then the app's snackbar,
+/// right above the tab bar: OrcaShell's Scaffold is the root one under tabs
+/// (orca_shell.dart:114-117) and paints its snackbar slot over its body, the
+/// branch Navigators holding the sheets (scaffold.dart:3197, :3276), so the
+/// bar lies over a sheet. A page's own Scaffold is nested and draws none; a
+/// route over the shell has no tab bar and its own Scaffold draws the bar
+/// (`RoutePage`), under its sheets. Under a server tab bar both stop at that
+/// bar's top.
+@MainActor
+private struct TabStackLayers: View {
+    let router: OrcaRouter
+    let model: TabShellModel
+    let route: OrcaRoute
+    @ObservedObject var serverBar: ServerBarHeight
+
+    var body: some View {
+        let underTabs = !model.hidesBar(for: route)
+        let lift = model.showsServerBar(for: route) ? serverBar.height : 0
+        ZStack {
+            if !route.isNotFound {
+                RouteDialogLayer(loader: router.loader(for: route))
+                    // A Scaffold in a sheet is nested in the shell's.
+                    .environment(\.orcaSnackbarDrawn, underTabs)
+                    .id(route.id)
+                    .padding(.bottom, lift)
+                    .ignoresSafeArea(.container, edges: underTabs ? [.top, .horizontal] : .all)
+                    .ignoresSafeArea(.keyboard)
+            }
+            if underTabs {
+                SnackbarOverlay(snackbars: router.snackbars, reachesBottomEdge: false)
+                    .padding(.bottom, lift)
+            }
         }
     }
 }
@@ -309,11 +368,11 @@ private struct TabStack: View {
 /// its content between the bars.
 ///
 /// Under the tab bar (the system's or the server's) the shell draws the
-/// app's snackbar right above it, over the page, as OrcaShell's Scaffold is
-/// the root one there (orca_shell.dart:114-117): the page's own Scaffold is
-/// nested and draws none, nor lifts its FAB. A route over the shell has no
-/// tab bar: it is a titled route, whose own Scaffold draws the bar
-/// (`RoutePage`).
+/// app's snackbar right above it, over the page (`TabStackLayers`), as
+/// OrcaShell's Scaffold is the root one there (orca_shell.dart:114-117): the
+/// page's own Scaffold is nested and draws none, nor lifts its FAB. A route
+/// over the shell has no tab bar: it is a titled route, whose own Scaffold
+/// draws the bar (`RoutePage`).
 @MainActor
 private struct ShellBar: ViewModifier {
     let model: TabShellModel
@@ -331,9 +390,6 @@ private struct ShellBar: ViewModifier {
         content
             .environment(\.orcaSafeAreaTaken, taken)
             .environment(\.orcaSnackbarDrawn, underTabs)
-            .overlay {
-                if underTabs { SnackbarOverlay(snackbars: model.router.snackbars, reachesBottomEdge: false) }
-            }
             .overlay(alignment: .leading) {
                 if model.opensDrawerByEdge(for: route), !self.page.hasLeadingDrawer {
                     DrawerEdgeGrip(edge: .leading) { model.openDrawer() }
@@ -349,6 +405,9 @@ private struct ShellBar: ViewModifier {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if server, let bar = model.bar {
                     ShellTreeView(tree: bar).bottomBarBacking()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                            model.serverBar.height = $0
+                        }
                 }
             }
     }

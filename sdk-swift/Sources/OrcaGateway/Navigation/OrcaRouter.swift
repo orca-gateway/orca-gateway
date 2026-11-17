@@ -658,7 +658,7 @@ public final class OrcaRouter: ObservableObject {
         let over = shell.over.map(route)
         bound = next
         let live = Set(next.values.map(\.route.id))
-        loaders = loaders.filter { live.contains($0.key) }
+        keepLoaders(live)
         if let asked = pageDrawerRequest, !live.contains(asked) { pageDrawerRequest = nil }
         entrances = entrances.filter { live.contains($0.key) }
         heroSources = heroSources.filter { live.contains($0.key) }
@@ -760,13 +760,26 @@ public final class OrcaRouter: ObservableObject {
         }
     }
 
+    /// Keep the loaders of the `live` routes and drop the rest. A dropped
+    /// page's open sheets close, so an openDialog waiting on them goes on:
+    /// its view may have left the screen long before, covered by a push
+    /// (Kotlin's router closes them the same way).
+    private func keepLoaders(_ live: Set<UUID>) {
+        let dropped = loaders.filter { !live.contains($0.key) }
+        guard !dropped.isEmpty else { return }
+        loaders = loaders.filter { live.contains($0.key) }
+        for loader in dropped.values {
+            if case .loaded(let model) = loader.phase { model.dialogs.closeAll() }
+        }
+    }
+
     /// Drop loaders of routes that left the stack (a back swipe changes the
     /// path directly) and a page drawer request with its route, hand the
     /// page now on top the latest app scope, and report the location on top
     /// when it changed.
     private func routesChanged(from oldCount: Int) {
         let live = Set(stack.map(\.id) + [root.id])
-        loaders = loaders.filter { live.contains($0.key) }
+        keepLoaders(live)
         if let asked = pageDrawerRequest, !live.contains(asked) { pageDrawerRequest = nil }
         entrances = entrances.filter { live.contains($0.key) }
         heroSources = heroSources.filter { live.contains($0.key) }

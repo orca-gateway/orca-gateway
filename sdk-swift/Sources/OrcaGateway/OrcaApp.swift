@@ -6,9 +6,16 @@ import SwiftUI
 /// Scaffold on screen, `SnackbarSlot`), and the debug overlay while DevTools
 /// runs with `showOverlay` on. Put it inside a NavigationStack (OrcaApp does)
 /// so a Scaffold's AppBar becomes the navigation bar.
+///
+/// The sheets openDialog opens are drawn over the NavigationStack under
+/// OrcaApp (`RouteDialogLayer`); a page shown on its own draws them over
+/// itself. A page leaving the screen for good (its route no longer on any
+/// stack, or shown on its own) closes them, so no openDialog waits forever.
 @MainActor
 public struct OrcaPageView: View {
     @ObservedObject var model: OrcaPageModel
+    @Environment(\.orcaDialogsDrawn) private var dialogsDrawn
+    @Environment(\.orcaPage) private var page
     /// The page's load, request start to render complete in ms, from the
     /// loader that fetched it; nil for a page drawn without one.
     let loadTimeMs: Double?
@@ -39,6 +46,14 @@ public struct OrcaPageView: View {
         .onAppear { model.appeared() }
         .overlay(alignment: .bottomTrailing) { debugOverlay }
         .overlay(alignment: .bottom) { ToastView(snackbars: model.snackbars) }
+        .overlay {
+            if !dialogsDrawn { DialogLayer(model: model).ignoresSafeArea() }
+        }
+        .onDisappear {
+            // Covered by a push or another tab: its sheets wait for it.
+            if let page, page.router.holds(page.route.id) { return }
+            model.dialogs.closeAll()
+        }
     }
 }
 
@@ -294,6 +309,8 @@ public final class OrcaPageLoader: ObservableObject {
     private func build(_ page: PageResponse, app: [String: JSONValue], client: OrcaClient) -> OrcaPageModel {
         let model = router?.plugins?.page(page, store: ElmStore(app: app), client: client)
             ?? OrcaPageModel(page: page, store: ElmStore(app: app), client: client)
+        // After the host's handlers, as Flutter's page registers it.
+        model.registerOpenDialog()
         model.onRefetchPage = { [weak self, weak model] in
             guard let self, let model else { return }
             try await self.refetch(model)
@@ -791,6 +808,10 @@ private struct RouterRoot: View {
 /// The router's pages as a NavigationStack. The system animates its pushes
 /// and pops, but for a `fade` or `slideUp` route: the router writes the path
 /// with animations off and `RoutePage` animates its content in.
+///
+/// Over it, its navigation bar included, lie the sheets of the page on top
+/// (Flutter's root Navigator: the modal route over the page route, its
+/// AppBar and its Scaffold's snackbar), edge to edge.
 @MainActor
 private struct RouteStack: View {
     @ObservedObject var router: OrcaRouter
@@ -803,6 +824,24 @@ private struct RouteStack: View {
                     RoutePage(router: router, route: route)
                 }
         }
+        .environment(\.orcaDialogsDrawn, true)
+        .overlay {
+            let top = router.top
+            if !top.isNotFound {
+                RouteDialogLayer(loader: router.loader(for: top))
+                    .id(top.id)
+                    .ignoresSafeArea()
+            }
+        }
+    }
+}
+
+extension OrcaRouter {
+    /// The route is on one of the stacks: the single one, a tab's, or over
+    /// the shell.
+    func holds(_ id: OrcaRoute.ID) -> Bool {
+        root.id == id || stack.contains { $0.id == id } || overRoutes.contains { $0.id == id }
+            || tabStacks.contains { $0.contains { $0.id == id } }
     }
 }
 
