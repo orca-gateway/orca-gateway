@@ -85,12 +85,15 @@ class CapabilitiesTest {
      *
      * A7.x: native parity step 7 adds its seven rich widgets ([A7]), so the
      * pin moves from 82 to 89; Swift lands the same seven in the same step.
+     *
+     * A8.x: native parity step 8 adds its four overlays ([A8]), so the pin
+     * moves from 89 to 93; Swift lands the same four in the same step.
      */
     @Test
-    fun c1_kotlinAdvertisesTheSame89WidgetsAsSwift() {
+    fun c1_kotlinAdvertisesTheSame93WidgetsAsSwift() {
         val kotlin = json("sdk-kotlin/capabilities.json").jsonObject["widgets"]!!.jsonArray.map { it.jsonPrimitive.content }
         val swift = strings(json("sdk-swift/capabilities.json").jsonObject["widgets"])
-        assertEquals(89, kotlin.size)
+        assertEquals(93, kotlin.size)
         assertEquals(swift, kotlin.toSet())
         assertEquals(kotlin.sorted(), kotlin, "capabilities.json keeps its widgets sorted")
         val added = setOf(
@@ -116,6 +119,7 @@ class CapabilitiesTest {
         assertTrue(kotlin.containsAll(SLIVERS), "missing: ${SLIVERS - kotlin.toSet()}")
         assertTrue(kotlin.containsAll(A6), "missing: ${A6 - kotlin.toSet()}")
         assertTrue(kotlin.containsAll(A7), "missing: ${A7 - kotlin.toSet()}")
+        assertTrue(kotlin.containsAll(A8), "missing: ${A8 - kotlin.toSet()}")
         assertEquals(kotlin, GeneratedCapabilities.widgets)
         assertEquals(GeneratedCapabilities.capsHash, CapabilityVector.current.hash)
     }
@@ -124,20 +128,20 @@ class CapabilitiesTest {
      * A3.1: Compose draws the 13 layout wrappers, so the generated vector
      * advertises them and the core registry lets them through instead of
      * degrading them; WidgetBuildersTest pins standard() to the same set.
-     * The pin is 89: with S12's 5 animated ones (49), then native parity
+     * The pin is 93: with S12's 5 animated ones (49), then native parity
      * step 4's 11 effect and touch wrappers (A4.x, 60), then S13's
      * ReorderableListView and SubPage, then S18's
      * UnsupportedWidgetPlaceholder (63), then native parity step 5's five
      * scroll widgets (A5.x, 68), then step 13's CustomScrollView and four
      * slivers (B13.1-K, B13.2-K, 73), then native parity step 6's nine form
      * controls (A6.x, 82), then native parity step 7's seven rich widgets
-     * (A7.x).
+     * (A7.x, 89), then native parity step 8's four overlays (A8.x).
      */
     @Test
     fun a3_1_theThirteenLayoutWrappersAreAdvertisedAndLetThrough() {
         val advertised = GeneratedCapabilities.widgets.toSet()
         assertEquals(emptySet(), A3_1 - advertised, "not advertised")
-        assertEquals(89, GeneratedCapabilities.widgets.size)
+        assertEquals(93, GeneratedCapabilities.widgets.size)
         assertEquals(emptySet(), A3_1 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
@@ -224,6 +228,28 @@ class CapabilitiesTest {
         }
         assertEquals(emptySet(), A7 - manifestAndroidWidgets(), "a widget lacks the android target")
         assertEquals(emptySet(), A7 - WidgetRegistry.shared.types, "degraded by the core registry")
+    }
+
+    /**
+     * A8.x: Compose draws native parity step 8's four overlays (Dialog as
+     * Flutter's `SizedBox.shrink()` in place, BottomSheet, Tooltip, SnackBar),
+     * so capabilities.json lists each of them, the generated vector
+     * advertises each once, every one carries the manifest's android target,
+     * and the core registry lets them through; WidgetBuildersTest pins
+     * standard() to the same set.
+     */
+    @Test
+    fun a8_x_kt_advertisesTheFourOverlays() {
+        val listed = strings(json("sdk-kotlin/capabilities.json").jsonObject["widgets"])
+        assertEquals(emptySet(), A8 - listed, "not in capabilities.json")
+        for (widget in A8.sorted()) {
+            assertEquals(
+                1, GeneratedCapabilities.widgets.count { it == widget },
+                "$widget is not advertised exactly once",
+            )
+        }
+        assertEquals(emptySet(), A8 - manifestAndroidWidgets(), "a widget lacks the android target")
+        assertEquals(emptySet(), A8 - WidgetRegistry.shared.types, "degraded by the core registry")
     }
 
     /**
@@ -356,5 +382,8 @@ class CapabilitiesTest {
             "CircularProgressIndicator", "DefaultTextStyle", "ImageIcon", "LinearProgressIndicator",
             "RichText", "SelectableText", "Table",
         )
+
+        /** Native parity step 8's overlays (A8.1-A8.5), sorted. */
+        val A8 = setOf("BottomSheet", "Dialog", "SnackBar", "Tooltip")
     }
 }

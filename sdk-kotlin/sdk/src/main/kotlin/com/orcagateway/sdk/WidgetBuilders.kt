@@ -18,6 +18,7 @@ import com.orcagateway.sdk.widgets.BaselineWidget
 import com.orcagateway.sdk.widgets.BlurViewWidget
 import com.orcagateway.sdk.widgets.BottomNavItemWidget
 import com.orcagateway.sdk.widgets.BottomNavigationBarWidget
+import com.orcagateway.sdk.widgets.BottomSheetWidget
 import com.orcagateway.sdk.widgets.ButtonWidget
 import com.orcagateway.sdk.widgets.CardWidget
 import com.orcagateway.sdk.widgets.CenterWidget
@@ -32,6 +33,7 @@ import com.orcagateway.sdk.widgets.ContainerWidget
 import com.orcagateway.sdk.widgets.CustomScrollViewWidget
 import com.orcagateway.sdk.widgets.DecoratedBoxWidget
 import com.orcagateway.sdk.widgets.DefaultTextStyleWidget
+import com.orcagateway.sdk.widgets.DialogWidget
 import com.orcagateway.sdk.widgets.DividerWidget
 import com.orcagateway.sdk.widgets.DrawerWidget
 import com.orcagateway.sdk.widgets.ExpandedWidget
@@ -77,6 +79,7 @@ import com.orcagateway.sdk.widgets.SliverAppBarWidget
 import com.orcagateway.sdk.widgets.SliverGridWidget
 import com.orcagateway.sdk.widgets.SliverListWidget
 import com.orcagateway.sdk.widgets.SliverToBoxAdapterWidget
+import com.orcagateway.sdk.widgets.SnackBarWidget
 import com.orcagateway.sdk.widgets.SpacerWidget
 import com.orcagateway.sdk.widgets.StackWidget
 import com.orcagateway.sdk.widgets.SubPageWidget
@@ -84,6 +87,7 @@ import com.orcagateway.sdk.widgets.SwitchWidget
 import com.orcagateway.sdk.widgets.TableWidget
 import com.orcagateway.sdk.widgets.TextFieldWidget
 import com.orcagateway.sdk.widgets.TextWidget
+import com.orcagateway.sdk.widgets.TooltipWidget
 import com.orcagateway.sdk.widgets.TransformWidget
 import com.orcagateway.sdk.widgets.UnsupportedWidgetPlaceholderWidget
 import com.orcagateway.sdk.widgets.VideoWidget
@@ -143,7 +147,7 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
         internal val shared: WidgetBuilders = standard()
 
         /**
-         * A fresh registry with the 89 widgets of sdk-kotlin/capabilities.json:
+         * A fresh registry with the 93 widgets of sdk-kotlin/capabilities.json:
          * the 15 core ones (S7) and the rest of the iOS set (S9: Expanded,
          * Spacer, TextField, GestureDetector, Container, ClipRRect, Stack,
          * Positioned, Image, Icon), then AnimatedBuilder, Transform and Video,
@@ -159,13 +163,16 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
          * the nine form controls of native parity step 6 (A6.x: Checkbox,
          * Radio, Switch, Slider, TextFormField, Form, IconButton,
          * FloatingActionButton, InkWell; TextFormField draws with
-         * TextField's builder, as Flutter's), and the seven rich widgets of
+         * TextField's builder, as Flutter's), the seven rich widgets of
          * native parity step 7 (A7.x: RichText, SelectableText,
          * DefaultTextStyle, ImageIcon, CircularProgressIndicator,
          * LinearProgressIndicator, Table; ImageIcon draws with Icon's builder,
          * whose `src` path is Flutter's ImageIcon, as `_buildImageIcon` makes
-         * it). Keep the two lists in step: the caps
-         * vector advertises what this draws (WidgetBuildersTest checks it).
+         * it), and the four overlays of native parity step 8 (A8.x: Dialog,
+         * drawn in place as Flutter's `SizedBox.shrink()` while `openDialog`
+         * shows its children, BottomSheet, Tooltip, SnackBar). Keep the two
+         * lists in step: the caps vector advertises what this draws
+         * (WidgetBuildersTest checks it).
          */
         public fun standard(): WidgetBuilders = WidgetBuilders(emptyMap()).apply {
             register("Scaffold") { node, model, modifier -> ScaffoldWidget(node, model, modifier) }
@@ -265,6 +272,10 @@ public class WidgetBuilders private constructor(initial: Map<String, WidgetBuild
                 LinearProgressIndicatorWidget(node, model, modifier)
             }
             register("Table") { node, model, modifier -> TableWidget(node, model, modifier) }
+            register("Dialog") { _, _, modifier -> DialogWidget(modifier) }
+            register("BottomSheet") { node, model, modifier -> BottomSheetWidget(node, model, modifier) }
+            register("Tooltip") { node, model, modifier -> TooltipWidget(node, model, modifier) }
+            register("SnackBar") { node, model, modifier -> SnackBarWidget(node, model, modifier) }
         }
     }
 }
