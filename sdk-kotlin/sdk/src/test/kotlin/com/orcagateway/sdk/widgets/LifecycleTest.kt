@@ -20,15 +20,20 @@ import com.orcagateway.core.debug.OrcaDebug
 import com.orcagateway.core.json.JsonValue
 import com.orcagateway.core.models.Action
 import com.orcagateway.core.models.ComponentNode
+import com.orcagateway.core.models.NavConfig
+import com.orcagateway.core.models.NavFlow
+import com.orcagateway.core.models.NavRoute
 import com.orcagateway.core.models.PageResponse
 import com.orcagateway.core.models.StateDefinition
 import com.orcagateway.core.models.StateScope
+import com.orcagateway.core.models.TabDef
 import com.orcagateway.core.state.ActionEffect
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaApp
 import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.WidgetBuilders
+import com.orcagateway.sdk.navigation.OrcaRoute
 import com.orcagateway.sdk.navigation.OrcaRouter
 import com.orcagateway.sdk.support.button
 import com.orcagateway.sdk.support.column
@@ -249,6 +254,98 @@ class LifecycleTest {
 
         assertEquals(listOf(1L, 1L), listOf(model.value("appBg"), model.value("appFg")), "onApp*")
         assertEquals(listOf(0L, 0L), listOf(model.value("bg"), model.value("fg")), "short names")
+    }
+
+    /** Every page: one Text of its name whose onAppBackground and onAppForeground count into its page keys bg and fg. */
+    private class AppEventPages : HttpTransport {
+        override suspend fun send(request: HttpRequest): HttpResponse {
+            val name = request.url.path.substringAfterLast("/page/")
+            val page = PageResponse(
+                pageId = name, title = name,
+                state = counters("bg", "fg"),
+                components = listOf(
+                    text("t", name).copy(actions = mapOf("onAppBackground" to count("bg"), "onAppForeground" to count("fg"))),
+                ),
+            )
+            return HttpResponse(200, body = Json.encodeToString(PageResponse.serializer(), page).encodeToByteArray())
+        }
+
+        val client: OrcaClient
+            get() = OrcaClient(URI("http://stub.invalid"), appId = "lifecycle", device = DeviceInfo(osVersion = "test"), transport = this)
+    }
+
+    /** [router] in OrcaApp under the test lifecycle [app], which has started; returns once [first] is on screen. */
+    private fun showApp(router: OrcaRouter, app: TestApp, first: String) {
+        compose.runOnIdle { app.registry.currentState = Lifecycle.State.STARTED }
+        compose.setContent {
+            CompositionLocalProvider(LocalOrcaAppLifecycle provides app.lifecycle) { OrcaApp(router) }
+        }
+        compose.waitUntil(5_000) { shown(first) > 0 }
+    }
+
+    /** The app goes to the background and comes back: STARTED → CREATED → STARTED. */
+    private fun backgroundAndBack(app: TestApp) {
+        compose.runOnIdle { app.registry.currentState = Lifecycle.State.CREATED }
+        compose.runOnIdle { app.registry.currentState = Lifecycle.State.STARTED }
+        compose.waitForIdle()
+    }
+
+    private fun OrcaRouter.model(route: OrcaRoute): OrcaPageModel = (loader(route).phase as OrcaPageLoader.Phase.Loaded).model
+
+    /** How many times the page's onAppBackground and onAppForeground ran. */
+    private fun OrcaPageModel.appEvents(): Pair<Long?, Long?> = value("bg") to value("fg")
+
+    /**
+     * A2.3 (kt): a page under a pushed one hears the app go to the
+     * background and come back, once each, as Flutter's covered route (the
+     * Navigator keeps it mounted) does, though the NavHost took it out of
+     * the composition; the pushed page hears them too. Popped back on top it
+     * hears each once more, not twice, and its node alone observes.
+     */
+    @Test
+    fun a2_3_kt_aPageUnderAPushedOneHearsTheAppEvents() {
+        val app = TestApp()
+        val router = OrcaRouter(AppEventPages().client)
+        showApp(router, app, first = "home")
+        val home = router.model(router.root)
+
+        compose.runOnIdle { router.navigate("about") }
+        compose.waitUntil(5_000) { shown("about") > 0 && shown("home") == 0 }
+        val about = router.model(router.top)
+        backgroundAndBack(app)
+        assertEquals(1L to 1L, home.appEvents(), "the covered page")
+        assertEquals(1L to 1L, about.appEvents(), "the pushed page")
+
+        compose.runOnIdle { router.goBack() }
+        compose.waitUntil(5_000) { shown("home") > 0 && shown("about") == 0 }
+        backgroundAndBack(app)
+        assertEquals(2L to 2L, home.appEvents(), "back on top")
+        assertEquals(1, app.registry.observerCount, "observers")
+    }
+
+    /**
+     * A2.3 (kt): the page of a tab not shown hears the app events too, as
+     * under Flutter's StatefulShellRoute.indexedStack, which keeps a visited
+     * branch mounted: the tab shell keeps its page composed.
+     */
+    @Test
+    fun a2_3_kt_thePageOfATabNotShownHearsTheAppEvents() {
+        val app = TestApp()
+        val config = NavConfig(
+            initialRoute = "/home",
+            tabs = listOf(TabDef("home", "Home", "home", "/home"), TabDef("more", "More", "menu", "/more")),
+            flows = listOf(NavFlow(name = "main", routes = listOf(NavRoute("home"), NavRoute("more")))),
+        )
+        val router = OrcaRouter(AppEventPages().client, config)
+        showApp(router, app, first = "home")
+        val home = router.model(router.root)
+
+        compose.runOnIdle { router.selectTab(1) }
+        compose.waitUntil(5_000) { shown("more") > 0 }
+        val more = router.model(router.top)
+        backgroundAndBack(app)
+        assertEquals(1L to 1L, home.appEvents(), "the tab not shown")
+        assertEquals(1L to 1L, more.appEvents(), "the tab shown")
     }
 
     /** A2.5 (kt): a tap wrapped in once changes state one time; a second tap does nothing, and another widget's once still runs. */

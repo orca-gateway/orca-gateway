@@ -115,6 +115,39 @@ final class LifecycleTests: XCTestCase {
         XCTAssertEqual(app.store.value("onAppForeground"), 1)
     }
 
+    /// A2.3: a page under a pushed one hears the app go to the background
+    /// and come back, once each, as Flutter's covered route (the Navigator
+    /// keeps it mounted) does; the pushed page hears them too. Popped back
+    /// on top it hears each once more, not twice.
+    func testA2_3APageUnderAPushedOneHearsTheAppEvents() throws {
+        let router = OrcaRouter(client: AppEventPages.client, path: "home", system: SystemRecorder().actions())
+        let hosted = HostedNode(OrcaApp(router: router))
+        defer { hosted.close() }
+        let home = try hosted.loaded(router, router.root)
+
+        router.navigate(to: "about")
+        let about = try hosted.loaded(router, router.top)
+        hosted.pump(1)
+        cycle(hosted)
+        XCTAssertEqual(Self.appEvents(home), [1, 1], "the covered page")
+        XCTAssertEqual(Self.appEvents(about), [1, 1], "the pushed page")
+
+        router.goBack()
+        hosted.pump(1)
+        cycle(hosted)
+        XCTAssertEqual(Self.appEvents(home), [2, 2], "back on top")
+    }
+
+    /// The app goes to the background and comes back, through `.inactive` each way.
+    private func cycle(_ hosted: HostedNode) {
+        for phase in [ScenePhase.inactive, .background, .inactive, .active] { hosted.set(phase) }
+    }
+
+    /// How many times the page's onAppBackground and onAppForeground ran.
+    static func appEvents(_ model: OrcaPageModel) -> [JSONValue] {
+        [model.store.value("onAppBackground"), model.store.value("onAppForeground")]
+    }
+
     // MARK: A2.5 once per widget and trigger
 
     /// A2.5: a tap wrapped in once changes the state one time; a second tap
@@ -474,7 +507,7 @@ private struct PhaseHost<Content: View>: View {
 /// A view in a real window (UIKit or AppKit), kept on screen until `close`.
 @MainActor
 private final class HostedNode {
-    let model: OrcaPageModel
+    let model: OrcaPageModel?
     let phase = PhaseBox()
     let box = FrameBox()
     #if canImport(UIKit)
@@ -487,7 +520,7 @@ private final class HostedNode {
         self.init(NodeView(id: "n", model: model).record("n"), model: model)
     }
 
-    init<V: View>(_ content: V, model: OrcaPageModel) {
+    init<V: View>(_ content: V, model: OrcaPageModel? = nil) {
         self.model = model
         let root = PhaseHost(phase: phase, box: box, content: content)
         let size = CGRect(x: 0, y: 0, width: 300, height: 300)
@@ -519,12 +552,53 @@ private final class HostedNode {
         pump()
     }
 
+    /// The page of `route` once the view on screen loaded it (five seconds at most).
+    func loaded(_ router: OrcaRouter, _ route: OrcaRoute) throws -> OrcaPageModel {
+        let loader = router.loader(for: route)
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            if case .loaded(let model) = loader.phase { return model }
+            pump(0.05)
+        }
+        throw NSError(domain: "LifecycleTests", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: "page \(route.path) did not load: \(loader.phase)"])
+    }
+
     func close() {
         #if canImport(UIKit)
         window.isHidden = true
         #elseif canImport(AppKit)
         window.orderOut(nil)
         #endif
+    }
+}
+
+/// Every page: one Text of its name whose onAppBackground and
+/// onAppForeground add 1 to the page state of their name.
+private final class AppEventPages: HTTPTransport, @unchecked Sendable {
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        let name = request.url.path.components(separatedBy: "/page/").last ?? ""
+        let triggers = ["onAppBackground", "onAppForeground"]
+        var actions: [String: JSONValue] = [:]
+        for trigger in triggers {
+            actions[trigger] = ["type": "setState", "scope": "page", "key": .string(trigger), "value": [
+                "type": "transform", "input": ["type": "state", "key": .string(trigger), "scope": "page"],
+                "by": [["type": "add", "by": ["type": "static", "value": 1]]],
+            ]]
+        }
+        let page: JSONValue = [
+            "pageId": .string(name), "title": .string(name),
+            "state": .array(triggers.map { ["key": .string($0), "scope": "page", "initial": 0] }),
+            "components": [["id": "n", "type": "Text", "kind": "primitive", "childMode": "none",
+                            "props": ["data": .string(name)], "children": [], "watches": [],
+                            "actions": .object(actions)]],
+        ]
+        return HTTPResponse(status: 200, body: try page.encoded())
+    }
+
+    static var client: OrcaClient {
+        OrcaClient(baseURL: URL(string: "http://stub.invalid")!, appId: "lifecycle",
+                   device: DeviceInfo(osVersion: "test"), transport: AppEventPages())
     }
 }
 

@@ -626,6 +626,9 @@ public class OrcaRouter private constructor(
         // With a config: every route on any tab's stack or over the shell, shown or not.
         val live = if (shell != null) bound.values.mapTo(HashSet()) { it.route.id } else stack.mapTo(HashSet()) { it.id } + root.id
         for (id in loaders.keys - live) loaders.remove(id)?.close()
+        // Without a shell OrcaApp draws one NavHost, which takes every page but the top one out of the
+        // composition; a page it covers still hears the app events. The tab shell keeps every page composed.
+        for ((id, loader) in loaders) (loader.phase as? OrcaPageLoader.Phase.Loaded)?.model?.isCovered = !hasShell && id != top.id
         if (pageDrawerRequest != null && pageDrawerRequest !in live) pageDrawerRequest = null
         val model = (loaders[top.id]?.phase as? OrcaPageLoader.Phase.Loaded)?.model
         if (model != null && model.store.state.app != appState) model.store.commit(model.store.state.copy(app = appState))
