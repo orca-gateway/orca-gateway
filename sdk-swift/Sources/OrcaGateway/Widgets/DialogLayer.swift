@@ -313,6 +313,10 @@ struct RouteDialogLayer: View {
 /// height kept; Flutter's keyboard covers a modal sheet. The layer takes its
 /// whole space from the page's first frame, so its keyboard reader is there
 /// before any sheet opens.
+///
+/// Its space is the page's Overlay, Flutter's nearest one (the Navigator the
+/// sheets go on): the tooltip bubbles of the page are placed in it
+/// (`TooltipOverlayArea`).
 @MainActor
 struct DialogLayer: View {
     let model: OrcaPageModel
@@ -370,6 +374,7 @@ struct DialogLayer: View {
         }
         #endif
         .onReceive(dialogs.objectWillChange) { _ in settled = false }
+        .modifier(TooltipOverlayArea(model: model))
         #if canImport(UIKit)
         // A sheet opened and its panel is drawn: VoiceOver goes into it.
         .onChange(of: dialogs.opens) { _ in OrcaDialogs.post(.screenChanged, nil) }
@@ -475,8 +480,8 @@ struct DialogLayer: View {
 /// changes; 0 when the keyboard is down or beside it. It takes no touch, is
 /// not an accessibility element, and may have no height. Each new
 /// `opens` (a sheet opened) ends editing in its window, so a field below
-/// gives up focus and its keyboard.
-private struct KeyboardOverlap: UIViewRepresentable {
+/// gives up focus and its keyboard; the tooltip layer passes 0 always.
+struct KeyboardOverlap: UIViewRepresentable {
     let opens: Int
     let changed: (CGFloat) -> Void
 

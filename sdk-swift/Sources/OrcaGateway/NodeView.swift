@@ -177,6 +177,7 @@ struct WidgetView: View {
         case "Drawer": DrawerView(node: node, model: model)
         case "BottomSheet": BottomSheetNodeView(node: node, model: model)
         case "SnackBar": SnackBarNodeView(node: node, model: model)
+        case "Tooltip": TooltipNodeView(node: node, model: model)
         // Shown only by openDialog; nothing in place (SB:229-233).
         case "Dialog": DialogNodeView()
         case "BackdropFilter": BackdropFilterView(node: node, model: model)

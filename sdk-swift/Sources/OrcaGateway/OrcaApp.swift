@@ -11,11 +11,16 @@ import SwiftUI
 /// OrcaApp (`RouteDialogLayer`); a page shown on its own draws them over
 /// itself. A page leaving the screen for good (its route no longer on any
 /// stack, or shown on its own) closes them, so no openDialog waits forever.
+/// The tooltip bubbles are OrcaApp's, over everything; a page shown on its
+/// own draws its own over itself and its sheets (`TooltipHostLayer`).
 @MainActor
 public struct OrcaPageView: View {
     @ObservedObject var model: OrcaPageModel
     @Environment(\.orcaDialogsDrawn) private var dialogsDrawn
     @Environment(\.orcaPage) private var page
+    @Environment(\.orcaTooltips) private var appTooltips
+    /// The bubbles of a page shown on its own; unused under OrcaApp.
+    @State private var ownTooltips = OrcaTooltips()
     /// The page's load, request start to render complete in ms, from the
     /// loader that fetched it; nil for a page drawn without one.
     let loadTimeMs: Double?
@@ -49,6 +54,10 @@ public struct OrcaPageView: View {
         .overlay {
             if !dialogsDrawn { DialogLayer(model: model).ignoresSafeArea() }
         }
+        .overlay {
+            if appTooltips == nil { TooltipHostLayer(tooltips: ownTooltips).ignoresSafeArea() }
+        }
+        .environment(\.orcaTooltips, appTooltips ?? ownTooltips)
         .onDisappear {
             // Covered by a push or another tab: its sheets wait for it.
             if let page, page.router.holds(page.route.id) { return }
@@ -776,11 +785,15 @@ struct AppBootContent: View {
 /// a route outside the tabs). Over it lies the drawer layer: the one place a
 /// drawer is drawn (the shell's and each page Scaffold's), so a panel covers
 /// the navigation and tab bars too. The host is not observed here: a drawer
-/// opening redraws the layer, not the pages.
+/// opening redraws the layer, not the pages. Over all of it lie the app's
+/// tooltip bubbles (`TooltipHostLayer`), each placed and clipped in its
+/// page's Overlay (`TooltipOverlayArea`): over the stacks, their sheets and
+/// snackbar bars and the drawer; under tabs, never over the tab bar.
 @MainActor
 private struct RouterRoot: View {
     @ObservedObject var router: OrcaRouter
     @State private var drawers = DrawerHost()
+    @State private var tooltips = OrcaTooltips()
     @OrcaReduceMotion private var reduceMotion
     /// Where a Hero and the page pushed from it meet for the zoom.
     @Namespace private var heroes
@@ -797,7 +810,9 @@ private struct RouterRoot: View {
             .environment(\.orcaDrawerHost, drawers)
             .environment(\.orcaHeroNamespace, heroes)
             DrawerHostLayer(host: drawers)
+            TooltipHostLayer(tooltips: tooltips).ignoresSafeArea()
         }
+        .environment(\.orcaTooltips, tooltips)
         // The router decides each push; with reduced motion all are the
         // system's.
         .onAppear { router.reduceMotion = reduceMotion }
