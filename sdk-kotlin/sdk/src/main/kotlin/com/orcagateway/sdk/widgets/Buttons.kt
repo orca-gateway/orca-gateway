@@ -61,7 +61,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
@@ -316,8 +315,12 @@ internal fun Modifier.longPress(key: Any, action: State<() -> Unit>): Modifier =
  * `onLongPress`, then over its whole box, and offers those to
  * accessibility; otherwise it takes none, so the widgets around it get
  * them. A long press takes Flutter's 500 ms ([FlutterGestureTiming]).
- * `constraints` bound the box from outside. `tooltip` is its accessibility
- * label: no tooltip is drawn yet.
+ * `constraints` bound the box from outside. A `tooltip`, unless empty, is
+ * Flutter's Tooltip around it (button_builders.dart:158-159): its
+ * accessibility label, and a hold of 500 ms shows the bubble
+ * ([TooltipBubble]) and fires nothing. With its own `onLongPress` the
+ * button keeps the hold: its recognizer, inside the Tooltip, starts its
+ * timer first and wins the arena (binding.dart:506, recognizer.dart:708).
  * No ripple or press feedback, as Flutter draws none (`splashColor` and
  * `highlightColor` are never read). No Material either, so unlike the
  * other buttons it leaves a DefaultTextStyle above it in force.
@@ -332,7 +335,9 @@ internal fun IconButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier
     val tap = enabled && node.actions["onTap"] != null
     val longPress = enabled && node.actions["onLongPress"] != null
     val fire = rememberUpdatedState<(String) -> Unit> { trigger -> model.fire(trigger, on = node) }
-    val constrained = labelled(node, modifier).sizeIn(
+    val tooltip = node["tooltip"]?.stringValue
+    val tip = rememberTooltip()
+    val constrained = modifier.tooltip(tip, tooltip, armed = !longPress).sizeIn(
         minWidth = Props.length(bounds?.get("minWidth")) ?: Dp.Unspecified,
         minHeight = Props.length(bounds?.get("minHeight")) ?: Dp.Unspecified,
         maxWidth = Props.length(bounds?.get("maxWidth")) ?: Dp.Unspecified,
@@ -362,6 +367,7 @@ internal fun IconButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier
             contentAlignment = if (padding != null) Props.alignment(node["alignment"]) else Alignment.Center,
         ) {
             if (color != null) CompositionLocalProvider(LocalContentColor provides color, content = child) else child()
+            TooltipBubble(tip, tooltip)
         }
     }
 }
@@ -379,10 +385,15 @@ internal fun IconButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier
  * after Flutter's 500 ms ([FlutterGestureTiming]), is never a tap.
  * `splashColor`, `focusColor` and `hoverColor` colour its ripple
  * ([fabOverlay]). Disabled it is drawn unchanged (Flutter's disabled elevation
- * falls back to `elevation`) and is an [InertFab]. `tooltip` is its
- * accessibility label. The Scaffold's `floatingActionButton` slot places
- * it at the bottom end, 16 in, as Flutter's endFloat. A DefaultTextStyle
- * above it stops here: its RawMaterialButton's Material resets it.
+ * falls back to `elevation`) and is an [InertFab]. A `tooltip`, unless
+ * empty, is the Tooltip Material's FAB wraps itself in, enabled or not
+ * (floating_action_button.dart:622-623): its accessibility label, and a
+ * hold shows the bubble ([TooltipBubble]). Inside the wrapper, its long
+ * press starts first and wins, so then a hold fires no `onLongPress`
+ * (TalkBack's long click still does). The Scaffold's
+ * `floatingActionButton` slot places it at the bottom end, 16 in, as
+ * Flutter's endFloat. A DefaultTextStyle above it stops here: its
+ * RawMaterialButton's Material resets it.
  */
 @Composable
 internal fun FloatingActionButtonWidget(node: ResolvedNode, model: OrcaPageModel, modifier: Modifier) {
@@ -390,15 +401,21 @@ internal fun FloatingActionButtonWidget(node: ResolvedNode, model: OrcaPageModel
     val mini = node["mini"]?.boolValue ?: false
     val elevation = Props.length(node["elevation"]) ?: 6.dp
     val longPress = rememberUpdatedState<() -> Unit> { model.fire("onLongPress", on = node) }
-    val labelled = labelled(node, modifier)
-    val content: @Composable () -> Unit = { if (node.childIds.isNotEmpty()) ChildView(node, model) }
+    val tooltip = node["tooltip"]?.stringValue
+    val tip = rememberTooltip()
+    val labelled = modifier.tooltip(tip, tooltip)
+    val content: @Composable () -> Unit = {
+        if (node.childIds.isNotEmpty()) ChildView(node, model)
+        TooltipBubble(tip, tooltip)
+    }
     val interactions = remember { MutableInteractionSource() }
     FlutterGestureTiming {
         WithColorScheme(FlutterLightScheme) {
             val fill = Props.color(node["backgroundColor"]) ?: MaterialTheme.colorScheme.primaryContainer
             val ink = MaterialTheme.colorScheme.onPrimaryContainer
             val shape = if (mini) FloatingActionButtonDefaults.smallShape else FloatingActionButtonDefaults.shape
-            val pressable = labelled.longPress(model, longPress).semantics { onLongClick { longPress.value(); true } }
+            val held = if (tooltip.isNullOrEmpty()) labelled.longPress(model, longPress) else labelled
+            val pressable = held.semantics { onLongClick { longPress.value(); true } }
             val onTap: () -> Unit = { model.fire("onTap", on = node) }
             val raised = FloatingActionButtonDefaults.elevation(defaultElevation = elevation)
             val ripple = fabOverlay(node, ink, interactions) ?: LocalRippleConfiguration.current
@@ -507,10 +524,4 @@ private fun InertFab(
             }
         }
     }
-}
-
-/** [modifier] with the node's `tooltip`, unless empty, as its accessibility label (Flutter's Tooltip semantics). */
-private fun labelled(node: ResolvedNode, modifier: Modifier): Modifier {
-    val tooltip = node["tooltip"]?.stringValue?.takeIf { it.isNotEmpty() } ?: return modifier
-    return modifier.semantics { contentDescription = tooltip }
 }

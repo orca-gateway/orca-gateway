@@ -43,6 +43,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -161,6 +162,10 @@ internal class OrcaDialogs {
  * included; with tabs inside the shell's body, so its tab bar, top bar and
  * snackbar bar stay over it. Null [model]: [content] alone.
  *
+ * With [model] the layer's box is also the area the route's tooltips, in
+ * the page and in its sheets, place their bubbles in ([LocalTooltipOverlay]),
+ * Flutter's nearest Overlay: the route's Navigator, under tabs the tab's.
+ *
  * Each sheet is a black54 barrier over the whole layer and, from its bottom
  * edge (no safe area: useSafeArea false), a white panel with top corners
  * of 24 (clipped), [DialogSheet.heightFactor] of the layer's height and as
@@ -192,12 +197,24 @@ internal class OrcaDialogs {
  */
 @Composable
 internal fun DialogLayer(model: OrcaPageModel?, content: @Composable () -> Unit) {
+    // The route's area for the bubbles of its tooltips, the page's and the sheets' alike. Always provided, so
+    // the content stays put as the model comes and goes; a frame's inner layer (no model) keeps the frame's.
+    val tooltips = remember { TooltipOverlay() }
+    CompositionLocalProvider(LocalTooltipOverlay provides (if (model != null) tooltips else LocalTooltipOverlay.current)) {
+        Layer(model, tooltips, content)
+    }
+}
+
+/** [DialogLayer]'s page and sheets, [tooltips] the layer's area. */
+@Composable
+private fun Layer(model: OrcaPageModel?, tooltips: TooltipOverlay, content: @Composable () -> Unit) {
     val dialogs = model?.dialogs
     val top = dialogs?.top
     val page = remember { FocusRequester() }
     Box(
         Modifier
             .fillMaxSize()
+            .onGloballyPositioned(tooltips::place)
             .then(if (top != null) Modifier.clearAndSetSemantics {} else Modifier)
             .focusRequester(page)
             .focusGroup(),

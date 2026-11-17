@@ -21,10 +21,13 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
@@ -187,6 +190,16 @@ class IconButtonFabTest {
     private fun counts(tap: Int = 0, longPress: Int = 0, outer: Int = 0): Map<String, Int> =
         mapOf("onTap" to tap, "onLongPress" to longPress, "outer" to outer)
 
+    /** The messages of the bubbles on screen while [tag] is held 600 ms; then it is let go. */
+    private fun heldBubbles(tag: String): List<String> {
+        compose.onNodeWithTag(tag).performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(600)
+        val bubbles = compose.onAllNodes(hasAnyAncestor(hasTestTag(TOOLTIP_BUBBLE_TAG)) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Text))
+            .fetchSemanticsNodes().flatMap { node -> node.config[SemanticsProperties.Text].map { it.text } }
+        compose.onNodeWithTag(tag).performTouchInput { up() }
+        return bubbles
+    }
+
     private val click = SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick)
     private val noClick = SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick)
     private val noLongClick = SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick)
@@ -307,9 +320,9 @@ class IconButtonFabTest {
     }
 
     /**
-     * A6.5: `tooltip` is the button's accessibility label (the repo draws no
-     * tooltip yet, step 8); an empty one is none, as Flutter adds no Tooltip
-     * for it.
+     * A6.5: `tooltip` is the button's accessibility label (its Tooltip's
+     * semantics; the bubble a hold shows is A8.3's, below); an empty one is
+     * none, as Flutter adds no Tooltip for it.
      */
     @Test
     fun a6_5_kt_theTooltipIsTheAccessibilityLabel() {
@@ -481,6 +494,83 @@ class IconButtonFabTest {
         assertEquals(DpRect(228.dp, 328.dp, 284.dp, 384.dp), bounds("f"))
         compose.onNodeWithTag("f").performClick()
         assertEquals(counts(tap = 1), fired(model))
+    }
+
+    // A8.3: the `tooltip` is Flutter's Tooltip, its bubble on a hold.
+
+    /**
+     * A8.3: an IconButton's `tooltip` wraps it in Flutter's Tooltip
+     * (button_builders.dart:158-159): held 500 ms it shows the bubble with
+     * the message, and the hold fires nothing, not even onTap at the release
+     * (the Tooltip's long press wins the arena from the button's tap); a tap
+     * still fires onTap. An empty tooltip is no Tooltip: a hold shows
+     * nothing and its release is a tap, as with Flutter's GestureDetector
+     * with only onTap.
+     */
+    @Test
+    fun a8_3_anIconButtonsTooltipShowsTheBubbleOnAHoldThatFiresNothing() {
+        val model = show(
+            start("root", "b", "silent"),
+            iconButton("b", "i1", "tooltip" to "Add", on = listOf("onTap")),
+            iconButton("silent", "i2", "tooltip" to "", on = listOf("onTap")),
+            icon("i1"),
+            icon("i2"),
+        )
+
+        assertEquals(listOf("Add"), heldBubbles("b"))
+        assertEquals(counts(), fired(model))
+        compose.onNodeWithTag("b").performClick()
+        assertEquals(counts(tap = 1), fired(model))
+
+        assertEquals(emptyList(), heldBubbles("silent"))
+        assertEquals(counts(tap = 2), fired(model))
+    }
+
+    /**
+     * A8.3: an IconButton with its own onLongPress keeps the hold: its
+     * GestureDetector, inside the Tooltip, starts its long-press timer first
+     * and wins the arena (binding.dart:506, recognizer.dart:708,
+     * long_press.dart:641-643), so onLongPress fires and no bubble shows. The
+     * tooltip is still its label.
+     */
+    @Test
+    fun a8_3_anIconButtonWithItsOwnOnLongPressKeepsTheHold() {
+        val model = show(
+            start("root", "b"),
+            iconButton("b", "i", "tooltip" to "Add", on = listOf("onTap", "onLongPress")),
+            icon("i"),
+        )
+
+        assertEquals(emptyList(), heldBubbles("b"))
+        assertEquals(counts(longPress = 1), fired(model))
+        compose.onNodeWithTag("b").assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Add")))
+    }
+
+    /**
+     * A8.3: a FAB's `tooltip` is the Tooltip Material's FAB wraps itself in,
+     * enabled or not (floating_action_button.dart:622-623), inside the
+     * builder's GestureDetector (button_builders.dart:219-222): its long
+     * press starts first and wins, so a hold shows the bubble and fires no
+     * onLongPress. TalkBack's long click still fires it; a tap still taps.
+     */
+    @Test
+    fun a8_3_aFabsTooltipShowsTheBubbleAndTheHoldFiresNoOnLongPress() {
+        val both = listOf("onTap", "onLongPress")
+        val model = show(
+            start("root", "f", "off"),
+            fab("f", "i1", "tooltip" to "Compose", on = both),
+            fab("off", "i2", "tooltip" to "Off", "enabled" to false, on = both),
+            icon("i1"),
+            icon("i2"),
+        )
+
+        assertEquals(listOf("Compose"), heldBubbles("f"))
+        assertEquals(counts(), fired(model))
+        compose.onNodeWithTag("f").performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.onNodeWithTag("f").performClick()
+        assertEquals(counts(tap = 1, longPress = 1), fired(model))
+
+        assertEquals(listOf("Off"), heldBubbles("off"))
     }
 
     // A6.7.
