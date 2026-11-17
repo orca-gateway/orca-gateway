@@ -2,3 +2,4 @@
 {"ts":"2026-11-16T21:15:55Z","stage":"09","round":2,"template":null,"text":"group 2 passed under the standing rule (minor/patch: no blocked task, next group by default); group 3 next"}
 {"ts":"2026-11-16T21:49:17Z","stage":"09","round":3,"template":null,"text":"group 3 passed under the standing rule (minor/patch: no blocked task, next group by default); group 4 next"}
 {"ts":"2026-11-16T22:53:55Z","stage":"09","round":4,"template":null,"text":"group 4 passed under the standing rule (minor/patch: no blocked task, next group by default); group 5 next"}
+{"ts":"2026-11-17T00:33:33Z","stage":"09","round":5,"template":null,"text":"group 5 passed under the standing rule (minor/patch: no blocked task, next group by default); rebase onto main, then group 6"}

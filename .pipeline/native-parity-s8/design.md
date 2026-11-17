@@ -65,8 +65,10 @@ Kotlin minSdk 24, Compose BOM 2026.05.01 (material3 1.4.0).
   closes. The Dialog node draws nothing in place. Platform behaviour, covered explicitly (the user's call,
   2026-11-16): Android Back closes the top sheet (as Flutter's route pop); VoiceOver and TalkBack focus moves into the
   panel when it opens and back to where it was when it closes; while open the page below is out of reach of
-  accessibility and the backdrop is one element labelled "Scrim" whose action closes the sheet, the panel a container
-  named "Bottom Sheet" (MUI bottom_sheet.dart:801-803, :1356-1357; material_localizations.dart:1137-1140); a text field
+  accessibility and the backdrop is one element labelled "Scrim" whose action closes the sheet, the panel a modal
+  container named as Flutter names the route: "Dialog" on Android, no name on iOS (MUI bottom_sheet.dart:726-732,
+  :801-805; material_localizations.dart:1122; corrected at S-dialog / K-dialog: "Bottom Sheet" is only the scrim's
+  Android tap hint, :1357); the sheet panel is as wide as its content up to 640 (:417-421); a text field
   in the panel stays above the keyboard (the panel lifts by the keyboard's height: beyond Flutter, whose modal sheet
   lets the keyboard cover it; a known difference in the PR).
 - D6 BottomSheet and the Scaffold slot (A8.2). The widget is Flutter's Container. The slot draws the node at the

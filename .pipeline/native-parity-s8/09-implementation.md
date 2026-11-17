@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 4 of 7 · tasks: 4 green, 0 blocked · the M3 snackbar bar, and the tooltip placement cores
-S-bar / K-bar: Flutter's fixed bar in the root Scaffold, above the tab bar, on titled routes.
-S-tipcore / K-tipcore: where a tooltip bubble goes and its timings (moved up from group 5).
+group 5 of 7 · tasks: 2 green, 0 blocked · openDialog shows Flutter's modal bottom sheet
+Barrier tap, drag and Android Back close it; closeDialog never pops a page; openDialog waits for it.
+VoiceOver and TalkBack land in the panel; the page is out of reach; the keyboard lifts the panel.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-Across a push the bar moves with the page; Flutter's Hero keeps it still (in the PR).
-A fling slides the bar off linearly; Flutter uses a spring (same end: removed at once).
+The sheet's name follows Flutter per platform: "Dialog" on Android, none on iOS (the design said
+"Bottom Sheet": a misread). An open sheet shows live nodes; Flutter keeps the first ones.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: group 5, the dialog sheet with Back, VoiceOver, TalkBack and the keyboard. (default: go)
+2. Next: bring the branch up to main 1b5bbf4, then group 6, the tooltip bubbles. (default: go)
 
 ## Appendix
 
@@ -61,6 +61,40 @@ already ran ahead of the kinds check).
 Changed: both kinds join `kinds`; with no handler they fall to the existing default (no state, no effect, reported to
 DevTools as Flutter's built-in handlers are, AE:180-204); a page handler runs and is awaited (OP:323-374, D5).
 Decided: no explicit switch branch (the default covers it). Not done: README's kind count (S-caps, G7).
+
+### Group 5
+Commits: K-dialog 2db22409, S-dialog ad4eda34 (staged by path). Nothing pushed. Twin review: fit findings on both
+(Swift: the keyboard case red, a covered page dropped from the stack never ended its waiters, the page kept input
+focus, the panel's name; Kotlin: the panel full width, the shell-tree case missing); both reworked once and passed on
+recheck; Swift then took one nit (the Scrim's area leaves out the keyboard lift) and ran the whole iOS scheme.
+Rows widened (logged): S-dialog also owns OrcaRouter.swift (closing dropped pages' sheets).
+
+#### Task S-dialog / K-dialog · the sheet layer
+Files: Swift `Widgets/DialogLayer.swift` (new), `OrcaPageModel.swift`, `OrcaApp.swift`, `Navigation/TabShellView.swift`,
+`Navigation/OrcaRouter.swift`, `DialogTests.swift` (new); Kotlin `widgets/DialogLayer.kt` (new), `OrcaPageModel.kt`,
+`OrcaPageView.kt`, `OrcaApp.kt`, `DialogTest.kt` (new).
+Cases: A8.1: frames at 0.5, 0.4 and 640 (as wide as the content up to 640, centred: bottom_sheet.dart:417-421,
+:618-621; the design said full width), from the bottom edge with no safe area, white, top 24; the barrier black54
+through ease (routes.dart:1869); in 250 / out 200 on legacyDecelerate (bottom_sheet.dart:29-31); a barrier tap and a
+drag past half or a fling over 700 close it (:32-33, :305-319); Back (Kotlin); a Sequential's SetState only after the
+close; closeDialog with none open keeps the page; stacked sheets close one per call; a state change redraws inside;
+the shell tree opens none; a page torn down or dropped while covered resumes every waiter (risk 7); handler order.
+Platform (D5, the user's requirement): VoiceOver focus into the panel on open and back to the opener on close
+(screenChanged / layoutChanged); TalkBack: the page cleared from semantics, the pane titled "Dialog", input focus moved
+in and back (Compose has no public API to move accessibility focus: hand check); the Scrim one element that closes
+(iOS: label "Scrim" and its action, only above the panel; Android: "Scrim" with "Close Bottom Sheet"); the escape
+gesture (iOS); the panel above the keyboard (beyond Flutter). Swift 22 (UI 617 → 625, iOS 22/22 plus the whole
+scheme: UI 810, core 666); Kotlin 21 (sdk 851 → 872). Red first, bar a few pins named in the digests (none-open, shell tree).
+Decided (Flutter over the brief): closeDialog registered before the plugin host so a host's replaces the built-in,
+openDialog after it so the page's beats a host's (action_executor.dart:151-156, :896; orca_page.dart:318-323); the
+pane name per platform (bottom_sheet.dart:726-732; "Bottom Sheet" is only the scrim's Android hint, :1357); under tabs
+the shell's snackbar paints over the sheet, a page Scaffold's under it (scaffold.dart:3197 vs :3276; orca_shell.dart
+:114-117), so Swift moved the shell bar into TabStackLayers.
+Known differences (in the PR): the sheet shows the page's live nodes (Flutter keeps the subtree from open time); iOS
+does not give input focus back on close; a tab's drawer menu bar is covered on iOS. Follow-up: Swift copies Curves'
+private cubic solver for legacyDecelerate.
+Hand checks: VoiceOver and TalkBack landing in the panel and returning, the escape gesture, a real tap, drag, fling and
+Back, the edge swipe off on iOS, the lift over a real keyboard with a text field in the sheet.
 
 ### Group 4
 Commits: S-tipcore 82ce5acf, K-tipcore 9469a5ed, S-bar 80b2d16e, K-bar 5fdc17b9 (staged by path). Nothing pushed.
@@ -189,6 +223,11 @@ caps are S-caps / K-caps (G7); a snackbar over the slot is S-bar / K-bar (G4).
 Nits left as is: Swift's line keeping a DTS italic has no case of its own (Kotlin pins italic); Kotlin's touch box
 covers the cut corners (16 on the sheet, 4 on the bar) where Flutter's BoxDecoration.hitTest lets them through; a
 label wider than the whole bar is ellipsised on Kotlin, overflows on Swift and Flutter.
+
+### Test run (group 5, both tasks' final files)
+engine `bun test` 842 pass · Flutter 547 pass, analyze clean · `swift test` UI 625, core 666 · the whole iOS scheme UI
+810, core 666, no state-during-update warning · Kotlin `./gradlew cleanTest :sdk:cleanTestDebugUnitTest build
+--no-build-cache` core 683, sdk 872, lint clean.
 
 ### Test run (group 4, all four tasks' final files)
 engine `bun test` 842 pass · Flutter 547 pass, analyze clean · `swift test` UI 617, core 666 · iOS scheme on
