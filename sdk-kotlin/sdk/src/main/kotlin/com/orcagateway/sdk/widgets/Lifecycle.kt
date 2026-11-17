@@ -36,7 +36,10 @@ private val LIFECYCLE_TRIGGERS = setOf(
  * - onAppBackground (else onBackground) runs on the app's ON_STOP; the trigger fired is the name that is set.
  * - onAppForeground (else onForeground) runs on an ON_START after an ON_STOP: never on the first start, as Flutter's observer comes after resume.
  * - ON_STOP comes about 700 ms after the last activity stops (ProcessLifecycleOwner's delay, so a rotation is no stop); not worked around.
- * - A page under a pushed one has left the composition and hears no app event (Flutter's covered route still does).
+ * - A page under a pushed one hears them too, as Flutter's covered route, though the NavHost took it out of the
+ *   composition: its observers are held on the page model meanwhile ([OrcaPageModel.isCovered]).
+ * - With several nodes, ON_START reaches them in the order they began observing and ON_STOP the other way round
+ *   (LifecycleRegistry), so the pushed page's onAppBackground runs before the covered one's; Flutter runs both in order.
  */
 @Composable
 internal fun LifecycleTriggers(node: ResolvedNode, model: OrcaPageModel) {
@@ -71,7 +74,7 @@ internal fun LifecycleTriggers(node: ResolvedNode, model: OrcaPageModel) {
             }
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
+        onDispose { model.appObserverLeft { lifecycle.removeObserver(observer) } }
     }
 }
 

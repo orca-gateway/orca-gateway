@@ -310,12 +310,48 @@ public class OrcaPageModel(
     }
 
     /**
-     * Cancel every action still running. The model draws on, but runs
-     * nothing more. Its sheets go, and an openDialog waiting on one returns.
+     * Cancel every action still running, and remove the app lifecycle
+     * observers held for a covered page ([isCovered]). The model draws on,
+     * but runs nothing more. Its sheets go, and an openDialog waiting on one
+     * returns.
      */
     override fun close() {
+        closed = true
         scope.cancel()
         dialogs.closeAll()
+        releaseAppObservers()
+    }
+
+    private var closed = false
+
+    /**
+     * The page is under the top one of a single stack, whose NavHost takes it
+     * out of the composition while its route stays (the router sets it; the
+     * tab shell keeps every page composed, so there it stays false). Flutter's
+     * covered route stays mounted, and its nodes go on hearing the app go to
+     * the background and come back: meanwhile the app lifecycle observer of a
+     * node that leaves the composition is held here ([appObserverLeft]) and
+     * goes on firing, until the page is on top again (its nodes observe anew)
+     * or the model closes.
+     */
+    internal var isCovered: Boolean = false
+        set(value) {
+            field = value
+            if (!value) releaseAppObservers()
+        }
+
+    /** How to remove each app lifecycle observer held while the page is covered. */
+    private val heldAppObservers = ArrayList<() -> Unit>()
+
+    /** A node's app lifecycle observer left the composition: held while the page is covered ([isCovered]), else [remove]d now. */
+    internal fun appObserverLeft(remove: () -> Unit) {
+        if (isCovered && !closed) heldAppObservers += remove else remove()
+    }
+
+    private fun releaseAppObservers() {
+        val held = heldAppObservers.toList()
+        heldAppObservers.clear()
+        for (remove in held) remove()
     }
 
     /**
