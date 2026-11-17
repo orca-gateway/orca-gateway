@@ -3,20 +3,20 @@
 ## Front page
 
 ### In one breath
-group 5 of 7 · tasks: 2 green, 0 blocked · openDialog shows Flutter's modal bottom sheet
-Barrier tap, drag and Android Back close it; closeDialog never pops a page; openDialog waits for it.
-VoiceOver and TalkBack land in the panel; the page is out of reach; the keyboard lifts the panel.
+group 6 of 7 · tasks: 2 green, 0 blocked · Tooltip draws Flutter's bubble on both SDKs
+A 500 ms hold shows it 24 below the child's centre (above it near the bottom); gone 1.5 s later.
+It stays in its page's area: above the tab bar and the keyboard; it never takes a touch.
 
 ### New for you
 nothing new
 
 ### Trade-offs
-The sheet's name follows Flutter per platform: "Dialog" on Android, none on iOS (the design said
-"Bottom Sheet": a misread). An open sheet shows live nodes; Flutter keeps the first ones.
+Flutter puts the bubble in the nearest Overlay, so under tabs it stays above the tab bar; we do the
+same (the brief said one root layer). A child with its own long press runs both: a known difference.
 
 ### Questions for you
 1. Blocked tasks: none. (default: nothing to retry)
-2. Next: bring the branch up to main 1b5bbf4, then group 6, the tooltip bubbles. (default: go)
+2. Next: group 7, the four widgets join both capability vectors and READMEs. (default: go)
 
 ## Appendix
 
@@ -25,13 +25,13 @@ cases and the engine half (D2, D-overlays); a row is ticked in phase-a-tests.md 
 SDKs and the hand checks agree.
 
 ### Group 1
-Commits: F1 2cd6e781, F-pins a9ce895b, S-act 1deaa3d0, K-act 5e2f75bd (staged by path). Nothing pushed. Each reviewed,
+Commits: F1 b7db5c49, F-pins 8909302f, S-act 2235dcf8, K-act 7aa376ab (staged by path). Nothing pushed. Each reviewed,
 fit and quality in one pass; F1 went back once (quality: fixture 52's name had spaces, now "openDialog-closeDialog";
 rechecked: pass).
 
 #### Task F1 · Fixtures 47, 52; heightFactor in schema
 Files: `schema/action.schema.json` · `schema/fixtures/render/47_overlay_widgets.json` (new) ·
-`schema/fixtures/actions/52_open_close_dialog.json` (new) · `engine/test/action-schema-sync.test.ts`. Commit 2cd6e781.
+`schema/fixtures/actions/52_open_close_dialog.json` (new) · `engine/test/action-schema-sync.test.ts`. Commit b7db5c49.
 Cases: A8.1 fx (the schema pin) red first, green; 47 and 52 passed as written (they pin behaviour Flutter has);
 corrupted copies failed the engine and Flutter runners, restored byte-identical. Engine 840/0, Flutter conformance 282,
 whole 547, analyze clean.
@@ -44,7 +44,7 @@ Decided: the closeDialog button sits in the body (the Dialog has one child); 52 
 
 #### Task F-pins · Native fixture pins and runs
 Files: Swift `ModelRoundTripTests.swift`, `ActionFixtureTests.swift`; Kotlin `ModelRoundTripTest.kt`,
-`FixturePathsTest.kt`, `ActionFixtureTest.kt`. Commit a9ce895b.
+`FixturePathsTest.kt`, `ActionFixtureTest.kt`. Commit 8909302f.
 Cases: A8.1-A8.5 fx sw/kt (`testA8_1to5_OverlayWidgetsAndDialogKindsRoundTrip_fixture47` /
 `a8_1to5_overlayWidgetsAndDialogKindsRoundTrip`), A8.1 fx sw/kt (`testA8_1_OpenAndCloseDialogLeaveTheStateAndEmit
 Nothing_fixture52` / `a8_1_openAndCloseDialogLeaveTheStateAndEmitNothing`); red 56≠57, 32≠33, 52 absent; green.
@@ -53,7 +53,7 @@ examples use `custom:noSuchKind` (no handler, not in kinds: the same path closeD
 
 #### Task S-act / K-act · both dialog kinds known
 Files: `ActionExecutor.swift` / `.kt` · `ActionHandlerTest(s)` · both `capabilities.json` · `Generated.swift` / `.kt`
-(one generator run, caps hash 1aaf60d6… on both) · `CapabilitiesTest(s)`. Commits 1deaa3d0, 5e2f75bd.
+(one generator run, caps hash 1aaf60d6… on both) · `CapabilitiesTest(s)`. Commits 2235dcf8, 7aa376ab.
 Cases: A8.1 core, the same four on both (`…AreKnownKinds`, `…WithNoHandlerBothChangeNoStateAndEmitNoEffect`,
 `…ARegisteredHandlerRunsWithTheAction`, `…TheNextActionWaitsForTheOpenDialogHandler`) + Swift's advertised check;
 kinds 26 → 28. Red: known kinds, the DevTools list, the pins; the two handler cases passed before (a registered handler
@@ -62,8 +62,51 @@ Changed: both kinds join `kinds`; with no handler they fall to the existing defa
 DevTools as Flutter's built-in handlers are, AE:180-204); a page handler runs and is awaited (OP:323-374, D5).
 Decided: no explicit switch branch (the default covers it). Not done: README's kind count (S-caps, G7).
 
+### Group 6
+Commits: K-tip df2f6bd4, S-tip a8f2f751 (staged by path). Nothing pushed. Twin review: both passed quality first time;
+fit went back twice. Round 1: the bubble used the root, so under tabs it could sit over the tab bar (Flutter puts it in
+the nearest Overlay, the tab's navigator: raw_tooltip.dart:965-969); Swift's bubble was hidden from VoiceOver; `.beside`
+missed taps between its children. Round 2: Swift lost the tab's area after a tab switch (defensive fix, the iOS 18.5
+simulator never drops it); Kotlin's sheets sat outside the area and the page's content was rebuilt when the model came
+in. All closed on recheck; Swift then took the sheet-under-tabs twin case Kotlin had.
+Rows widened (logged): both also own their DialogLayer file (each page's area is the dialog layer's).
+
+#### Task S-tip / K-tip · the Tooltip bubble, buttons too (q2)
+Files: Swift `Widgets/Tooltip.swift` (new), `Widgets/DialogLayer.swift`, `NodeView.swift`, `Widgets/Buttons.swift`,
+`OrcaApp.swift`, `TooltipTests.swift` (new); Kotlin `widgets/Tooltip.kt` (new), `widgets/DialogLayer.kt`,
+`widgets/Buttons.kt`, `TooltipTest.kt` (new), `IconButtonFabTest.kt`.
+Cases: A8.3 ui on both: the 500 ms hold with its haptic; held while pressed, gone 1.5 s after release or at another
+touch; fade 150 / 75 on fastOutSlowIn; 24 below the child's centre, above it near the bottom, 10 from a side
+(TooltipPlacement, G4); the keyboard shortening the area; under tabs above the FAB inside the tab's area (and after a
+switch away and back, Swift); a tooltip in a sheet under tabs keeps the tab's area; the look (grey 700 at 0.9, corners
+4, padding 16 x 4, at least 32 high, white bodyMedium 14); an empty message draws the child alone; the bubble takes no
+touch; read by VoiceOver / TalkBack. Buttons (risk 11, Flutter's arena): an IconButton with only onTap shows the bubble
+on a hold and fires nothing; with its own onLongPress that wins; on a FAB the bubble wins (button_builders.dart:219-222,
+floating_action_button.dart:622-623). Swift TooltipTests 19 (iOS-hosted ones in a UIWindow); Kotlin TooltipTest
+16 + IconButtonFabTest 3. Red first, bar pins of behaviour that already held (Kotlin: the empty message, the
+IconButton's own long press; Swift: the tab switch, which the simulator never breaks).
+Changed: Swift: a store per app, a host layer in RouterRoot (and in a page shown on its own), each page's area reported
+by its dialog layer (keyed by page model) and the bubble clipped to it; a window-wide touch watch that cancels and
+delays nothing. Kotlin: Modifier.tooltip and TooltipWidget; the bubble a Popup (not touchable, not focusable, watching
+outside touches) placed in the route's area from LocalTooltipOverlay, which DialogLayer provides around the page and
+its sheets. Both: IconButton and FAB draw the bubble from `tooltip`; the old label-only fallbacks are gone.
+Decided: the nearest Overlay over the brief's single root layer (Flutter, logged); a generic Tooltip over a child with
+its own long press runs both (logged, a known difference); Swift's VoiceOver reads "label, message" (`.combine`), the
+engine's iOS bridge appends the message after a newline (SemanticsObject.mm:583-596).
+Known differences (in the PR): a child's own long press runs with the hold (Flutter: the child's only); Kotlin's bubble
+is not clipped when it fits on neither side; TalkBack gets the message as contentDescription (Compose has no tooltip
+text), so a Text child may be read twice and a button's text replaced; under tabs the bubble's order against the
+shell's snackbar and drawer differs; on macOS the 1.5 s runs from the show; Kotlin's outside touch sees only the first
+finger; a bubble may stay over a pushed page until its timer ends.
+Hand checks: a real 500 ms hold and its haptic on both; a touch on the bubble reaching what is under it; the window
+touch watch leaving taps, scrolls and long presses intact (iOS); what VoiceOver and TalkBack read, also in a sheet; the
+bubble over a real keyboard and status bar.
+Runs: Swift UI 625 → 633, core 666, iOS TooltipTests 19/19 and the whole scheme 828 (round 3); Kotlin sdk 872 → 891,
+core 683, build and lint clean; engine 848 with the one planned red (parity-a-overlays, green after the caps tasks);
+Flutter 554, analyze clean.
+
 ### Group 5
-Commits: K-dialog 2db22409, S-dialog ad4eda34 (staged by path). Nothing pushed. Twin review: fit findings on both
+Commits: K-dialog a7f8c5ec, S-dialog b3d9f6f9 (staged by path). Nothing pushed. Twin review: fit findings on both
 (Swift: the keyboard case red, a covered page dropped from the stack never ended its waiters, the page kept input
 focus, the panel's name; Kotlin: the panel full width, the shell-tree case missing); both reworked once and passed on
 recheck; Swift then took one nit (the Scrim's area leaves out the keyboard lift) and ran the whole iOS scheme.
@@ -97,7 +140,7 @@ Hand checks: VoiceOver and TalkBack landing in the panel and returning, the esca
 Back, the edge swipe off on iOS, the lift over a real keyboard with a text field in the sheet.
 
 ### Group 4
-Commits: S-tipcore 82ce5acf, K-tipcore 9469a5ed, S-bar 80b2d16e, K-bar 5fdc17b9 (staged by path). Nothing pushed.
+Commits: S-tipcore 5d1a2681, K-tipcore ae681483, S-bar 145ab9d6, K-bar f0b94b37 (staged by path). Nothing pushed.
 The tooltip cores moved up from G5 (they need nothing from G4; logged). Rows widened during the group (logged): K-bar
 also owns OrcaPageModel.kt (the queue's reveal and swipe) and OrcaApp.kt (the titled-route bar); S-bar also owns
 SnackbarQueueHostTests.swift (its two interim-bar tests).
@@ -109,7 +152,7 @@ mounted shell drew no bar; now in RouteFrame); final: both pass both lenses.
 
 #### Task S-tipcore / K-tipcore · TooltipPlacement
 Files: Swift `OrcaGatewayCore/Render/TooltipPlacement.swift` + tests; Kotlin `core/.../render/TooltipPlacement.kt` +
-test. Commits 82ce5acf, 9469a5ed.
+test. Commits 5d1a2681, ae681483.
 Cases (six shared names, the same inputs on both): centred on the child; 24 below its centre; above when below does
 not fit (both or neither: below, its top held at H − 10); clamped 10 from the edges; with ≤ 20 spare, centred in the
 overlay; Flutter's timings. Red first on stubs. Swift core 660 → 666; Kotlin core 677 → 683.
@@ -144,7 +187,7 @@ Hand checks: a real swipe and fling, the reveal's smoothness, VoiceOver / TalkBa
 keyboard, landscape edge to edge, real insets.
 
 ### Group 3
-Commits: D2 2acf9405, K-queue ed8ab357, S-queue fd77ece9 (staged by path). Nothing pushed. D2 went back once
+Commits: D2 f3a164e8, K-queue 688d3cd8, S-queue 70845d0a (staged by path). Nothing pushed. D2 went back once
 (the off-target "once" test had lost its two-hit check; restored with a test-only registry entry; rechecked: pass).
 The queues were reviewed as twins: K pass; S went back once (its `toast` was no longer observable; now it publishes
 once per head-item change, as Kotlin's Compose state; rechecked: pass).
@@ -179,7 +222,7 @@ Nits left as is: Kotlin copies the queue's items every busy frame; the twin type
 Moved to S-bar (G4): the Swift shell tree never attaches to the router, so a shell's snackbar goes to its own queue.
 
 ### Group 2
-Commits: S-core 6261ac68, K-core b82f6ca3, S-static 826baa06, K-static 99760366 (staged by path). Nothing pushed. The cores
+Commits: S-core ecb1d216, K-core fe585bf0, S-static 76ce8f39, K-static ae4849ea (staged by path). Nothing pushed. The cores
 were reviewed as twins and went back once (both: a swipe now removes the bar at once, Flutter's Dismissible then
 removeCurrentSnackBar with no leave animation, snack_bar.dart:859-871, :865; Swift: the unknown-id case could not go
 red, strengthened as Kotlin's; rechecked: pass). The statics were reviewed as twins: K pass, S rework; both took
@@ -187,7 +230,7 @@ the review's findings (below); rechecked: both pass on both lenses, three nits l
 
 #### Task S-core / K-core · DialogStack and SnackbarQueue
 Files: `sdk-swift/Sources/OrcaGatewayCore/State/DialogStack.swift`, `SnackbarQueue.swift` + tests; Kotlin
-`core/.../state/DialogStack.kt`, `SnackbarQueue.kt` + tests. Commits 6261ac68, b82f6ca3.
+`core/.../state/DialogStack.kt`, `SnackbarQueue.kt` + tests. Commits ecb1d216, fe585bf0.
 Cases (the same 13 names on both): A8.1 ×6 (`OpenResolvesTheDialogsFirstChildAsTheSheetRoot…`,
 `AnUnknownIdOrNoChildrenOpensNothing`, `HeightFactorDefaultsToHalfAndNaNOrNegativeIsHalf`,
 `ClosePopsTheTopSheetAndNoneOpenIsANoOp`, `ADismissPopsTheTopSheet`, `StackedSheetsCloseOnePerCall`); A8.4 ×7
