@@ -100,12 +100,13 @@ final class MapKitViewTests: XCTestCase {
         ]).decode(PageResponse.self)
     }
 
-    /// The page's GoogleMap node, "main-map", with these actions.
-    func mapNode(_ actions: [String: JSONValue]) -> JSONValue {
+    /// The page's GoogleMap node, "main-map", with these actions, and its
+    /// mapType `kind` in page state unless one is given.
+    func mapNode(_ actions: [String: JSONValue], mapType: JSONValue? = nil) -> JSONValue {
         func state(_ key: String) -> JSONValue { ["type": "state", "scope": "page", "key": .string(key)] }
         return [
             "id": "main-map", "type": "GoogleMap", "kind": "primitive", "childMode": "none",
-            "props": ["latitude": state("lat"), "longitude": -122.4194, "zoom": 12, "mapType": state("kind"),
+            "props": ["latitude": state("lat"), "longitude": -122.4194, "zoom": 12, "mapType": mapType ?? state("kind"),
                       "markers": state("pins")],
             "children": [], "watches": ["kind", "pins", "lat"], "actions": .object(actions),
         ]
@@ -183,6 +184,8 @@ final class MapKitViewTests: XCTestCase {
         XCTAssertEqual(pins.map(\.coordinate.latitude), [37.7749, 37.8044])
         XCTAssertEqual(pins.map(\.coordinate.longitude), [-122.4194, -122.2711])
 
+        // MapKit makes a pin's view as it lays the map out.
+        pump(until: { map.view(for: pins[0]) != nil })
         let pin = try XCTUnwrap(map.view(for: pins[0]), "marker1 is not on screen")
         XCTAssertTrue(pin.canShowCallout, "the title and snippet in a callout")
         XCTAssertNotNil(pin.image, "an invisible pin")
@@ -262,9 +265,12 @@ final class MapKitViewTests: XCTestCase {
         // marker (didSelect), then the tap ends on its pin.
         var pin = try middle(of: "marker1", on: map)
         try touchBegins(on: map, coordinator)
-        map.selectAnnotation(marker, animated: false)
-        coordinator.tapped(at: pin, on: map)
-        pump(until: { screen.page("markerTaps") == 2 }, timeout: 0.5)
+        gesture(on: coordinator) {
+            map.selectAnnotation(marker, animated: false)
+            coordinator.tapped(at: pin, on: map)
+        }
+        // didSelect's, should MapKit call it after selecting.
+        pump(until: { screen.page("markerTaps") != 0 })
         XCTAssertEqual(screen.page("markerTaps"), 1, "a first tap fires onMarkerTap once")
         XCTAssertEqual(screen.page("markerId"), "marker1")
 
@@ -273,8 +279,7 @@ final class MapKitViewTests: XCTestCase {
         pump(until: { screen.page("markerId") == "" })
         pin = try middle(of: "marker1", on: map)
         try touchBegins(on: map, coordinator)
-        coordinator.tapped(at: pin, on: map)
-        pump(until: { screen.page("markerId") == "marker1" })
+        gesture(on: coordinator) { coordinator.tapped(at: pin, on: map) }
         XCTAssertEqual(screen.page("markerId"), "marker1", "a tap on the selected marker fired nothing")
         XCTAssertEqual(screen.page("markerTaps"), 2)
         XCTAssertTrue(map.selectedAnnotations.contains { $0 === marker })
@@ -283,12 +288,12 @@ final class MapKitViewTests: XCTestCase {
         // On its callout (MapKit puts it in the pin's view): Google's info
         // window, whose tap is neither onMarkerTap nor onTap.
         let view = try XCTUnwrap(map.view(for: marker))
+        pump(until: { view.subviews.contains { !$0.isHidden } })
         let callout = try XCTUnwrap(view.subviews.first { !$0.isHidden }, "no callout on the selected marker")
         let onCallout = callout.convert(CGPoint(x: callout.bounds.midX, y: callout.bounds.midY), to: map)
         XCTAssertTrue(map.annotationView(at: onCallout) === view, "the callout is not in the pin's view")
         try touchBegins(on: map, coordinator)
-        coordinator.tapped(at: onCallout, on: map)
-        pump(until: { false }, timeout: 0.3)
+        gesture(on: coordinator) { coordinator.tapped(at: onCallout, on: map) }
         XCTAssertEqual(screen.page("markerTaps"), 2, "a tap on the callout fired onMarkerTap")
         XCTAssertEqual(screen.page("tapLat"), -1, "a tap on the callout fired onTap")
     }
@@ -312,21 +317,19 @@ final class MapKitViewTests: XCTestCase {
         #endif
 
         // On the marker: no onTap.
-        coordinator.tapped(at: try middle(of: "marker1", on: map), on: map)
-        pump(until: { false }, timeout: 0.3)
+        let onMarker = try middle(of: "marker1", on: map)
+        gesture(on: coordinator) { coordinator.tapped(at: onMarker, on: map) }
         XCTAssertEqual(screen.page("tapLat"), -1, "a tap on a marker fired onTap")
 
         let off = CGPoint(x: 30, y: 40)
         let there = map.convert(off, toCoordinateFrom: map)
-        coordinator.tapped(at: off, on: map)
-        pump(until: { screen.page("tapLat") != -1 })
+        gesture(on: coordinator) { coordinator.tapped(at: off, on: map) }
         XCTAssertEqual(screen.page("tapLat")?.doubleValue ?? 0, there.latitude, accuracy: 1e-9)
         XCTAssertEqual(screen.page("tapLng")?.doubleValue ?? 0, there.longitude, accuracy: 1e-9)
 
         let press = CGPoint(x: 200, y: 100)
         let pressed = map.convert(press, toCoordinateFrom: map)
-        coordinator.longPressed(at: press, on: map)
-        pump(until: { screen.page("pressLat") != -1 })
+        gesture(on: coordinator) { coordinator.longPressed(at: press, on: map) }
         XCTAssertEqual(screen.page("pressLat")?.doubleValue ?? 0, pressed.latitude, accuracy: 1e-9)
         XCTAssertEqual(screen.page("pressLng")?.doubleValue ?? 0, pressed.longitude, accuracy: 1e-9)
         XCTAssertEqual(screen.page("markerId"), "", "no marker was tapped")
@@ -336,7 +339,8 @@ final class MapKitViewTests: XCTestCase {
         let screen = Screen(try page())
         defer { screen.hosted.close() }
         let map = try screen.map(self)
-        pump(until: { false }, timeout: 0.5)
+        // Laid out at the initial camera, its pins drawn where it put them.
+        _ = try middle(of: "marker1", on: map)
         XCTAssertEqual(screen.page("camZoom"), -1, "placing the initial camera is not a move")
 
         try screen.run(["type": "moveCamera", "targetId": "main-map", "latitude": 40.7128, "longitude": -74.006,
@@ -353,9 +357,10 @@ final class MapKitViewTests: XCTestCase {
         XCTAssertEqual(screen.page("camZoom")?.doubleValue ?? 0, 14, accuracy: 0.01)
 
         // To the edge of what Google's LatLng takes, without a MapKit
-        // exception: the pole and the whole world.
+        // exception: the pole and the whole world, until the map is over
+        // longitude 200 as LatLng keeps it, -160 (the move has run to its end).
         try screen.run(["type": "moveCamera", "targetId": "main-map", "latitude": 95, "longitude": 200, "zoom": 0])
-        pump(until: { false }, timeout: 0.5)
+        pump(until: { abs(map.region.center.longitude + 160) < 1e-4 })
         XCTAssertTrue(CLLocationCoordinate2DIsValid(map.region.center))
     }
 
@@ -365,12 +370,16 @@ final class MapKitViewTests: XCTestCase {
         defer { screen.hosted.close() }
         let map = try screen.map(self)
 
+        // The new node's map is hybrid too: the map showing it is SwiftUI's
+        // update with the new node, which hands the map its triggers' new
+        // actions as it hands it the props.
         try screen.run(["type": "replaceComponent", "targetId": "main-map", "components": [mapNode([
             "onMarkerTap": ["type": "setState", "scope": "page", "key": "markerId",
                             "value": ["type": "static", "value": "the new action"]],
-        ])]])
-        pump(until: { false }, timeout: 0.3)
+        ], mapType: "hybrid")]])
+        pump(until: { (screen.plugin.maps.surfaces["main-map"] as? MapKitSurface)?.mapType == .hybrid })
         XCTAssertTrue(screen.plugin.maps.surfaces["main-map"] === map, "the node's new actions made a new map")
+        XCTAssertEqual(map.mapType, .hybrid, "the map has not had the new node")
 
         map.selectAnnotation(try annotation(map, "marker1"), animated: false)
         pump(until: { screen.page("markerId") != "" })
@@ -459,18 +468,50 @@ final class MapKitViewTests: XCTestCase {
         return (component(0), component(1), component(2), alpha)
     }
 
-    /// The middle of the marker `id`'s pin, once MapKit has put it there and
-    /// shown it.
+    /// The middle of the marker `id`'s pin, once MapKit has made it, put it
+    /// there and shown it.
     func middle(of id: String, on map: MapKitSurface) throws -> CGPoint {
         let marker = try annotation(map, id)
-        let pin = try XCTUnwrap(map.view(for: marker), "\(id) is not on screen")
         let place = map.convert(marker.coordinate, toPointTo: map)
-        func middle() -> CGPoint { pin.convert(CGPoint(x: pin.bounds.midX, y: pin.bounds.midY), to: map) }
-        pump(until: { !pin.isHidden && hypot(middle().x - place.x, middle().y - place.y) < 1 })
+        func middle(of pin: MKAnnotationView) -> CGPoint {
+            pin.convert(CGPoint(x: pin.bounds.midX, y: pin.bounds.midY), to: map)
+        }
+        pump(until: {
+            guard let pin = map.view(for: marker), !pin.isHidden else { return false }
+            return hypot(middle(of: pin).x - place.x, middle(of: pin).y - place.y) < 1
+        })
+        let pin = try XCTUnwrap(map.view(for: marker), "\(id) is not on screen")
         XCTAssertFalse(pin.isHidden, "the pin is not shown")
-        XCTAssertEqual(middle().x, place.x, accuracy: 1, "the pin is not over its marker")
-        XCTAssertEqual(middle().y, place.y, accuracy: 1)
-        return middle()
+        XCTAssertEqual(middle(of: pin).x, place.x, accuracy: 1, "the pin is not over its marker")
+        XCTAssertEqual(middle(of: pin).y, place.y, accuracy: 1)
+        return middle(of: pin)
+    }
+
+    /// Does `body`, a gesture handed to the map's coordinator, and runs the
+    /// main run loop until the actions of the triggers it fired have run. A
+    /// trigger fires, or does not, as the coordinator takes the gesture; its
+    /// action runs in a task after (model.fire), so what is checked next is
+    /// all the gesture did.
+    func gesture(on coordinator: MapKitView.Coordinator, _ body: () -> Void) {
+        @MainActor final class Fired {
+            var tasks: [Task<Void, Never>] = []
+            var ran = false
+        }
+        let fired = Fired()
+        let fire = coordinator.fire
+        coordinator.fire = { event in
+            let task = fire(event)
+            if let task { fired.tasks.append(task) }
+            return task
+        }
+        body()
+        coordinator.fire = fire
+        Task { [tasks = fired.tasks] in
+            for task in tasks { await task.value }
+            fired.ran = true
+        }
+        pump(until: { fired.ran })
+        XCTAssertTrue(fired.ran, "the fired actions did not run")
     }
 
     /// What UIKit (AppKit) asks the map's tap as a touch (a click) begins;
@@ -495,9 +536,10 @@ final class MapKitViewTests: XCTestCase {
         #endif
     }
 
-    /// Runs the main run loop until `done`, 3 s at most, so SwiftUI draws,
-    /// MapKit lays out and the fired actions run.
-    func pump(until done: () -> Bool, timeout: Double = 3) {
+    /// Runs the main run loop until `done`, so SwiftUI draws, MapKit lays out
+    /// and the fired actions run. 30 s at most: on CI's iOS simulator MapKit
+    /// can hold the main thread for 15 s and more as it loads.
+    func pump(until done: () -> Bool, timeout: Double = 30) {
         let deadline = Date().addingTimeInterval(timeout)
         while !done() && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
     }
