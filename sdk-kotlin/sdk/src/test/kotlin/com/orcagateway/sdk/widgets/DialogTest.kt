@@ -2,6 +2,7 @@ package com.orcagateway.sdk.widgets
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.view.KeyEvent
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
@@ -379,6 +380,36 @@ class DialogTest {
         assertEquals(0, router.stack.size)
     }
 
+    /**
+     * A8.1: with a field in the sheet focused and the keyboard already down
+     * (the IME took the first Back), the next Back closes the sheet, as it
+     * pops Flutter's sheet route whatever has the focus inside it. The Back
+     * comes as the platform sends it once the IME is hidden: a key event
+     * through the activity's views, then the activity's Back. With nothing
+     * in it focused, the same.
+     */
+    @Test
+    fun a8_1_backWithAFieldInTheSheetFocusedClosesTheSheet() {
+        val model = show(sheetField = true)
+        open(model)
+        compose.waitForIdle()
+        val field = SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText)
+        compose.onNode(field).performClick()
+        compose.onNode(field).assertIsFocused()
+        assertTrue(fieldFocused)
+
+        backKey()
+        assertEquals(0, panels(), "one Back closes the sheet")
+        assertEquals(0, model.dialogs.sheets.size)
+
+        // And with nothing in it focused, one Back still closes it.
+        open(model)
+        compose.waitForIdle()
+        assertFalse(fieldFocused)
+        backKey()
+        assertEquals(0, panels(), "one Back closes the sheet")
+    }
+
     // Accessibility, focus and the keyboard (D5).
 
     /**
@@ -636,7 +667,8 @@ class DialogTest {
      * "Open 0.4" and "Then" (openDialog then `after` = true), with [field]
      * a TextField, and the Dialog `d`, whose child is a Column of the page
      * state `note` ("first"), "Change" (`note` = "changed") and "Close"
-     * (closeDialog); with [wide] its child is a SizedBox 2000 wide instead.
+     * (closeDialog), with [sheetField] a TextField under them; with [wide]
+     * its child is a SizedBox 2000 wide instead.
      * With [scaffold] the Container is the body of a Scaffold with an AppBar
      * titled "Title".
      */
@@ -646,6 +678,7 @@ class DialogTest {
         field: Boolean = false,
         scaffold: Boolean = false,
         wide: Boolean = false,
+        sheetField: Boolean = false,
     ): OrcaPageModel {
         val nodes = buildList {
             if (scaffold) {
@@ -673,6 +706,9 @@ class DialogTest {
             if (wide) {
                 add(ComponentNode("d", "Dialog", ComponentNode.Kind.Layout, ComponentNode.ChildMode.Single, children = listOf("dc")))
                 add(sizedBox("dc", width = 2000, height = 10))
+            } else if (sheetField) {
+                addAll(dialog().map { if (it.id == "dc") column("dc", "dt", "change", "close", "sf") else it })
+                add(leaf("sf", "TextField"))
             } else {
                 addAll(dialog())
             }
@@ -727,6 +763,15 @@ class DialogTest {
 
     private fun back() {
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
+    }
+
+    /** Back as a key press, down and up, through the activity: its views first, then its own Back. */
+    private fun backKey() {
+        compose.activityRule.scenario.onActivity {
+            it.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK))
+            it.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK))
+        }
         compose.waitForIdle()
     }
 

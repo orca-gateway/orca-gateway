@@ -97,7 +97,7 @@ internal class OrcaSheet(val sheet: DialogSheet) {
     /** Where the panel's top was last placed in the sheet, in pixels: a drag on the panel is measured in the sheet. */
     var topPx: Int = 0
 
-    /** The panel's focus target. */
+    /** The focus target the sheet takes on open, beside the panel's content (see [Sheet]). */
     val focus: FocusRequester = FocusRequester()
 
     /** How much of the panel shows, 0..1: [value] through [split] and the curve. */
@@ -304,12 +304,15 @@ private fun Sheet(sheet: OrcaSheet, model: OrcaPageModel, dialogs: OrcaDialogs, 
                             Modifier.clearAndSetSemantics {}
                         },
                     )
-                    .focusRequester(sheet.focus)
-                    .focusTarget()
                     .then(if (sheet.leaving) Modifier else Modifier.dragToClose(sheet, fling) { dialogs.dismiss() })
                     .clip(PANEL_SHAPE)
                     .background(Color.White),
             ) {
+                // The focus the sheet takes, a target beside the content and not around it: Compose turns a Back
+                // key nothing claims into FocusDirection.Exit, which focuses the nearest focusable target above
+                // the focused one (FocusTraversal.kt, Exit: findNonDeactivatedParent). Around the content it took
+                // the Back of a focused field in the sheet, and the sheet needed one more; Flutter's route pops.
+                Box(Modifier.focusRequester(sheet.focus).focusTarget())
                 // The BottomSheet's Material sets bodyMedium (material.dart:470-474); a sheet sliding out takes no touch.
                 ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
                     CompositionLocalProvider(LocalPointerBlocked provides sheet.leaving) {
