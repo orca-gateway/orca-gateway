@@ -4,9 +4,9 @@
   "idea": "Native parity step 7 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): rich text, progress and tables on both native SDKs: RichText, SelectableText, DefaultTextStyle, ImageIcon, CircularProgressIndicator, LinearProgressIndicator and Table, drawn as Flutter's builders draw them and advertised in both capability lists. Test cases A7.1-A7.4 in phase-a-tests.md. In sdk-swift and sdk-kotlin, with a render fixture",
   "kind": "feature",
   "created_at": "2026-11-16T15:36:29Z",
-  "updated_at": "2026-11-16T19:32:34Z",
+  "updated_at": "2026-11-16T19:56:56Z",
   "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
-  "current": "10",
+  "current": "16",
   "stages": {
     "01": {
       "status": "skipped",
@@ -51,27 +51,38 @@
       "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 groups 4-7's two questions are minor (no blocked task; next is ticking A7.1-A7.4 and stage 10, the step 7 PR stacked on PR #50, the user merges), defaults"
     },
     "10": {
-      "status": "in_review",
+      "status": "approved",
       "rounds": 2,
-      "card": "cards/10-r2.md"
+      "card": "cards/10-r2.md",
+      "approved_at": "2026-11-16T19:56:42Z",
+      "approved_with": "standing rule (2026-11-11): Q2 minor, default; Q1 answered by the user's own action: PR #52 merged by amrebada 2026-11-16T19:54:29Z (merge 4a7f389b, head 0ebffbeb), 14 of 15 checks green, the map plugin's iOS-simulator check still queued at the merge"
     },
     "11": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "skipped by default (config.json)"
     },
     "12": {
-      "status": "pending"
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/12-r1.md",
+      "approved_at": "2026-11-16T19:56:56Z",
+      "approved_with": "standing rule (2026-11-11): gate 12's one question is minor (13-16 skipped, no deploy target), default; PR #52 merged with 14 of 15 checks green (the map plugin's iOS run queued, its macOS tests green locally); main 4a7f389b read once, Engine, Schema and SDK Swift green, the rest running"
     },
     "13": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     },
     "14": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     },
     "15": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     },
     "16": {
-      "status": "pending"
+      "status": "skipped",
+      "reason": "no deploy target (config.json deploy stage/prod null, store none); SDKs publish only through scripts/release.sh, run by the user; gate 12 default"
     }
   },
   "gates": {

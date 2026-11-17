@@ -11,6 +11,10 @@ import {
   Always,
   RefetchPage,
   Expr,
+  OpenDialog,
+  CloseDialog,
+  ShowSnackbar,
+  ShowToast,
   type Action,
   type ActionMap,
   type Widget,
@@ -82,6 +86,10 @@ import {
   CircularProgressIndicator,
   LinearProgressIndicator,
   Table,
+  Dialog,
+  BottomSheet,
+  Tooltip,
+  SnackBar,
 } from "../../engine/src/components";
 // ImageIcon is not re-exported by the components index; its class file is.
 import { ImageIcon } from "../../engine/src/components/primitive/image-icon";
@@ -90,10 +98,10 @@ import { ImageIcon } from "../../engine/src/components/primitive/image-icon";
 // step, each the "torture" page for the props that step brings to Swift and
 // Kotlin, so the same page can be compared on Flutter, iOS and Android.
 // Pages: polish (step 1), lifecycle (step 2), layout and layout-safe (step 3),
-// effects (step 4), lists (step 5), forms (step 6), rich (step 7). Later steps
-// add overlays: one page constant each, one entry in `routes`. Images come from
-// picsum.photos; offline an Image draws "!" in its box and an ImageIcon its
-// empty box. Only widgets all three SDKs draw.
+// effects (step 4), lists (step 5), forms (step 6), rich (step 7), overlays
+// (step 8). Later steps add one page constant each, one entry in `routes`.
+// Images come from picsum.photos; offline an Image draws "!" in its box and an
+// ImageIcon its empty box. Only widgets all three SDKs draw.
 
 const red = "#E53935";
 const blue = "#1E88E5";
@@ -1823,6 +1831,198 @@ const richPage = PageDefinition.create({
     }),
 });
 
+// ── Step 8 · overlays: Dialog with openDialog and closeDialog, BottomSheet and
+//    the Scaffold bottomSheet slot, Tooltip, the showSnackbar queue and the
+//    SnackBar widget (A8.1-A8.5) ───────────────────────────────────────────────
+
+/** The key of the overlays page's Dialog: openDialog names it. */
+const overlaysDialog = "overlays-dialog";
+
+/**
+ * A8.1: drawn as nothing in place; openDialog shows its child as a modal bottom
+ * sheet. Kept compact (about 160 high: padding 24, the Text, two 48 rows, two
+ * gaps) so it fits a 0.3 sheet on a 740-high screen without overflow.
+ */
+function overlaysDialogNode(): Widget {
+  return Dialog.new({
+    child: Padding.new({
+      padding: EdgeInsets.symmetric({ horizontal: 16, vertical: 12 }),
+      child: Column.new({
+        crossAxisAlignment: "stretch",
+        gap: 8,
+        children: [
+          Text.new({
+            data: V.transform(V.pageState("note"), [TV.template("In the sheet: note {{value}}")]),
+            style: { fontSize: 16 },
+          }),
+          Row.new({
+            gap: 8,
+            children: [
+              ElevatedButton.new({ child: Text.new({ data: "note + 1" }), actions: { onTap: bump("note") } }),
+              TextButton.new({ child: Text.new({ data: "Close (closeDialog)" }), actions: { onTap: CloseDialog() } }),
+            ],
+          }),
+          TextField.new({ decoration: { hintText: "Type here: the keyboard check" } }),
+        ],
+      }),
+    }),
+  }).withKey(overlaysDialog);
+}
+
+const overlaysPage = PageDefinition.create({
+  id: "overlays",
+  title: "Overlays",
+  state: [
+    { key: "note", scope: "page", initial: 0 },
+    { key: "closes", scope: "page", initial: 0 },
+    { key: "fabTaps", scope: "page", initial: 0 },
+    { key: "iconTaps", scope: "page", initial: 0 },
+    { key: "undoTaps", scope: "page", initial: 0 },
+  ],
+  render: () =>
+    Scaffold.new({
+      appBar: AppBar.new({ title: Text.new({ data: "Overlays (step 8)" }) }),
+      floatingActionButton: FloatingActionButton.new({
+        child: Icon.new({ name: "add" }),
+        actions: { onTap: bump("fabTaps") },
+      }),
+      // A8.2 (the slot over the FAB) and A8.3 (a Tooltip at the screen's bottom edge).
+      bottomSheet: BottomSheet.new({
+        backgroundColor: "#FFF3E0",
+        child: Row.new({
+          children: [
+            Expanded.new({ child: caption("A8.2 The Scaffold's bottomSheet slot: the FAB centred on its top edge") }),
+            SizedBox.new({ width: 8 }),
+            Tooltip.new({
+              message: "A8.3 at the bottom edge: the bubble opens above",
+              child: Text.new({ data: "Hold me", style: { fontWeight: "bold" } }),
+            }),
+          ],
+        }),
+      }),
+      body: SingleChildScrollView.new({
+        child: Padding.new({
+          padding: EdgeInsets.all(16),
+          child: Column.new({
+            crossAxisAlignment: "start",
+            children: [
+              section(
+                "A8.1 Dialog: openDialog shows it as a modal bottom sheet, closeDialog closes the sheet only",
+                caption("The Dialog draws nothing here. Open it at 0.5 of the page (no heightFactor) or at 0.3; close it with its button, a tap on the dim barrier, a drag down, or Back on Android. The tab bar, if any, stays uncovered"),
+                overlaysDialogNode(),
+                SizedBox.new({ height: 4 }),
+                shows("On the page: note", "note"),
+                SizedBox.new({ height: 8 }),
+                Column.new({
+                  crossAxisAlignment: "start",
+                  gap: 8,
+                  children: [
+                    ElevatedButton.new({
+                      child: Text.new({ data: "Open (0.5, the default)" }),
+                      actions: { onTap: OpenDialog(overlaysDialog) },
+                    }),
+                    OutlinedButton.new({
+                      child: Text.new({ data: "Open at 0.3" }),
+                      actions: { onTap: OpenDialog(overlaysDialog, 0.3) },
+                    }),
+                  ],
+                }),
+                SizedBox.new({ height: 12 }),
+                caption("Sequential openDialog then SetState: the count goes up only once the sheet has closed (openDialog waits for the close)"),
+                SizedBox.new({ height: 4 }),
+                shows("Closed after the wait", "closes"),
+                SizedBox.new({ height: 8 }),
+                ElevatedButton.new({
+                  child: Text.new({ data: "Open, then count the close" }),
+                  actions: { onTap: Sequential(OpenDialog(overlaysDialog), bump("closes")) },
+                }),
+              ),
+              section(
+                "A8.2 BottomSheet: inline, and in the Scaffold's bottomSheet slot over the FAB",
+                caption("Inline on a grey box: a white panel, top corners 16, padding 16. The slot sheet is the pale orange bar at the bottom of the screen, the + FAB centred on its top edge; the FAB still takes taps"),
+                SizedBox.new({ height: 4 }),
+                fullWidth(
+                  Container.new({
+                    color: pale,
+                    padding: EdgeInsets.only({ top: 16 }),
+                    child: BottomSheet.new({ child: Text.new({ data: "An inline BottomSheet" }) }),
+                  }),
+                ),
+                SizedBox.new({ height: 8 }),
+                shows("FAB taps", "fabTaps"),
+              ),
+              section(
+                "A8.3 Tooltip: hold to show the bubble",
+                caption("Long press: a haptic, then the bubble below the target, held while pressed and gone 1.5 s after release. The one in the pale orange slot at the screen's bottom edge opens above its text. The IconButton's tooltip shows the same bubble; a tap fires its onTap only"),
+                SizedBox.new({ height: 4 }),
+                Tooltip.new({
+                  message: "A tooltip on a Text",
+                  child: Text.new({ data: "Hold this text", style: { fontSize: 16, color: blue } }),
+                }),
+                SizedBox.new({ height: 8 }),
+                Row.new({
+                  gap: 8,
+                  children: [
+                    IconButton.new({
+                      child: Icon.new({ name: "share" }),
+                      tooltip: "Share (the IconButton's tooltip)",
+                      actions: { onTap: bump("iconTaps") },
+                    }),
+                    shows("IconButton taps", "iconTaps"),
+                  ],
+                }),
+              ),
+              section(
+                "A8.4 showSnackbar: one bar at a time, in order, kept across a push",
+                caption("Two in a row: the second shows when the first leaves (4 s each). Then a push: the bar stays over the pushed page. Snackbar, toast, snackbar: the toast (2 s) waits its turn between the two bars"),
+                SizedBox.new({ height: 4 }),
+                Column.new({
+                  crossAxisAlignment: "start",
+                  gap: 8,
+                  children: [
+                    ElevatedButton.new({
+                      child: Text.new({ data: "Two snackbars in a row" }),
+                      actions: { onTap: Sequential(ShowSnackbar("Snackbar 1 of 2"), ShowSnackbar("Snackbar 2 of 2")) },
+                    }),
+                    ElevatedButton.new({
+                      child: Text.new({ data: "Snackbar, then push a page" }),
+                      actions: { onTap: Sequential(ShowSnackbar("Shown before the push"), Navigate("polish-pushed")) },
+                    }),
+                    ElevatedButton.new({
+                      child: Text.new({ data: "Snackbar, toast, snackbar" }),
+                      actions: {
+                        onTap: Sequential(
+                          ShowSnackbar("Snackbar 1 of 3"),
+                          ShowToast("Toast 2 of 3"),
+                          ShowSnackbar("Snackbar 3 of 3"),
+                        ),
+                      },
+                    }),
+                  ],
+                }),
+              ),
+              section(
+                "A8.5 SnackBar widget: a static bar in place, its action label counts taps",
+                caption("A dark bar, corners 4: the content on the left, the label on the right. Tap the label: its count goes up (duration is not read)"),
+                SizedBox.new({ height: 4 }),
+                fullWidth(
+                  SnackBar.new({
+                    content: "Message archived",
+                    duration: 3000,
+                    actionLabel: V.transform(V.pageState("undoTaps"), [TV.template("Undo ({{value}})")]),
+                    actions: { onAction: bump("undoTaps") },
+                  }),
+                ),
+              ),
+              // Room to scroll the last section clear of the slot sheet and the FAB.
+              SizedBox.new({ height: 120 }),
+            ],
+          }),
+        }),
+      }),
+    }),
+});
+
 const parityFlow = Flow.create({
   name: "parity",
   routes: [
@@ -1836,6 +2036,7 @@ const parityFlow = Flow.create({
     { path: "lists", page: listsPage },
     { path: "forms", page: formsPage },
     { path: "rich", page: richPage },
+    { path: "overlays", page: overlaysPage },
   ],
 });
 

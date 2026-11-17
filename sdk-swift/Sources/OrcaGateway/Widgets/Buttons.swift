@@ -356,24 +356,6 @@ struct PressGestures: ViewModifier {
     }
 }
 
-/// `tooltip`, unless empty, as the accessibility label (Flutter adds no
-/// Tooltip for an empty one). iOS has no tooltip, and the SDK draws none
-/// until step 8: on mobile Flutter wraps a tooltipped IconButton or FAB in
-/// a Tooltip whose own long press shows the bubble, so holding a tooltipped
-/// IconButton with only onTap shows the tooltip and fires nothing; here the
-/// tooltip is only the accessibility label.
-private struct TooltipLabel: ViewModifier {
-    let text: String?
-
-    func body(content: Content) -> some View {
-        if let text, !text.isEmpty {
-            content.accessibilityElement(children: .combine).accessibilityLabel(Text(text))
-        } else {
-            content
-        }
-    }
-}
-
 /// Flutter `IconButton` as its builder (`_buildIconButton`,
 /// button_builders.dart:93-163) draws it, not a system button: a
 /// (`size` + 16) square, `size` 24 by default, holding the child (an empty
@@ -389,8 +371,10 @@ private struct TooltipLabel: ViewModifier {
 /// it attaches no gesture, so the views around it get them. A long press
 /// waits Flutter's 500 ms (`PressGestures`). `constraints` bound the box
 /// from outside (Flutter's ConstrainedBox: the box's side clamped into
-/// them). `tooltip` is its accessibility label: iOS has no tooltip, and
-/// until step 8 no Tooltip's long press shows a bubble (`TooltipLabel`). No
+/// them). `tooltip`, unless empty, is Flutter's Tooltip around the button
+/// (button_builders.dart:158-159, `TooltipTrigger`): a hold shows the
+/// bubble unless the button has its own onLongPress, and fires nothing
+/// then; the whole box takes the hold, and VoiceOver reads the tooltip. No
 /// press feedback, as Flutter draws none (`splashColor` and
 /// `highlightColor` are never read). No Material either, so unlike the
 /// other buttons it leaves a DefaultTextStyle above it in force.
@@ -413,15 +397,21 @@ struct IconButtonNodeView: View {
                                        when: enabled && node.actions["onLongPress"] != nil)
     }
 
+    /// Its `tooltip` around it, with its tap and long press.
+    var tooltip: TooltipTrigger {
+        TooltipTrigger(key: OrcaTooltips.Key(model, node.id), message: node["tooltip"]?.stringValue,
+                       press: .button(tap: tap, longPress: longPress, bubbleFirst: false))
+    }
+
     var body: some View {
         let size = Props.number(node["size"]) ?? 24
+        let trigger = tooltip
         placed(child(size).modifier(OptionalForeground(color: Props.color(node["color"]))))
             .frame(width: side(size, "minWidth", "maxWidth"), height: side(size, "minHeight", "maxHeight"))
             .opacity(node["enabled"]?.boolValue ?? true ? 1 : 0.38)
-            .modifier(WholeBox(active: tap != nil || longPress != nil))
-            .modifier(PressGestures(tap: tap, longPress: longPress))
+            .modifier(WholeBox(active: tap != nil || longPress != nil || trigger.shows))
             .accessibilityAddTraits(tap != nil ? .isButton : [])
-            .modifier(TooltipLabel(text: node["tooltip"]?.stringValue))
+            .modifier(trigger)
     }
 
     /// The box's side on one axis: `size` + 16 clamped into `constraints`
@@ -482,8 +472,10 @@ struct IconButtonNodeView: View {
 /// floating_action_button.dart:538-542) and attaches no gesture, so the
 /// views around it get the tap; its fill (a mini's whole target) still
 /// takes the touch from the views behind, as Flutter's Material does.
-/// `tooltip` is its accessibility label (iOS has no tooltip, and until step
-/// 8 no Tooltip's long press shows a bubble, `TooltipLabel`). No ripple and
+/// `tooltip`, unless empty, is the Tooltip MUI's FAB wraps itself in
+/// (floating_action_button.dart:623, `TooltipTrigger`): a hold shows the
+/// bubble, enabled or not, and onLongPress never fires then; VoiceOver
+/// reads the tooltip. No ripple and
 /// no press feedback on iOS: `splashColor`, `focusColor` and `hoverColor`
 /// have no counterpart and are not read; nor are `heroTag` (no Hero) and
 /// `isExtended` (no effect on Flutter's default FAB). The Scaffold's
@@ -506,6 +498,12 @@ struct FloatingActionButtonNodeView: View {
         longPress = PressGestures.fire("onLongPress", on: node, in: model, when: enabled)
     }
 
+    /// Its `tooltip` around it, with its tap and long press.
+    var tooltip: TooltipTrigger {
+        TooltipTrigger(key: OrcaTooltips.Key(model, node.id), message: node["tooltip"]?.stringValue,
+                       press: .button(tap: tap, longPress: longPress, bubbleFirst: true))
+    }
+
     var body: some View {
         let mini = node["mini"]?.boolValue ?? false
         let side: CGFloat = mini ? 40 : 56
@@ -523,9 +521,8 @@ struct FloatingActionButtonNodeView: View {
                             y: elevation / 2)
             }
             .modifier(TapTarget(padded: mini))
-            .modifier(PressGestures(tap: tap, longPress: longPress))
             .accessibilityAddTraits(.isButton)
-            .modifier(TooltipLabel(text: node["tooltip"]?.stringValue))
+            .modifier(tooltip)
     }
 }
 

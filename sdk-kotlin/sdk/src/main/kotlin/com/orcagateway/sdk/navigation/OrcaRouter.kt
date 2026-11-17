@@ -30,6 +30,7 @@ import com.orcagateway.core.state.StoreState
 import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.OrcaPluginHost
+import com.orcagateway.sdk.OrcaSnackbarQueue
 import com.orcagateway.sdk.system.SystemActions
 import java.util.UUID
 
@@ -297,6 +298,14 @@ public class OrcaRouter private constructor(
     /** Called with every effect a page reports, for DevTools and logging. */
     public var onEffect: ((ActionEffect) -> Unit)? = null
 
+    /**
+     * The app's one queue of snackbars and toasts, Flutter's root
+     * ScaffoldMessenger (MaterialApp's): every page attached here shows into
+     * it, and it is kept across navigate, back and a change of tab, so a bar
+     * a page showed stays on the next page with its time still running.
+     */
+    internal val snackbars: OrcaSnackbarQueue = OrcaSnackbarQueue()
+
     /** What OrcaApp's plugins give each page loaded from here; OrcaApp sets it before the first request. */
     internal var plugins: OrcaPluginHost? = null
 
@@ -511,9 +520,11 @@ public class OrcaRouter private constructor(
 
     /**
      * Wire a page that just loaded: its commits keep the shared app scope,
-     * its navigation and system effects come here, its effects are reported.
+     * its navigation and system effects come here, its effects are reported,
+     * and its snackbars and toasts join the app's queue ([snackbars]).
      */
     internal fun attach(model: OrcaPageModel) {
+        model.snackbars = snackbars
         // The page seeded its own app definitions; they are shared from now.
         // The scope may have moved on while the page was fetched (the host
         // or another page wrote): those values stay, and what the page

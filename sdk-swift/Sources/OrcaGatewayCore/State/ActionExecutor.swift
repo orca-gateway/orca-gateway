@@ -40,12 +40,16 @@ public final class ActionExecutor {
     /// `refetchPage` is run by the handler the page model registers; with
     /// none it does nothing and emits no effect, as Flutter's executor awaits
     /// a null `onRefetchPage` (sdk/lib/src/state/action_executor.dart).
+    /// `openDialog` and `closeDialog` the same: the page model's handlers
+    /// show and close the sheet; with none, nothing and no effect, as
+    /// Flutter's awaits a null `onOpenDialog` and its closeDialog has no
+    /// context.
     nonisolated public static let kinds: Set<String> = [
         "setState", "actionGroup", "showSnackbar", "showToast", "conditionalAction",
         "lifecycle", "navigate", "goBack", "switchTab", "openDrawer", "openUrl", "copyToClipboard", "share",
         "serverAction", "addComponent", "updateComponent", "deleteComponent", "replaceComponent",
         "once", "always", "debugLog", "animateForward", "animateReverse", "updateSubPage", "refetchPage",
-        "persistState", "clearState",
+        "persistState", "clearState", "openDialog", "closeDialog",
     ]
 
     public let store: ElmStore

@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "slug": "native-parity-s8",
+  "idea": "Native parity step 8 (plan /Users/amrebada/.claude/plans/native-parity/plan.md, Phase A): dialogs, bottom sheets, tooltips and snackbars on both native SDKs: Dialog, BottomSheet, Tooltip and SnackBar, the openDialog, closeDialog and showSnackbar actions, the Scaffold bottomSheet slot and a snackbar queue, drawn and run as Flutter's builders and action executor do, and advertised in both capability lists. Test cases A8.1-A8.5 in phase-a-tests.md. In sdk-swift and sdk-kotlin, with fixtures where the rows need them",
+  "kind": "feature",
+  "created_at": "2026-11-16T19:36:31Z",
+  "updated_at": "2026-11-17T03:14:42Z",
+  "active_session": "ab7954f0-d0b4-4fcc-9f1e-a3ec6d37e995",
+  "current": "10",
+  "stages": {
+    "01": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 8, cases: phase-a-tests.md rows A8.1-A8.5"
+    },
+    "02": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 8, cases: phase-a-tests.md rows A8.1-A8.5"
+    },
+    "03": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 8, cases: phase-a-tests.md rows A8.1-A8.5"
+    },
+    "04": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 8, cases: phase-a-tests.md rows A8.1-A8.5"
+    },
+    "05": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 8, cases: phase-a-tests.md rows A8.1-A8.5"
+    },
+    "06": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 8, cases: phase-a-tests.md rows A8.1-A8.5"
+    },
+    "07": {
+      "status": "skipped",
+      "reason": "covered by the native parity plan (/Users/amrebada/.claude/plans/native-parity/plan.md, approved by the user 2026-11-15, three phases, one session per phase); stages 01-07 skipped as for S1-S18; design in force: plan step 8, cases: phase-a-tests.md rows A8.1-A8.5"
+    },
+    "08": {
+      "status": "approved",
+      "rounds": 1,
+      "card": "cards/08-r1.md",
+      "approved_at": "2026-11-16T20:14:49Z",
+      "approved_with": "standing rule (2026-11-11): gate 08's four questions are minor (commands as found; one commit per task, one gate per group; hand checks after G7 with VoiceOver and TalkBack; Q4 is the user's own call of 2026-11-16, relayed: \"go with your recommendation\"), defaults"
+    },
+    "09": {
+      "status": "approved",
+      "rounds": 7,
+      "card": "cards/09-r7.md",
+      "approved_at": "2026-11-17T03:07:04Z",
+      "approved_with": "standing rule (2026-11-11): minor and patch questions auto-approved; gate 09 group 7's two questions are minor (no blocked task; next is stage 10, the step 8 PR, then ticking A8.1-A8.5 with its link; the user merges), defaults"
+    },
+    "10": {
+      "status": "in_review",
+      "rounds": 1,
+      "card": "cards/10-r1.md"
+    },
+    "11": {
+      "status": "pending"
+    },
+    "12": {
+      "status": "pending"
+    },
+    "13": {
+      "status": "pending"
+    },
+    "14": {
+      "status": "pending"
+    },
+    "15": {
+      "status": "pending"
+    },
+    "16": {
+      "status": "pending"
+    }
+  },
+  "gates": {
+    "code_unlocked": true
+  }
+}

@@ -60,4 +60,29 @@ describe("action.schema.json ↔ action.ts", () => {
     const missing = [...schemaActionKinds(schema).keys()].filter((n) => !referenced.has(n));
     expect(missing).toEqual([]);
   });
+
+  // Native parity step 8 (A8.1): Flutter, Swift and Kotlin all read the
+  // sheet's `heightFactor` (Flutter orca_page.dart: `heightFactor ?? 0.5`),
+  // so the schema must carry every field the TS interface declares.
+  test("A8.1 fx: OpenDialogAction carries the optional heightFactor number of action.ts", () => {
+    const fields = tsInterfaceFields("OpenDialogAction");
+    expect(fields).toEqual({ type: false, dialogId: false, heightFactor: true });
+    const def = loadSchema().definitions.OpenDialogAction as unknown as {
+      required: string[];
+      properties: Record<string, { type?: string }>;
+    };
+    expect(Object.keys(def.properties).sort()).toEqual(Object.keys(fields).sort());
+    const required = Object.entries(fields).filter(([, optional]) => !optional).map(([name]) => name);
+    expect([...def.required].sort()).toEqual(required.sort());
+    expect(def.properties.heightFactor?.type).toBe("number");
+  });
 });
+
+/** Field name → optional, for `export interface <name> { ... }` in action.ts. */
+function tsInterfaceFields(name: string): Record<string, boolean> {
+  const src = readFileSync(ACTION_TS, "utf8");
+  const body = new RegExp(`export interface ${name} \\{([^}]*)\\}`).exec(src)?.[1] ?? "";
+  const out: Record<string, boolean> = {};
+  for (const m of body.matchAll(/^\s*([A-Za-z][A-Za-z0-9]*)(\??):/gm)) out[m[1]] = m[2] === "?";
+  return out;
+}

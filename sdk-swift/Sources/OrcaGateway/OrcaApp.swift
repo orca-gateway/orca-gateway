@@ -1,13 +1,26 @@
 #if canImport(SwiftUI)
 import SwiftUI
 
-/// One page with its snackbar and toast overlay, and the debug overlay
-/// while DevTools runs with `showOverlay` on. Put it inside a
-/// NavigationStack (OrcaApp does) so a Scaffold's AppBar becomes the
-/// navigation bar.
+/// One page with the toast overlay (the head of its queue, the router's
+/// under OrcaApp, when it is a toast; a snackbar is drawn by the root
+/// Scaffold on screen, `SnackbarSlot`), and the debug overlay while DevTools
+/// runs with `showOverlay` on. Put it inside a NavigationStack (OrcaApp does)
+/// so a Scaffold's AppBar becomes the navigation bar.
+///
+/// The sheets openDialog opens are drawn over the NavigationStack under
+/// OrcaApp (`RouteDialogLayer`); a page shown on its own draws them over
+/// itself. A page leaving the screen for good (its route no longer on any
+/// stack, or shown on its own) closes them, so no openDialog waits forever.
+/// The tooltip bubbles are OrcaApp's, over everything; a page shown on its
+/// own draws its own over itself and its sheets (`TooltipHostLayer`).
 @MainActor
 public struct OrcaPageView: View {
     @ObservedObject var model: OrcaPageModel
+    @Environment(\.orcaDialogsDrawn) private var dialogsDrawn
+    @Environment(\.orcaPage) private var page
+    @Environment(\.orcaTooltips) private var appTooltips
+    /// The bubbles of a page shown on its own; unused under OrcaApp.
+    @State private var ownTooltips = OrcaTooltips()
     /// The page's load, request start to render complete in ms, from the
     /// loader that fetched it; nil for a page drawn without one.
     let loadTimeMs: Double?
@@ -37,36 +50,178 @@ public struct OrcaPageView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear { model.appeared() }
         .overlay(alignment: .bottomTrailing) { debugOverlay }
-        .overlay(alignment: .bottom) { ToastView(model: model) }
-        .animation(.easeInOut(duration: 0.2), value: model.toast)
+        .overlay(alignment: .bottom) { ToastView(snackbars: model.snackbars) }
+        .overlay {
+            if !dialogsDrawn { DialogLayer(model: model).ignoresSafeArea() }
+        }
+        .overlay {
+            if appTooltips == nil { TooltipHostLayer(tooltips: ownTooltips).ignoresSafeArea() }
+        }
+        .environment(\.orcaTooltips, appTooltips ?? ownTooltips)
+        .onDisappear {
+            // Covered by a push or another tab: its sheets wait for it.
+            if let page, page.router.holds(page.route.id) { return }
+            model.dialogs.closeAll()
+        }
     }
 }
 
-/// The snackbar or toast at the bottom; it leaves after its duration.
+/// The head of the queue at the bottom while it is in (entering or
+/// showing) and a toast, as the pill it was before the queue (a known
+/// difference: Flutter's toast is a floating SnackBar). It slides and fades
+/// in, and out as the head starts to leave; the queue times it. A snackbar
+/// head is not drawn here.
 @MainActor
 private struct ToastView: View {
-    @ObservedObject var model: OrcaPageModel
+    @ObservedObject var snackbars: OrcaSnackbars
 
     var body: some View {
-        if let toast = model.toast {
-            let snackbar = toast.style == .snackbar
-            Text(toast.message)
-                .font(.subheadline)
-                .foregroundColor(.white)
-                .multilineTextAlignment(.leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .frame(maxWidth: snackbar ? .infinity : nil, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: snackbar ? 6 : 22)
-                        .fill(Color(white: 0.18)))
-                .padding(16)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .accessibilityIdentifier("orca.toast")
-                .task(id: toast.id) {
-                    try? await Task.sleep(nanoseconds: UInt64(max(0, toast.duration) * 1_000_000_000))
-                    if model.toast?.id == toast.id { model.toast = nil }
-                }
+        let toast = snackbars.shown.flatMap { $0.style == .toast ? $0 : nil }
+        ZStack {
+            if let toast {
+                Text(toast.message)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 22).fill(Color(white: 0.18)))
+                    .padding(16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .accessibilityIdentifier("orca.toast")
+                    // Each item slides in and out on its own, also when
+                    // the head goes from one straight to the next.
+                    .id(toast.id)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: toast?.id)
+    }
+}
+
+/// The app's one queue of snackbars and toasts, D4's `SnackbarQueue` kept
+/// live: Flutter's root ScaffoldMessenger as showSnackbar and showToast use
+/// it (sdk/lib/src/state/action_executor.dart:393-423; material app.dart
+/// :990, scaffold.dart:371-392, :438-449, :661-674). OrcaRouter holds the
+/// app's, so a bar outlives the page that showed it, across navigate, back
+/// and a tab switch; a page with no router holds its own. Pages hand it
+/// their snackbars and toasts in arrival order; views draw its head.
+///
+/// Time is `clock`'s. Each change first brings the queue up to it, and the
+/// queue wakes itself (`sleep`) when its next phase is due, whatever is on
+/// screen: a bar's time runs once it is in, as the messenger's timer does
+/// with no Scaffold drawn. Tests set `clock`, set `sleep` to nil and pass
+/// time in with `tick()`.
+@MainActor
+final class OrcaSnackbars: ObservableObject {
+    @Published private(set) var queue = SnackbarQueue()
+    /// Now, in ms, on the scale of `OrcaPageModel.milliseconds(_:)`.
+    var clock: () -> Double = { OrcaPageModel.milliseconds(Date()) }
+    /// Waits the given ms, until the queue's next phase is due; nil: nothing
+    /// wakes the queue but `tick()`.
+    var sleep: ((Double) async -> Void)? = { ms in
+        try? await Task.sleep(nanoseconds: UInt64(max(ms, 1) * 1_000_000))
+    }
+    /// The clock's reading the queue was last brought up to.
+    private var last: Double?
+    private var wake: Task<Void, Never>?
+    /// Each queued item as an OrcaToast, made once so its id stays, by item
+    /// id.
+    private var toasts: [Int: OrcaToast] = [:]
+
+    /// The head, whatever its phase; nil when the queue is idle.
+    var head: OrcaToast? { queue.current.flatMap { toasts[$0.id] } }
+
+    /// The head while it is in: entering or showing, not leaving.
+    var shown: OrcaToast? { queue.phase == .leaving ? nil : head }
+
+    /// How far the head is in at `clock()`, 0 (out) ... 1 (fully in),
+    /// linear: the queue's `reveal` brought up to now without changing the
+    /// queue, so a bar sampling it each frame moves between the queue's own
+    /// phase changes. 0 when idle, or when the head has gone by now.
+    var reveal: Double {
+        var now = queue
+        if let last { now.advance(by: clock() - last) }
+        return now.current?.id == queue.current?.id ? now.reveal : 0
+    }
+
+    /// What reads a bar's message out as it appears: VoiceOver's
+    /// announcement on iOS, nothing elsewhere. Tests put their own here.
+    static var announcer: (String) -> Void = { message in
+        #if canImport(UIKit) && !os(watchOS)
+        UIAccessibility.post(notification: .announcement, argument: message)
+        #endif
+    }
+    /// The bar last read out.
+    private var announced: UUID?
+
+    /// A bar for `toast` appeared: read its message out once (Flutter's live
+    /// region on the SnackBar, snack_bar.dart:849-851). A pushed page
+    /// showing the same bar, or the bar drawn again, says nothing more.
+    func announce(_ toast: OrcaToast) {
+        guard announced != toast.id else { return }
+        announced = toast.id
+        Self.announcer(toast.message)
+    }
+
+    /// A swipe took `toast` off the screen: if it is still the head it goes
+    /// at once, whatever its phase, with no leave, and the next enters
+    /// (Flutter's Dismissible, then removeCurrentSnackBar, snack_bar.dart
+    /// :859-871, :865). A bar that has gone meanwhile changes nothing.
+    func swipe(_ toast: OrcaToast) {
+        catchUp()
+        if head?.id == toast.id {
+            queue.swipe()
+            prune()
+        }
+        schedule()
+    }
+
+    /// showSnackbar or showToast: the item joins the back of the queue; no
+    /// duration is the kind's (4000 ms, 2000 for a toast).
+    func show(_ kind: SnackbarQueue.Kind, message: String, durationMs: Int?) {
+        catchUp()
+        let item = queue.show(kind, message: message, durationMs: durationMs)
+        toasts[item.id] = OrcaToast(message: message, duration: Double(item.durationMs) / 1000,
+                                    style: kind == .snackbar ? .snackbar : .toast)
+        schedule()
+    }
+
+    /// Bring the queue up to `clock()`, then set the next wake.
+    func tick() {
+        catchUp()
+        schedule()
+    }
+
+    /// The phases due by `clock()` end in turn; a head that has left gives
+    /// way to the next.
+    private func catchUp() {
+        let now = clock()
+        if let last, now > last {
+            var next = queue
+            next.advance(by: now - last)
+            if next != queue {
+                queue = next
+                prune()
+            }
+        }
+        last = now
+    }
+
+    /// Forget the OrcaToast of every item no longer queued.
+    private func prune() {
+        let live = Set(queue.items.map(\.id))
+        toasts = toasts.filter { live.contains($0.key) }
+    }
+
+    /// Wake at the queue's next phase change; none when it is idle.
+    private func schedule() {
+        wake?.cancel()
+        wake = nil
+        guard let sleep, let due = queue.untilNextChangeMs else { return }
+        wake = Task { [weak self] in
+            await sleep(due)
+            guard !Task.isCancelled else { return }
+            self?.tick()
         }
     }
 }
@@ -163,6 +318,8 @@ public final class OrcaPageLoader: ObservableObject {
     private func build(_ page: PageResponse, app: [String: JSONValue], client: OrcaClient) -> OrcaPageModel {
         let model = router?.plugins?.page(page, store: ElmStore(app: app), client: client)
             ?? OrcaPageModel(page: page, store: ElmStore(app: app), client: client)
+        // After the host's handlers, as Flutter's page registers it.
+        model.registerOpenDialog()
         model.onRefetchPage = { [weak self, weak model] in
             guard let self, let model else { return }
             try await self.refetch(model)
@@ -628,11 +785,15 @@ struct AppBootContent: View {
 /// a route outside the tabs). Over it lies the drawer layer: the one place a
 /// drawer is drawn (the shell's and each page Scaffold's), so a panel covers
 /// the navigation and tab bars too. The host is not observed here: a drawer
-/// opening redraws the layer, not the pages.
+/// opening redraws the layer, not the pages. Over all of it lie the app's
+/// tooltip bubbles (`TooltipHostLayer`), each placed and clipped in its
+/// page's Overlay (`TooltipOverlayArea`): over the stacks, their sheets and
+/// snackbar bars and the drawer; under tabs, never over the tab bar.
 @MainActor
 private struct RouterRoot: View {
     @ObservedObject var router: OrcaRouter
     @State private var drawers = DrawerHost()
+    @State private var tooltips = OrcaTooltips()
     @OrcaReduceMotion private var reduceMotion
     /// Where a Hero and the page pushed from it meet for the zoom.
     @Namespace private var heroes
@@ -649,7 +810,9 @@ private struct RouterRoot: View {
             .environment(\.orcaDrawerHost, drawers)
             .environment(\.orcaHeroNamespace, heroes)
             DrawerHostLayer(host: drawers)
+            TooltipHostLayer(tooltips: tooltips).ignoresSafeArea()
         }
+        .environment(\.orcaTooltips, tooltips)
         // The router decides each push; with reduced motion all are the
         // system's.
         .onAppear { router.reduceMotion = reduceMotion }
@@ -660,6 +823,10 @@ private struct RouterRoot: View {
 /// The router's pages as a NavigationStack. The system animates its pushes
 /// and pops, but for a `fade` or `slideUp` route: the router writes the path
 /// with animations off and `RoutePage` animates its content in.
+///
+/// Over it, its navigation bar included, lie the sheets of the page on top
+/// (Flutter's root Navigator: the modal route over the page route, its
+/// AppBar and its Scaffold's snackbar), edge to edge.
 @MainActor
 private struct RouteStack: View {
     @ObservedObject var router: OrcaRouter
@@ -672,6 +839,24 @@ private struct RouteStack: View {
                     RoutePage(router: router, route: route)
                 }
         }
+        .environment(\.orcaDialogsDrawn, true)
+        .overlay {
+            let top = router.top
+            if !top.isNotFound {
+                RouteDialogLayer(loader: router.loader(for: top))
+                    .id(top.id)
+                    .ignoresSafeArea()
+            }
+        }
+    }
+}
+
+extension OrcaRouter {
+    /// The route is on one of the stacks: the single one, a tab's, or over
+    /// the shell.
+    func holds(_ id: OrcaRoute.ID) -> Bool {
+        root.id == id || stack.contains { $0.id == id } || overRoutes.contains { $0.id == id }
+            || tabStacks.contains { $0.contains { $0.id == id } }
     }
 }
 
@@ -750,8 +935,30 @@ struct RoutePage: View {
             .accessibilityIdentifier("orca.notFound")
         } else {
             LoadedRoutePage(route: route, loader: router.loader(for: route))
+                .modifier(TitledRouteSnackbar(snackbars: route.scaffoldTitle == nil ? nil : router.snackbars))
                 .environment(\.orcaPage, OrcaPageContext(router: router, route: route, isStackRoot: isStackRoot))
                 .environment(\.orcaSafeAreaTaken, taken.union(barEdges))
+        }
+    }
+}
+
+/// A titled route (`scaffoldTitle`: a tabbed config's route outside every
+/// tab) is wrapped by Flutter in a root Scaffold of its own, with its page,
+/// spinner or error inside (navigation_handler.dart:111-147, :372;
+/// orca_page.dart:218-247): that Scaffold draws the app's snackbar at the
+/// bottom edge, the inset inside, also over a page with no Scaffold, and a
+/// Scaffold in the page is nested (draws none, its FAB stays). `snackbars`
+/// nil: not a titled route, nothing changes.
+private struct TitledRouteSnackbar: ViewModifier {
+    let snackbars: OrcaSnackbars?
+
+    func body(content: Content) -> some View {
+        if let snackbars {
+            content
+                .environment(\.orcaSnackbarDrawn, true)
+                .overlay { SnackbarOverlay(snackbars: snackbars, reachesBottomEdge: true) }
+        } else {
+            content
         }
     }
 }

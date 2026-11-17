@@ -7,7 +7,7 @@ import XCTest
 final class ModelRoundTripTests: XCTestCase {
     func testAllRenderFixturesRoundTrip() throws {
         let files = try Fixtures.files("render")
-        XCTAssertEqual(files.count, 56, "render fixtures 01-46, 60-69")
+        XCTAssertEqual(files.count, 57, "render fixtures 01-47, 60-69")
         var nodes = 0
         for (name, fixture) in files {
             let expected = fixture["expected"]
@@ -23,6 +23,19 @@ final class ModelRoundTripTests: XCTestCase {
         XCTAssertGreaterThan(nodes, 24)
     }
 
+    /// A8.1-A8.5: render fixture 47 (a keyed Dialog, a BottomSheet in a
+    /// Scaffold slot, a Tooltip, a SnackBar, openDialog and closeDialog)
+    /// decodes into nodes and encodes back equal.
+    func testA8_1to5_OverlayWidgetsAndDialogKindsRoundTrip_fixture47() throws {
+        let expected = try Fixtures.json("schema/fixtures/render/47_overlay_widgets.json")["expected"]
+        let nodes = try decodeModel([ComponentNode].self, from: expected)
+        assertJSONEqual(try jsonOf(nodes), expected, "47")
+        XCTAssertTrue(Set(nodes.map(\.type)).isSuperset(of: ["Scaffold", "Dialog", "BottomSheet", "Tooltip", "SnackBar"]))
+        var kinds = Set<String>()
+        for action in nodes.flatMap({ ($0.actions ?? [:]).values }) { collectKinds(action, into: &kinds) }
+        XCTAssertTrue(kinds.isSuperset(of: ["openDialog", "closeDialog"]), "\(kinds)")
+    }
+
     func testRenderFixtureNodesDecodeTheirFields() throws {
         let fixture = try Fixtures.json("schema/fixtures/render/06_nested_state.json")
         let nodes = try decodeModel([ComponentNode].self, from: fixture["expected"])
@@ -36,7 +49,7 @@ final class ModelRoundTripTests: XCTestCase {
 
     func testAllActionFixturesRoundTrip() throws {
         let files = try Fixtures.files("actions")
-        XCTAssertEqual(files.count, 32, "action fixtures 01-19, 30-35, 45-51")
+        XCTAssertEqual(files.count, 33, "action fixtures 01-19, 30-35, 45-52")
         var kinds = Set<String>()
         for (name, fixture) in files {
             // A fixture runs either `actions` or `steps` [{action, source?, event?}].

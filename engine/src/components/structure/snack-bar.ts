@@ -12,8 +12,6 @@ export interface SnackBarProps {
 
 export class SnackBar extends PrimitiveWidget {
   readonly type = "SnackBar";
-  /** No native iOS counterpart (Epic 23b); SwiftUI degrades it via the caps vector. */
-  static readonly targets = ["flutter", "web", "android"] as const;
   static readonly triggers = ["onAction"] as const;
   private props: Omit<SnackBarProps, "actions">;
 

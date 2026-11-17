@@ -34,6 +34,7 @@ public object GeneratedCapabilities {
         "BlurView",
         "BottomNavItem",
         "BottomNavigationBar",
+        "BottomSheet",
         "Card",
         "Center",
         "Checkbox",
@@ -48,6 +49,7 @@ public object GeneratedCapabilities {
         "CustomScrollView",
         "DecoratedBox",
         "DefaultTextStyle",
+        "Dialog",
         "Divider",
         "Drawer",
         "ElevatedButton",
@@ -96,6 +98,7 @@ public object GeneratedCapabilities {
         "SliverGrid",
         "SliverList",
         "SliverToBoxAdapter",
+        "SnackBar",
         "Spacer",
         "Stack",
         "SubPage",
@@ -105,6 +108,7 @@ public object GeneratedCapabilities {
         "TextButton",
         "TextField",
         "TextFormField",
+        "Tooltip",
         "Transform",
         "UnsupportedWidgetPlaceholder",
         "Video",
@@ -130,6 +134,7 @@ public object GeneratedCapabilities {
         "animateForward",
         "animateReverse",
         "clearState",
+        "closeDialog",
         "conditionalAction",
         "copyToClipboard",
         "debugLog",
@@ -138,6 +143,7 @@ public object GeneratedCapabilities {
         "lifecycle",
         "navigate",
         "once",
+        "openDialog",
         "openDrawer",
         "openUrl",
         "persistState",
@@ -203,5 +209,5 @@ public object GeneratedCapabilities {
     )
 
     /** sha256 of the engine's canonicalizeVector() of the vector above. */
-    public const val capsHash: String = "8d06076b3a65aa6f098af24196f41d44ea385f45978d2e8fc155828e87fe10fc"
+    public const val capsHash: String = "3d9011c0ef8f105ee4699bc6c0bc05522444879ec56b5558ef0d96ff9cd4189f"
 }

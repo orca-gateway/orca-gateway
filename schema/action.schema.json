@@ -179,6 +179,10 @@
         },
         "dialogId": {
           "type": "string"
+        },
+        "heightFactor": {
+          "type": "number",
+          "description": "The sheet's height as a fraction of the available height. Default 0.5."
         }
       }
     },

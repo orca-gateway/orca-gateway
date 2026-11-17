@@ -3489,7 +3489,8 @@
       "targets": [
         "flutter",
         "web",
-        "android"
+        "android",
+        "ios"
       ],
       "triggers": [
         "onAction"
@@ -4040,7 +4041,8 @@
       "targets": [
         "flutter",
         "web",
-        "android"
+        "android",
+        "ios"
       ],
       "triggers": []
     },

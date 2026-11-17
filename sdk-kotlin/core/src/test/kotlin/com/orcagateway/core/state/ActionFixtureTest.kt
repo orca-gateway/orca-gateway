@@ -144,9 +144,9 @@ class ActionFixtureTest {
     private suspend fun runFixture(file: String) = runFixture(file, Fixtures.json("schema/fixtures/actions/$file"))
 
     @Test
-    fun allThirtyTwoActionFixturesPass() = runSuspend {
+    fun allThirtyThreeActionFixturesPass() = runSuspend {
         val files = Fixtures.files("actions")
-        assertEquals(32, files.size)
+        assertEquals(33, files.size)
         for ((name, fx) in files) runFixture(name, fx)
     }
 
@@ -170,6 +170,20 @@ class ActionFixtureTest {
     @Test
     fun a5_6_refetchPageEmitsNothing() = runSuspend { runFixture("48_refetchPage.json") }
 
+    /**
+     * A8.1: fixture 52, openDialog (heightFactor 0.4) then closeDialog with no dialog layer wired: the state stays
+     * and no effect goes out, as Flutter's executor calls a null onOpenDialog and has no context to pop.
+     */
+    @Test
+    fun a8_1_openAndCloseDialogLeaveTheStateAndEmitNothing() = runSuspend {
+        val file = "52_open_close_dialog.json"
+        val fx = Fixtures.json("schema/fixtures/actions/$file")
+        assertEquals(listOf("openDialog", "closeDialog"), fx["actions"].arrayValue.orEmpty().map { it["type"].stringValue })
+        assertEquals(fx["state"], fx["expected"]["state"], "no state change")
+        assertEquals(JsonValue.Array(emptyList()), fx["expected"]["effects"], "no effect")
+        runFixture(file, fx)
+    }
+
     @Test
     fun c14_6_K_persistStateSavesASnapshotInOneStorage() = runSuspend { runFixture("49_persist_state.json") }
 
@@ -180,6 +194,9 @@ class ActionFixtureTest {
     fun c14_6_K_savedEntriesAreRestoredWhenStateIsSetUp() = runSuspend { runFixture("51_restore_saved_state.json") }
 
     // MARK: source and once
+
+    /** A kind no executor implements: a `custom:` action with no handler registered does nothing (fixture 46). */
+    private val unhandled: Action = Action.Custom(obj("type" to "custom:noSuchKind"))
 
     private fun increment(key: String): Action = Action.SetState(
         key,
@@ -242,8 +259,10 @@ class ActionFixtureTest {
     fun implementsLooksInsideOnceAndAlways() {
         assertTrue(ActionExecutor.implements(Action.Once(Action.GoBack)))
         assertTrue(ActionExecutor.implements(Action.Always(Action.DebugLog())))
-        assertFalse(ActionExecutor.implements(Action.Once(Action.CloseDialog)))
-        assertFalse(ActionExecutor.implements(Action.Always(Action.ActionGroup(actions = listOf(Action.CloseDialog)))))
+        // closeDialog until native parity step 8 made it a known kind; a
+        // `custom:` kind no executor lists, as Swift's twin (ActionFixtureTests.swift).
+        assertFalse(ActionExecutor.implements(Action.Once(unhandled)))
+        assertFalse(ActionExecutor.implements(Action.Always(Action.ActionGroup(actions = listOf(unhandled)))))
     }
 
     @Test
@@ -258,10 +277,10 @@ class ActionFixtureTest {
         val seen = ArrayList<ActionEffect>()
         executor.onEffect = { seen.add(it) }
         executor.execute(Action.RefetchPage)
-        executor.execute(Action.CloseDialog)
+        executor.execute(unhandled)
         assertEquals(state, store.state)
         assertEquals(emptyList(), seen)
-        assertFalse(ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.CloseDialog))))
+        assertFalse(ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, unhandled))))
         assertTrue(
             ActionExecutor.implements(Action.ActionGroup(actions = listOf(Action.GoBack, Action.SetState("a", value = j(1))))),
         )

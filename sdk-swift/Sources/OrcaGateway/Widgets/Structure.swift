@@ -19,7 +19,11 @@ import AppKit
 /// menu button for it, as Flutter's AppBar does. The bars take their insets
 /// from the body (Flutter removes them from its MediaQuery padding,
 /// scaffold.dart :3027-3031): a SafeArea in it neither adds them nor lets its
-/// content under the bars. Bottom sheets are not drawn yet.
+/// content under the bars. The `bottomSheet` slot lies over the body's
+/// bottom, above the bottom bars, and lifts the FAB; a root Scaffold (no
+/// Scaffold or tab shell above it draws the snackbar) draws the app's
+/// snackbar there too, over the sheet, and the FAB rides above it
+/// (`ScaffoldBottomLayer`).
 ///
 /// Always light: Flutter's `_buildScaffold`
 /// (sdk/lib/src/builders/structure_builders.dart), like its AppBar, Card,
@@ -32,12 +36,14 @@ struct ScaffoldView: View {
     @Environment(\.orcaDrawerHost) private var drawerHost
     @Environment(\.orcaPage) private var page
     @Environment(\.orcaSafeAreaTaken) private var taken
+    @Environment(\.orcaSnackbarDrawn) private var snackbarDrawn
 
     var body: some View {
         // The appBar slot has no NodeView: this is its build.
         let appBar = node.slots["appBar"].flatMap { model.resolve($0, animationProgress: nil) }
         let drawers = ScaffoldDrawers(node: node, model: model, host: drawerHost,
                                       router: page?.router, route: page?.route.id)
+        let sheet = node.slots["bottomSheet"], fab = node.slots["floatingActionButton"]
         ZStack(alignment: .bottomTrailing) {
             // Painted also without a backgroundColor: the light background,
             // so a dark window never shows behind the light page.
@@ -49,8 +55,9 @@ struct ScaffoldView: View {
             }
             .environment(\.orcaSafeAreaTaken, taken.union(barEdges(appBar: appBar != nil)))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            if let fab = node.slots["floatingActionButton"] {
-                NodeView(id: fab, model: model).padding(16)
+            if sheet != nil || fab != nil || !snackbarDrawn {
+                ScaffoldBottomLayer(sheet: sheet, fab: fab, snackbars: snackbarDrawn ? nil : model.snackbars,
+                                    model: model, reachesBottomEdge: !hasBottomBars)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBars }
@@ -87,6 +94,9 @@ struct ScaffoldView: View {
         // above it (scaffold.dart:3415, material.dart:470-474).
         .environment(\.orcaDefaultTextStyle, nil)
         .environment(\.colorScheme, .light)
+        // A Scaffold in its slots is nested: this one, or one above, draws
+        // the snackbar.
+        .environment(\.orcaSnackbarDrawn, true)
     }
 
     /// The top edge under an appBar, the bottom one above bottom bars.
@@ -118,6 +128,112 @@ struct ScaffoldView: View {
                 }
             }
             .bottomBarBacking(Props.color(node["backgroundColor"]) ?? systemBackground)
+        }
+    }
+}
+
+/// What a Scaffold lays over its body's bottom, in MUI's paint order
+/// (scaffold.dart:3254-3285, :3352-3366): the `bottomSheet` slot, the app's
+/// snackbar (`snackbars`, the root Scaffold's only), the FAB.
+///
+/// The slot is MUI's persistent sheet. Its node is laid on the sheet's
+/// Material: M3's surfaceContainerLow #F7F2FA, top corners 28, elevation 1
+/// with no shadow and no tint, not clipped (bottom_sheet.dart:350-420,
+/// bottom_sheet_defaults_m3.g.dart:12-40), so a BottomSheet node's own
+/// Container covers it. Built fully in (no entrance, scaffold.dart
+/// :2511-2563) and not draggable (`enableDrag` false when persistent, :2690).
+///
+/// The sheet and the bar sit at the content bottom over the body, which
+/// keeps its frame, above the bottom bars (scaffold.dart:1171-1176,
+/// :1240-1258, :1340-1352); with none that is the Scaffold's bottom edge,
+/// under the home indicator, as Flutter takes the bottom padding from both
+/// (scaffold.dart:3257-3263, :3273-3285): the bar holds that inset inside
+/// it (`SnackbarBar`). The bar runs edge to edge, the horizontal safe area
+/// inside it too (the snackbar slot keeps its left and right padding,
+/// :3277-3279). With the keyboard up all of it sits on the keyboard's top
+/// and no bottom inset is held (`BottomLayerReader`).
+@MainActor
+private struct ScaffoldBottomLayer: View {
+    let sheet: String?
+    let fab: String?
+    let snackbars: OrcaSnackbars?
+    let model: OrcaPageModel
+    /// No bottom bars: the sheet and the bar reach the Scaffold's bottom edge.
+    let reachesBottomEdge: Bool
+
+    static let surface = Props.color(hex: "#F7F2FA")
+
+    var body: some View {
+        BottomLayerReader { insets in
+            let bottom = reachesBottomEdge ? insets.bottom : 0
+            ScaffoldBottomLayout(fabMargin: 16 + bottom, barLeading: insets.leading, barTrailing: insets.trailing) {
+                if let sheet {
+                    NodeView(id: sheet, model: model)
+                        .background(CornersShape(radii: CornerRadii(topLeft: 28, topRight: 28)).fill(Self.surface))
+                        .accessibilityElement(children: .contain)
+                        .layoutValue(key: ScaffoldBottomRole.self, value: .sheet)
+                }
+                if let snackbars {
+                    SnackbarSlot(snackbars: snackbars, safeArea: EdgeInsets(
+                        top: 0, leading: insets.leading, bottom: bottom, trailing: insets.trailing))
+                        .layoutValue(key: ScaffoldBottomRole.self, value: .snackbar)
+                }
+                if let fab {
+                    NodeView(id: fab, model: model)
+                        .layoutValue(key: ScaffoldBottomRole.self, value: .fab)
+                }
+            }
+            .ignoresSafeArea(.container, edges: reachesBottomEdge ? .bottom : [])
+        }
+    }
+}
+
+/// Which of `ScaffoldBottomLayer`'s parts a subview is.
+private struct ScaffoldBottomRole: LayoutValueKey {
+    enum Role { case sheet, snackbar, fab }
+    static let defaultValue: Role? = nil
+}
+
+/// MUI `_ScaffoldLayout` for the sheet, the snackbar and the FAB: the sheet
+/// at most 640 wide (M3's constraints), bottom-centred, as tall as it is;
+/// the bar as wide as the Scaffold at the bottom, past the side insets
+/// (`barLeading`, `barTrailing`), as tall as it shows and given its own
+/// height (scaffold.dart:1234-1238, :1340-1352); the FAB (endFloat) 16 in
+/// from the end edge and `fabMargin` above the bottom, or higher: 16 above
+/// the bar, or with its centre on the sheet's top edge, whichever is highest
+/// (floating_action_button_location.dart:528-534, :565-586). SwiftUI mirrors
+/// the placements in right-to-left, where the end edge is the left.
+private struct ScaffoldBottomLayout: Layout {
+    /// The FAB's gap above the bottom edge with no sheet: 16 above the safe area.
+    var fabMargin: CGFloat
+    var barLeading: CGFloat = 0
+    var barTrailing: CGFloat = 0
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var sheetHeight: CGFloat = 0, barHeight: CGFloat = 0
+        for sheet in subviews where sheet[ScaffoldBottomRole.self] == .sheet {
+            let size = sheet.sizeThatFits(ProposedViewSize(width: min(bounds.width, 640), height: bounds.height))
+            sheet.place(at: CGPoint(x: bounds.midX, y: bounds.maxY), anchor: .bottom, proposal: ProposedViewSize(size))
+            sheetHeight = size.height
+        }
+        for bar in subviews where bar[ScaffoldBottomRole.self] == .snackbar {
+            let proposal = ProposedViewSize(width: bounds.width + barLeading + barTrailing, height: nil)
+            barHeight = bar.sizeThatFits(proposal).height
+            bar.place(at: CGPoint(x: bounds.minX - barLeading, y: bounds.maxY), anchor: .bottomLeading,
+                      proposal: proposal)
+        }
+        for fab in subviews where fab[ScaffoldBottomRole.self] == .fab {
+            let fabSize = fab.sizeThatFits(ProposedViewSize(width: max(bounds.width - 32, 0),
+                                                            height: max(bounds.height - 32, 0)))
+            var y = bounds.maxY - fabMargin - fabSize.height
+            if barHeight > 0 { y = min(y, bounds.maxY - barHeight - fabSize.height - 16) }
+            if sheetHeight > 0 { y = min(y, bounds.maxY - sheetHeight - fabSize.height / 2) }
+            fab.place(at: CGPoint(x: bounds.maxX - 16 - fabSize.width, y: y), anchor: .topLeading,
+                      proposal: ProposedViewSize(fabSize))
         }
     }
 }

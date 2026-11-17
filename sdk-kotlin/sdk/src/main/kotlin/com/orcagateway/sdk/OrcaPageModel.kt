@@ -3,6 +3,7 @@ package com.orcagateway.sdk
 import android.util.Log
 import androidx.compose.runtime.RememberObserver
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -26,9 +27,11 @@ import com.orcagateway.core.state.ActionSource
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.OrcaUrlPolicy
 import com.orcagateway.core.state.SavedState
+import com.orcagateway.core.state.SnackbarQueue
 import com.orcagateway.core.subpage.SubPage
 import com.orcagateway.core.subpage.SubPageHost
 import com.orcagateway.core.subpage.SubPageMounts
+import com.orcagateway.sdk.widgets.OrcaDialogs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,12 +40,17 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * A snackbar or toast to show. [OrcaPageView] draws a snackbar in the page's
- * Material 3 `SnackbarHost` and a toast as an Android `Toast`. Two toasts
- * are never equal, even with the same text (identity, as Swift's UUID).
+ * A snackbar or toast in the app's queue ([OrcaPageModel.toast] is the one
+ * at its head), each shown on its turn: a snackbar as Material 3's fixed
+ * bar, drawn by the root Scaffold on screen (the page's, the tab shell's,
+ * a titled route's; nowhere when there is none), a toast as an Android
+ * `Toast`. Two toasts are never equal, even with the same text (identity,
+ * as Swift's UUID).
  */
 public class OrcaToast(
     public val message: String,
@@ -59,8 +67,10 @@ public class OrcaToast(
  * One rendered page: its nodes, its store, and the executor that runs its
  * actions. Views resolve nodes through it and fire triggers into it.
  *
- * Snackbars and toasts are drawn by the page itself ([toast]), and
- * `animateForward` / `animateReverse` run on its own animation controllers.
+ * Snackbars and toasts join one queue ([toast] is its head): the page's
+ * own, or once a router attaches the page the router's, which every page
+ * of the app shares. `animateForward` / `animateReverse` run on the page's
+ * own animation controllers.
  * Navigation and system effects go to [effectHandler] (the host's router
  * sets it), and a server action's structural changes edit the node tree here.
  *
@@ -85,8 +95,51 @@ public class OrcaPageModel(
     public val renderer: PageRenderer = PageRenderer(page, registry)
     public val executor: ActionExecutor = ActionExecutor(store, client)
 
-    /** The snackbar or toast showing now (Compose state). */
-    public var toast: OrcaToast? by mutableStateOf(null)
+    /**
+     * The queue this page's showSnackbar and showToast join: the page's own,
+     * until a router attaches the page and hands it the app's one queue
+     * (Flutter's root ScaffoldMessenger). Compose state.
+     */
+    internal var snackbars: OrcaSnackbarQueue by mutableStateOf(OrcaSnackbarQueue())
+
+    /**
+     * The snackbar or toast at the head of the queue, on screen or coming in
+     * or going; null when the queue is empty. Read-only: the actions fill the
+     * queue and time empties it. Compose state.
+     */
+    public val toast: OrcaToast? get() = snackbars.head
+
+    /**
+     * The sheets openDialog opened on this page, drawn by the layer of its
+     * [OrcaPageView] (or of its titled route's frame). Compose state.
+     */
+    internal val dialogs: OrcaDialogs = OrcaDialogs()
+
+    /**
+     * closeDialog closes the top sheet, none open nothing, never a page
+     * (sdk/lib/src/state/action_executor.dart:894-919). Flutter's is a
+     * built-in, so a host's or a plugin's closeDialog registered after it
+     * replaces it: the loader registers it before the plugins.
+     */
+    internal fun registerCloseDialog() {
+        executor.registerHandler("closeDialog") { _, _ -> dialogs.close() }
+    }
+
+    /**
+     * openDialog opens a sheet of the Dialog `dialogId` and returns once it
+     * closes, so a sequential group's next action waits for that; an id the
+     * page lacks, or a Dialog with no child on it, opens nothing
+     * (sdk/lib/src/widgets/orca_page.dart:323-374). Flutter's page registers
+     * it after the host's custom actions (:318-323), so it beats a custom
+     * one: the loader registers it after the plugins.
+     */
+    internal fun registerOpenDialog() {
+        executor.registerHandler("openDialog") { action, _ ->
+            val dialogId = (action["dialogId"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@registerHandler
+            val heightFactor = (action["heightFactor"] as? JsonPrimitive)?.takeUnless { it.isString }?.doubleOrNull
+            dialogs.open(dialogId, heightFactor, renderer.nodes)?.closed?.await()
+        }
+    }
 
     /**
      * Bumped after every change to the node tree (a server action adding,
@@ -256,9 +309,13 @@ public class OrcaPageModel(
         }
     }
 
-    /** Cancel every action still running. The model draws on, but runs nothing more. */
+    /**
+     * Cancel every action still running. The model draws on, but runs
+     * nothing more. Its sheets go, and an openDialog waiting on one returns.
+     */
     override fun close() {
         scope.cancel()
+        dialogs.closeAll()
     }
 
     /**
@@ -305,10 +362,11 @@ public class OrcaPageModel(
 
     internal fun perform(effect: ActionEffect) {
         when (effect.type) {
-            "showSnackbar", "showToast" -> toast = OrcaToast(
-                message = effect.payload["message"]?.stringValue ?: "",
-                durationMillis = effect.payload["duration"]?.intValue ?: DEFAULT_DURATION_MILLIS,
+            // At the back of the queue, in the order they come: nothing is dropped or replaced.
+            "showSnackbar", "showToast" -> snackbars.show(
                 style = if (effect.type == "showSnackbar") OrcaToast.Style.Snackbar else OrcaToast.Style.Toast,
+                message = effect.payload["message"]?.stringValue ?: "",
+                durationMillis = effect.payload["duration"]?.intValue,
             )
             "animateForward", "animateReverse" ->
                 animate(forward = effect.type == "animateForward", id = effect.payload["animationId"]?.stringValue)
@@ -469,9 +527,6 @@ public class OrcaPageModel(
     }
 
     internal companion object {
-        /** Dart's snackbar default, also used when an effect carries none. */
-        const val DEFAULT_DURATION_MILLIS: Long = 4000
-
         const val NANOS_PER_MILLI: Double = 1_000_000.0
 
         /**
@@ -480,6 +535,95 @@ public class OrcaPageModel(
          * (which knows this instance) runs nothing for it.
          */
         val INERT_ACTION: Action = Action.Unknown(JsonValue.Null)
+    }
+}
+
+/**
+ * One queue of snackbars and toasts, the core's [SnackbarQueue] as Compose
+ * state on frame time: Flutter's root ScaffoldMessenger as showSnackbar and
+ * showToast use it (sdk/lib/src/state/action_executor.dart:393-423). The
+ * router holds the app's one and hands it to every page it attaches, so a
+ * bar outlives the page that showed it; a page with no router has its own.
+ *
+ * Every [OrcaPageView] on screen drives it ([tick] each frame while it
+ * holds something); the time runs from the first frame after a show, and
+ * the frames no page drew (a page loading) are counted at the next one. A
+ * frame ticked twice counts once. Main thread only.
+ */
+internal class OrcaSnackbarQueue {
+    private val queue = SnackbarQueue()
+
+    /** What each queued item is shown as, by item (identity). */
+    private val toasts = HashMap<SnackbarQueue.Item, OrcaToast>()
+
+    /** The last frame time ticked, ms; null while idle (the next show starts the clock). */
+    private var lastFrameMs: Long? = null
+
+    /** The queue holds something: the pages tick it. */
+    private val busy = MutableStateFlow(false)
+
+    /** The last toast handed to Android, so a toast on several pages' screens is shown once. */
+    private var taken: OrcaToast? = null
+
+    /** The item at the head; null when idle. Compose state. */
+    var head: OrcaToast? by mutableStateOf(null)
+        private set
+
+    /** The head's phase; null when idle. Compose state. */
+    var phase: SnackbarQueue.Phase? by mutableStateOf(null)
+        private set
+
+    /** How far the head is in, 0 (out) .. 1 (fully in), linear in time: what its bar is revealed by. Compose state. */
+    var reveal: Double by mutableDoubleStateOf(0.0)
+        private set
+
+    /** At the back of the queue; no [durationMillis] is 4000 ms for a snackbar, 2000 for a toast. */
+    fun show(style: OrcaToast.Style, message: String, durationMillis: Long?) {
+        val kind = if (style == OrcaToast.Style.Snackbar) SnackbarQueue.Kind.Snackbar else SnackbarQueue.Kind.Toast
+        val item = queue.show(kind, message, durationMillis)
+        toasts[item] = OrcaToast(message, item.durationMs, style)
+        changed()
+    }
+
+    /**
+     * A swipe on the bar: the head goes at once, with no leave of its own,
+     * and the next, if any, starts entering (the core's [SnackbarQueue.swipe]).
+     * Left empty, its clock stops, as when the last one leaves in [tick]: the
+     * next show starts it again, so the idle time is not taken as its entry.
+     */
+    fun swipe() {
+        queue.swipe()
+        if (queue.phase == null) lastFrameMs = null
+        changed()
+    }
+
+    /** A frame at [frameMs]: the time since the last one passes. */
+    fun tick(frameMs: Long) {
+        val last = lastFrameMs
+        if (last != null && frameMs > last) queue.advance(frameMs - last)
+        lastFrameMs = if (queue.phase == null) null else maxOf(frameMs, last ?: frameMs)
+        changed()
+    }
+
+    /** Suspends until the queue holds something. */
+    suspend fun awaitWork() {
+        busy.first { it }
+    }
+
+    /** True the first time it is asked for [toast]: the page that shows it as an Android Toast. */
+    fun take(toast: OrcaToast): Boolean {
+        if (taken === toast) return false
+        taken = toast
+        return true
+    }
+
+    private fun changed() {
+        val items = queue.items
+        toasts.keys.retainAll(items.toSet())
+        head = queue.current?.let(toasts::get)
+        phase = queue.phase
+        reveal = queue.reveal
+        busy.value = items.isNotEmpty()
     }
 }
 

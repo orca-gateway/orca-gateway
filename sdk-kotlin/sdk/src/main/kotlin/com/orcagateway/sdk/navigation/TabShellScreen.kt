@@ -64,11 +64,13 @@ import com.orcagateway.core.navigation.TransitionSpec
 import com.orcagateway.core.render.WidgetRegistry
 import com.orcagateway.core.state.ElmStore
 import com.orcagateway.core.state.StoreState
+import com.orcagateway.sdk.LocalOrcaShellSnackbars
 import com.orcagateway.sdk.NodeView
 import com.orcagateway.sdk.OrcaPageLoader
 import com.orcagateway.sdk.OrcaPageModel
 import com.orcagateway.sdk.RoutePage
 import com.orcagateway.sdk.style.IconNames
+import com.orcagateway.sdk.widgets.SnackbarLayer
 import com.orcagateway.sdk.widgets.orcaReduceMotion
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -92,6 +94,12 @@ import java.util.UUID
  *
  * A route over the shell ([OrcaRouter.overRoutes]) takes the whole screen:
  * the bar is gone while one is on top, and the route has its title bar.
+ *
+ * The app's snackbar is drawn here, above the tab bar ([SnackbarLayer]),
+ * not by the tab pages' Scaffolds: Flutter's `OrcaShell` is their root
+ * Scaffold and nests theirs (orca_shell.dart:114-117; scaffold.dart
+ * :258-263). A route over the shell is outside it there: a titled one's
+ * frame draws the bar ([RoutePage]), an untitled one's Scaffolds do.
  *
  * A config with a drawer ([OrcaRouter.hasDrawer]) puts the shell inside a
  * [ShellDrawer], and every tab page, at any depth of its tab, under a top
@@ -137,6 +145,8 @@ private fun ShellScaffold(router: OrcaRouter, modifier: Modifier, drawer: Boolea
         // not pad for them again (Flutter's Scaffold removes them from its body's padding).
         // Over the shell there is no tab bar, so the page pads for the bottom inset itself.
         Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { KeptPages(router) }
+        // Above the tab bar, which takes the safe area; under it, as Material 3 draws its bars last.
+        if (!covered) SnackbarLayer(router.snackbars, padding, onBars = true)
     }
 }
 
@@ -355,7 +365,11 @@ private fun KeptPages(router: OrcaRouter) {
                 loaders[route.id]
             }
             Box(kept) {
-                CompositionLocalProvider(LocalOrcaNavigation provides if (route.id in tabRoots) atRoot else pushed) {
+                CompositionLocalProvider(
+                    LocalOrcaNavigation provides if (route.id in tabRoots) atRoot else pushed,
+                    // A tab page's Scaffolds leave the bar to the shell; a route over it draws its own (or its frame does).
+                    LocalOrcaShellSnackbars provides (route !in over),
+                ) {
                     RoutePage(router, route, loader)
                 }
             }
