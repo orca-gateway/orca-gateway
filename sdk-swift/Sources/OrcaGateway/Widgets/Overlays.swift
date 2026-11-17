@@ -61,8 +61,7 @@ struct SnackBarNodeView: View {
     /// the label is, with or without an `onAction`); nil with no label.
     var labelTap: (() -> Task<Void, Never>?)? {
         guard actionLabel != nil else { return nil }
-        let node = node, model = model
-        return { model.fire("onAction", on: node) }
+        return { [node, model] in model.fire("onAction", on: node) }
     }
 
     var body: some View {

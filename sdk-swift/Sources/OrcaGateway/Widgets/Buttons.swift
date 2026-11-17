@@ -405,13 +405,13 @@ struct IconButtonNodeView: View {
 
     var body: some View {
         let size = Props.number(node["size"]) ?? 24
-        let tooltip = tooltip
+        let trigger = tooltip
         placed(child(size).modifier(OptionalForeground(color: Props.color(node["color"]))))
             .frame(width: side(size, "minWidth", "maxWidth"), height: side(size, "minHeight", "maxHeight"))
             .opacity(node["enabled"]?.boolValue ?? true ? 1 : 0.38)
-            .modifier(WholeBox(active: tap != nil || longPress != nil || tooltip.shows))
+            .modifier(WholeBox(active: tap != nil || longPress != nil || trigger.shows))
             .accessibilityAddTraits(tap != nil ? .isButton : [])
-            .modifier(tooltip)
+            .modifier(trigger)
     }
 
     /// The box's side on one axis: `size` + 16 clamped into `constraints`

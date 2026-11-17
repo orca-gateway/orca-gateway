@@ -469,15 +469,15 @@ final class DialogTests: XCTestCase {
         let restore = SnackBarWidgetTests.automation(true)
         defer { _ = SnackBarWidgetTests.automation(restore) }
         _ = try snapshot(window)
-        let modal = try XCTUnwrap(Self.modal(in: window), "no modal container")
-        let named = Self.objects(in: modal).filter { $0.accessibilityLabel == "Bottom Sheet" }
+        let container = try XCTUnwrap(Self.modal(in: window), "no modal container")
+        let named = Self.objects(in: container).filter { $0.accessibilityLabel == "Bottom Sheet" }
         XCTAssertTrue(named.isEmpty, "the panel is named; Flutter's iOS route is not")
-        XCTAssertNotNil(SnackBarWidgetTests.element(labelled: "Scrim", in: modal), "the Scrim is not in it")
-        XCTAssertNotNil(SnackBarWidgetTests.element(labelled: "inside", in: modal), "the panel's content is not in it")
-        XCTAssertNil(SnackBarWidgetTests.element(labelled: "p0", in: modal), "the page is inside the modal container")
-        XCTAssertFalse(Self.fields(in: window).contains { Self.objects(in: modal).contains($0) },
+        XCTAssertNotNil(SnackBarWidgetTests.element(labelled: "Scrim", in: container), "the Scrim is not in it")
+        XCTAssertNotNil(SnackBarWidgetTests.element(labelled: "inside", in: container), "the panel's content is not in it")
+        XCTAssertNil(SnackBarWidgetTests.element(labelled: "p0", in: container), "the page is inside the modal container")
+        XCTAssertFalse(Self.fields(in: window).contains { Self.objects(in: container).contains($0) },
                        "the page's field is inside the modal container")
-        let order = (modal.accessibilityElements as? [NSObject]) ?? []
+        let order = (container.accessibilityElements as? [NSObject]) ?? []
         if order.count >= 2 {
             XCTAssertNotEqual(order.first?.accessibilityLabel, "Scrim", "the Scrim comes before the panel")
         }
@@ -496,8 +496,8 @@ final class DialogTests: XCTestCase {
         let restore = SnackBarWidgetTests.automation(true)
         defer { _ = SnackBarWidgetTests.automation(restore) }
         _ = try snapshot(window)
-        let modal = try XCTUnwrap(Self.modal(in: window), "no modal container")
-        XCTAssertTrue(modal.accessibilityPerformEscape(), "escape not taken")
+        let container = try XCTUnwrap(Self.modal(in: window), "no modal container")
+        XCTAssertTrue(container.accessibilityPerformEscape(), "escape not taken")
         XCTAssertEqual(page.dialogs.stack.sheets.map(\.heightFactor), [0.5])
     }
 

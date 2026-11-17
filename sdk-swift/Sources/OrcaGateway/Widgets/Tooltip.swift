@@ -431,10 +431,10 @@ final class OrcaTooltips: ObservableObject {
         wake?.cancel()
         wake = nil
         let now = clock()
-        let due = bubbles.flatMap { bubble -> [Double] in
+        let soonest = bubbles.flatMap { bubble -> [Double] in
             [bubble.hideAt, bubble.fade.end > now ? bubble.fade.end : nil].compactMap { $0 }
         }.min()
-        guard let sleep, let due else { return }
+        guard let sleep, let due = soonest else { return }
         wake = Task { [weak self] in
             await sleep(max(due - now, 0))
             guard !Task.isCancelled else { return }

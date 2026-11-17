@@ -129,8 +129,7 @@ private struct LiveSnackbar: View {
         if SnackbarSwipe.dismisses(drag: drag, velocity: velocity, height: height) {
             let left = SnackbarSwipe.movement * Double(max(0, 1 - drag / full))
             withAnimation(.linear(duration: left)) { drag = max(drag, full) }
-            let snackbars = snackbars, toast = toast
-            DispatchQueue.main.asyncAfter(deadline: .now() + left) { snackbars.swipe(toast) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + left) { [snackbars, toast] in snackbars.swipe(toast) }
         } else {
             withAnimation(.linear(duration: SnackbarSwipe.movement * Double(min(drag / full, 1)))) { drag = 0 }
         }

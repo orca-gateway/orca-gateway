@@ -40,10 +40,10 @@ struct SheetMotion: Equatable {
 
     /// The share of the panel's height that shows at `now`.
     func value(at now: Double) -> Double {
-        let controller = controller(at: now)
-        guard let split else { return Self.legacyDecelerate(controller) }
-        if controller <= split { return controller }
-        return split + (1 - split) * Self.legacyDecelerate((controller - split) / (1 - split))
+        let progress = controller(at: now)
+        guard let split else { return Self.legacyDecelerate(progress) }
+        if progress <= split { return progress }
+        return split + (1 - split) * Self.legacyDecelerate((progress - split) / (1 - split))
     }
 
     func isDone(at now: Double) -> Bool { controller(at: now) == to }
@@ -397,10 +397,10 @@ struct DialogLayer: View {
                        lift: CGFloat) -> some View {
         let height = size.height * CGFloat(entry.sheet.heightFactor)
         let dragged = isTop ? drag.map { controller(dragged: $0, height: height) } : nil
-        let controller = dragged ?? entry.motion.controller(at: now)
+        let barrierT = dragged ?? entry.motion.controller(at: now)
         let shown = dragged ?? entry.motion.value(at: now)
         return ZStack(alignment: .bottom) {
-            Color.black.opacity(SheetMotion.barrierOpacity(controller: controller))
+            Color.black.opacity(SheetMotion.barrierOpacity(controller: barrierT))
                 .contentShape(Rectangle())
                 .onTapGesture { dialogs.dismiss() }
                 .accessibilityHidden(true)
@@ -550,8 +550,8 @@ struct KeyboardOverlap: UIViewRepresentable {
             guard overlap != reported else { return }
             reported = overlap
             if now { return changed(overlap) }
-            let changed = changed
-            DispatchQueue.main.async { changed(overlap) }
+            let tell = changed
+            DispatchQueue.main.async { tell(overlap) }
         }
     }
 }

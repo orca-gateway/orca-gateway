@@ -274,13 +274,13 @@ final class SnackbarQueueHostTests: XCTestCase {
 
         pass(125, queue)
         XCTAssertEqual(next.toast?.style, .toast)
-        let toast = try draw(next)
-        let pill = try XCTUnwrap(Self.pill(in: toast), "no toast")
+        let toastPixels = try draw(next)
+        let pill = try XCTUnwrap(Self.pill(in: toastPixels), "no toast")
         XCTAssertLessThan(pill.width, 268, "the toast spans the width")
         XCTAssertEqual(pill.maxY, 184, accuracy: 1)
         // The bar would cover both edges (the pill's anti-aliased text may
         // come near its colour).
-        XCTAssertFalse(SnackbarBarTests.isBar(toast.pixel(1, 195)) || SnackbarBarTests.isBar(toast.pixel(298, 195)),
+        XCTAssertFalse(SnackbarBarTests.isBar(toastPixels.pixel(1, 195)) || SnackbarBarTests.isBar(toastPixels.pixel(298, 195)),
                        "the bar is drawn once it has left")
         pass(250 + 2000, queue)
         XCTAssertEqual(queue.queue.phase, .leaving)

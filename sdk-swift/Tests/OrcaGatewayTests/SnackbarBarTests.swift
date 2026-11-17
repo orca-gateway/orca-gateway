@@ -173,15 +173,15 @@ final class SnackbarBarTests: XCTestCase {
 
         pass(125, queue)
         XCTAssertEqual(queue.reveal, 0.5, accuracy: 0.0001)
-        let shown = 48 * 0.7755613
+        let shown: CGFloat = 48 * 0.7755613
         let entering = try draw(model, width: 300, height: 400)
         let bar = try XCTUnwrap(entering.bounds(of: Self.isBar), "nothing at mid-entry")
         XCTAssertEqual(bar.minY, 400 - shown, accuracy: Self.accuracy, "not revealed by height")
         XCTAssertEqual(bar.maxY, 400, accuracy: Self.accuracy)
         XCTAssertTrue(Self.isBar(entering.pixel(5, 395)), "faded: \(entering.pixel(5, 395))")
         let text = try XCTUnwrap(entering.rows(Int(bar.minY)...399).bounds(of: Self.isLight), "no text")
-        let fab = try XCTUnwrap(entering.bounds(of: Pixels.isRed))
-        XCTAssertEqual(fab.minY, 400 - shown - 16 - 56, accuracy: Self.accuracy, "the FAB does not ride on it")
+        let fabFrame = try XCTUnwrap(entering.bounds(of: Pixels.isRed))
+        XCTAssertEqual(fabFrame.minY, 400 - shown - 16 - 56, accuracy: Self.accuracy, "the FAB does not ride on it")
 
         // The text lies as far below the shown top as below a full bar's top.
         pass(125, queue)
@@ -555,19 +555,19 @@ final class SnackbarBarTests: XCTestCase {
     /// child), not the part shown while it enters: half shown, it still
     /// reports its full 48.
     func testA8_4_TheReleaseIsMeasuredAgainstTheWholeBar() async throws {
-        var reported: CGFloat = 0
+        let reported = Reported()
         let host = UIHostingController(rootView: VStack(spacing: 0) {
             Color.clear
             SnackbarBar(message: "Saved", heightFactor: 0.5)
         }
-        .onPreferenceChange(SnackbarHeightKey.self) { reported = $0 })
+        .onPreferenceChange(SnackbarHeightKey.self) { reported.value = $0 })
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 300, height: 200))
         window.rootViewController = host
         window.isHidden = false
         defer { window.isHidden = true }
         host.view.frame = window.bounds
         _ = try snapshot(window)
-        XCTAssertEqual(reported, 48, accuracy: 1)
+        XCTAssertEqual(reported.value, 48, accuracy: 1)
         XCTAssertEqual(try XCTUnwrap(try snapshot(window).bounds(of: Self.isBar)).height, 24, accuracy: 1,
                        "half of it is not what shows")
     }
@@ -744,6 +744,12 @@ final class SnackbarBarTests: XCTestCase {
                            file: file, line: line)
         }
     }
+}
+
+/// A value a SwiftUI action reports, held where a `@Sendable` action may
+/// write it (a captured `var` it may not), as NativeWidgetTests' FrameBox.
+final class Reported {
+    var value: CGFloat = 0
 }
 
 /// Pages by name: `components[name]` as the page's nodes, nothing for any

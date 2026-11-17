@@ -768,8 +768,8 @@ final class TooltipTests: XCTestCase {
             child: .init(x: child.minX, y: child.minY, width: child.width, height: child.height),
             bubble: .init(width: bubble.width, height: bubble.height),
             overlay: .init(width: overlay.width, height: overlay.height))
-        XCTAssertEqual(bubble.minX, origin.x, accuracy: Self.accuracy, "x: \(bubble) for \(child)", file: file, line: line)
-        XCTAssertEqual(bubble.minY, origin.y, accuracy: Self.accuracy, "y: \(bubble) for \(child)", file: file, line: line)
+        XCTAssertEqual(bubble.minX, CGFloat(origin.x), accuracy: Self.accuracy, "x: \(bubble) for \(child)", file: file, line: line)
+        XCTAssertEqual(bubble.minY, CGFloat(origin.y), accuracy: Self.accuracy, "y: \(bubble) for \(child)", file: file, line: line)
     }
 
     static func isBubbleOnWhite(_ p: (r: UInt8, g: UInt8, b: UInt8, a: UInt8)) -> Bool {
